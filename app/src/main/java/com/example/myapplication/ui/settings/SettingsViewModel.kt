@@ -1,5 +1,6 @@
 package com.example.myapplication.ui.settings
 
+import com.example.myapplication.localplayer.ui.PlayerSettingsKeys
 import com.example.myapplication.data.local.AppLanguagePrefs
 import android.app.Application
 import android.app.DownloadManager
@@ -110,8 +111,8 @@ private fun mergeSettingsUi(
         devMirrorDbToDocuments = prefs[KEY_DEV_MIRROR_DB] ?: false,
         devHideShareButton = prefs[KEY_DEV_HIDE_SHARE] ?: false,
         devFpsOverlay = prefs[KEY_DEV_FPS_OVERLAY] ?: false,
-        autoSkipSegments = prefs[LocalPlayerViewModel.AUTO_SKIP_KEY] ?: false,
-        autoNextEpisode = prefs[LocalPlayerViewModel.AUTO_NEXT_KEY] ?: true,
+        autoSkipSegments = prefs[PlayerSettingsKeys.AUTO_SKIP] ?: false,
+        autoNextEpisode = prefs[PlayerSettingsKeys.AUTO_NEXT] ?: true,
         devAdaptiveGlassScroll = prefs[DevPreferencesKeys.ADAPTIVE_GLASS_SCROLL] ?: false,
         devLegacyUi = prefs[DevPreferencesKeys.LEGACY_UI] ?: false,
         devGithubUpdatesEnabled = githubUpdatesEnabled,
@@ -300,7 +301,7 @@ class SettingsViewModel(
     }
 
     /**
-     * Единственный писатель [LocalPlayerViewModel.AUTO_SKIP_KEY].
+     * Единственный писатель [PlayerSettingsKeys.AUTO_SKIP].
      *
      * Ключ берётся напрямую из `LocalPlayerViewModel`, а не объявляется здесь второй строкой:
      * у него три читателя (`LocalPlayerViewModel`, `StreamPlayerActivity`,
@@ -309,14 +310,14 @@ class SettingsViewModel(
      */
     fun setAutoSkipSegments(enabled: Boolean) {
         viewModelScope.launch {
-            settingsDataStore.edit { it[LocalPlayerViewModel.AUTO_SKIP_KEY] = enabled }
+            settingsDataStore.edit { it[PlayerSettingsKeys.AUTO_SKIP] = enabled }
         }
     }
 
-    /** Единственный писатель [LocalPlayerViewModel.AUTO_NEXT_KEY] — по тем же причинам. */
+    /** Единственный писатель [PlayerSettingsKeys.AUTO_NEXT] — по тем же причинам. */
     fun setAutoNextEpisode(enabled: Boolean) {
         viewModelScope.launch {
-            settingsDataStore.edit { it[LocalPlayerViewModel.AUTO_NEXT_KEY] = enabled }
+            settingsDataStore.edit { it[PlayerSettingsKeys.AUTO_NEXT] = enabled }
         }
     }
 

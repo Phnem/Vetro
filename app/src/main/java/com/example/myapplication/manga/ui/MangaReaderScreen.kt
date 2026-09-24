@@ -775,6 +775,7 @@ private fun PageImage(
         AsyncImage(
             model = model,
             contentDescription = null,
+            imageLoader = MangaImageLoader.get(context),
             contentScale = contentScale,
             onState = { state ->
                 loading = state is AsyncImagePainter.State.Loading

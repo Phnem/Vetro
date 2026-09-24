@@ -1,5 +1,7 @@
 package com.example.myapplication.media.progress
 
+import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.Dispatchers
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
@@ -67,6 +69,8 @@ class EpisodePlaybackStore(
         return dataStore.data.map { preferences ->
             decode(preferences[key])
         }.distinctUntilChanged()
+            // Разбор JSON — не на главном потоке: подписчики сидят в композиции и VM.
+            .flowOn(Dispatchers.Default)
     }
 
     fun episodeFlow(
@@ -129,6 +133,8 @@ class EpisodePlaybackStore(
                 }
             }
         }.distinctUntilChanged()
+            // Разбор JSON — не на главном потоке: подписчики сидят в композиции и VM.
+            .flowOn(Dispatchers.Default)
     }
 
     /**

@@ -5,9 +5,15 @@ import com.example.myapplication.media.source.SanitizeHeaders
 import com.example.myapplication.media.source.VetroVideo
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.IOException
 import java.net.URI
+import java.util.concurrent.Callable
+import java.util.concurrent.ExecutionException
+import java.util.concurrent.Executors
+import java.util.concurrent.Future
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.abs
 
 /**
@@ -19,8 +25,14 @@ import kotlin.math.abs
  *
  * A single dropped connection must not cost the whole episode: CDNs close long-lived keep-alive
  * sessions mid-body (OkHttp surfaces that as `EOFException`), and an episode is hundreds of
- * segments. Each segment is therefore fetched into a staging file and retried on transport errors;
+ * segments. Each segment is therefore fetched whole into memory and retried on transport errors;
  * only a complete segment is appended to the output, so a half-read body can never corrupt it.
+ *
+ * Up to [PARALLEL_SEGMENTS] segments are in flight at once and appended strictly in playlist order:
+ * on a slow link one connection rarely fills the pipe, and hundreds of sequential round trips were
+ * most of an episode's download time. The first transport failure drops the window to one — a CDN
+ * that is dropping connections is not helped by more of them. Segments go straight from memory to
+ * the output; the old staging file wrote every byte twice.
  */
 class HlsSegmentDownloader(
     private val client: OkHttpClient,
@@ -30,28 +42,45 @@ class HlsSegmentDownloader(
         destination: File,
         onProgress: (Int) -> Unit = {},
         isCancelled: () -> Boolean = { false },
+        parallelism: Int = PARALLEL_SEGMENTS,
     ): File {
         val playlist = resolveMediaPlaylist(video.url, video, depth = 0)
-        if (playlist.segmentUrls.isEmpty()) throw IOException("HLS-плейлист не содержит сегментов")
+        val urls = playlist.segmentUrls
+        if (urls.isEmpty()) throw IOException("HLS-плейлист не содержит сегментов")
 
         destination.parentFile?.mkdirs()
         val tmp = File(destination.parentFile, destination.nameWithoutExtension + ".part.mp4")
-        val staging = File(destination.parentFile, destination.nameWithoutExtension + ".seg.tmp")
         runCatching { tmp.delete() }
-        runCatching { staging.delete() }
+        // A staging file left by a download interrupted before segments moved to memory.
+        runCatching { File(destination.parentFile, destination.nameWithoutExtension + ".seg.tmp").delete() }
 
+        val window = parallelism.coerceIn(1, urls.size)
+        val degraded = AtomicBoolean(false)
+        val executor = Executors.newFixedThreadPool(window)
         try {
-            tmp.outputStream().buffered().use { output ->
-                playlist.segmentUrls.forEachIndexed { index, segmentUrl ->
+            tmp.outputStream().buffered(WRITE_BUFFER_BYTES).use { output ->
+                val inFlight = ArrayDeque<Future<ByteArray>>()
+                var nextToFetch = 0
+                var lastPercent = -1
+                for (index in urls.indices) {
                     if (isCancelled()) throw HlsDownloadCancelledException()
-                    fetchSegmentWithRetry(segmentUrl, video, staging, index, isCancelled)
-                    staging.inputStream().use { it.copyTo(output) }
-                    runCatching { staging.delete() }
-                    onProgress(
-                        (((index + 1L) * 100L) / playlist.segmentUrls.size)
-                            .toInt()
-                            .coerceIn(0, 99)
-                    )
+                    val limit = if (degraded.get()) 1 else window
+                    while (nextToFetch < urls.size && (inFlight.isEmpty() || inFlight.size < limit)) {
+                        val segment = nextToFetch++
+                        inFlight.addLast(
+                            executor.submit(
+                                Callable {
+                                    fetchSegmentWithRetry(urls[segment], video, segment, isCancelled, degraded)
+                                },
+                            ),
+                        )
+                    }
+                    output.write(inFlight.removeFirst().awaitSegment())
+                    val percent = (((index + 1L) * 100L) / urls.size).toInt().coerceIn(0, 99)
+                    if (percent != lastPercent) {
+                        lastPercent = percent
+                        onProgress(percent)
+                    }
                 }
             }
             if (!MediaFileValidator.isPlayableVideo(tmp)) {
@@ -70,8 +99,15 @@ class HlsSegmentDownloader(
             runCatching { tmp.delete() }
             throw error
         } finally {
-            runCatching { staging.delete() }
+            // Interrupts segments still in flight after a failure or cancellation.
+            executor.shutdownNow()
         }
+    }
+
+    private fun Future<ByteArray>.awaitSegment(): ByteArray = try {
+        get()
+    } catch (failure: ExecutionException) {
+        throw failure.cause ?: failure
     }
 
     /**
@@ -81,23 +117,22 @@ class HlsSegmentDownloader(
     private fun fetchSegmentWithRetry(
         segmentUrl: String,
         video: VetroVideo,
-        staging: File,
         index: Int,
         isCancelled: () -> Boolean,
-    ) {
+        degraded: AtomicBoolean,
+    ): ByteArray {
         var lastError: IOException? = null
         repeat(SEGMENT_ATTEMPTS) { attempt ->
             if (isCancelled()) throw HlsDownloadCancelledException()
             try {
-                fetchSegment(segmentUrl, video, staging, isCancelled)
-                return
+                return fetchSegment(segmentUrl, video, isCancelled)
             } catch (cancelled: HlsDownloadCancelledException) {
                 throw cancelled
             } catch (permanent: PermanentSegmentException) {
                 throw permanent
             } catch (error: IOException) {
                 lastError = error
-                runCatching { staging.delete() }
+                degraded.set(true)
                 runCatching {
                     Log.w(
                         TAG,
@@ -117,9 +152,8 @@ class HlsSegmentDownloader(
     private fun fetchSegment(
         segmentUrl: String,
         video: VetroVideo,
-        staging: File,
         isCancelled: () -> Boolean,
-    ) {
+    ): ByteArray {
         client.newCall(request(segmentUrl, video)).execute().use { response ->
             if (!response.isSuccessful) {
                 if (response.code in RETRYABLE_STATUSES) {
@@ -142,16 +176,17 @@ class HlsSegmentDownloader(
             val body = response.body ?: throw IOException("Пустой HLS-сегмент")
             val declaredLength = body.contentLength().takeIf { it > 0L }
             var written = 0L
-            staging.outputStream().buffered().use { output ->
-                body.byteStream().use { input ->
-                    val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
-                    while (true) {
-                        if (isCancelled()) throw HlsDownloadCancelledException()
-                        val count = input.read(buffer)
-                        if (count < 0) break
-                        output.write(buffer, 0, count)
-                        written += count
-                    }
+            val output = ByteArrayOutputStream(
+                declaredLength?.coerceAtMost(Int.MAX_VALUE.toLong())?.toInt() ?: READ_BUFFER_BYTES,
+            )
+            body.byteStream().use { input ->
+                val buffer = ByteArray(READ_BUFFER_BYTES)
+                while (true) {
+                    if (isCancelled()) throw HlsDownloadCancelledException()
+                    val count = input.read(buffer)
+                    if (count < 0) break
+                    output.write(buffer, 0, count)
+                    written += count
                 }
             }
             // A short body is the silent form of the dropped-connection failure: OkHttp only raises
@@ -159,6 +194,7 @@ class HlsSegmentDownloader(
             if (declaredLength != null && written < declaredLength) {
                 throw IOException("Сегмент оборван: $written из $declaredLength байт")
             }
+            return output.toByteArray()
         }
     }
 
@@ -277,6 +313,9 @@ class HlsSegmentDownloader(
         private const val SEGMENT_ATTEMPTS = 4
         private const val PLAYLIST_ATTEMPTS = 3
         private const val RETRY_BACKOFF_MS = 800L
+        const val PARALLEL_SEGMENTS = 3
+        private const val READ_BUFFER_BYTES = 64 * 1024
+        private const val WRITE_BUFFER_BYTES = 256 * 1024
         private val RETRYABLE_STATUSES = setOf(408, 425, 429, 500, 502, 503, 504)
         private val MAP_URI = Regex("""URI="([^"]+)"""", RegexOption.IGNORE_CASE)
         private val RESOLUTION = Regex("""RESOLUTION=\d+x(\d+)""", RegexOption.IGNORE_CASE)

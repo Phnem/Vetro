@@ -294,7 +294,7 @@ class KodikDirectSearch(
 
     // region Сеть и токены
 
-    private fun search(title: String): JSONObject? {
+    private suspend fun search(title: String): JSONObject? {
         // Сначала токен, который уже сработал в этом процессе: перебор — это лишние запросы
         // на каждую серию, а живой токен меняется куда реже.
         val cached = KodikTokenCache.working
@@ -330,7 +330,7 @@ class KodikDirectSearch(
         return null
     }
 
-    private fun requestSearch(token: String, title: String): SearchOutcome = runCatching {
+    private suspend fun requestSearch(token: String, title: String): SearchOutcome = runCatchingCancellable {
         val url = "$API_ORIGIN/search".toHttpUrl().newBuilder()
             .addQueryParameter("token", token)
             .addQueryParameter("title", title)
@@ -344,7 +344,7 @@ class KodikDirectSearch(
             .header("Accept", "application/json,*/*")
             .header("User-Agent", KodikSource.USER_AGENT)
             .build()
-        client.newCall(request).execute().use { response ->
+        client.newCall(request).await().use { response ->
             val body = response.body?.string().orEmpty()
             val payload = body.takeIf { it.trimStart().startsWith("{") }
                 ?.let { runCatching { JSONObject(it) }.getOrNull() }

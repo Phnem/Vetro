@@ -58,13 +58,13 @@ class LocalPlayerViewModel(
      */
     val autoSkipEnabled: StateFlow<Boolean> =
         settingsDataStore.data
-            .map { it[AUTO_SKIP_KEY] ?: false }
+            .map { it[PlayerSettingsKeys.AUTO_SKIP] ?: false }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
 
     /** Включать следующую серию по концу текущей. По умолчанию ВКЛ — см. [AUTO_NEXT_KEY]. */
     val autoNextEnabled: StateFlow<Boolean> =
         settingsDataStore.data
-            .map { it[AUTO_NEXT_KEY] ?: true }
+            .map { it[PlayerSettingsKeys.AUTO_NEXT] ?: true }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), true)
 
     init {
@@ -111,16 +111,5 @@ class LocalPlayerViewModel(
             store.remove(animeId)
             _uiState.value = LocalPlayerUiState.NeedSource
         }
-    }
-
-    companion object {
-        /** Пункт настроек, который включит автоскип, добавим позже — он будет писать этот ключ. */
-        val AUTO_SKIP_KEY = booleanPreferencesKey("local_player_auto_skip")
-
-        /**
-         * Включать следующую серию по концу текущей. По умолчанию ВКЛ (отсутствие ключа = `true`):
-         * пользователь заказал автопереход как поведение, а не как возможность его включить.
-         */
-        val AUTO_NEXT_KEY = booleanPreferencesKey("player_auto_next_episode")
     }
 }

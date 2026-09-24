@@ -44,7 +44,7 @@ class KodikSource(
                 val yummyTask = async(Dispatchers.IO) {
                     // Путь больше не отключается на сезонах без собственного названия:
                     // запрос всегда несёт пригодный набор алиасов.
-                    runCatching {
+                    runCatchingCancellable {
                         yummyCandidates(seasonQuery.anime, episodeNumber, seasonInfo)
                     }
                         .onFailure { Log.i(TAG, "Yummy path failed: ${it.message}") }
@@ -52,7 +52,7 @@ class KodikSource(
                 }
                 val directTask = async(Dispatchers.IO) {
                     val search = directSearch ?: return@async emptyList<KodikIframeCandidate>()
-                    runCatching {
+                    runCatchingCancellable {
                         search.findEpisodeCandidates(
                             anime = seasonQuery.anime,
                             episodeNumber = episodeNumber,
@@ -99,7 +99,7 @@ class KodikSource(
     }
 
     /** Прежний путь: YummyAnime отдаёт метаданные серий и готовые iframe_url плеера Kodik. */
-    private fun yummyCandidates(
+    private suspend fun yummyCandidates(
         anime: Anime,
         episodeNumber: Int,
         seasonInfo: SeasonInfo?,
@@ -140,7 +140,7 @@ class KodikSource(
      * Отсеяв неподтверждённые, лестница запросов идёт дальше и может найти нужный релиз
      * английским названием сезона.
      */
-    private fun findRelease(anime: Anime, seasonInfo: SeasonInfo?): JSONObject? {
+    private suspend fun findRelease(anime: Anime, seasonInfo: SeasonInfo?): JSONObject? {
         val queries = listOfNotNull(anime.titleRu, anime.title, anime.titleEn)
             .map(String::trim)
             .filter(String::isNotBlank)
@@ -188,9 +188,9 @@ class KodikSource(
         return localTitles.maxOfOrNull { TitleMatcher.bestScore(it, remote) } ?: 0.0
     }
 
-    private fun requestJson(url: String): JSONObject? = runCatching {
+    private suspend fun requestJson(url: String): JSONObject? = runCatchingCancellable {
         val request = Request.Builder().url(url).applyApiHeaders().build()
-        client.newCall(request).execute().use { response ->
+        client.newCall(request).await().use { response ->
             if (!response.isSuccessful) {
                 Log.i(TAG, "Yummy API HTTP ${response.code}: $url")
                 return@use null
@@ -225,7 +225,7 @@ class KodikSource(
 private class KodikExtractor(
     private val client: OkHttpClient,
 ) {
-    fun resolve(iframeUrl: String): List<VetroVideo> {
+    suspend fun resolve(iframeUrl: String): List<VetroVideo> {
         val page = fetch(iframeUrl, SITE_REFERER) ?: return emptyList()
         val context = parseContext(page, iframeUrl) ?: return emptyList()
         val endpoint = detectEndpoint(page, iframeUrl) ?: DEFAULT_ENDPOINT
@@ -262,17 +262,17 @@ private class KodikExtractor(
         }.distinctBy { it.url }
     }
 
-    private fun fetch(url: String, referer: String): String? = runCatching {
+    private suspend fun fetch(url: String, referer: String): String? = runCatchingCancellable {
         val request = Request.Builder().url(url)
             .header("User-Agent", KodikSource.USER_AGENT)
             .header("Referer", referer)
             .build()
-        client.newCall(request).execute().use { response ->
+        client.newCall(request).await().use { response ->
             response.body?.string().orEmpty().takeIf { response.isSuccessful }
         }
     }.onFailure { Log.i(TAG, "iframe failed: ${it.message}") }.getOrNull()
 
-    private fun requestLinks(
+    private suspend fun requestLinks(
         endpoint: String,
         referer: String,
         context: PlayerContext,
@@ -305,7 +305,7 @@ private class KodikExtractor(
                 endpoint.startsWith('/') -> "$host$endpoint"
                 else -> "$host/$endpoint"
             }
-            val parsed = runCatching {
+            val parsed = runCatchingCancellable {
                 val request = Request.Builder().url(url).post(body)
                     .header("User-Agent", KodikSource.USER_AGENT)
                     .header("Referer", referer)
@@ -313,7 +313,7 @@ private class KodikExtractor(
                     .header("X-Requested-With", "XMLHttpRequest")
                     .header("Accept", "application/json, text/javascript, */*; q=0.01")
                     .build()
-                client.newCall(request).execute().use { response ->
+                client.newCall(request).await().use { response ->
                     val text = response.body?.string().orEmpty()
                     text.takeIf { it.trimStart().startsWith("{") }?.let(::JSONObject)
                 }
@@ -376,7 +376,7 @@ private class KodikExtractor(
         return null
     }
 
-    private fun detectEndpoint(page: String, iframeUrl: String): String? {
+    private suspend fun detectEndpoint(page: String, iframeUrl: String): String? {
         val marker = "/assets/js/app.player_single."
         val start = page.indexOf(marker, ignoreCase = true)
         if (start < 0) return null

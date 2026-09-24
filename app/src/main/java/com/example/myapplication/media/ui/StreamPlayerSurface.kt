@@ -8,10 +8,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -35,16 +33,13 @@ import androidx.media3.ui.PlayerView
 import com.example.myapplication.localplayer.ui.AudioTrackOption
 import com.example.myapplication.localplayer.ui.ImmersivePlayerWindow
 import com.example.myapplication.localplayer.ui.rememberMediaSkipPlayback
+import com.example.myapplication.localplayer.ui.rememberPlaybackClock
 import com.example.myapplication.localplayer.ui.PlayerControlsOverlay
 import com.example.myapplication.ui.shared.loading.BubbleClusterLoader
 import com.example.myapplication.localplayer.ui.PlayerPinchState
 import com.example.myapplication.localplayer.ui.VideoFit
-import com.example.myapplication.localplayer.ui.isDrmProtected
-import com.example.myapplication.localplayer.ui.rememberPlayerAmbient
 import com.example.myapplication.media.source.VetroVideo
 import com.example.myapplication.ui.shared.theme.MotionTokens
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.isActive
 import kotlin.math.max
 
 /** The custom Exo controls applied to a remote, header-aware player. */
@@ -81,9 +76,8 @@ fun StreamPlayerSurface(
         requestPending = loading,
         playerBuffering = isBuffering,
     )
-    var position by remember(player) { mutableLongStateOf(player.currentPosition) }
-    var buffered by remember(player) { mutableLongStateOf(player.bufferedPosition) }
-    var duration by remember(player) { mutableLongStateOf(0L) }
+    // Позицию поверхность не читает: см. PlaybackClock.
+    val clock = rememberPlaybackClock(player, isPlaying)
     var embeddedAudioTracks by remember(player) {
         mutableStateOf<List<AudioTrackOption>>(emptyList())
     }
@@ -91,13 +85,6 @@ fun StreamPlayerSurface(
     var fit by remember(player) { mutableStateOf(VideoFit.ORIGINAL) }
     var viewportSize by remember { mutableStateOf(IntSize.Zero) }
     var videoAspect by remember(player) { mutableFloatStateOf(16f / 9f) }
-    // PixelCopy читает буфер SurfaceView, а не сеть, поэтому стрим сэмплится ровно так же, как
-    // локальный файл. Единственное, что реально запрещает съём пикселей, — DRM (protected surface).
-    var videoSurface by remember { mutableStateOf<android.view.SurfaceView?>(null) }
-    var drmProtected by remember(player) {
-        mutableStateOf(player.currentMediaItem?.localConfiguration?.drmConfiguration != null)
-    }
-    var controlsVisible by remember(player) { mutableStateOf(true) }
     val viewportAspect = viewportSize.width.toFloat() / viewportSize.height.coerceAtLeast(1)
     val cropScale = max(
         viewportAspect / videoAspect.coerceAtLeast(0.01f),
@@ -138,8 +125,8 @@ fun StreamPlayerSurface(
         episodeNumber = episodeNumber,
         anilistId = anilistId,
         malId = malId,
-        durationMs = duration,
-        positionMs = position,
+        durationMs = clock.durationMs,
+        positionMs = clock.position,
         autoSkipEnabled = autoSkipEnabled,
         exactTimestamps = video.timestamps,
         exactOrigin = video.sourceName,
@@ -155,15 +142,10 @@ fun StreamPlayerSurface(
 
             override fun onPlaybackStateChanged(playbackState: Int) {
                 isBuffering = playbackState == Player.STATE_BUFFERING
-                if (playbackState != Player.STATE_IDLE) {
-                    duration = player.duration.coerceAtLeast(0L)
-                }
             }
 
             override fun onTracksChanged(tracks: Tracks) {
                 embeddedAudioTracks = tracks.streamAudioOptions()
-                // Решаем один раз по факту дорожек, а не промахами PixelCopy в рантайме.
-                drmProtected = drmProtected || tracks.isDrmProtected()
             }
 
             override fun onVideoSizeChanged(size: VideoSize) {
@@ -171,26 +153,9 @@ fun StreamPlayerSurface(
                     videoAspect = size.width * size.pixelWidthHeightRatio / size.height
                 }
             }
-
-            override fun onPositionDiscontinuity(
-                oldPosition: Player.PositionInfo,
-                newPosition: Player.PositionInfo,
-                reason: Int,
-            ) {
-                position = player.currentPosition
-            }
         }
         player.addListener(listener)
         onDispose { player.removeListener(listener) }
-    }
-
-    LaunchedEffect(player) {
-        while (isActive) {
-            position = player.currentPosition
-            buffered = player.bufferedPosition
-            player.duration.takeIf { it > 0L }?.let { duration = it }
-            delay(250L)
-        }
     }
 
     // Положение кадра переживает смену серии: поверхность не пересоздаётся (меняются только url и
@@ -213,8 +178,7 @@ fun StreamPlayerSurface(
                 },
             factory = { context ->
                 // SurfaceView (значение surface_type по умолчанию) — не менять на TextureView:
-                // фон доков размывается по снимку PixelCopy раз в секунду (rememberPlayerAmbient),
-                // живой блюр по кадру им не нужен, а TextureView стоил бы каждого кадра.
+                // тот стоил бы каждого кадра воспроизведения.
                 PlayerView(context).apply {
                     this.player = player
                     useController = false
@@ -223,7 +187,6 @@ fun StreamPlayerSurface(
                         ViewGroup.LayoutParams.MATCH_PARENT,
                     )
                     setBackgroundColor(android.graphics.Color.BLACK)
-                    videoSurface = videoSurfaceView as? android.view.SurfaceView
                 }
             },
             update = { view ->
@@ -238,18 +201,12 @@ fun StreamPlayerSurface(
             PlayerControlsOverlay(
                 player = player,
                 title = title,
-                ambient = rememberPlayerAmbient(
-                    surfaceProvider = { videoSurface },
-                    adaptive = !drmProtected,
-                    active = controlsVisible,
-                ),
-                onControlsVisibleChange = { controlsVisible = it },
                 onRotate = onRotate,
                 isPlaying = isPlaying,
                 isBuffering = showLoading,
-                position = position,
-                buffered = buffered,
-                duration = duration,
+                position = clock.position,
+                buffered = clock.buffered,
+                duration = clock.durationMs,
                 hasPrev = hasPrevEpisode,
                 hasNext = hasNextEpisode,
                 onPrev = onPrevEpisode,

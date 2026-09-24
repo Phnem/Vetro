@@ -15,7 +15,8 @@ class HlsSegmentDownloaderTest {
 
     @Test
     fun `selects requested variant and keeps repeated segments`() {
-        val requestedPaths = mutableListOf<String>()
+        // Segments are fetched in parallel: the interceptor runs on several threads.
+        val requestedPaths = java.util.Collections.synchronizedList(mutableListOf<String>())
         val packet = ByteArray(188 * 400).also { bytes ->
             bytes.indices.step(188).forEach { bytes[it] = 0x47 }
         }
@@ -178,6 +179,63 @@ class HlsSegmentDownloaderTest {
 
             assertTrue(error is java.io.IOException)
             assertEquals(1, segmentRequests)
+        } finally {
+            destination.delete()
+        }
+    }
+
+    @Test
+    fun `parallel segments land in playlist order even when they finish out of order`() {
+        val segmentCount = 7
+        // Each segment is a run of TS packets tagged with its index; earlier segments answer slower.
+        fun segment(index: Int) = ByteArray(188 * 100).also { bytes ->
+            bytes.indices.step(188).forEach {
+                bytes[it] = 0x47
+                bytes[it + 1] = index.toByte()
+            }
+        }
+        val client = OkHttpClient.Builder()
+            .addInterceptor { chain ->
+                val path = chain.request().url.encodedPath
+                val (contentType, body) = if (path == "/media.m3u8") {
+                    "application/vnd.apple.mpegurl" to buildString {
+                        appendLine("#EXTM3U")
+                        repeat(segmentCount) {
+                            appendLine("#EXTINF:4,")
+                            appendLine("s$it.ts")
+                        }
+                        appendLine("#EXT-X-ENDLIST")
+                    }.toByteArray()
+                } else {
+                    val index = path.removePrefix("/s").removeSuffix(".ts").toInt()
+                    Thread.sleep((segmentCount - index) * 15L)
+                    "video/mp2t" to segment(index)
+                }
+                Response.Builder()
+                    .request(chain.request())
+                    .protocol(Protocol.HTTP_1_1)
+                    .code(200)
+                    .message("OK")
+                    .body(body.toResponseBody(contentType.toMediaType()))
+                    .build()
+            }
+            .build()
+        val destination = File.createTempFile("ordered-hls", ".mp4").also { it.delete() }
+        val progress = java.util.Collections.synchronizedList(mutableListOf<Int>())
+
+        try {
+            HlsSegmentDownloader(client).download(
+                video = VetroVideo(url = "https://media.test/media.m3u8", label = "720p"),
+                destination = destination,
+                onProgress = { progress += it },
+            )
+
+            val written = destination.readBytes()
+            val order = written.indices.step(188 * 100).map { written[it + 1].toInt() }
+            assertEquals((0 until segmentCount).toList(), order)
+            // Progress only moves forward and is reported once per value.
+            assertEquals(progress.distinct().sorted(), progress)
+            assertEquals(100, progress.last())
         } finally {
             destination.delete()
         }

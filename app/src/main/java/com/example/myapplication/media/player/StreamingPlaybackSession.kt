@@ -45,18 +45,27 @@ object StreamingPlaybackSessionFactory {
             .setMediaSourceFactory(mediaSourceFactory)
             .setTrackSelector(trackSelector)
             .setLoadControl(
-                DefaultLoadControl.Builder()
-                    .setAllocator(allocator)
-                    .setBufferDurationsMs(
-                        tuning.minBufferMs,
-                        tuning.maxBufferMs,
-                        tuning.bufferForPlaybackMs,
-                        tuning.bufferForPlaybackAfterRebufferMs,
-                    )
-                    .setPrioritizeTimeOverSizeThresholds(
-                        tuning.prioritizeTimeOverSizeThresholds,
-                    )
-                    .build(),
+                // Буфер по времени (60/90 с) — как был; потолок по памяти включается, только
+                // если 90 с этого потока не влезают в кучу (см. AdaptiveBufferGuard).
+                MemoryGuardedLoadControl(
+                    delegate = DefaultLoadControl.Builder()
+                        .setAllocator(allocator)
+                        .setBufferDurationsMs(
+                            tuning.minBufferMs,
+                            tuning.maxBufferMs,
+                            tuning.bufferForPlaybackMs,
+                            tuning.bufferForPlaybackAfterRebufferMs,
+                        )
+                        .setPrioritizeTimeOverSizeThresholds(
+                            tuning.prioritizeTimeOverSizeThresholds,
+                        )
+                        .build(),
+                    allocator = allocator,
+                    minBufferMs = tuning.minBufferMs,
+                    maxBufferMs = tuning.maxBufferMs,
+                    memory = MemoryGuardedLoadControl.memorySnapshot(context),
+                    nowMs = SystemClock::elapsedRealtime,
+                ),
             )
             .build()
         player.setMediaSource(buildMediaSource(mediaSourceFactory, video))

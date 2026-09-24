@@ -1,5 +1,7 @@
 package com.example.myapplication.localplayer.ui
 
+import com.example.myapplication.media.progress.runPlaybackProgressSaver
+import androidx.compose.runtime.CompositionLocalProvider
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ActivityInfo
@@ -14,7 +16,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -37,8 +38,6 @@ import com.example.myapplication.ui.shared.theme.OneUiTheme
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
@@ -94,8 +93,7 @@ class DownloadedPlayerActivity : ComponentActivity(), PipHostActivity {
 
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
-                while (true) {
-                    delay(1_000L)
+                runPlaybackProgressSaver(isPlaying = { player?.isPlaying == true }) {
                     persistCurrentProgress()
                 }
             }
@@ -103,43 +101,43 @@ class DownloadedPlayerActivity : ComponentActivity(), PipHostActivity {
 
         setContent {
             OneUiTheme {
-                val autoSkip by settings.data
-                    .map { it[LocalPlayerViewModel.AUTO_SKIP_KEY] ?: false }
-                    .collectAsState(initial = false)
-                val autoNext by settings.data
-                    .map { it[LocalPlayerViewModel.AUTO_NEXT_KEY] ?: true }
-                    .collectAsState(initial = true)
-                var landscape by rememberSaveable { mutableStateOf(true) }
-                BackHandler { finish() }
-                DisposableEffect(landscape) {
-                    requestedOrientation = if (landscape) {
-                        ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
-                    } else {
-                        ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+                val playerSettingsState = rememberPlayerSettings(settings)
+                CompositionLocalProvider(LocalPlayerLanguage provides playerSettingsState.value.language) {
+                    val playerSettings by playerSettingsState
+                    val autoSkip = playerSettings.autoSkip
+                    val autoNext = playerSettings.autoNext
+                    var landscape by rememberSaveable { mutableStateOf(true) }
+                    BackHandler { finish() }
+                    DisposableEffect(landscape) {
+                        requestedOrientation = if (landscape) {
+                            ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+                        } else {
+                            ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+                        }
+                        onDispose {
+                            requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+                        }
                     }
-                    onDispose {
-                        requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
-                    }
-                }
 
-                Box(
-                    Modifier
-                        .fillMaxSize()
-                        .background(MaterialTheme.colorScheme.background)
-                ) {
-                    PlayerScreen(
-                        episodes = episodes,
-                        startIndex = startIndex,
-                        malId = malId,
-                        anilistId = anilistId,
-                        autoSkipEnabled = autoSkip,
-                        autoNextEnabled = autoNext,
-                        isInPip = pipState.value,
-                        onEnterPip = ::enterPip,
-                        onRotate = { landscape = !landscape },
-                        onBack = { finish() },
-                        onPlayerAvailable = { player = it },
-                    )
+                    Box(
+                        Modifier
+                            .fillMaxSize()
+                            .background(MaterialTheme.colorScheme.background)
+                    ) {
+                        PlayerScreen(
+                            episodes = episodes,
+                            startIndex = startIndex,
+                            malId = malId,
+                            anilistId = anilistId,
+                            autoSkipEnabled = autoSkip,
+                            autoNextEnabled = autoNext,
+                            isInPip = pipState.value,
+                            onEnterPip = ::enterPip,
+                            onRotate = { landscape = !landscape },
+                            onBack = { finish() },
+                            onPlayerAvailable = { player = it },
+                        )
+                    }
                 }
             }
         }
