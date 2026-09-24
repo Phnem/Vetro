@@ -1,5 +1,7 @@
 package com.example.myapplication
 
+import com.example.myapplication.ui.shared.theme.iosOverscrollFactory
+import androidx.compose.foundation.LocalOverscrollFactory
 import android.content.Intent
 import android.graphics.Color as AndroidGraphicsColor
 import android.os.Build
@@ -162,11 +164,14 @@ class MainActivity : ComponentActivity() {
 
                 val stagedMorphOrigin = remember { StagedMorphOriginState() }
                 val workspaceSearch = remember { WorkspaceSearchState() }
+                val overscrollFactory = remember { iosOverscrollFactory(this@MainActivity) }
                 CompositionLocalProvider(
                     LocalAdaptiveGlassEnabled provides settingsState.devAdaptiveGlassScroll,
                     LocalModernUi provides settingsState.modernUi,
                     LocalStagedMorphOrigin provides stagedMorphOrigin,
                     LocalWorkspaceSearch provides workspaceSearch,
+                    // iOS-«резинка» на краю всех списков и скроллов приложения (IosScroll.kt).
+                    LocalOverscrollFactory provides overscrollFactory,
                 ) {
                 Box(
                     modifier = Modifier

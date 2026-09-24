@@ -1,5 +1,6 @@
 package com.example.myapplication.localplayer.ui
 
+import com.example.myapplication.ui.shared.theme.IosScroll
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ActivityInfo
@@ -416,6 +417,7 @@ private fun LibraryContent(
     val episodes = state.source.episodes
     Box(Modifier.fillMaxSize()) {
         LazyColumn(
+            flingBehavior = IosScroll.flingBehavior(),
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(
                 top = 76.dp,

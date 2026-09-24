@@ -1,5 +1,6 @@
 package com.example.myapplication.ui.home
 
+import com.example.myapplication.ui.shared.theme.IosScroll
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
@@ -220,7 +221,7 @@ private fun StatsContent(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .verticalScroll(scroll)
+            .verticalScroll(scroll, flingBehavior = IosScroll.flingBehavior())
             .padding(horizontal = 28.dp, vertical = 20.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {

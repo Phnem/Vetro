@@ -1,5 +1,6 @@
 package com.example.myapplication.ui.home.updates
 
+import com.example.myapplication.ui.shared.theme.IosScroll
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
@@ -186,6 +187,7 @@ fun NotificationCenter(
                     )
                 } else {
                     LazyColumn(
+                        flingBehavior = IosScroll.flingBehavior(),
                         modifier = Modifier.heightIn(max = maxListHeight),
                         verticalArrangement = Arrangement.spacedBy(CARD_GAP),
                     ) {

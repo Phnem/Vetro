@@ -1,5 +1,6 @@
 package com.example.myapplication.ui.settings
 
+import com.example.myapplication.ui.shared.theme.IosScroll
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -86,7 +87,7 @@ fun AiConnectSheet(
         modifier = sharedModifier
             .fillMaxWidth()
             .heightIn(max = 640.dp)
-            .verticalScroll(rememberScrollState())
+            .verticalScroll(rememberScrollState(), flingBehavior = IosScroll.flingBehavior())
             .padding(horizontal = 20.dp)
             .padding(top = IosDesign.SheetContentTop, bottom = 24.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),

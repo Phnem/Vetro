@@ -1,5 +1,6 @@
 package com.example.myapplication
 
+import com.example.myapplication.ui.shared.theme.IosScroll
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
@@ -253,7 +254,7 @@ fun NotificationSyncOverlay(
                     Column(
                         modifier = Modifier
                             .padding(horizontal = 16.dp)
-                            .verticalScroll(rememberScrollState())
+                            .verticalScroll(rememberScrollState(), flingBehavior = IosScroll.flingBehavior())
                     ) {
                         // —— Header (Close button only) —— //
                         Row(

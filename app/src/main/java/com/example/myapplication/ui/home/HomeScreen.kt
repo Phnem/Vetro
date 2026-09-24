@@ -1,5 +1,6 @@
 package com.example.myapplication.ui.home
 
+import com.example.myapplication.ui.shared.theme.IosScroll
 import com.example.myapplication.ui.home.updates.notificationStrings
 import com.example.myapplication.ui.home.updates.NotificationCenter
 import com.example.myapplication.ui.home.updates.NotificationBellButton
@@ -50,7 +51,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -91,7 +91,6 @@ import androidx.navigation.NavController
 import com.example.myapplication.ui.shared.GlassBackdropRecovery
 import com.example.myapplication.ui.shared.ListSyncLoadingOverlay
 import com.example.myapplication.ui.shared.LocalAdaptiveGlassScrollInProgress
-import com.example.myapplication.ui.shared.customOverscroll
 import com.example.myapplication.ui.shared.rememberDockAutoHide
 
 import com.example.myapplication.GlassActionDock
@@ -361,7 +360,6 @@ fun HomeScreen(
         }
     }
 
-    var overscrollAmount by remember { mutableFloatStateOf(0f) }
     val isHeaderFloating by remember { derivedStateOf { listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 20 } }
     val showScrollToTop by remember { derivedStateOf { listState.firstVisibleItemIndex > 4 } }
     val bgColor = MaterialTheme.colorScheme.background
@@ -630,69 +628,246 @@ fun HomeScreen(
                     // а НЕ его предок, поэтому не оборачивает layerBackdrop-список и не ломает стекло дока.
                     PullRefreshIndicator(controller = refreshController, revealMax = refreshRevealMax)
 
-                    CompositionLocalProvider(LocalOverscrollFactory provides null) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .nestedScroll(dockAutoHide.connection)
-                                // Верхнюю «резинку» отключаем — верхний пулл целиком у pull-to-refresh.
-                                .customOverscroll(listState, topEnabled = { false }) { overscrollAmount = it }
-                                // Сдвиг контента = overscroll + раскрытие pull-to-refresh. Тот же
-                                // СУЩЕСТВУЮЩИЙ offset-узел (не новая нода над layerBackdrop) — стекло
-                                // дока остаётся целым.
-                                .offset {
-                                    val reveal = (refreshController.revealFraction() * refreshRevealMax.toPx()).roundToInt()
-                                    IntOffset(0, overscrollAmount.roundToInt() + reveal)
-                                }
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .nestedScroll(dockAutoHide.connection)
+                            // Край списка — общая iOS-«резинка» (LocalOverscrollFactory в корне);
+                            // верхнюю протяжку первым забирает pull-to-refresh как родитель в
+                            // nested scroll, поэтому резинка сверху при обновлении не спорит с ним.
+                            // Сдвиг контента = overscroll + раскрытие pull-to-refresh. Тот же
+                            // СУЩЕСТВУЮЩИЙ offset-узел (не новая нода над layerBackdrop) — стекло
+                            // дока остаётся целым.
+                            .offset {
+                                val reveal = (refreshController.revealFraction() * refreshRevealMax.toPx()).roundToInt()
+                                IntOffset(0, reveal)
+                            }
+                    ) {
+                        PullToRefreshBox(
+                            isRefreshing = isRefreshing,
+                            onRefresh = {
+                                dismissCloudSyncPill()
+                                // Жест сработал → индикатор фиксируется в оттянутом положении
+                                // минимум на 2с (см. PullRefreshController).
+                                refreshController.notifyRefreshInvoked()
+                                viewModel.refreshList()
+                            },
+                            state = refreshPullState,
+                            // Свой визуал рисуем сами, стоковый индикатор выключаем.
+                            indicator = {},
+                            modifier = Modifier.fillMaxSize()
                         ) {
-                            PullToRefreshBox(
-                                isRefreshing = isRefreshing,
-                                onRefresh = {
-                                    dismissCloudSyncPill()
-                                    // Жест сработал → индикатор фиксируется в оттянутом положении
-                                    // минимум на 2с (см. PullRefreshController).
-                                    refreshController.notifyRefreshInvoked()
-                                    viewModel.refreshList()
-                                },
-                                state = refreshPullState,
-                                // Свой визуал рисуем сами, стоковый индикатор выключаем.
-                                indicator = {},
-                                modifier = Modifier.fillMaxSize()
+                            key(layerBackdropResetKey) {
+                            LazyColumn(
+                                flingBehavior = IosScroll.flingBehavior(),
+                                state = listState,
+                                contentPadding = PaddingValues(top = 0.dp, bottom = 0.dp, start = 0.dp, end = 0.dp),
+                                verticalArrangement = Arrangement.spacedBy(16.dp),
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .layerBackdrop(backdrop)
                             ) {
-                                key(layerBackdropResetKey) {
-                                LazyColumn(
-                                    state = listState,
-                                    contentPadding = PaddingValues(top = 0.dp, bottom = 0.dp, start = 0.dp, end = 0.dp),
-                                    verticalArrangement = Arrangement.spacedBy(16.dp),
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .layerBackdrop(backdrop)
-                                ) {
-                                    item {
-                                        VetroWorkspaceTopBar(
-                                            strings = getStrings(currentLanguage),
+                                item {
+                                    VetroWorkspaceTopBar(
+                                        strings = getStrings(currentLanguage),
+                                    )
+                                }
+
+                                val recsReady = recsState as? RecommendationsUiState.Ready
+                                if (recsReady != null && recsReady.items.isNotEmpty() && uiState.searchQuery.isEmpty()) {
+                                    item(key = "discovery_card", contentType = "discovery_card") {
+                                        DiscoveryCard(
+                                            state = recsReady,
+                                            strings = recsStrings,
+                                            onClick = {
+                                                performHaptic(view, "light")
+                                                dismissCloudSyncPill()
+                                                showRecsSheet = true
+                                            },
+                                            modifier = Modifier.padding(horizontal = 16.dp),
                                         )
                                     }
+                                }
 
-                                    val recsReady = recsState as? RecommendationsUiState.Ready
-                                    if (recsReady != null && recsReady.items.isNotEmpty() && uiState.searchQuery.isEmpty()) {
-                                        item(key = "discovery_card", contentType = "discovery_card") {
-                                            DiscoveryCard(
-                                                state = recsReady,
-                                                strings = recsStrings,
-                                                onClick = {
-                                                    performHaptic(view, "light")
-                                                    dismissCloudSyncPill()
-                                                    showRecsSheet = true
-                                                },
-                                                modifier = Modifier.padding(horizontal = 16.dp),
-                                            )
+                                val showApiFirst = list.isEmpty() && uiState.searchQuery.isNotEmpty()
+
+                                if (showApiFirst) {
+                                    apiSearchResultsSection(
+                                        strings = strings,
+                                        apiSearchModels = apiSearchModels,
+                                        uiState = uiState,
+                                        currentLanguage = currentLanguage,
+                                        genreRepository = genreRepository,
+                                        view = view,
+                                        viewModel = viewModel,
+                                        topPadding = 8.dp
+                                    )
+                                    when {
+                                        uiState.apiSearchLoading -> Unit
+                                        uiState.apiSearchError != null -> Unit
+                                        apiSearchModels.isNotEmpty() -> item {
+                                            Box(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .padding(vertical = 24.dp, horizontal = 16.dp),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                Text(
+                                                    text = strings.noResultsInLibrary,
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                    textAlign = TextAlign.Center
+                                                )
+                                            }
+                                        }
+                                        else -> item {
+                                            Box(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .padding(vertical = 32.dp),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                EmptyStateView(
+                                                    title = strings.noResults,
+                                                    subtitle = ""
+                                                )
+                                            }
                                         }
                                     }
+                                } else if (list.isNotEmpty()) {
+                                    items(
+                                        items = list,
+                                        key = { it.id },
+                                        contentType = { "anime_card" }
+                                    ) { anime ->
+                                        val webLinksEntry = webLinksMap[anime.id]
+                                            val airingEntry = airingMap[anime.id]
+                                            val cardProgress = rememberCardProgress(
+                                                totalEpisodes = franchiseEpisodeTotal(
+                                                    layout = seasonLayoutMap[anime.id],
+                                                    storedEpisodes = anime.episodes,
+                                                ),
+                                                watched = watchedMap[anime.id],
+                                                airing = airingEntry,
+                                                reading = mangaReadingMap[anime.id],
+                                            )
+                                            val cardState = remember(anime, currentLanguage, webLinksEntry, cardProgress) {
+                                                // Название по выбранному языку: EN → английское, RU → русское.
+                                                // Замена, а не вторая строка; при отсутствии перевода — исходный title.
+                                                val displayTitle = when (currentLanguage) {
+                                                    AppLanguage.EN -> anime.titleEn?.takeIf { it.isNotBlank() } ?: anime.title
+                                                    AppLanguage.RU -> anime.titleRu?.takeIf { it.isNotBlank() } ?: anime.title
+                                                }
+                                                val links = when (currentLanguage) {
+                                                    AppLanguage.EN -> webLinksEntry?.enLinks
+                                                    AppLanguage.RU -> webLinksEntry?.ruLinks
+                                                }.orEmpty()
+                                                AnimeCardState(
+                                                    id = anime.id,
+                                                    title = displayTitle,
+                                                    titleEn = null,
+                                                    rating = anime.rating,
+                                                    genres = persistentListOf(
+                                                        *anime.tags.take(3)
+                                                            .mapNotNull { genreRepository.getLabel(it, currentLanguage).takeIf { n -> n.isNotBlank() } }
+                                                            .toTypedArray()
+                                                    ),
+                                                    episodesCount = anime.episodes,
+                                                    // У манги счёт идёт по главам — иначе на
+                                                    // одной карточке соседствовали бы
+                                                    // «12 / 60 ch.» и «60 eps.».
+                                                    episodesUnit = when (anime.mediaType) {
+                                                        com.example.myapplication.data.models.MediaType.MANGA -> "ch."
+                                                        else -> "eps."
+                                                    },
+                                                    webLinks = links,
+                                                    language = currentLanguage,
+                                                    imagePath = viewModel.getImgPath(anime.imageFileName),
+                                                    mediaTypeLabel = when (anime.mediaType) {
+                                                        com.example.myapplication.data.models.MediaType.ANIME -> strings.typeAnime
+                                                        com.example.myapplication.data.models.MediaType.MANGA -> strings.typeManga
+                                                        com.example.myapplication.data.models.MediaType.MOVIE -> strings.typeMovie
+                                                        com.example.myapplication.data.models.MediaType.SERIES -> strings.typeSeries
+                                                    },
+                                                    airing = cardProgress,
+                                                    isFavorite = anime.isFavorite,
+                                                )
+                                            }
 
-                                    val showApiFirst = list.isEmpty() && uiState.searchQuery.isNotEmpty()
+                                        // Тап по карточке — полноэкранные детали; кнопка справа-внизу — редактирование.
+                                        val openDetails: () -> Unit = {
+                                            performHaptic(view, "light")
+                                            collapseUpdatesToBell()
+                                            navController.navigateToDetails(anime.id)
+                                        }
+                                        val openEdit: () -> Unit = {
+                                            performHaptic(view, "light")
+                                            navController.navigateToAddEdit(anime.id)
+                                        }
+                                        val rowModifier = Modifier.padding(horizontal = 16.dp)
+                                        // .animateItem() не добавляем: конфликт с SharedTransition при возврате.
 
-                                    if (showApiFirst) {
+                                        if (hostedInWorkspace) {
+                                            // Горизонтальная ось отдана навигации: действия — по удержанию.
+                                            var coords by remember { mutableStateOf<LayoutCoordinates?>(null) }
+                                            Box(
+                                                modifier = rowModifier.onGloballyPositioned { coords = it },
+                                            ) {
+                                                with(sharedTransitionScope) {
+                                                    OneUiAnimeCard(
+                                                        state = cardState,
+                                                        animatedVisibilityScope = animatedVisibilityScope,
+                                                        onClick = openDetails,
+                                                        onEditClick = openEdit,
+                                                        onLongClick = {
+                                                            val bounds = coords?.boundsInRoot() ?: return@OneUiAnimeCard
+                                                            performHaptic(view, "light")
+                                                            cardMenuTarget = CardMenuTarget(
+                                                                state = cardState,
+                                                                isFavorite = anime.isFavorite,
+                                                                boundsInRoot = bounds,
+                                                            )
+                                                            cardMenuVisible = true
+                                                        },
+                                                    )
+                                                }
+                                            }
+                                        } else {
+                                            val dismissState = rememberSwipeToDismissBoxState(
+                                                positionalThreshold = { totalDistance -> totalDistance * 0.4f }
+                                            )
+                                            LaunchedEffect(dismissState.currentValue) {
+                                                when (dismissState.currentValue) {
+                                                    SwipeToDismissBoxValue.StartToEnd -> {
+                                                        performHaptic(view, "success")
+                                                        animeToFavorite = anime
+                                                        pendingSwipeReset = { dismissState.reset() }
+                                                    }
+                                                    SwipeToDismissBoxValue.EndToStart -> {
+                                                        performHaptic(view, "warning")
+                                                        animeToDelete = anime
+                                                        pendingSwipeReset = { dismissState.reset() }
+                                                    }
+                                                    SwipeToDismissBoxValue.Settled -> Unit
+                                                }
+                                            }
+                                            SwipeToDismissBox(
+                                                state = dismissState,
+                                                backgroundContent = { SwipeBackground(dismissState) },
+                                                modifier = rowModifier
+                                            ) {
+                                                with(sharedTransitionScope) {
+                                                    OneUiAnimeCard(
+                                                        state = cardState,
+                                                        animatedVisibilityScope = animatedVisibilityScope,
+                                                        onClick = openDetails,
+                                                        onEditClick = openEdit,
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+                                    if (uiState.searchQuery.isNotEmpty()) {
                                         apiSearchResultsSection(
                                             strings = strings,
                                             apiSearchModels = apiSearchModels,
@@ -701,206 +876,29 @@ fun HomeScreen(
                                             genreRepository = genreRepository,
                                             view = view,
                                             viewModel = viewModel,
-                                            topPadding = 8.dp
+                                            topPadding = 24.dp
                                         )
-                                        when {
-                                            uiState.apiSearchLoading -> Unit
-                                            uiState.apiSearchError != null -> Unit
-                                            apiSearchModels.isNotEmpty() -> item {
-                                                Box(
-                                                    modifier = Modifier
-                                                        .fillMaxWidth()
-                                                        .padding(vertical = 24.dp, horizontal = 16.dp),
-                                                    contentAlignment = Alignment.Center
-                                                ) {
-                                                    Text(
-                                                        text = strings.noResultsInLibrary,
-                                                        style = MaterialTheme.typography.bodySmall,
-                                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                        textAlign = TextAlign.Center
-                                                    )
-                                                }
-                                            }
-                                            else -> item {
-                                                Box(
-                                                    modifier = Modifier
-                                                        .fillMaxWidth()
-                                                        .padding(vertical = 32.dp),
-                                                    contentAlignment = Alignment.Center
-                                                ) {
-                                                    EmptyStateView(
-                                                        title = strings.noResults,
-                                                        subtitle = ""
-                                                    )
-                                                }
-                                            }
-                                        }
-                                    } else if (list.isNotEmpty()) {
-                                        items(
-                                            items = list,
-                                            key = { it.id },
-                                            contentType = { "anime_card" }
-                                        ) { anime ->
-                                            val webLinksEntry = webLinksMap[anime.id]
-                                                val airingEntry = airingMap[anime.id]
-                                                val cardProgress = rememberCardProgress(
-                                                    totalEpisodes = franchiseEpisodeTotal(
-                                                        layout = seasonLayoutMap[anime.id],
-                                                        storedEpisodes = anime.episodes,
-                                                    ),
-                                                    watched = watchedMap[anime.id],
-                                                    airing = airingEntry,
-                                                    reading = mangaReadingMap[anime.id],
-                                                )
-                                                val cardState = remember(anime, currentLanguage, webLinksEntry, cardProgress) {
-                                                    // Название по выбранному языку: EN → английское, RU → русское.
-                                                    // Замена, а не вторая строка; при отсутствии перевода — исходный title.
-                                                    val displayTitle = when (currentLanguage) {
-                                                        AppLanguage.EN -> anime.titleEn?.takeIf { it.isNotBlank() } ?: anime.title
-                                                        AppLanguage.RU -> anime.titleRu?.takeIf { it.isNotBlank() } ?: anime.title
-                                                    }
-                                                    val links = when (currentLanguage) {
-                                                        AppLanguage.EN -> webLinksEntry?.enLinks
-                                                        AppLanguage.RU -> webLinksEntry?.ruLinks
-                                                    }.orEmpty()
-                                                    AnimeCardState(
-                                                        id = anime.id,
-                                                        title = displayTitle,
-                                                        titleEn = null,
-                                                        rating = anime.rating,
-                                                        genres = persistentListOf(
-                                                            *anime.tags.take(3)
-                                                                .mapNotNull { genreRepository.getLabel(it, currentLanguage).takeIf { n -> n.isNotBlank() } }
-                                                                .toTypedArray()
-                                                        ),
-                                                        episodesCount = anime.episodes,
-                                                        // У манги счёт идёт по главам — иначе на
-                                                        // одной карточке соседствовали бы
-                                                        // «12 / 60 ch.» и «60 eps.».
-                                                        episodesUnit = when (anime.mediaType) {
-                                                            com.example.myapplication.data.models.MediaType.MANGA -> "ch."
-                                                            else -> "eps."
-                                                        },
-                                                        webLinks = links,
-                                                        language = currentLanguage,
-                                                        imagePath = viewModel.getImgPath(anime.imageFileName),
-                                                        mediaTypeLabel = when (anime.mediaType) {
-                                                            com.example.myapplication.data.models.MediaType.ANIME -> strings.typeAnime
-                                                            com.example.myapplication.data.models.MediaType.MANGA -> strings.typeManga
-                                                            com.example.myapplication.data.models.MediaType.MOVIE -> strings.typeMovie
-                                                            com.example.myapplication.data.models.MediaType.SERIES -> strings.typeSeries
-                                                        },
-                                                        airing = cardProgress,
-                                                        isFavorite = anime.isFavorite,
-                                                    )
-                                                }
-
-                                            // Тап по карточке — полноэкранные детали; кнопка справа-внизу — редактирование.
-                                            val openDetails: () -> Unit = {
-                                                performHaptic(view, "light")
-                                                collapseUpdatesToBell()
-                                                navController.navigateToDetails(anime.id)
-                                            }
-                                            val openEdit: () -> Unit = {
-                                                performHaptic(view, "light")
-                                                navController.navigateToAddEdit(anime.id)
-                                            }
-                                            val rowModifier = Modifier.padding(horizontal = 16.dp)
-                                            // .animateItem() не добавляем: конфликт с SharedTransition при возврате.
-
-                                            if (hostedInWorkspace) {
-                                                // Горизонтальная ось отдана навигации: действия — по удержанию.
-                                                var coords by remember { mutableStateOf<LayoutCoordinates?>(null) }
-                                                Box(
-                                                    modifier = rowModifier.onGloballyPositioned { coords = it },
-                                                ) {
-                                                    with(sharedTransitionScope) {
-                                                        OneUiAnimeCard(
-                                                            state = cardState,
-                                                            animatedVisibilityScope = animatedVisibilityScope,
-                                                            onClick = openDetails,
-                                                            onEditClick = openEdit,
-                                                            onLongClick = {
-                                                                val bounds = coords?.boundsInRoot() ?: return@OneUiAnimeCard
-                                                                performHaptic(view, "light")
-                                                                cardMenuTarget = CardMenuTarget(
-                                                                    state = cardState,
-                                                                    isFavorite = anime.isFavorite,
-                                                                    boundsInRoot = bounds,
-                                                                )
-                                                                cardMenuVisible = true
-                                                            },
-                                                        )
-                                                    }
-                                                }
-                                            } else {
-                                                val dismissState = rememberSwipeToDismissBoxState(
-                                                    positionalThreshold = { totalDistance -> totalDistance * 0.4f }
-                                                )
-                                                LaunchedEffect(dismissState.currentValue) {
-                                                    when (dismissState.currentValue) {
-                                                        SwipeToDismissBoxValue.StartToEnd -> {
-                                                            performHaptic(view, "success")
-                                                            animeToFavorite = anime
-                                                            pendingSwipeReset = { dismissState.reset() }
-                                                        }
-                                                        SwipeToDismissBoxValue.EndToStart -> {
-                                                            performHaptic(view, "warning")
-                                                            animeToDelete = anime
-                                                            pendingSwipeReset = { dismissState.reset() }
-                                                        }
-                                                        SwipeToDismissBoxValue.Settled -> Unit
-                                                    }
-                                                }
-                                                SwipeToDismissBox(
-                                                    state = dismissState,
-                                                    backgroundContent = { SwipeBackground(dismissState) },
-                                                    modifier = rowModifier
-                                                ) {
-                                                    with(sharedTransitionScope) {
-                                                        OneUiAnimeCard(
-                                                            state = cardState,
-                                                            animatedVisibilityScope = animatedVisibilityScope,
-                                                            onClick = openDetails,
-                                                            onEditClick = openEdit,
-                                                        )
-                                                    }
-                                                }
-                                            }
-                                        }
-                                        if (uiState.searchQuery.isNotEmpty()) {
-                                            apiSearchResultsSection(
-                                                strings = strings,
-                                                apiSearchModels = apiSearchModels,
-                                                uiState = uiState,
-                                                currentLanguage = currentLanguage,
-                                                genreRepository = genreRepository,
-                                                view = view,
-                                                viewModel = viewModel,
-                                                topPadding = 24.dp
+                                    }
+                                } else {
+                                    item {
+                                        Box(
+                                            modifier = Modifier
+                                                .fillParentMaxSize()
+                                                .padding(bottom = 120.dp),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            EmptyStateView(
+                                                title = strings.emptyTitle,
+                                                subtitle = strings.emptySubtitle
                                             )
                                         }
-                                    } else {
-                                        item {
-                                            Box(
-                                                modifier = Modifier
-                                                    .fillParentMaxSize()
-                                                    .padding(bottom = 120.dp),
-                                                contentAlignment = Alignment.Center
-                                            ) {
-                                                EmptyStateView(
-                                                    title = strings.emptyTitle,
-                                                    subtitle = strings.emptySubtitle
-                                                )
-                                            }
-                                        }
-                                    }
-                                    item(key = "home_bottom_dock_spacer") {
-                                        Spacer(Modifier.height(220.dp))
                                     }
                                 }
-                                } // key(layerBackdropResetKey)
+                                item(key = "home_bottom_dock_spacer") {
+                                    Spacer(Modifier.height(220.dp))
+                                }
                             }
+                            } // key(layerBackdropResetKey)
                         }
                     }
                     CloudSyncPill(

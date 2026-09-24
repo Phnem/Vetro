@@ -1,5 +1,6 @@
 package com.example.myapplication
 
+import com.example.myapplication.ui.shared.theme.IosScroll
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -97,7 +98,7 @@ fun WelcomeScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(horizontal = 24.dp)
-                .verticalScroll(scrollState),
+                .verticalScroll(scrollState, flingBehavior = IosScroll.flingBehavior()),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Spacer(modifier = Modifier.height(32.dp))

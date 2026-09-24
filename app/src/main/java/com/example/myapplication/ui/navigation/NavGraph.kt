@@ -1,5 +1,7 @@
 package com.example.myapplication.ui.navigation
 
+import androidx.compose.animation.core.LinearEasing
+import com.example.myapplication.ui.details.SwipeBackGesture
 import androidx.compose.animation.EnterExitState
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionLayout
@@ -107,10 +109,22 @@ private fun homeDepressExit() =
     ) + fadeOut(animationSpec = tween(300), targetAlpha = 0.55f)
 
 private fun homeDepressPopEnter() =
-    scaleIn(
-        initialScale = 0.92f,
-        animationSpec = MotionTokens.sheetDismissForced(),
-    ) + fadeIn(animationSpec = tween(220), initialAlpha = 0.55f)
+    if (SwipeBackGesture.active) {
+        // Свайп «назад» по экрану деталей ведёт переход за пальцем — нужна линейная кривая.
+        scaleIn(initialScale = 0.92f, animationSpec = tween(SWIPE_BACK_LINEAR_MS, easing = LinearEasing)) +
+            fadeIn(animationSpec = tween(SWIPE_BACK_LINEAR_MS, easing = LinearEasing), initialAlpha = 0.55f)
+    } else {
+        scaleIn(
+            initialScale = 0.92f,
+            animationSpec = MotionTokens.sheetDismissForced(),
+        ) + fadeIn(animationSpec = tween(220), initialAlpha = 0.55f)
+    }
+
+/**
+ * Длительность линейного перехода «назад» при свайпе по экрану: на жесте она не видна (переход
+ * едет за пальцем), а после отпускания — это время доезда оставшейся доли.
+ */
+private const val SWIPE_BACK_LINEAR_MS = 320
 
 @OptIn(ExperimentalSharedTransitionApi::class, UnstableApi::class)
 @Composable
@@ -322,10 +336,18 @@ fun AppNavGraph(
                     ) + fadeIn(animationSpec = tween(220))
                 },
                 popExitTransition = {
-                    slideOutHorizontally(
-                        targetOffsetX = { it },
-                        animationSpec = MotionTokens.dismissOffset,
-                    ) + fadeOut(animationSpec = tween(220))
+                    if (SwipeBackGesture.active) {
+                        // Окно идёт за пальцем 1:1 — линейно; см. SwipeBackGesture.
+                        slideOutHorizontally(
+                            targetOffsetX = { it },
+                            animationSpec = tween(SWIPE_BACK_LINEAR_MS, easing = LinearEasing),
+                        ) + fadeOut(animationSpec = tween(SWIPE_BACK_LINEAR_MS, easing = LinearEasing))
+                    } else {
+                        slideOutHorizontally(
+                            targetOffsetX = { it },
+                            animationSpec = MotionTokens.dismissOffset,
+                        ) + fadeOut(animationSpec = tween(220))
+                    }
                 },
             ) { backStackEntry ->
                 val route = backStackEntry.toRoute<DetailsRoute>()

@@ -1,5 +1,6 @@
 package com.example.myapplication.ui.details
 
+import com.example.myapplication.ui.shared.theme.IosScroll
 import com.example.myapplication.domain.seasons.displayLabel
 import com.example.myapplication.media.download.DownloadQuality
 import androidx.compose.animation.AnimatedContent
@@ -206,6 +207,7 @@ private fun SeasonStep(
     onSelect: (Int) -> Unit,
 ) {
     LazyColumn(
+        flingBehavior = IosScroll.flingBehavior(),
         modifier = Modifier.heightIn(max = 340.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
@@ -293,6 +295,7 @@ private fun EpisodesStep(
         }
         Spacer(Modifier.height(4.dp))
         LazyColumn(
+            flingBehavior = IosScroll.flingBehavior(),
             modifier = Modifier.heightIn(max = 320.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
@@ -394,6 +397,7 @@ private fun ProgressStep(state: DownloadWizardState, ru: Boolean) {
         val episodes = progress?.episodes.orEmpty()
         if (episodes.isNotEmpty()) {
             LazyColumn(
+                flingBehavior = IosScroll.flingBehavior(),
                 modifier = Modifier.heightIn(max = 300.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {

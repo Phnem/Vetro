@@ -1,5 +1,6 @@
 package com.example.myapplication.ui.workspace
 
+import com.example.myapplication.ui.shared.theme.IosScroll
 import kotlinx.coroutines.flow.first
 import androidx.compose.runtime.snapshotFlow
 import com.example.myapplication.ui.home.updates.EpisodeNotificationTray
@@ -167,6 +168,7 @@ fun WorkspaceScreen(
         Box(modifier = Modifier.fillMaxSize().layerBackdrop(backdrop)) {
         CompositionLocalProvider(LocalBackdropPinned provides pinnedDuringSwipe) {
         HorizontalPager(
+            flingBehavior = IosScroll.pagerFlingBehavior(pagerState),
             state = pagerState,
             modifier = Modifier.fillMaxSize(),
             // Соседняя страница обязана быть готова заранее: иначе переход показывает пустой кадр.

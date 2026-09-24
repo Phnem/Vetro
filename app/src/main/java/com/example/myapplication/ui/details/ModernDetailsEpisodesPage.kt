@@ -1,5 +1,6 @@
 package com.example.myapplication.ui.details
 
+import com.example.myapplication.ui.shared.theme.IosScroll
 import android.widget.Toast
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
@@ -203,6 +204,7 @@ fun ModernDetailsEpisodesPage(
 
     Box(Modifier.fillMaxSize().background(episodeBackground)) {
         LazyColumn(
+            flingBehavior = IosScroll.flingBehavior(),
             modifier = Modifier.fillMaxSize().statusBarsPadding(),
             contentPadding = PaddingValues(
                 top = 76.dp,

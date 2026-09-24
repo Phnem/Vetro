@@ -1,5 +1,6 @@
 package com.example.myapplication.localplayer.ui
 
+import com.example.myapplication.ui.shared.theme.IosScroll
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.animation.core.animateDpAsState
@@ -1221,7 +1222,7 @@ private fun OptionMenu(
                             .statusBarsPadding()
                             .displayCutoutPadding()
                             .padding(top = 66.dp, end = 14.dp)
-                            .verticalScroll(rememberScrollState()),
+                            .verticalScroll(rememberScrollState(), flingBehavior = IosScroll.flingBehavior()),
                         horizontalAlignment = Alignment.End,
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {

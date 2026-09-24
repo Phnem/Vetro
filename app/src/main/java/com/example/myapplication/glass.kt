@@ -1,5 +1,6 @@
 package com.example.myapplication
 
+import com.example.myapplication.ui.shared.theme.IosScroll
 import androidx.compose.foundation.layout.offset
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.draw.drawWithCache
@@ -1371,7 +1372,7 @@ fun GenreFilterOverlay(
                 Column(
                     modifier = Modifier
                         .padding(start = 20.dp, top = 2.dp, end = 20.dp)
-                        .verticalScroll(rememberScrollState())
+                        .verticalScroll(rememberScrollState(), flingBehavior = IosScroll.flingBehavior())
                 ) {
                     Box(
                         modifier = Modifier

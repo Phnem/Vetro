@@ -1,5 +1,6 @@
 package com.example.myapplication.ui.settings
 
+import com.example.myapplication.ui.shared.theme.IosScroll
 import com.example.myapplication.ui.shared.glassControl
 import com.example.myapplication.ui.shared.rememberPinnableBackdrop
 import android.app.Activity
@@ -370,6 +371,7 @@ fun SettingsScreen(
                 }
 
                 LazyColumn(
+                    flingBehavior = IosScroll.flingBehavior(),
                     state = listState,
                     modifier = Modifier
                         .fillMaxSize()

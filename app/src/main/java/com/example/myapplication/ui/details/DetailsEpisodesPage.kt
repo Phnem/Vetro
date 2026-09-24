@@ -1,5 +1,6 @@
 package com.example.myapplication.ui.details
 
+import com.example.myapplication.ui.shared.theme.IosScroll
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -179,6 +180,7 @@ fun DetailsEpisodesPage(
             is LocalPlayerUiState.Library -> {
                 val episodes = s.source.episodes
                 LazyColumn(
+                    flingBehavior = IosScroll.flingBehavior(),
                     modifier = Modifier.fillMaxSize().statusBarsPadding(),
                     contentPadding = PaddingValues(
                         top = 72.dp,

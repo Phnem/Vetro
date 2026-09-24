@@ -1,5 +1,6 @@
 package com.example.myapplication.ui.inspect
 
+import com.example.myapplication.ui.shared.theme.IosScroll
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
@@ -230,6 +231,7 @@ fun InspectScreen(
                         // тянет контент за собой. Раньше свайп просто подменял режим на месте,
                         // без всякого движения, поэтому перехода не читалось вовсе.
                         HorizontalPager(
+                            flingBehavior = IosScroll.pagerFlingBehavior(pagerState),
                             state = pagerState,
                             modifier = Modifier.fillMaxSize(),
                             beyondViewportPageCount = 1,
@@ -402,6 +404,7 @@ fun InspectScreen(
                                         is InspectUiState.Idle -> { /* empty */ }
                                         is InspectUiState.Success -> {
                                             LazyColumn(
+                                                flingBehavior = IosScroll.flingBehavior(),
                                                 modifier = Modifier.fillMaxSize(),
                                                 contentPadding = PaddingValues(16.dp, 16.dp, 16.dp, 116.dp),
                                                 verticalArrangement = Arrangement.spacedBy(12.dp)

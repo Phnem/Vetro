@@ -1,5 +1,6 @@
 package com.example.myapplication.media.ui
 
+import com.example.myapplication.ui.shared.theme.IosScroll
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -82,7 +83,7 @@ fun StreamWatchSheet(
                     }
                 }
                 is StreamWatchUiState.Ready -> {
-                    LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    LazyColumn(flingBehavior = IosScroll.flingBehavior(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         items(s.hosters, key = { it.name + it.url }) { hoster ->
                             HosterBlock(
                                 hoster = hoster,

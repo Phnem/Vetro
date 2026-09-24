@@ -1,5 +1,6 @@
 package com.example.myapplication.ui.details
 
+import com.example.myapplication.ui.shared.theme.IosScroll
 import com.example.myapplication.ui.shared.glassControl
 import android.graphics.BitmapFactory
 
@@ -154,8 +155,10 @@ fun DetailsScreen(
         // преломляют живой контент. Узел с layerBackdrop никогда не размонтируется.
         Box(modifier = Modifier.fillMaxSize().layerBackdrop(backdrop)) {
             HorizontalPager(
+                flingBehavior = IosScroll.pagerFlingBehavior(pagerState),
                 state = pagerState,
-                modifier = Modifier.fillMaxSize(),
+                // Свайп вправо со страницы «Детали» — назад на главную (как в iOS, от любой точки).
+                modifier = Modifier.fillMaxSize().detailsSwipeBack(pagerState, enabled = true),
                 beyondViewportPageCount = 1,
             ) { page ->
                 when (page) {
@@ -386,7 +389,7 @@ private fun DetailsInfoPage(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .verticalScroll(scrollState),
+                .verticalScroll(scrollState, flingBehavior = IosScroll.flingBehavior()),
         ) {
             // Прозрачное окно, сквозь которое виден hero; дальше начинается сам лист.
             Spacer(Modifier.height(heroHeight - sheetOverlap))

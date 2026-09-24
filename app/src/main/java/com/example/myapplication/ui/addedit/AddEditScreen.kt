@@ -1,5 +1,6 @@
 package com.example.myapplication.ui.addedit
 
+import com.example.myapplication.ui.shared.theme.IosScroll
 import com.example.myapplication.ui.shared.glassControl
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -224,7 +225,7 @@ fun AddEditScreen(
                                 .imePadding()
                                 .navigationBarsPadding()
                                 .padding(horizontal = 24.dp)
-                                .verticalScroll(scrollState),
+                                .verticalScroll(scrollState, flingBehavior = IosScroll.flingBehavior()),
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
                             Spacer(Modifier.height(contentTopInset))

@@ -1,5 +1,6 @@
 package com.example.myapplication.manga.ui
 
+import com.example.myapplication.ui.shared.theme.IosScroll
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -294,6 +295,7 @@ private fun ReaderContent(
                             }
                             val forward = if (direction == PageDirection.Rtl) 1 else -1
                             HorizontalPager(
+                                flingBehavior = IosScroll.pagerFlingBehavior(pagerState),
                                 state = pagerState,
                                 modifier = Modifier.fillMaxSize(),
                                 beyondViewportPageCount = 1,
@@ -336,6 +338,7 @@ private fun ReaderContent(
                             onToggleChrome = { chromeVisible = !chromeVisible },
                         ) { zoomModifier ->
                             LazyColumn(
+                                flingBehavior = IosScroll.flingBehavior(),
                                 state = listState,
                                 modifier = zoomModifier.fillMaxSize(),
                             ) {
@@ -456,7 +459,7 @@ private fun ZoomablePage(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .verticalScroll(rememberScrollState())
+                    .verticalScroll(rememberScrollState(), flingBehavior = IosScroll.flingBehavior())
                     .pageTurnTaps(page.url, onToggleChrome, onTapLeft, onTapRight),
             ) {
                 PageImage(

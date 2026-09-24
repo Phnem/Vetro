@@ -1,5 +1,6 @@
 package com.example.myapplication.manga.ui
 
+import com.example.myapplication.ui.shared.theme.IosScroll
 import android.content.Intent
 import androidx.core.net.toUri
 import androidx.compose.animation.AnimatedVisibility
@@ -259,6 +260,7 @@ private fun SourcePickerContent(
         }
 
         LazyColumn(
+            flingBehavior = IosScroll.flingBehavior(),
             contentPadding = PaddingValues(
                 start = 16.dp,
                 end = 16.dp,
@@ -445,7 +447,7 @@ private fun ChaptersContent(
             Row(
                 modifier = Modifier
                     .weight(1f)
-                    .horizontalScroll(rememberScrollState())
+                    .horizontalScroll(rememberScrollState(), flingBehavior = IosScroll.flingBehavior())
                     .padding(horizontal = 16.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
@@ -485,7 +487,7 @@ private fun ChaptersContent(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState())
+                    .horizontalScroll(rememberScrollState(), flingBehavior = IosScroll.flingBehavior())
                     .padding(horizontal = 16.dp, vertical = 8.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
@@ -520,6 +522,7 @@ private fun ChaptersContent(
         }
 
         LazyColumn(
+            flingBehavior = IosScroll.flingBehavior(),
             contentPadding = PaddingValues(
                 start = 16.dp,
                 end = 16.dp,

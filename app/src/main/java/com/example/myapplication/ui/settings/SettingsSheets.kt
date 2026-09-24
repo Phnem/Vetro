@@ -1,5 +1,6 @@
 package com.example.myapplication.ui.settings
 
+import com.example.myapplication.ui.shared.theme.IosScroll
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -115,7 +116,7 @@ fun CloudSettingsSheet(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .verticalScroll(rememberScrollState())
+                .verticalScroll(rememberScrollState(), flingBehavior = IosScroll.flingBehavior())
                 .padding(horizontal = 20.dp)
                 .padding(top = 16.dp, bottom = 28.dp),
         ) {
@@ -761,7 +762,7 @@ fun UpdateChangelogSheet(
             .fillMaxWidth()
             .padding(horizontal = 20.dp)
             .padding(top = IosDesign.SheetContentTop, bottom = 24.dp)
-            .verticalScroll(rememberScrollState())
+            .verticalScroll(rememberScrollState(), flingBehavior = IosScroll.flingBehavior())
     ) {
         Box(modifier = Modifier.fillMaxWidth()) {
             IconButton(

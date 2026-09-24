@@ -1,5 +1,6 @@
 package com.example.myapplication.audiobooks.ui
 
+import com.example.myapplication.ui.shared.theme.IosScroll
 import android.content.ComponentName
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.Animatable
@@ -383,7 +384,7 @@ private fun PlayerButton(label: String, description: String, onClick: () -> Unit
 @Composable
 private fun ChaptersSheet(book: PlayingBook, timeline: BookTimeline?, controller: MediaController,
                           strings: AudiobookStrings, onDismiss: () -> Unit) {
-    LazyColumn(Modifier.fillMaxWidth().heightIn(max = 560.dp).padding(horizontal = 24.dp),
+    LazyColumn(Modifier.fillMaxWidth().heightIn(max = 560.dp).padding(horizontal = 24.dp), flingBehavior = IosScroll.flingBehavior(),
         verticalArrangement = Arrangement.spacedBy(8.dp)) {
         item { Text(strings.chapters, fontSize = 24.sp, fontWeight = FontWeight.Bold) }
         if (timeline == null) item { Text(book.chapterTitle) }
@@ -403,7 +404,7 @@ private fun SpeedSheet(book: PlayingBook, controller: MediaController, strings: 
         Slider(value = book.speed.coerceIn(0.5f, 3f), onValueChange = {
             controller.setPlaybackSpeed((it * 20).toInt() / 20f)
         }, valueRange = 0.5f..3f, modifier = Modifier.semantics { contentDescription = strings.playbackSpeed })
-        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState(), flingBehavior = IosScroll.flingBehavior()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             for (speed in listOf(0.8f, 1f, 1.2f, 1.5f, 2f)) {
                 Button(onClick = { controller.setPlaybackSpeed(speed) }) { Text("${speed}×") }
             }

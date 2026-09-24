@@ -1,5 +1,6 @@
 package com.example.myapplication.ui.details
 
+import com.example.myapplication.ui.shared.theme.IosScroll
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -47,7 +48,7 @@ fun MovieSeriesSourceSheet(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .verticalScroll(rememberScrollState())
+                .verticalScroll(rememberScrollState(), flingBehavior = IosScroll.flingBehavior())
                 .padding(horizontal = 20.dp)
                 .navigationBarsPadding(),
             verticalArrangement = Arrangement.spacedBy(12.dp),

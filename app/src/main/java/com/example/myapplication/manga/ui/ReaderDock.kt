@@ -1,5 +1,6 @@
 package com.example.myapplication.manga.ui
 
+import com.example.myapplication.ui.shared.theme.IosScroll
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -197,6 +198,7 @@ fun ReaderChaptersSheet(
             ),
         )
         LazyColumn(
+            flingBehavior = IosScroll.flingBehavior(),
             state = listState,
             contentPadding = PaddingValues(start = 12.dp, end = 12.dp, bottom = 32.dp),
             verticalArrangement = Arrangement.spacedBy(2.dp),
