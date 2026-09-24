@@ -44,6 +44,9 @@ private const val PARALLAX_KEPT = 0.25f
 /** Затемнение уходящей страницы в конце хода: глубже — значит темнее. */
 private const val SUNKEN_DIM = 0.28f
 
+/** На какой доле хода от правого края тень наезжающей страницы набирает полную силу. */
+private const val SHADOW_FADE_IN = 0.15f
+
 /** Скругление углов уходящей страницы в конце хода, dp. */
 private const val SUNKEN_CORNER_DP = 16f
 
@@ -62,8 +65,10 @@ fun workspacePageTransform(offset: Float): PageTransform {
             dimAlpha = 0f,
             cornerDp = 0f,
             // Тень ровно на время движения: у осевшей страницы её нет, иначе на стыке страниц
-            // остаётся тёмная полоса в покое.
-            shadowAlpha = clamped,
+            // остаётся тёмная полоса в покое. Это касается ОБОИХ краёв хода: тень рисуется слева
+            // от ведущего края, и у соседней страницы, ждущей за правым краем экрана (offset = 1),
+            // она легла бы полосой поверх текущей. Поэтому на первых долях хода она нарастает.
+            shadowAlpha = clamped * ((1f - clamped) / SHADOW_FADE_IN).coerceIn(0f, 1f),
         )
     }
     val depth = -clamped

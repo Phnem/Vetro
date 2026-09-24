@@ -40,8 +40,10 @@ class WorkspacePageTransformTest {
     fun `incoming page casts a shadow on its leading edge while it moves`() {
         assertEquals(0f, workspacePageTransform(0f).shadowAlpha, eps)
         assertTrue(workspacePageTransform(0.5f).shadowAlpha > 0f)
+        // Соседняя страница в покое за правым краем: её тень не должна лечь на текущую.
+        assertEquals(0f, workspacePageTransform(1f).shadowAlpha, eps)
         assertTrue(
-            workspacePageTransform(1f).shadowAlpha >= workspacePageTransform(0.5f).shadowAlpha,
+            workspacePageTransform(0.8f).shadowAlpha >= workspacePageTransform(0.5f).shadowAlpha,
         )
     }
 
