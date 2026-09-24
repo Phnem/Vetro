@@ -23,6 +23,7 @@ val viewModelModule = module {
             authRepository = get(),
             appUpdateRepository = get(),
             imageCompressionMigrator = get(),
+            startupSweeps = get(),
         )
     }
     viewModel {

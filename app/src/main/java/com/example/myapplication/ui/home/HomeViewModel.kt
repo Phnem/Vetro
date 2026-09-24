@@ -43,6 +43,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.Dispatchers
@@ -422,7 +423,7 @@ class HomeViewModel(
     }
 
     fun deleteAnime(id: String) {
-        viewModelScope.launch {
+        viewModelScope.launch(Dispatchers.IO) {
             runCatching {
                 val anime = localDataSource.getAnimeById(id) ?: return@launch
                 anime.imageFileName?.let { imageStorage.deleteImage(it) }
@@ -432,7 +433,7 @@ class HomeViewModel(
     }
 
     fun toggleFavorite(id: String) {
-        viewModelScope.launch {
+        viewModelScope.launch(Dispatchers.IO) {
             runCatching {
                 val anime = localDataSource.getAnimeById(id) ?: return@launch
                 localDataSource.updateAnime(anime.copy(isFavorite = !anime.isFavorite))
@@ -467,7 +468,10 @@ class HomeViewModel(
      * приложение открыто, обновления показываются in-app стопкой, а не в шторке.
      */
     fun clearSystemUpdateNotifications() {
-        notifier.cancelAllUpdateNotifications(localDataSource.getUpdates().map { it.animeId })
+        // Вызывается на каждом выходе на передний план — чтение из БД не на главном потоке.
+        viewModelScope.launch(Dispatchers.IO) {
+            notifier.cancelAllUpdateNotifications(localDataSource.getUpdates().map { it.animeId })
+        }
     }
 
     private suspend fun readLanguageFromSettings(): AppLanguage = AppLanguagePrefs.current(settingsDataStore)
@@ -522,7 +526,7 @@ class HomeViewModel(
 
     fun loadStatsAnimeList() {
         viewModelScope.launch {
-            val list = localDataSource.getAllAnimeList().toImmutableList()
+            val list = withContext(Dispatchers.IO) { localDataSource.getAllAnimeList() }.toImmutableList()
             val avgRating = if (list.isEmpty()) {
                 0.0
             } else {

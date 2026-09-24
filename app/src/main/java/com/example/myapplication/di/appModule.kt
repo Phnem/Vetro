@@ -52,6 +52,8 @@ val appModule = module {
     single<GenreRepository> { GenreRepository() }
     // Стопка обновлений → колокольчик: живёт до смерти процесса, то есть до холодного старта.
     single { com.example.myapplication.ui.home.updates.EpisodeNotificationTray() }
+    // Одна область корутин уровня процесса (см. AppScope).
+    single { com.example.myapplication.AppScope() }
     single { GeminiStructuredClient(get()) }
     single { AiLlmEndpoint(get()) }
     single { AiProviderLatencyProber(get(), get()) }

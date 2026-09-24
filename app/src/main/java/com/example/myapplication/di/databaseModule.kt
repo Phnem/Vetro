@@ -37,7 +37,7 @@ val databaseModule = module {
     single { get<SQLDelightDatabaseFactory>().getDatabase() }
     single { VetroPublicDbExporter(androidContext(), get(), get()) }
     single { DeveloperMirrorCoordinator(settingsDataStore = get(named("settings")), exporter = get()) }
-    single { AnimeLocalDataSource(get(), get()) }
+    single { AnimeLocalDataSource(get(), get(), get()) }
     single<ImageStorageRepository> {
         ImageStorageRepositoryImpl(
             context = androidContext(),
@@ -89,6 +89,15 @@ val databaseModule = module {
         ImageCompressionMigrator(
             db = get(),
             storagePaths = get()
+        )
+    }
+    single {
+        com.example.myapplication.data.local.StartupSweeps(
+            dataStore = get(named("migration")),
+            legacyStorageMigrator = get(),
+            legacyCollectionSafMigrator = get(),
+            imageCompressionMigrator = get(),
+            appScope = get(),
         )
     }
 

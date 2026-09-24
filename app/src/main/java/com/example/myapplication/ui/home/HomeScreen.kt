@@ -1,5 +1,6 @@
 package com.example.myapplication.ui.home
 
+import androidx.activity.compose.ReportDrawnWhen
 import com.example.myapplication.ui.shared.theme.IosScroll
 import com.example.myapplication.ui.home.updates.notificationStrings
 import com.example.myapplication.ui.home.updates.NotificationCenter
@@ -176,6 +177,9 @@ fun HomeScreen(
     val syncReport by viewModel.syncReport.collectAsStateWithLifecycle()
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val list by viewModel.animeListFlow.collectAsStateWithLifecycle()
+    // Старт «полностью отрисован», когда коллекция на экране: система пишет это время в лог
+    // (Fully drawn), и по нему считается холодный старт, а не по первому кадру сплэша.
+    ReportDrawnWhen { uiState.isListLoaded }
     val playerPromoDismissed by viewModel.playerPromoDismissed.collectAsStateWithLifecycle()
     val playerPromoDeferred by viewModel.playerPromoDeferredThisSession.collectAsStateWithLifecycle()
     val webLinksMap by viewModel.webLinks.collectAsStateWithLifecycle()

@@ -55,6 +55,7 @@ import com.example.myapplication.utils.getStrings
 import com.example.myapplication.utils.getWelcomeStrings
 import com.example.myapplication.utils.systemAppLanguage
 import org.koin.androidx.compose.koinViewModel
+import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
 import org.koin.compose.koinInject
 
 private const val SplashZoomMillis = 450
@@ -134,8 +135,10 @@ fun AppNavGraph(
     startDestination: Any = SplashRoute
 ) {
     val homeViewModel: HomeViewModel = koinViewModel()
-    val addEditViewModel: AddEditViewModel = koinViewModel()
-    val inspectViewModel: InspectViewModel = koinViewModel()
+    // Формы AddEdit и Inspect создаются, когда их маршрут открыт впервые, а не на сплэше: у обеих
+    // в конструкторе горячие подписки на настройки. Владелец — тот же, что был (активити), поэтому
+    // экземпляр по-прежнему один на все заходы.
+    val activityViewModelOwner = checkNotNull(LocalViewModelStoreOwner.current)
 
     val context = LocalContext.current
     val authRepository: com.example.myapplication.sync.supabase.AuthRepository = koinInject()
@@ -371,7 +374,7 @@ fun AppNavGraph(
                 val route = backStackEntry.toRoute<AddEditRoute>()
                 AddEditScreen(
                     navController = navController,
-                    viewModel = addEditViewModel,
+                    viewModel = koinViewModel<AddEditViewModel>(viewModelStoreOwner = activityViewModelOwner),
                     animeId = route.animeId,
                     sharedTransitionScope = this@SharedTransitionLayout,
                     animatedVisibilityScope = this
@@ -396,7 +399,7 @@ fun AppNavGraph(
             ) {
                 InspectScreen(
                     navController = navController,
-                    viewModel = inspectViewModel,
+                    viewModel = koinViewModel<InspectViewModel>(viewModelStoreOwner = activityViewModelOwner),
                     sharedTransitionScope = this@SharedTransitionLayout,
                     animatedVisibilityScope = this,
                     onBack = { navController.popBackStack() },

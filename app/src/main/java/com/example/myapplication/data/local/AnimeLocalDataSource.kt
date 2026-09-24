@@ -10,23 +10,47 @@ import com.example.myapplication.data.models.RatingScale
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.flow.shareIn
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.SharingStarted
+import com.example.myapplication.AppScope
 
+/**
+ * Все suspend-функции записи уходят на IO сами: раньше они шли на потоке вызывающего, то есть из
+ * viewModelScope — на главном, и каждая правка тайтла писала в SQLite посреди кадра.
+ */
 class AnimeLocalDataSource(
     private val factory: SQLDelightDatabaseFactory,
-    private val mirrorCoordinator: DeveloperMirrorCoordinator
+    private val mirrorCoordinator: DeveloperMirrorCoordinator,
+    private val appScope: AppScope,
 ) {
 
     private fun db(): AnimeDatabase = factory.getDatabase()
 
+    /**
+     * Вся коллекция — ОДИН запрос на всех подписчиков.
+     *
+     * Раньше каждый подписчик (главная, счётчик просмотренного, объяснения статистики, рекомендации,
+     * Inspect) держал свой запрос, и любая запись в БД запускала полный GROUP_CONCAT по коллекции
+     * пять раз. Теперь запрос один; живёт, пока есть подписчики (+5 с на смену экрана), последний
+     * список отдаётся новому подписчику сразу.
+     */
+    private val sharedCollection: Flow<List<Anime>> by lazy {
+        db().animeQueries.getAllAnimeWithTagsConcat(::concatRowToAnime)
+            .asFlow()
+            .mapToList(Dispatchers.IO)
+            .distinctUntilChanged()
+            .shareIn(appScope, SharingStarted.WhileSubscribed(5_000), replay = 1)
+    }
+
     /** Реактивный поток коллекции (опционально — одного типа медиа). */
     fun observeAllAnime(filterType: MediaType? = null): Flow<List<Anime>> {
-        val queries = db().animeQueries
-        val query = if (filterType == null) {
-            queries.getAllAnimeWithTagsConcat(::concatRowToAnime)
-        } else {
-            queries.getAnimeWithTagsConcatByType(filterType.name, ::concatRowToAnime)
-        }
-        return query.asFlow().mapToList(Dispatchers.IO)
+        if (filterType == null) return sharedCollection
+        return db().animeQueries
+            .getAnimeWithTagsConcatByType(filterType.name, ::concatRowToAnime)
+            .asFlow()
+            .mapToList(Dispatchers.IO)
     }
 
     fun getAnimeCount(): Int {
@@ -43,17 +67,17 @@ class AnimeLocalDataSource(
     fun getAnimeById(id: String): Anime? =
         db().animeQueries.getAnimeWithTagsConcatById(id, ::concatRowToAnime).executeAsOneOrNull()
 
-    suspend fun updateAnimeComment(id: String, comment: String) {
+    suspend fun updateAnimeComment(id: String, comment: String): Unit = withContext(Dispatchers.IO) {
         db().animeQueries.updateAnimeComment(comment, System.currentTimeMillis(), id)
         mirrorCoordinator.requestExportIfEnabled()
     }
 
-    suspend fun insertAnime(anime: Anime) {
+    suspend fun insertAnime(anime: Anime): Unit = withContext(Dispatchers.IO) {
         db().insertNewAnime(anime)
         mirrorCoordinator.requestExportIfEnabled()
     }
 
-    suspend fun updateAnime(anime: Anime) {
+    suspend fun updateAnime(anime: Anime): Unit = withContext(Dispatchers.IO) {
         db().animeQueries.transaction {
             db().animeQueries.updateAnime(
                 title = anime.title,
@@ -99,7 +123,7 @@ class AnimeLocalDataSource(
         mirrorCoordinator.requestExportIfEnabled()
     }
 
-    suspend fun deleteAnime(id: String) {
+    suspend fun deleteAnime(id: String): Unit = withContext(Dispatchers.IO) {
         db().animeQueries.transaction {
             db().animeQueries.deleteAnimeTags(id)
             db().animeQueries.deleteAnime(id)
@@ -107,7 +131,7 @@ class AnimeLocalDataSource(
         mirrorCoordinator.requestExportIfEnabled()
     }
 
-    suspend fun insertAllAnime(list: List<Anime>) {
+    suspend fun insertAllAnime(list: List<Anime>): Unit = withContext(Dispatchers.IO) {
         val database = db()
         val now = System.currentTimeMillis()
         database.animeQueries.transaction {
@@ -152,7 +176,7 @@ class AnimeLocalDataSource(
             .associate { row -> row.anime_id to row.new_episodes.toInt() }
     }
 
-    suspend fun setUpdates(updates: List<AnimeUpdate>) {
+    suspend fun setUpdates(updates: List<AnimeUpdate>): Unit = withContext(Dispatchers.IO) {
         db().animeQueries.transaction {
             db().animeQueries.deleteAllUpdates()
             updates.forEach { u ->
@@ -200,7 +224,7 @@ class AnimeLocalDataSource(
             }
 
     /** Полная перезапись снимка прогресса сезонов (каждый проход проверки авторитетен). */
-    suspend fun setAiringProgress(items: List<com.example.myapplication.data.models.AiringProgress>) {
+    suspend fun setAiringProgress(items: List<com.example.myapplication.data.models.AiringProgress>): Unit = withContext(Dispatchers.IO) {
         db().airingProgressQueries.transaction {
             db().airingProgressQueries.deleteAllAiringProgress()
             items.forEach { p ->
@@ -215,7 +239,7 @@ class AnimeLocalDataSource(
         }
     }
 
-    suspend fun addIgnored(animeId: String, newEpisodes: Int) {
+    suspend fun addIgnored(animeId: String, newEpisodes: Int): Unit = withContext(Dispatchers.IO) {
         db().animeQueries.setIgnored(
             anime_id = animeId,
             new_episodes = newEpisodes.toLong()
@@ -227,7 +251,7 @@ class AnimeLocalDataSource(
      * «Прочитано» для пачки обновлений: каждое уходит из списка и запоминается как отклонённое на
      * своём числе серий, чтобы следующая проверка не вернула его снова. Одной транзакцией.
      */
-    suspend fun markUpdatesRead(updates: List<AnimeUpdate>) {
+    suspend fun markUpdatesRead(updates: List<AnimeUpdate>): Unit = withContext(Dispatchers.IO) {
         val queries = db().animeQueries
         queries.transaction {
             updates.forEach { update ->
@@ -238,12 +262,12 @@ class AnimeLocalDataSource(
         mirrorCoordinator.requestExportIfEnabled()
     }
 
-    suspend fun removeUpdate(animeId: String) {
+    suspend fun removeUpdate(animeId: String): Unit = withContext(Dispatchers.IO) {
         db().animeQueries.deleteUpdateByAnimeId(animeId)
         mirrorCoordinator.requestExportIfEnabled()
     }
 
-    suspend fun setAnilistId(animeId: String, anilistId: Int) {
+    suspend fun setAnilistId(animeId: String, anilistId: Int): Unit = withContext(Dispatchers.IO) {
         db().animeQueries.setAnilistId(
             anilist_id = anilistId.toLong(),
             updatedAt = System.currentTimeMillis(),
@@ -252,7 +276,7 @@ class AnimeLocalDataSource(
         mirrorCoordinator.requestExportIfEnabled()
     }
 
-    suspend fun setMalId(animeId: String, malId: Int) {
+    suspend fun setMalId(animeId: String, malId: Int): Unit = withContext(Dispatchers.IO) {
         db().animeQueries.setMalId(
             mal_id = malId.toLong(),
             updatedAt = System.currentTimeMillis(),
@@ -261,7 +285,7 @@ class AnimeLocalDataSource(
         mirrorCoordinator.requestExportIfEnabled()
     }
 
-    suspend fun setShikimoriId(animeId: String, shikimoriId: Int) {
+    suspend fun setShikimoriId(animeId: String, shikimoriId: Int): Unit = withContext(Dispatchers.IO) {
         db().animeQueries.setShikimoriId(
             shikimori_id = shikimoriId.toLong(),
             updatedAt = System.currentTimeMillis(),
@@ -280,7 +304,7 @@ class AnimeLocalDataSource(
     }
 
     /** Сброс отметок «проверено» у ненайденных — полный перескан дубляжа (dev-кнопка, Stage 9). */
-    suspend fun resetTitleEnChecks() {
+    suspend fun resetTitleEnChecks(): Unit = withContext(Dispatchers.IO) {
         db().animeQueries.resetTitleEnChecks(
             updatedAt = System.currentTimeMillis()
         )
@@ -296,14 +320,14 @@ class AnimeLocalDataSource(
         return db().animeQueries.countNeedingTitleRu().executeAsOne().toInt()
     }
 
-    suspend fun resetTitleRuChecks() {
+    suspend fun resetTitleRuChecks(): Unit = withContext(Dispatchers.IO) {
         db().animeQueries.resetTitleRuChecks(
             updatedAt = System.currentTimeMillis()
         )
         mirrorCoordinator.requestExportIfEnabled()
     }
 
-    suspend fun setTitleRu(animeId: String, titleRu: String, atMillis: Long = System.currentTimeMillis()) {
+    suspend fun setTitleRu(animeId: String, titleRu: String, atMillis: Long = System.currentTimeMillis()): Unit = withContext(Dispatchers.IO) {
         db().animeQueries.setTitleRu(
             title_ru = titleRu,
             title_ru_checked_at = atMillis,
@@ -313,7 +337,7 @@ class AnimeLocalDataSource(
         mirrorCoordinator.requestExportIfEnabled()
     }
 
-    suspend fun markTitleRuChecked(animeId: String, atMillis: Long = System.currentTimeMillis()) {
+    suspend fun markTitleRuChecked(animeId: String, atMillis: Long = System.currentTimeMillis()): Unit = withContext(Dispatchers.IO) {
         db().animeQueries.markTitleRuChecked(
             title_ru_checked_at = atMillis,
             updatedAt = System.currentTimeMillis(),
@@ -322,7 +346,7 @@ class AnimeLocalDataSource(
         mirrorCoordinator.requestExportIfEnabled()
     }
 
-    suspend fun setTitleEn(animeId: String, titleEn: String, atMillis: Long = System.currentTimeMillis()) {
+    suspend fun setTitleEn(animeId: String, titleEn: String, atMillis: Long = System.currentTimeMillis()): Unit = withContext(Dispatchers.IO) {
         db().animeQueries.setTitleEn(
             title_en = titleEn,
             title_en_checked_at = atMillis,
@@ -332,7 +356,7 @@ class AnimeLocalDataSource(
         mirrorCoordinator.requestExportIfEnabled()
     }
 
-    suspend fun markTitleEnChecked(animeId: String, atMillis: Long = System.currentTimeMillis()) {
+    suspend fun markTitleEnChecked(animeId: String, atMillis: Long = System.currentTimeMillis()): Unit = withContext(Dispatchers.IO) {
         db().animeQueries.markTitleEnChecked(
             title_en_checked_at = atMillis,
             updatedAt = System.currentTimeMillis(),
@@ -341,7 +365,7 @@ class AnimeLocalDataSource(
         mirrorCoordinator.requestExportIfEnabled()
     }
 
-    suspend fun markAnilistNotFound(animeId: String, atMillis: Long) {
+    suspend fun markAnilistNotFound(animeId: String, atMillis: Long): Unit = withContext(Dispatchers.IO) {
         db().animeQueries.markAnilistNotFound(
             anilist_not_found_at = atMillis,
             updatedAt = System.currentTimeMillis(),
@@ -350,7 +374,7 @@ class AnimeLocalDataSource(
         mirrorCoordinator.requestExportIfEnabled()
     }
 
-    suspend fun markMalNotFound(animeId: String, atMillis: Long) {
+    suspend fun markMalNotFound(animeId: String, atMillis: Long): Unit = withContext(Dispatchers.IO) {
         db().animeQueries.markMalNotFound(
             mal_not_found_at = atMillis,
             updatedAt = System.currentTimeMillis(),
@@ -359,7 +383,7 @@ class AnimeLocalDataSource(
         mirrorCoordinator.requestExportIfEnabled()
     }
 
-    suspend fun markShikimoriNotFound(animeId: String, atMillis: Long) {
+    suspend fun markShikimoriNotFound(animeId: String, atMillis: Long): Unit = withContext(Dispatchers.IO) {
         db().animeQueries.markShikimoriNotFound(
             shikimori_not_found_at = atMillis,
             updatedAt = System.currentTimeMillis(),
@@ -368,7 +392,7 @@ class AnimeLocalDataSource(
         mirrorCoordinator.requestExportIfEnabled()
     }
 
-    suspend fun setTmdbId(animeId: String, tmdbId: Int) {
+    suspend fun setTmdbId(animeId: String, tmdbId: Int): Unit = withContext(Dispatchers.IO) {
         db().animeQueries.setTmdbId(
             tmdb_id = tmdbId.toLong(),
             updatedAt = System.currentTimeMillis(),
@@ -380,17 +404,17 @@ class AnimeLocalDataSource(
     fun isSeriesEpisodesNormalized(animeId: String): Boolean =
         db().animeQueries.countSeriesEpisodeNormalization(animeId).executeAsOne() > 0
 
-    suspend fun markSeriesEpisodesNormalized(animeId: String) {
+    suspend fun markSeriesEpisodesNormalized(animeId: String): Unit = withContext(Dispatchers.IO) {
         db().animeQueries.markSeriesEpisodesNormalized(anime_id = animeId)
         mirrorCoordinator.requestExportIfEnabled()
     }
 
-    suspend fun clearTmdbId(animeId: String) {
+    suspend fun clearTmdbId(animeId: String): Unit = withContext(Dispatchers.IO) {
         db().animeQueries.clearTmdbId(updatedAt = System.currentTimeMillis(), id = animeId)
         mirrorCoordinator.requestExportIfEnabled()
     }
 
-    suspend fun setKinopoiskId(animeId: String, kinopoiskId: Int) {
+    suspend fun setKinopoiskId(animeId: String, kinopoiskId: Int): Unit = withContext(Dispatchers.IO) {
         db().animeQueries.setKinopoiskId(
             kinopoisk_id = kinopoiskId.toLong(),
             updatedAt = System.currentTimeMillis(),
@@ -405,9 +429,9 @@ class AnimeLocalDataSource(
      * Blank input is rejected rather than written: an empty string would look like a resolved id and
      * stop later enrichment from ever retrying.
      */
-    suspend fun setImdbId(animeId: String, imdbId: String) {
+    suspend fun setImdbId(animeId: String, imdbId: String): Unit = withContext(Dispatchers.IO) {
         val canonical = imdbId.trim()
-        if (canonical.isEmpty()) return
+        if (canonical.isEmpty()) return@withContext
         db().animeQueries.setImdbId(
             imdb_id = canonical,
             updatedAt = System.currentTimeMillis(),
@@ -416,12 +440,12 @@ class AnimeLocalDataSource(
         mirrorCoordinator.requestExportIfEnabled()
     }
 
-    suspend fun clearKinopoiskId(animeId: String) {
+    suspend fun clearKinopoiskId(animeId: String): Unit = withContext(Dispatchers.IO) {
         db().animeQueries.clearKinopoiskId(updatedAt = System.currentTimeMillis(), id = animeId)
         mirrorCoordinator.requestExportIfEnabled()
     }
 
-    suspend fun markTmdbNotFound(animeId: String, atMillis: Long) {
+    suspend fun markTmdbNotFound(animeId: String, atMillis: Long): Unit = withContext(Dispatchers.IO) {
         db().animeQueries.markTmdbNotFound(
             tmdb_not_found_at = atMillis,
             updatedAt = System.currentTimeMillis(),
@@ -430,7 +454,7 @@ class AnimeLocalDataSource(
         mirrorCoordinator.requestExportIfEnabled()
     }
 
-    suspend fun markKinopoiskNotFound(animeId: String, atMillis: Long) {
+    suspend fun markKinopoiskNotFound(animeId: String, atMillis: Long): Unit = withContext(Dispatchers.IO) {
         db().animeQueries.markKinopoiskNotFound(
             kinopoisk_not_found_at = atMillis,
             updatedAt = System.currentTimeMillis(),
