@@ -1,5 +1,8 @@
 package com.example.myapplication
 
+import androidx.compose.foundation.layout.offset
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.draw.drawWithCache
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.AnimatedVisibilityScope
@@ -201,7 +204,9 @@ fun GlassActionDock(
     val frosted = LocalModernUi.current
     val frostedMaterial = FrostedMaterials.dock()
     val dockShape = RoundedCornerShape(32.dp)
-    val topPadding by animateDpAsState(
+    // Сдвиг вниз при «всплытии» — State, читаемый в раскладке (offset), а не отступ в
+    // композиции: иначе док пересобирался на каждом кадре своего появления.
+    val topShift = animateDpAsState(
         targetValue = if (isFloating) 16.dp else 0.dp,
         animationSpec = MotionTokens.barRevealDp,
         label = "dockPadding"
@@ -212,7 +217,7 @@ fun GlassActionDock(
         label = "border"
     )
     val shineColorBase = if (isDark) Color.White.copy(alpha = 0.15f) else Color.White.copy(alpha = 0.6f)
-    val shineAlpha by animateFloatAsState(
+    val shineAlpha = animateFloatAsState(
         targetValue = if (isFloating) 1f else 0f,
         label = "shineAlpha"
     )
@@ -234,7 +239,7 @@ fun GlassActionDock(
             animationSpec = MotionTokens.standard()
         ) + fadeOut(animationSpec = MotionTokens.standard()),
         modifier = modifier
-            .padding(top = topPadding)
+            .offset { IntOffset(0, topShift.value.roundToPx()) }
             .statusBarsPadding()
     ) {
         Box {
@@ -262,23 +267,34 @@ fun GlassActionDock(
                         },
                     )
             ) {
-                if (shineAlpha > 0f) {
-                    Canvas(modifier = Modifier.matchParentSize()) {
-                        val rect = Rect(offset = Offset.Zero, size = size)
-                        val path = Path().apply { addRoundRect(RoundRect(rect, CornerRadius(32.dp.toPx()))) }
-                        drawPath(
-                            path,
-                            brush = Brush.verticalGradient(
-                                colors = listOf(
-                                    shineColorBase.copy(alpha = shineColorBase.alpha * shineAlpha),
-                                    Color.Transparent,
-                                    Color.Transparent,
-                                    shineColorBase.copy(alpha = 0.05f * shineAlpha)
-                                )
-                            ),
-                            style = Stroke(width = 1.dp.toPx())
-                        )
-                    }
+                // Блик — часть жидкого рецепта. У матового материала свой кант и своя подсветка,
+                // и второй контур поверх них давал двойную линию.
+                if (!frosted) {
+                    Spacer(
+                        modifier = Modifier
+                            .matchParentSize()
+                            .drawWithCache {
+                                val rect = Rect(offset = Offset.Zero, size = size)
+                                val path = Path().apply { addRoundRect(RoundRect(rect, CornerRadius(32.dp.toPx()))) }
+                                val stroke = Stroke(width = 1.dp.toPx())
+                                onDrawBehind {
+                                    val alpha = shineAlpha.value
+                                    if (alpha <= 0f) return@onDrawBehind
+                                    drawPath(
+                                        path,
+                                        brush = Brush.verticalGradient(
+                                            colors = listOf(
+                                                shineColorBase.copy(alpha = shineColorBase.alpha * alpha),
+                                                Color.Transparent,
+                                                Color.Transparent,
+                                                shineColorBase.copy(alpha = 0.05f * alpha)
+                                            )
+                                        ),
+                                        style = stroke,
+                                    )
+                                }
+                            }
+                    )
                 }
             }
 

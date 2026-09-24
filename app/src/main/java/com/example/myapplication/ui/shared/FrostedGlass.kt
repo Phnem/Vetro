@@ -162,6 +162,9 @@ object FrostedMaterials {
                 tint = if (isDark) Color(0xFF1C1C1E) else Color.White,
                 noiseAlpha = 0f,
                 highlight = null,
+                // Тень задней карточки лежит под верхней и не видна, а слой под неё стоил бы
+                // на каждом кадре драга стопки.
+                shadow = null,
             )
         }
     }
@@ -275,6 +278,26 @@ fun Modifier.frostedGlass(
         .then(body)
         .border(hairline, material.rim, shape)
 }
+
+/**
+ * Стеклянная кнопка (круглая «назад», кнопка действия, шапка): в новом интерфейсе — матовый
+ * материал дока, как у всех стеклянных поверхностей рядом; в классическом — прежний «жидкий»
+ * рецепт вызывающего, [classic] целиком (бэкдроп, линза, блик, кант).
+ *
+ * Развилка по режиму статична на время жизни экрана: режим меняется только пересозданием
+ * активити, поэтому набор узлов над бэкдропом на живом экране не меняется.
+ */
+@Composable
+fun Modifier.glassControl(
+    backdrop: Backdrop,
+    shape: Shape,
+    classic: Modifier.() -> Modifier,
+): Modifier =
+    if (LocalModernUi.current) {
+        this.frostedGlass(backdrop = backdrop, shape = shape, material = FrostedMaterials.dock())
+    } else {
+        this.classic()
+    }
 
 private fun DrawScope.drawNoise(noiseBrush: ShaderBrush, alpha: Float) {
     if (alpha > 0f) drawRect(brush = noiseBrush, alpha = alpha)

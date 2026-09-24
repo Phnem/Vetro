@@ -40,13 +40,26 @@ class ImageStorageRepositoryImpl(
         }
     }
 
+    /**
+     * Найденные пути запоминаются: вызов идёт из композиции карточек и Details, а поиск файла —
+     * это stat'ы, а для вложений ещё и `listFiles()` двух папок. Отрицательный ответ НЕ
+     * запоминается — обложка может появиться позже (восстановление из облака, фоновая загрузка).
+     */
+    private val resolvedPaths = java.util.concurrent.ConcurrentHashMap<String, String>()
+
     override fun getImageFilePath(fileName: String): String? {
-        return resolveImageFile(fileName)?.absolutePath
+        // Один stat на попадание — страховка от подмены файла (миграция сжатия заменяет
+        // оригинал вариантом `_c.webp`); полный поиск с listFiles() в разы дороже.
+        resolvedPaths[fileName]?.let { cached -> if (File(cached).exists()) return cached }
+        val path = resolveImageFile(fileName)?.absolutePath ?: return null
+        resolvedPaths[fileName] = path
+        return path
     }
 
     override fun hasLocalImage(fileName: String): Boolean = resolveImageFile(fileName) != null
 
     override fun deleteImage(fileName: String): Boolean {
+        resolvedPaths.remove(fileName)
         val normalized = normalizeFileName(fileName)
         val inApp = File(getImgDir(), normalized)
         return inApp.exists() && inApp.delete()

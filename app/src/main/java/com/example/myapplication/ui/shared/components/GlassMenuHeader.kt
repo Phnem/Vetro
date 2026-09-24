@@ -1,5 +1,6 @@
 package com.example.myapplication.ui.shared.components
 
+import com.example.myapplication.ui.shared.glassControl
 import com.example.myapplication.ui.shared.rememberPinnableBackdrop
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -85,17 +86,18 @@ fun GlassMenuHeader(
                 .align(Alignment.CenterStart)
                 .size(48.dp)
                 .clip(CircleShape)
-                .drawBackdrop(
-                    backdrop = source,
-                    shape = { CircleShape },
-                    effects = {
-                        vibrancy()
-                        blur(12f.dp.toPx())
-                        lens(8f.dp.toPx(), 40f.dp.toPx())
-                    },
-                    onDrawSurface = { drawRect(surfaceTint) },
-                )
-                .border(0.5.dp, borderColor, CircleShape)
+                .glassControl(source, CircleShape) {
+                    drawBackdrop(
+                        backdrop = source,
+                        shape = { CircleShape },
+                        effects = {
+                            vibrancy()
+                            blur(12f.dp.toPx())
+                            lens(8f.dp.toPx(), 40f.dp.toPx())
+                        },
+                        onDrawSurface = { drawRect(surfaceTint) },
+                    ).border(0.5.dp, borderColor, CircleShape)
+                }
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null,
@@ -119,17 +121,18 @@ fun GlassMenuHeader(
                 .widthIn(max = 240.dp)
                 .height(48.dp)
                 .clip(RoundedCornerShape(100.dp))
-                .drawBackdrop(
-                    backdrop = source,
-                    shape = { RoundedCornerShape(100.dp) },
-                    effects = {
-                        vibrancy()
-                        blur(12f.dp.toPx())
-                        lens(8f.dp.toPx(), 40f.dp.toPx())
-                    },
-                    onDrawSurface = { drawRect(surfaceTint) },
-                )
-                .border(0.5.dp, borderColor, RoundedCornerShape(100.dp))
+                .glassControl(source, RoundedCornerShape(100.dp)) {
+                    drawBackdrop(
+                        backdrop = source,
+                        shape = { RoundedCornerShape(100.dp) },
+                        effects = {
+                            vibrancy()
+                            blur(12f.dp.toPx())
+                            lens(8f.dp.toPx(), 40f.dp.toPx())
+                        },
+                        onDrawSurface = { drawRect(surfaceTint) },
+                    ).border(0.5.dp, borderColor, RoundedCornerShape(100.dp))
+                }
                 .padding(horizontal = 24.dp),
             contentAlignment = Alignment.Center,
         ) {

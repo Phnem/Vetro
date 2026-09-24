@@ -1,5 +1,6 @@
 package com.example.myapplication.ui.home.updates
 
+import com.kyant.backdrop.backdrops.emptyBackdrop
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -117,6 +118,7 @@ fun EpisodeUpdateStack(
     val accent = Color(0xFFE85002)
     val topMaterial = FrostedMaterials.notification()
     val stackedMaterial = FrostedMaterials.stackedNotification()
+    val noBackdrop = remember { emptyBackdrop() }
 
     // Улетевшие, но ещё не удалённые из БД карточки: скрываем до обновления Flow.
     val departedIds: SnapshotStateList<String> = remember { mutableStateListOf() }
@@ -172,31 +174,36 @@ fun EpisodeUpdateStack(
                 .height(stackHeight),
             contentAlignment = Alignment.TopCenter
         ) {
+            // Всё, что зависит от смещения топа, считается ВНУТРИ лямбд раскладки и слоя: чтение
+            // Animatable в композиции пересобирало всю стопку на каждом кадре драга.
             // Прогресс ухода топа: задние карточки подтягиваются на уровень выше.
-            val progress = (maxOf(abs(offsetX.value), abs(offsetY.value)) / dismissThresholdPx)
-                .coerceIn(0f, 1f)
+            fun progress(): Float =
+                (maxOf(abs(offsetX.value), abs(offsetY.value)) / dismissThresholdPx).coerceIn(0f, 1f)
 
             // +2: топ, видимые пики и одна скрытая карточка, всплывающая при уходе топа.
             visible.take(VISIBLE_BACK_CARDS + 2).withIndex().reversed().forEach { (index, update) ->
                 val isTop = index == 0
 
-                val translateY: Float
-                val scale: Float
-                val alpha: Float
-                if (isTop) {
-                    translateY = offsetY.value
-                    scale = 1f
-                    val horizontalFade = abs(offsetX.value) / (widthPx * 0.9f)
-                    val verticalFade = -offsetY.value / flyOutYPx
-                    alpha = (1f - maxOf(horizontalFade, verticalFade)).coerceIn(0f, 1f)
+                fun translateY(): Float = if (isTop) {
+                    offsetY.value
                 } else {
                     val currentY = peekPx * index
                     val nextY = peekPx * (index - 1)
+                    currentY + (nextY - currentY) * progress()
+                }
+                fun scale(): Float = if (isTop) {
+                    1f
+                } else {
                     val currentScale = 1f - BACK_SCALE_STEP * index
                     val nextScale = 1f - BACK_SCALE_STEP * (index - 1)
-                    translateY = currentY + (nextY - currentY) * progress
-                    scale = currentScale + (nextScale - currentScale) * progress
-                    alpha = if (index > VISIBLE_BACK_CARDS) progress else 1f
+                    currentScale + (nextScale - currentScale) * progress()
+                }
+                fun alpha(): Float = if (isTop) {
+                    val horizontalFade = abs(offsetX.value) / (widthPx * 0.9f)
+                    val verticalFade = -offsetY.value / flyOutYPx
+                    (1f - maxOf(horizontalFade, verticalFade)).coerceIn(0f, 1f)
+                } else {
+                    if (index > VISIBLE_BACK_CARDS) progress() else 1f
                 }
 
                 val gestureModifier = if (isTop && !departing) {
@@ -231,16 +238,17 @@ fun EpisodeUpdateStack(
                             .offset {
                                 IntOffset(
                                     x = if (isTop) offsetX.value.roundToInt() else 0,
-                                    y = translateY.roundToInt(),
+                                    y = translateY().roundToInt(),
                                 )
                             }
                             .graphicsLayer {
+                                val scale = scale()
                                 scaleX = scale
                                 scaleY = scale
                                 rotationZ = if (isTop) {
                                     ((offsetX.value / widthPx) * 10f).coerceIn(-7f, 7f)
                                 } else 0f
-                                this.alpha = alpha
+                                this.alpha = alpha()
                             }
                             .fillMaxWidth()
                     ) {
@@ -249,7 +257,9 @@ fun EpisodeUpdateStack(
                             // Memo: resolve пути идёт в БД, а стопка рекомпозируется каждый кадр драга.
                             coverPath = remember(update.animeId) { coverPathFor(update.animeId) },
                             isDark = isDark,
-                            backdrop = backdrop,
+                            // Задней карточке бэкдроп не нужен: у её материала нет размытия, а под
+                            // верхней её всё равно не видно. Узел тот же — меняется параметр.
+                            backdrop = if (isTop) backdrop else noBackdrop,
                             material = if (isTop) topMaterial else stackedMaterial,
                             onCard = onCard,
                             accent = accent,

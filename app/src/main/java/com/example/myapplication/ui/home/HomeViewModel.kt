@@ -1,5 +1,6 @@
 package com.example.myapplication.ui.home
 
+import kotlinx.coroutines.flow.collectLatest
 import com.example.myapplication.data.local.AppLanguagePrefs
 import android.app.NotificationManager
 import android.content.Context
@@ -203,6 +204,17 @@ class HomeViewModel(
         started = SharingStarted.WhileSubscribed(5000),
         initialValue = persistentListOf()
     )
+
+    // Пути к обложкам резолвятся здесь, на IO, как только пришёл список: карточка берёт путь из
+    // композиции, и без прогрева первый показ каждой обложки ходил бы по файловой системе на
+    // главном потоке (stat'ы, а для вложений — listFiles()). Репозиторий пути запоминает.
+    init {
+        viewModelScope.launch(Dispatchers.IO) {
+            animeListFlow.collectLatest { list ->
+                list.forEach { anime -> anime.imageFileName?.let(imageStorage::getImageFilePath) }
+            }
+        }
+    }
 
     val apiSearchWithStatus: StateFlow<kotlinx.collections.immutable.ImmutableList<ApiSearchUiModel>> = combine(
         _uiState.map { it.apiSearchResults }.distinctUntilChanged(),

@@ -1,5 +1,6 @@
 package com.example.myapplication.ui.details
 
+import com.example.myapplication.ui.shared.glassControl
 import android.graphics.BitmapFactory
 
 import androidx.compose.animation.AnimatedVisibility
@@ -882,18 +883,19 @@ private fun DetailsGlassBackButton(
     Box(
         modifier = modifier
             .size(48.dp)
-            .drawBackdrop(
-                backdrop = backdrop,
-                shape = { CircleShape },
-                effects = {
-                    vibrancy()
-                    blur(24f.dp.toPx())
-                    lens(8f.dp.toPx(), 48f.dp.toPx())
-                },
-                onDrawSurface = { drawRect(barTint) },
-            )
             .clip(CircleShape)
-            .border(0.5.dp, barBorder, CircleShape)
+            .glassControl(backdrop, CircleShape) {
+                drawBackdrop(
+                    backdrop = backdrop,
+                    shape = { CircleShape },
+                    effects = {
+                        vibrancy()
+                        blur(24f.dp.toPx())
+                        lens(8f.dp.toPx(), 48f.dp.toPx())
+                    },
+                    onDrawSurface = { drawRect(barTint) },
+                ).border(0.5.dp, barBorder, CircleShape)
+            }
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,

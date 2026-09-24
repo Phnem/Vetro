@@ -1,5 +1,12 @@
 package com.example.myapplication.ui.home
 
+import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.animation.core.tween
+import com.example.myapplication.ui.shared.frostedGlass
+import com.example.myapplication.ui.shared.FrostedMaterials
+import com.example.myapplication.ui.shared.LocalModernUi
+import com.example.myapplication.ui.shared.LocalAdaptiveGlassEnabled
 import android.app.Activity
 import android.content.pm.PackageManager
 import android.graphics.RenderEffect
@@ -329,11 +336,13 @@ fun HomeScreen(
     }
 
     val listState = rememberLazyListState()
-    val listScrollInProgress by remember { derivedStateOf { listState.isScrollInProgress } }
-
-    LaunchedEffect(listScrollInProgress) {
-        if (listScrollInProgress) {
-            cloudSyncPillDismissed = true
+    // Флаг скролла читается подпиской, а не в композиции: иначе начало и конец каждого жеста
+    // пересобирали бы всю главную.
+    val currentOnContentScrollChange by rememberUpdatedState(onContentScrollChange)
+    LaunchedEffect(listState) {
+        snapshotFlow { listState.isScrollInProgress }.collect { inProgress ->
+            if (inProgress) cloudSyncPillDismissed = true
+            currentOnContentScrollChange(inProgress)
         }
     }
 
@@ -352,7 +361,9 @@ fun HomeScreen(
             showCSheet || animeToDelete != null || animeToFavorite != null ||
             uiState.isGenreFilterVisible || showNotificationsOverlay || showSortOverlay ||
             showMediaTypeFilterOverlay || listSyncUi.isRunning || cardMenuTarget != null
-    val blurAmount by animateDpAsState(
+    // Анимированные значения держим как State и читаем в лямбдах слоя/раскладки: чтение в
+    // композиции пересобирало всю главную на каждом кадре открытия и закрытия оверлея.
+    val blurAmount = animateDpAsState(
         targetValue = when {
             notificationsBlockingChildDialog -> 20.dp
             shouldBlur -> 10.dp
@@ -364,7 +375,7 @@ fun HomeScreen(
     // Кнопка «вверх» опускается к низу, когда док скрыт (как кнопка поиска), и поднимается вместе с доком.
     // При видимом доке держим её выше плавающей кнопки поиска (её верх ≈162dp над нав-панелью),
     // чтобы кнопки не слипались.
-    val scrollToTopBottomPadding by animateDpAsState(
+    val scrollToTopLift = animateDpAsState(
         targetValue = when {
             !finalDockVisible -> 88.dp
             // В рабочей области своего нижнего дока у главной нет, а чужой ниже и тоньше:
@@ -412,17 +423,20 @@ fun HomeScreen(
     // как RenderEffect (см. shouldBlur). Шторка рекомендаций перекрывает экран своим scrim.
     val anyHomeSheetOpen = showMediaTypeFilterOverlay || showSortOverlay ||
         uiState.isGenreFilterVisible || showNotificationsOverlay || showCSheet
-    val homePushProgress by animateFloatAsState(
+    val homePushProgress = animateFloatAsState(
         targetValue = if (anyHomeSheetOpen) 1f else 0f,
         animationSpec = MotionTokens.sheetPresent(),
         label = "homePush",
     )
+    // Для восстановления стекла важен только момент «анимации над layerBackdrop доиграли».
+    val effectsSettled by remember {
+        derivedStateOf { blurAmount.value <= 0.dp && homePushProgress.value <= 0.001f }
+    }
 
     // Любая шторка/диалог/оверлей поверх главной → док рабочей области уезжает вниз: он
     // соседний узел, сам про эти состояния не знает.
     val anyOverlayVisible = shouldBlur || anyHomeSheetOpen || showRecsSheet || isSearchVisible
     LaunchedEffect(anyOverlayVisible) { onOverlayVisibleChange(anyOverlayVisible) }
-    LaunchedEffect(listScrollInProgress) { onContentScrollChange(listScrollInProgress) }
     LaunchedEffect(finalDockVisible) { onDockVisibleChange(finalDockVisible) }
     // Уход со страницы посреди скролла не должен оставить чужой док спрятанным или его стекло
     // в экономном режиме навсегда.
@@ -440,7 +454,15 @@ fun HomeScreen(
         // Иначе system bar insets добавляются в paddingValues — фон не заливает полосы сверху/снизу
         contentWindowInsets = WindowInsets(0.dp, 0.dp, 0.dp, 0.dp)
     ) { paddingValues ->
-        CompositionLocalProvider(LocalAdaptiveGlassScrollInProgress provides listScrollInProgress) {
+        // Экономный режим стекла на время скролла нужен только адаптивному жидкому стеклу; без
+        // него флаг не читаем вовсе, чтобы жест не пересобирал корень главной.
+        val glassScrollInProgress = if (LocalAdaptiveGlassEnabled.current && !LocalModernUi.current) {
+            val inProgress by remember { derivedStateOf { listState.isScrollInProgress } }
+            inProgress
+        } else {
+            false
+        }
+        CompositionLocalProvider(LocalAdaptiveGlassScrollInProgress provides glassScrollInProgress) {
         Box(modifier = Modifier.fillMaxSize().padding(paddingValues)) {
             Box(modifier = Modifier.fillMaxSize().background(bgColor))
 
@@ -554,19 +576,20 @@ fun HomeScreen(
                     .graphicsLayer {
                         // Якорь сверху: при «вдавливании» не открывается чёрный letterbox
                         // под status bar — контент остаётся edge-to-edge до выреза камеры.
-                        val s = androidx.compose.ui.util.lerp(1f, 0.94f, homePushProgress)
+                        val push = homePushProgress.value
+                        val s = androidx.compose.ui.util.lerp(1f, 0.94f, push)
                         scaleX = s
                         scaleY = s
                         transformOrigin = TransformOrigin(0.5f, 0f)
-                        clip = homePushProgress > 0.001f
+                        clip = push > 0.001f
                         shape = SquircleCornerShape(
                             topStart = 0.dp,
                             topEnd = 0.dp,
-                            bottomEnd = 16.dp * homePushProgress,
-                            bottomStart = 16.dp * homePushProgress,
+                            bottomEnd = 16.dp * push,
+                            bottomStart = 16.dp * push,
                         )
                     }
-                    .homeScrollBlur(blurAmount)
+                    .homeScrollBlur { blurAmount.value }
             ) {
                 Box(modifier = Modifier.fillMaxSize().weight(1f).background(bgColor)) {
                     val isRefreshing by viewModel.isRefreshing.collectAsStateWithLifecycle()
@@ -1067,29 +1090,57 @@ fun HomeScreen(
                 )
             }
 
+            // Появление и уход по спеке движения: оболочка — пружиной из 0.92 (точка исхода — сама
+            // кнопка), свет — короткими кривыми; уход быстрее входа и без отскока.
             AnimatedVisibility(
                 visible = showScrollToTop && !isSearchVisible && animeToDelete == null && animeToFavorite == null,
-                enter = fadeIn() + scaleIn(),
-                exit = fadeOut() + scaleOut(),
+                enter = fadeIn(tween(MotionTokens.EaseEnterMillis, easing = MotionTokens.EaseEnter)) +
+                    scaleIn(MotionTokens.springSurface(), initialScale = 0.92f),
+                exit = fadeOut(tween(MotionTokens.EaseExitMillis, easing = MotionTokens.EaseExit)) +
+                    scaleOut(MotionTokens.springExit(), targetScale = 0.92f),
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
                     .navigationBarsPadding()
-                    .padding(bottom = scrollToTopBottomPadding, end = 24.dp)
+                    .padding(end = 24.dp)
+                    // Подъём вслед за доком — сдвигом в раскладке, а не отступом: отступ читался
+                    // в композиции и пересобирал главную на каждом кадре анимации дока.
+                    .offset { IntOffset(0, -scrollToTopLift.value.roundToPx()) }
                     .zIndex(1f)
             ) {
-                SimpGlassCard(
-                    backdrop = backdrop,
-                    shape = CircleShape,
-                    modifier = Modifier.size(44.dp).clickable {
-                        performHaptic(view, "light")
-                        scope.launch { listState.animateScrollToItem(0) }
+                val onScrollToTop = {
+                    performHaptic(view, "light")
+                    scope.launch { listState.animateScrollToItem(0) }
+                    Unit
+                }
+                if (LocalModernUi.current) {
+                    // Тот же матовый материал, что у дока и круглой кнопки поиска рядом с ним:
+                    // жидкое стекло с бликом здесь выглядело чужим среди матовых поверхностей.
+                    Box(
+                        modifier = Modifier
+                            .size(44.dp)
+                            .clip(CircleShape)
+                            .frostedGlass(backdrop = backdrop, shape = CircleShape, material = FrostedMaterials.dock())
+                            .clickable(onClick = onScrollToTop),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.KeyboardArrowUp,
+                            contentDescription = "Up",
+                            tint = MaterialTheme.colorScheme.onSurface
+                        )
                     }
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.KeyboardArrowUp,
-                        contentDescription = "Up",
-                        tint = MaterialTheme.colorScheme.onSurface
-                    )
+                } else {
+                    SimpGlassCard(
+                        backdrop = backdrop,
+                        shape = CircleShape,
+                        modifier = Modifier.size(44.dp).clickable(onClick = onScrollToTop)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.KeyboardArrowUp,
+                            contentDescription = "Up",
+                            tint = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
                 }
             }
 
@@ -1243,7 +1294,7 @@ fun HomeScreen(
                 animeToDelete != null || animeToFavorite != null || isSearchVisible,
             // Обе анимации живут на ПРЕДКАХ layerBackdrop (homeScrollBlur и graphicsLayer со
             // «вдавливанием»), поэтому перезаписывать стекло раньше их конца бессмысленно.
-            effectsSettled = blurAmount <= 0.dp && homePushProgress <= 0.001f,
+            effectsSettled = effectsSettled,
             listState = listState,
             onRemount = { layerBackdropResetKey++ },
         )
@@ -1270,10 +1321,10 @@ fun HomeScreen(
  * `layerBackdrop` (тот, что сэмплит док), и док заливается сплошным фоном вместо стекла до
  * первого скролла. Держим узел стабильным и просто гасим renderEffect в null.
  */
-private fun Modifier.homeScrollBlur(blur: Dp): Modifier =
+private fun Modifier.homeScrollBlur(blur: () -> Dp): Modifier =
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
         this.graphicsLayer {
-            val px = blur.toPx()
+            val px = blur().toPx()
             renderEffect = if (px > 0f) {
                 RenderEffect.createBlurEffect(px, px, Shader.TileMode.CLAMP).asComposeRenderEffect()
             } else {
@@ -1281,8 +1332,8 @@ private fun Modifier.homeScrollBlur(blur: Dp): Modifier =
             }
             clip = px > 0f
         }
-    } else if (blur > 0.dp) {
-        this.then(Modifier.blur(blur))
+    } else if (blur() > 0.dp) {
+        this.then(Modifier.blur(blur()))
     } else {
         this
     }

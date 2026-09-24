@@ -1,7 +1,7 @@
 package com.example.myapplication.ui.home.cardmenu
 
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.animation.core.Animatable
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -156,7 +156,9 @@ fun CardActionMenuOverlay(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.45f * progress.value))
+                // Прогресс читается в отрисовке, а не в композиции: иначе оверлей вместе с копией
+                // карточки пересобирался бы на каждом кадре открытия и закрытия.
+                .drawBehind { drawRect(Color.Black, alpha = 0.45f * progress.value) }
                 .pointerInput(Unit) { detectTapGestures { onDismiss() } }
                 // Перетаскивания съедаем отдельно: clickable их не перехватывает, и без этого
                 // палец по скриму листал бы страницы рабочей области.
@@ -195,13 +197,13 @@ fun CardActionMenuOverlay(
             }
 
             // —— Ряд действий —— //
-            val actionsTop = cardLocalTop + grow + scaledHeight - lift * progress.value + gapPx
+            val actionsRestTop = cardLocalTop + grow + scaledHeight + gapPx
             Row(
                 modifier = Modifier
                     .offset {
                         IntOffset(
                             cardLocalLeft.roundToInt(),
-                            actionsTop.roundToInt(),
+                            (actionsRestTop - lift * progress.value).roundToInt(),
                         )
                     }
                     .width(cardWidth)

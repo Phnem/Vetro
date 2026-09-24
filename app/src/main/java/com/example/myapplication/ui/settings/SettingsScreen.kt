@@ -1,5 +1,6 @@
 package com.example.myapplication.ui.settings
 
+import com.example.myapplication.ui.shared.glassControl
 import com.example.myapplication.ui.shared.rememberPinnableBackdrop
 import android.app.Activity
 import android.content.Intent
@@ -697,24 +698,26 @@ fun SettingsScreen(
                         modifier = Modifier
                             .size(58.dp)
                             .clip(CircleShape)
-                            .drawBackdrop(
-                                backdrop = shareBackdrop,
-                                shape = { CircleShape },
-                                effects = {
-                                    vibrancy()
-                                    blur(2f.dp.toPx())
-                                    lens(16f.dp.toPx(), 44f.dp.toPx())
-                                },
-                            )
-                            .background(
-                                Brush.verticalGradient(
-                                    0f to Color.White.copy(alpha = 0.22f),
-                                    0.5f to Color.Transparent,
-                                    1f to Color.Black.copy(alpha = 0.10f),
-                                ),
-                                CircleShape,
-                            )
-                            .border(1.dp, Color.White.copy(alpha = 0.45f), CircleShape)
+                            .glassControl(shareBackdrop, CircleShape) {
+                                drawBackdrop(
+                                    backdrop = shareBackdrop,
+                                    shape = { CircleShape },
+                                    effects = {
+                                        vibrancy()
+                                        blur(2f.dp.toPx())
+                                        lens(16f.dp.toPx(), 44f.dp.toPx())
+                                    },
+                                )
+                                    .background(
+                                        Brush.verticalGradient(
+                                            0f to Color.White.copy(alpha = 0.22f),
+                                            0.5f to Color.Transparent,
+                                            1f to Color.Black.copy(alpha = 0.10f),
+                                        ),
+                                        CircleShape,
+                                    )
+                                    .border(1.dp, Color.White.copy(alpha = 0.45f), CircleShape)
+                            }
                             .clickable(
                                 interactionSource = remember { MutableInteractionSource() },
                                 indication = null,

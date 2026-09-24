@@ -1,10 +1,10 @@
 package com.example.myapplication.ui.addedit
 
+import com.example.myapplication.ui.shared.glassControl
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -437,16 +437,18 @@ fun AddEditScreen(
                             .size(48.dp)
                             .addEditMenuTileShadow(isDark, CircleShape)
                             .clip(CircleShape)
-                            .drawBackdrop(
-                                backdrop = backdrop,
-                                shape = { CircleShape },
-                                effects = {
-                                    vibrancy()
-                                    blur(12f.dp.toPx())
-                                    lens(8f.dp.toPx(), 40f.dp.toPx())
-                                }
-                            )
-                            .border(0.5.dp, Color.White.copy(alpha = 0.2f), CircleShape)
+                            .glassControl(backdrop, CircleShape) {
+                                drawBackdrop(
+                                    backdrop = backdrop,
+                                    shape = { CircleShape },
+                                    effects = {
+                                        vibrancy()
+                                        blur(12f.dp.toPx())
+                                        lens(8f.dp.toPx(), 40f.dp.toPx())
+                                    }
+                                )
+                                    .border(0.5.dp, Color.White.copy(alpha = 0.2f), CircleShape)
+                            }
                             .clickable(
                                 interactionSource = remember { MutableInteractionSource() },
                                 indication = null,
@@ -479,16 +481,18 @@ fun AddEditScreen(
                             .height(48.dp)
                             .addEditMenuTileShadow(isDark, RoundedCornerShape(100.dp))
                             .clip(RoundedCornerShape(100.dp))
-                            .drawBackdrop(
-                                backdrop = backdrop,
-                                shape = { RoundedCornerShape(100.dp) },
-                                effects = {
-                                    vibrancy()
-                                    blur(12f.dp.toPx())
-                                    lens(8f.dp.toPx(), 40f.dp.toPx())
-                                }
-                            )
-                            .border(0.5.dp, Color.White.copy(alpha = 0.2f), RoundedCornerShape(100.dp))
+                            .glassControl(backdrop, RoundedCornerShape(100.dp)) {
+                                drawBackdrop(
+                                    backdrop = backdrop,
+                                    shape = { RoundedCornerShape(100.dp) },
+                                    effects = {
+                                        vibrancy()
+                                        blur(12f.dp.toPx())
+                                        lens(8f.dp.toPx(), 40f.dp.toPx())
+                                    }
+                                )
+                                    .border(0.5.dp, Color.White.copy(alpha = 0.2f), RoundedCornerShape(100.dp))
+                            }
                             .padding(horizontal = 24.dp),
                         contentAlignment = Alignment.Center
                     ) {
@@ -516,16 +520,18 @@ fun AddEditScreen(
                         modifier = Modifier
                             .size(64.dp)
                             .addEditMenuTileShadow(isDark, CircleShape)
-                            .drawBackdrop(
-                                backdrop = backdrop,
-                                shape = { CircleShape },
-                                effects = {
-                                    vibrancy()
-                                    blur(28f.dp.toPx())
-                                    lens(16f.dp.toPx(), 48f.dp.toPx())
-                                },
-                                onDrawSurface = { drawRect(Color.White.copy(alpha = 0.12f)) }
-                            )
+                            .glassControl(backdrop, CircleShape) {
+                                drawBackdrop(
+                                    backdrop = backdrop,
+                                    shape = { CircleShape },
+                                    effects = {
+                                        vibrancy()
+                                        blur(28f.dp.toPx())
+                                        lens(16f.dp.toPx(), 48f.dp.toPx())
+                                    },
+                                    onDrawSurface = { drawRect(Color.White.copy(alpha = 0.12f)) }
+                                )
+                            }
                             .clip(CircleShape)
                             .border(0.5.dp, Color.White.copy(alpha = 0.2f), CircleShape)
                             .clickable {

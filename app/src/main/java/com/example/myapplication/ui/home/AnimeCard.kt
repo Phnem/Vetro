@@ -307,7 +307,9 @@ fun AnimeCardBody(
                 } else Modifier
             )
             .shadow(
-                elevation = if (isDark) 8.dp else 4.dp,
+                // В тёмной теме тень — чёрное по фону #000000: её не видно, а RenderThread
+                // строил её для каждой карточки на экране. Узел оставляем, высоту обнуляем.
+                elevation = if (isDark) 0.dp else 4.dp,
                 shape = RoundedCornerShape(24.dp),
                 spotColor = cardShadowColor
             )
@@ -342,12 +344,15 @@ fun AnimeCardBody(
                 )
                 state.imagePath?.let { imgPath ->
                     val context = LocalContext.current
-                    AsyncImage(
-                        model = ImageRequest.Builder(context)
+                    val request = remember(imgPath) {
+                        ImageRequest.Builder(context)
                             .data(File(imgPath))
                             .size(Size(280, 400))
                             .crossfade(true)
-                            .build(),
+                            .build()
+                    }
+                    AsyncImage(
+                        model = request,
                         contentDescription = state.title,
                         contentScale = ContentScale.Crop,
                         modifier = Modifier.fillMaxSize()

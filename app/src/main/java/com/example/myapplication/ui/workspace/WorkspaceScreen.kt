@@ -17,7 +17,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -54,7 +53,6 @@ import com.example.myapplication.ui.navigation.navigateToAddEdit
 import com.example.myapplication.ui.navigation.navigateToInspect
 import com.example.myapplication.ui.navigation.navigateToWelcome
 import com.example.myapplication.ui.shared.DONATION_URL
-import com.example.myapplication.ui.shared.LocalAdaptiveGlassScrollInProgress
 import com.example.myapplication.ui.shared.LocalBackdropPinned
 import com.example.myapplication.ui.shared.theme.MotionTokens
 import com.example.myapplication.utils.getStrings
@@ -96,10 +94,8 @@ fun WorkspaceScreen(
     // колбэком: док им сосед, а не потомок, и сам про их состояние не знает.
     var homeOverlayVisible by remember { mutableStateOf(false) }
     var settingsOverlayVisible by remember { mutableStateOf(false) }
-    // Автоскрытие дока (D9) и экономный режим его стекла живут здесь по той же причине: страницы
-    // доку не родители, `LocalAdaptiveGlassScrollInProgress` внутри них до него не достаёт.
+    // Автоскрытие дока (D9) живёт здесь по той же причине: страницы доку не родители.
     var pageDockVisible by remember { mutableStateOf(true) }
-    var pageScrollInProgress by remember { mutableStateOf(false) }
     var showSyncPanel by remember { mutableStateOf(false) }
     // Меню последнего гнезда дока раскрывается поверх страницы, поэтому его состояние живёт
     // рядом с доком, а не внутри какой-либо страницы.
@@ -123,11 +119,6 @@ fun WorkspaceScreen(
         initialPage = WorkspacePage.Start.index,
         pageCount = { WorkspacePage.PageCount },
     )
-
-    // Стекло дока на время движения: и скролл списка страницы, и сам «наезд» между страницами
-    // переводят его в статичный режим (D10) — режим меняется свойствами узла, структура прежняя.
-    val pagerScrolling by remember { derivedStateOf { pagerState.isScrollInProgress } }
-    val dockGlassStatic = pageScrollInProgress || pagerScrolling
 
     val goTo: (WorkspacePage) -> Unit = { page ->
         scope.launch {
@@ -180,7 +171,6 @@ fun WorkspaceScreen(
                     hostedInWorkspace = true,
                     onCardSelectionChange = { cardSelectionActive = it },
                     onOverlayVisibleChange = { homeOverlayVisible = it },
-                    onContentScrollChange = { pageScrollInProgress = it },
                     onDockVisibleChange = { pageDockVisible = it },
                 )
 
@@ -197,7 +187,6 @@ fun WorkspaceScreen(
                     bottomInset = dockInset,
                     onOpenSyncPanel = { showSyncPanel = true },
                     onOverlayVisibleChange = { settingsOverlayVisible = it },
-                    onContentScrollChange = { pageScrollInProgress = it },
                     onDockVisibleChange = { pageDockVisible = it },
                 )
             }
@@ -271,7 +260,6 @@ fun WorkspaceScreen(
             ) },
         )
 
-        CompositionLocalProvider(LocalAdaptiveGlassScrollInProgress provides dockGlassStatic) {
         WorkspaceDock(
             backdrop = backdrop,
             hidden = dockHidden,
@@ -304,7 +292,6 @@ fun WorkspaceScreen(
                 .padding(bottom = 16.dp)
                 .zIndex(6f),
         )
-        }
     }
 }
 
