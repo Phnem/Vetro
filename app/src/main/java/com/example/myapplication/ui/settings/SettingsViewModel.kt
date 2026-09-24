@@ -166,7 +166,9 @@ class SettingsViewModel(
         appUpdateRepository.appUpdateSnapshot,
         _transient,
     ) { prefs, snap, tr -> mergeSettingsUi(prefs, snap, tr) }
-        .stateIn(viewModelScope, SharingStarted.Eagerly, SettingsUiState())
+        // Подписка на файл настроек живёт, пока экран на виду (+5 с на поворот): в фоне её
+        // будила каждая запись прогресса плеера. Последнее значение stateIn сохраняет.
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SettingsUiState())
 
     /** When true, [MainActivity] may show the global update sheet (not on splash, not deduped by settings). */
     val startupUpdateOverlayEligible: StateFlow<Boolean> = combine(
@@ -176,7 +178,7 @@ class SettingsViewModel(
     ) { snap, prefs, tr ->
         val githubEnabled = prefs[DevPreferencesKeys.GITHUB_UPDATES_ENABLED] == true
         githubEnabled && snap.startupOverlayEligible && !tr.updateSheetShownFromSettingsThisSession
-    }.stateIn(viewModelScope, SharingStarted.Eagerly, false)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
 
     private var downloadReceiverRegistered = false
     private var activeDownloadId: Long = -1L
@@ -491,30 +493,25 @@ class SettingsViewModel(
         progressJob?.cancel()
         progressJob = viewModelScope.launch {
             val dm = appCtx.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
+            var lastPercent = -1
             while (isActive) {
-                dm.query(DownloadManager.Query().setFilterById(downloadId))?.use { c ->
-                    if (!c.moveToFirst()) return@launch
-                    val status = c.getInt(c.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS))
-                    when (status) {
-                        DownloadManager.STATUS_SUCCESSFUL, DownloadManager.STATUS_FAILED -> {
-                            if (status == DownloadManager.STATUS_FAILED) {
-                                onDownloadFailedCleanup()
-                            }
-                            return@launch
-                        }
-                        else -> {
-                            val soFar = c.getLong(
-                                c.getColumnIndexOrThrow(DownloadManager.COLUMN_BYTES_DOWNLOADED_SO_FAR)
-                            )
-                            val total = c.getLong(
-                                c.getColumnIndexOrThrow(DownloadManager.COLUMN_TOTAL_SIZE_BYTES)
-                            )
-                            val frac = if (total > 0L) {
-                                (soFar.toFloat() / total.toFloat()).coerceIn(0f, 1f)
-                            } else {
-                                0f
-                            }
-                            _transient.update { it.copy(apkDownloadProgress = frac) }
+                // Запрос к провайдеру загрузок — это IPC и курсор, главному потоку он ни к чему.
+                val poll = withContext(Dispatchers.IO) { queryApkDownload(dm, downloadId) }
+                when (poll) {
+                    // Провайдер не ответил курсором — как и раньше, спрашиваем снова.
+                    null -> Unit
+                    ApkDownloadPoll.Gone, ApkDownloadPoll.Succeeded -> return@launch
+                    ApkDownloadPoll.Failed -> {
+                        onDownloadFailedCleanup()
+                        return@launch
+                    }
+                    is ApkDownloadPoll.Running -> {
+                        // Стейт настроек обновляется только при смене процента, а не 4 раза в
+                        // секунду одним и тем же значением.
+                        val percent = (poll.fraction * 100).toInt()
+                        if (percent != lastPercent) {
+                            lastPercent = percent
+                            _transient.update { it.copy(apkDownloadProgress = poll.fraction) }
                         }
                     }
                 }
@@ -865,3 +862,26 @@ private fun filterSystemViewFrameRateSpam(log: String): String =
             "setRequestedFrameRate" in line && "frameRate=NaN" in line
         }
         .joinToString("\n")
+
+private sealed interface ApkDownloadPoll {
+    data object Gone : ApkDownloadPoll
+    data object Succeeded : ApkDownloadPoll
+    data object Failed : ApkDownloadPoll
+    data class Running(val fraction: Float) : ApkDownloadPoll
+}
+
+private fun queryApkDownload(dm: DownloadManager, downloadId: Long): ApkDownloadPoll? =
+    dm.query(DownloadManager.Query().setFilterById(downloadId))?.use { c ->
+        if (!c.moveToFirst()) return@use ApkDownloadPoll.Gone
+        when (c.getInt(c.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS))) {
+            DownloadManager.STATUS_SUCCESSFUL -> ApkDownloadPoll.Succeeded
+            DownloadManager.STATUS_FAILED -> ApkDownloadPoll.Failed
+            else -> {
+                val soFar = c.getLong(c.getColumnIndexOrThrow(DownloadManager.COLUMN_BYTES_DOWNLOADED_SO_FAR))
+                val total = c.getLong(c.getColumnIndexOrThrow(DownloadManager.COLUMN_TOTAL_SIZE_BYTES))
+                ApkDownloadPoll.Running(
+                    if (total > 0L) (soFar.toFloat() / total.toFloat()).coerceIn(0f, 1f) else 0f,
+                )
+            }
+        }
+    }

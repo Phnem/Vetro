@@ -250,10 +250,13 @@ private fun OverviewCard(
     isDark: Boolean,
 ) {
     val totalAnime = animeList.size
-    val avgRating = if (animeList.isNotEmpty()) animeList.map { it.rating }.average() else 0.0
-    val ratingFormatted = String.format(Locale.getDefault(), "%.1f", avgRating)
-    val totalEpisodes = animeList.sumOf { it.episodes }
-    val favorites = animeList.count { it.isFavorite }
+    // Проход по всей коллекции — один раз на её изменение, а не на каждую рекомпозицию карточки.
+    val ratingFormatted = remember(animeList) {
+        val avgRating = if (animeList.isNotEmpty()) animeList.map { it.rating }.average() else 0.0
+        String.format(Locale.getDefault(), "%.1f", avgRating)
+    }
+    val totalEpisodes = remember(animeList) { animeList.sumOf { it.episodes } }
+    val favorites = remember(animeList) { animeList.count { it.isFavorite } }
 
     Column(
         modifier = Modifier.fillMaxSize(),

@@ -48,23 +48,24 @@ import com.example.myapplication.isAppInDarkTheme
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun SharedTransitionScope.CommentMorphingContainer(
-    state: AddEditUiState,
+    comment: String,
+    commentMode: CommentMode,
     addCommentLabel: String,
     commentPlaceholder: String,
     onModeChange: (CommentMode) -> Unit,
     onSaveComment: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var inputText by remember(state.comment) { mutableStateOf(state.comment) }
+    var inputText by remember(comment) { mutableStateOf(comment) }
     val focusRequester = remember { FocusRequester() }
     val isDark = isAppInDarkTheme()
 
-    BackHandler(enabled = state.commentMode == CommentMode.Editing) {
+    BackHandler(enabled = commentMode == CommentMode.Editing) {
         onSaveComment(inputText)
     }
 
     AnimatedContent(
-        targetState = state.commentMode,
+        targetState = commentMode,
         label = "CommentContainerTransform",
         transitionSpec = {
             fadeIn(animationSpec = tween(300)) togetherWith fadeOut(animationSpec = tween(300))
@@ -177,7 +178,7 @@ fun SharedTransitionScope.CommentMorphingContainer(
                         .padding(16.dp)
                 ) {
                     Text(
-                        text = state.comment,
+                        text = comment,
                         style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )

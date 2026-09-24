@@ -1,11 +1,8 @@
 package com.example.myapplication
 
 import androidx.annotation.DrawableRes
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
@@ -16,7 +13,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.defaultMinSize
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -66,6 +62,8 @@ import com.example.myapplication.ui.shared.theme.MotionTokens
 import com.example.myapplication.ui.shared.theme.SnProFamily
 import com.example.myapplication.utils.performHaptic
 import com.phnem.vetro.R
+import androidx.compose.ui.draw.drawWithContent
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.launch
 
 private val ConnectedGreen = Color(0xFFF16001)
@@ -412,30 +410,32 @@ private fun SyncServiceCardStack(
             .height(CARD_HEIGHT + CARD_PEEK * (STACK_VISIBLE - 1)),
         contentAlignment = Alignment.BottomCenter,
     ) {
-        // Прогресс подтягивания следующей карты, пока верхнюю тянут вверх.
-        val progress = (-offsetY.value / upThresholdPx).coerceIn(0f, 1f)
-
-        deck.take(STACK_VISIBLE).withIndex().reversed().forEach { (index, model) ->
-            val visual = if (index == 0) {
-                StackVisual(
-                    translateY = offsetY.value,
+        // Положение карточек — в фазах слоя и отрисовки, не в композиции (см. SwipeableCardDeck).
+        fun visualFor(index: Int): StackVisual {
+            val offset = offsetY.value
+            if (index == 0) {
+                return StackVisual(
+                    translateY = offset,
                     scale = 1f,
-                    alpha = if (isFlyingOut) (1f - (-offsetY.value / 500f)).coerceIn(0f, 1f) else 1f,
+                    alpha = if (isFlyingOut) (1f - (-offset / 500f)).coerceIn(0f, 1f) else 1f,
                     dim = 0f,
                 )
-            } else {
-                val curY = -peekPx * index
-                val nextY = -peekPx * (index - 1)
-                val curScale = 1f - CARD_SCALE_STEP * index
-                val nextScale = 1f - CARD_SCALE_STEP * (index - 1)
-                StackVisual(
-                    translateY = curY + (nextY - curY) * progress,
-                    scale = curScale + (nextScale - curScale) * progress,
-                    alpha = 1f,
-                    dim = (0.14f * index - 0.14f * progress).coerceIn(0f, 0.5f),
-                )
             }
+            // Прогресс подтягивания следующей карты, пока верхнюю тянут вверх.
+            val progress = (-offset / upThresholdPx).coerceIn(0f, 1f)
+            val curY = -peekPx * index
+            val nextY = -peekPx * (index - 1)
+            val curScale = 1f - CARD_SCALE_STEP * index
+            val nextScale = 1f - CARD_SCALE_STEP * (index - 1)
+            return StackVisual(
+                translateY = curY + (nextY - curY) * progress,
+                scale = curScale + (nextScale - curScale) * progress,
+                alpha = 1f,
+                dim = (0.14f * index - 0.14f * progress).coerceIn(0f, 0.5f),
+            )
+        }
 
+        deck.take(STACK_VISIBLE).withIndex().reversed().forEach { (index, model) ->
             val dragModifier = if (index == 0) {
                 Modifier.pointerInput(deck) {
                     detectVerticalDragGestures(
@@ -449,7 +449,7 @@ private fun SyncServiceCardStack(
                         onDragCancel = { settleBack() },
                     ) { change, dragAmount ->
                         change.consume()
-                        scope.launch {
+                        scope.launch(start = CoroutineStart.UNDISPATCHED) {
                             val cur = offsetY.value
                             // вниз (undo) — с демпфированием, вверх — свободно
                             val delta = if (cur + dragAmount > 0f) dragAmount * 0.5f else dragAmount
@@ -471,6 +471,7 @@ private fun SyncServiceCardStack(
                     modifier = Modifier
                         .zIndex((STACK_VISIBLE - index).toFloat())
                         .graphicsLayer {
+                            val visual = visualFor(index)
                             translationY = visual.translateY
                             scaleX = visual.scale
                             scaleY = visual.scale
@@ -481,7 +482,7 @@ private fun SyncServiceCardStack(
                     SyncServiceCard(
                         model = model,
                         copy = copy,
-                        dim = visual.dim,
+                        dim = { visualFor(index).dim },
                         interactive = index == 0,
                         onAction = onAction,
                     )
@@ -495,7 +496,8 @@ private fun SyncServiceCardStack(
 private fun SyncServiceCard(
     model: SyncServiceCardModel,
     copy: SyncCardCopy,
-    dim: Float,
+    /** Читается только при отрисовке — драг стопки не пересобирает карточку. */
+    dim: () -> Float,
     interactive: Boolean,
     onAction: (ExternalListService, SyncCardAction) -> Unit,
 ) {
@@ -508,7 +510,13 @@ private fun SyncServiceCard(
             .fillMaxWidth()
             .height(CARD_HEIGHT)
             .clip(shape)
-            .background(model.bg),
+            .background(model.bg)
+            // Затемнение задних карточек в стопке — внутри клипа карточки.
+            .drawWithContent {
+                drawContent()
+                val alpha = dim()
+                if (alpha > 0f) drawRect(Color.Black, alpha = alpha)
+            },
     ) {
         Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
             // —— Шапка карточки ——
@@ -576,10 +584,6 @@ private fun SyncServiceCard(
             }
         }
 
-        // Затемнение задних карточек в стопке.
-        if (dim > 0f) {
-            Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = dim)))
-        }
     }
 }
 

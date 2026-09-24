@@ -150,8 +150,13 @@ fun DetailsScreen(
     }
     // У манги вторая страница — главы из движка манги, а не серии: разный источник и разный ридер.
     val isManga = current.mediaType == MediaType.MANGA
-    val episodeMenuViewModel: EpisodeMenuViewModel =
+    // У манги вторая страница — главы, серийный VM ей не нужен: раньше он создавался и для неё,
+    // сканировал «скачанные серии» и грузил обложки серий впустую.
+    val episodeMenuViewModel: EpisodeMenuViewModel? = if (isManga) {
+        null
+    } else {
         koinViewModel(key = "episode_menu_${current.id}") { parametersOf(episodeAnime) }
+    }
 
 
     fun openEpisodes() {
@@ -221,7 +226,7 @@ fun DetailsScreen(
                         seasons = seasons,
                         fallbackEpisodes = current.episodes,
                         posterPath = viewModel.getImgPath(current.imageFileName),
-                        viewModel = episodeMenuViewModel,
+                        viewModel = checkNotNull(episodeMenuViewModel),
                     )
                 }
             }
@@ -289,7 +294,7 @@ fun DetailsScreen(
                     backdrop = backdrop,
                     onClick = {
                         performHaptic(view, "light")
-                        episodeMenuViewModel.startWatching()
+                        episodeMenuViewModel?.startWatching()
                     },
                     modifier = startButtonModifier,
                 )

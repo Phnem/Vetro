@@ -336,6 +336,8 @@ fun AddEditScreen(
                     AnimatedFormRow(index = 8, collisionState = collisionState) {
                         AddEditSectionLabel(strings.addEditSectionFormat)
                     }
+                    val selectedTags = uiState.selectedTags
+                    val activeCategoryType = uiState.categoryType
                     AnimatedFormRow(index = 9, collisionState = collisionState) {
                         AddEditFormatCategorySection(
                             strings = strings,
@@ -343,7 +345,7 @@ fun AddEditScreen(
                             selectedTags = uiState.selectedTags,
                             activeCategory = uiState.categoryType,
                             onTagToggle = { tag, categoryType ->
-                                val currentTags = uiState.selectedTags.toMutableList()
+                                val currentTags = selectedTags.toMutableList()
                                 if (currentTags.contains(tag)) {
                                     currentTags.remove(tag)
                                     if (currentTags.isEmpty()) {
@@ -354,13 +356,13 @@ fun AddEditScreen(
                                         viewModel.onEvent(
                                             AddEditEvent.OnTagsChanged(
                                                 currentTags,
-                                                uiState.categoryType
+                                                activeCategoryType
                                             )
                                         )
                                     }
                                 } else {
-                                    val categoryMatches = uiState.categoryType.isEmpty() ||
-                                            uiState.categoryType.equals(
+                                    val categoryMatches = activeCategoryType.isEmpty() ||
+                                            activeCategoryType.equals(
                                                 categoryType,
                                                 ignoreCase = true
                                             )
@@ -406,7 +408,8 @@ fun AddEditScreen(
                     }
                     AnimatedFormRow(index = 13, collisionState = collisionState) {
                         CommentMorphingContainer(
-                            state = uiState,
+                            comment = uiState.comment,
+                            commentMode = uiState.commentMode,
                             addCommentLabel = commentStrings.addButton,
                             commentPlaceholder = commentStrings.placeholder,
                             onModeChange = {

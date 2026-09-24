@@ -87,6 +87,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.animation.core.animateFloatAsState
+import com.example.myapplication.ui.shared.fadedBlurEffect
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
@@ -260,8 +263,10 @@ fun SettingsScreen(
     }
 
     // Мягкий блюр фона под модальными листами (§10, но без ударной физики — тут sheet).
-    val blurRadius by animateDpAsState(
-        targetValue = if (activeSheet != null) 16.dp else 0.dp,
+    // Радиус постоянный, проявляется размытая копия (см. fadedBlurEffect); значение читается в
+    // слое — анимация не пересобирает экран настроек.
+    val backgroundBlur = animateFloatAsState(
+        targetValue = if (activeSheet != null) 1f else 0f,
         animationSpec = tween(300),
         label = "backgroundBlur"
     )
@@ -349,7 +354,13 @@ fun SettingsScreen(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .blur(blurRadius)
+                    // Постоянный слой вместо Modifier.blur: тот добавлял слой в цепочку только при
+                    // радиусе > 0, то есть над layerBackdrop при каждом открытии листа.
+                    .graphicsLayer {
+                        val amount = backgroundBlur.value
+                        renderEffect = fadedBlurEffect(SETTINGS_SHEET_BLUR.toPx(), amount)
+                        clip = amount > 0.01f
+                    }
                     .sharedBounds(
                         rememberSharedContentState(key = "settings_container"),
                         animatedVisibilityScope = animatedVisibilityScope,
@@ -1301,3 +1312,6 @@ fun CapsuleChipRow(
         }
     }
 }
+
+/** Радиус размытия фона под листами настроек. */
+private val SETTINGS_SHEET_BLUR = 16.dp

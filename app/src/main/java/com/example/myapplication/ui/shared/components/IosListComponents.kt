@@ -17,7 +17,6 @@ import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.defaultMinSize
@@ -46,6 +45,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import kotlin.math.roundToInt
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.sp
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
@@ -368,7 +369,9 @@ fun IosSegmentedControl(
 ) {
     val trackColor = if (isDark) Color.White.copy(alpha = 0.10f) else Color.Black.copy(alpha = 0.06f)
     val pillColor = if (isDark) Color(0xFF636366) else Color.White
-    val animatedFraction by animateFloatAsState(
+    // State, а не делегат: позиция читается в фазе раскладки (offset {}), и полёт пилюли не
+    // пересобирает сегменты на каждом кадре.
+    val animatedFraction = animateFloatAsState(
         targetValue = selectedIndex.toFloat(),
         animationSpec = MotionTokens.standard(),
         label = "segmentedPill",
@@ -388,7 +391,9 @@ fun IosSegmentedControl(
                 modifier = Modifier
                     .width(segWidth)
                     .height(28.dp)
-                    .offset(x = segWidth * animatedFraction)
+                    .offset {
+                        IntOffset((segWidth.toPx() * animatedFraction.value).roundToInt(), 0)
+                    }
                     .shadow(elevation = if (isDark) 0.dp else 1.5.dp, shape = pillShape, clip = false)
                     .clip(pillShape)
                     .background(pillColor),

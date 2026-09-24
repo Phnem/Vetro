@@ -2,13 +2,11 @@ package com.example.myapplication.ui.shared.components
 
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.BoxWithConstraints
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -34,6 +32,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import com.example.myapplication.ui.shared.theme.MotionTokens
 import com.example.myapplication.utils.performHaptic
+import androidx.compose.ui.draw.drawWithContent
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.launch
 
 // ==========================================
@@ -130,37 +130,40 @@ fun <T> SwipeableCardDeck(
             contentAlignment = Alignment.BottomCenter
         ) {
             // Рисуем с нижнего слоя к верхнему; zIndex дублирует порядок для надёжности.
-            deck.take(VISIBLE_DEPTH + 1).withIndex().reversed().forEach { (index, card) ->
-                val progress = (offsetY.value / swipeThresholdPx).coerceIn(0f, 1f)
-
-                val visual = if (index == 0) {
-                    DeckVisualState(
-                        translateY = offsetY.value,
-                        scale = 1f + (offsetY.value.coerceAtLeast(0f) / 4000f).coerceAtMost(0.16f),
+            // Положение карточек считается в фазах слоя и отрисовки: раньше оно вычислялось в
+            // композиции, и каждый кадр драга пересобирал всю колоду вместе с содержимым карточек.
+            fun visualFor(index: Int): DeckVisualState {
+                val offset = offsetY.value
+                if (index == 0) {
+                    return DeckVisualState(
+                        translateY = offset,
+                        scale = 1f + (offset.coerceAtLeast(0f) / 4000f).coerceAtMost(0.16f),
                         rotation = 0f,
-                        alpha = if (isFlyingOut) (1f - (offsetY.value / 800f)).coerceIn(0f, 1f) else 1f,
+                        alpha = if (isFlyingOut) (1f - (offset / 800f)).coerceIn(0f, 1f) else 1f,
                         dim = 0f,
                     )
-                } else {
-                    val currentY = -cardOffsetPx * index
-                    val nextY = -cardOffsetPx * (index - 1)
-                    val currentScale = 1f - CARD_SCALE_STEP * index
-                    val nextScale = 1f - CARD_SCALE_STEP * (index - 1)
-                    val currentRot = -CARD_ROTATION_STEP_DEG * index
-                    val nextRot = -CARD_ROTATION_STEP_DEG * (index - 1)
-                    DeckVisualState(
-                        translateY = currentY + (nextY - currentY) * progress,
-                        scale = currentScale + (nextScale - currentScale) * progress,
-                        rotation = currentRot + (nextRot - currentRot) * progress,
-                        alpha = when {
-                            index > VISIBLE_DEPTH -> 0f
-                            index == VISIBLE_DEPTH -> progress
-                            else -> 1f
-                        },
-                        dim = (0.16f * index - 0.16f * progress).coerceIn(0f, 0.6f),
-                    )
                 }
+                val progress = (offset / swipeThresholdPx).coerceIn(0f, 1f)
+                val currentY = -cardOffsetPx * index
+                val nextY = -cardOffsetPx * (index - 1)
+                val currentScale = 1f - CARD_SCALE_STEP * index
+                val nextScale = 1f - CARD_SCALE_STEP * (index - 1)
+                val currentRot = -CARD_ROTATION_STEP_DEG * index
+                val nextRot = -CARD_ROTATION_STEP_DEG * (index - 1)
+                return DeckVisualState(
+                    translateY = currentY + (nextY - currentY) * progress,
+                    scale = currentScale + (nextScale - currentScale) * progress,
+                    rotation = currentRot + (nextRot - currentRot) * progress,
+                    alpha = when {
+                        index > VISIBLE_DEPTH -> 0f
+                        index == VISIBLE_DEPTH -> progress
+                        else -> 1f
+                    },
+                    dim = (0.16f * index - 0.16f * progress).coerceIn(0f, 0.6f),
+                )
+            }
 
+            deck.take(VISIBLE_DEPTH + 1).withIndex().reversed().forEach { (index, card) ->
                 // Тап и драг сосуществуют на одном потоке указателя: detectTapGestures
                 // отдаёт событие драгу, как только движение уходит за touch slop.
                 val gestureModifier = if (index == 0) {
@@ -181,7 +184,9 @@ fun <T> SwipeableCardDeck(
                             onDragCancel = { animateBack() }
                         ) { change, dragAmount ->
                             change.consume()
-                            scope.launch {
+                            // UNDISPATCHED: сдвиг применяется сразу в этом же событии, а не
+                            // очередью корутин на следующий проход главного потока.
+                            scope.launch(start = CoroutineStart.UNDISPATCHED) {
                                 val current = offsetY.value
                                 // Вверх — с демпфированием (резинка), вниз — свободно
                                 val delta = if (current + dragAmount < 0f) dragAmount * UPWARD_DRAG_DAMPING else dragAmount
@@ -196,6 +201,7 @@ fun <T> SwipeableCardDeck(
                         modifier = gestureModifier
                             .zIndex((100 - index).toFloat())
                             .graphicsLayer {
+                                val visual = visualFor(index)
                                 translationY = visual.translateY
                                 scaleX = visual.scale
                                 scaleY = visual.scale
@@ -205,12 +211,14 @@ fun <T> SwipeableCardDeck(
                             .width(cardWidth)
                             .height(cardHeight)
                             .clip(cardShape)
+                            // Затемнение задних карточек (аналог filter: brightness()).
+                            .drawWithContent {
+                                drawContent()
+                                val dim = visualFor(index).dim
+                                if (dim > 0f) drawRect(Color.Black, alpha = dim)
+                            }
                     ) {
                         cardContent(card, index == 0)
-                        // Затемнение задних карточек (аналог filter: brightness())
-                        if (visual.dim > 0f) {
-                            Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = visual.dim)))
-                        }
                     }
                 }
             }

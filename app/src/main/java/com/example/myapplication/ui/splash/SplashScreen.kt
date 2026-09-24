@@ -131,31 +131,29 @@ fun VetroSplashScreen(
         else -> migrationSubtitle
     }
 
-    val wordmarkAlpha = splashWaveAlphaAt(
-        xFrac = 0.5f,
-        yFrac = 0.45f,
-        progress = waveProgress.value,
-        exitProgress = exitProgress.value,
-    )
-    // Лёгкий zoom-out логотипа на outro
-    val wordmarkScale = 1f + exitProgress.value * 0.12f
 
     Box(
         modifier = Modifier.fillMaxSize(),
         contentAlignment = Alignment.Center,
     ) {
         SplashWaveBackground(
-            progress = waveProgress.value,
-            exitProgress = exitProgress.value,
+            progress = { waveProgress.value },
+            exitProgress = { exitProgress.value },
         )
 
         VetroWordmark(
-            modifier = Modifier
-                .graphicsLayer {
-                    scaleX = wordmarkScale
-                    scaleY = wordmarkScale
-                }
-                .alpha(wordmarkAlpha),
+            modifier = Modifier.graphicsLayer {
+                // Лёгкий zoom-out логотипа на outro
+                val wordmarkScale = 1f + exitProgress.value * 0.12f
+                scaleX = wordmarkScale
+                scaleY = wordmarkScale
+                alpha = splashWaveAlphaAt(
+                    xFrac = 0.5f,
+                    yFrac = 0.45f,
+                    progress = waveProgress.value,
+                    exitProgress = exitProgress.value,
+                )
+            },
         )
 
         AnimatedVisibility(
