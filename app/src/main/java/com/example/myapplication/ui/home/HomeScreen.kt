@@ -106,7 +106,6 @@ import com.example.myapplication.ui.home.recommendations.getRecommendationsStrin
 import com.example.myapplication.ui.home.cardmenu.CardActionMenuOverlay
 import com.example.myapplication.ui.home.cardmenu.CardMenuTarget
 import com.example.myapplication.ui.home.updates.EpisodeUpdateStack
-import com.example.myapplication.ui.shared.LocalGlassCapsuleDock
 import com.example.myapplication.ui.shared.LocalWorkspaceSearch
 import com.example.myapplication.ui.navigation.navigateToAddEdit
 import com.example.myapplication.ui.navigation.navigateToDetails
@@ -297,9 +296,8 @@ fun HomeScreen(
     // общаются они заявками (см. WorkspaceSearchState). В классическом режиме связи нет:
     // там кнопка поиска стоит в том же доке, что и всё остальное.
     val workspaceSearch = LocalWorkspaceSearch.current
-    // Объединённый режим: рабочая область + капсульный док. Только в нём у нижнего дока есть
-    // меню, в которое переехали статистика и синхронизация.
-    val mergedDockMode = hostedInWorkspace && LocalGlassCapsuleDock.current
+    // Рабочая область всегда с капсульным доком: статистика и синхронизация живут в его меню.
+    val mergedDockMode = hostedInWorkspace
     if (hostedInWorkspace) {
         LaunchedEffect(isSearchVisible) { workspaceSearch.report(isSearchVisible) }
         // Уехали на дальний раздел — пейджер выбрасывает страницу из композиции вместе с её

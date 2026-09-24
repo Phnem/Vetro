@@ -14,7 +14,6 @@ import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -52,7 +51,6 @@ import com.example.myapplication.ui.navigation.navigateToInspect
 import com.example.myapplication.ui.navigation.navigateToWelcome
 import com.example.myapplication.ui.shared.DONATION_URL
 import com.example.myapplication.ui.shared.LocalAdaptiveGlassScrollInProgress
-import com.example.myapplication.ui.shared.LocalGlassCapsuleDock
 import com.example.myapplication.ui.shared.theme.MotionTokens
 import com.example.myapplication.utils.getStrings
 import com.example.myapplication.utils.performHaptic
@@ -115,9 +113,8 @@ fun WorkspaceScreen(
     syncPanelState.targetState = showSyncPanel
     val dockHidden = homeOverlayVisible || settingsOverlayVisible || showSyncPanel || !pageDockVisible
 
-    // Док у двух режимов разной высоты, а страницы резервируют место под него сами. Константа
-    // «на всякий случай побольше» оставляла бы под капсулой полосу пустоты.
-    val dockInset = if (LocalGlassCapsuleDock.current) CapsuleDockInset else WorkspaceDockInset
+    // Страницы резервируют место под док сами — ровно под капсулу, без запаса на всякий случай.
+    val dockInset = CapsuleDockInset
 
     val pagerState = rememberPagerState(
         initialPage = WorkspacePage.Start.index,

@@ -6,6 +6,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.compositionLocalOf
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -27,16 +28,13 @@ val LocalAdaptiveGlassEnabled = compositionLocalOf { true }
 val LocalAdaptiveGlassScrollInProgress = compositionLocalOf { false }
 
 /**
- * Dev toggle: нижний док — капсула матового стекла вместо прежнего «жидкого» (по умолчанию выкл).
+ * Новый интерфейс (по умолчанию) против классического, см. `DevPreferencesKeys.LEGACY_UI`:
+ * капсульный док, матовое стекло на всех стеклянных поверхностях, рабочая область со свайпом.
  *
- * Через CompositionLocal, а не параметром: док стоит глубоко внутри экрана коллекции, и тянуть
- * временный флаг через всю цепочку вызовов ради тумблера, который уедет после обкатки, дороже, чем
- * он стоит.
+ * Через CompositionLocal, а не параметром: материал — свойство всего приложения, а стеклянные
+ * поверхности стоят глубоко внутри экранов.
  */
-val LocalGlassCapsuleDock = compositionLocalOf { false }
-
-/** Dev toggle: нижние панели раскрываются морфом из своей кнопки (по умолчанию выкл). */
-val LocalStagedSheetMotion = compositionLocalOf { false }
+val LocalModernUi = staticCompositionLocalOf { true }
 
 enum class GlassPreset(
     val fullBlur: Dp,
@@ -147,7 +145,7 @@ fun Modifier.adaptiveGlassBackdrop(
     shape: Shape,
     effects: AdaptiveGlassEffects,
 ): Modifier {
-    if (LocalGlassCapsuleDock.current) {
+    if (LocalModernUi.current) {
         return this.frostedGlass(
             backdrop = backdrop,
             shape = shape,

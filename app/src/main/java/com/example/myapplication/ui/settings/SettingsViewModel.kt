@@ -113,9 +113,7 @@ private fun mergeSettingsUi(
         autoSkipSegments = prefs[LocalPlayerViewModel.AUTO_SKIP_KEY] ?: false,
         autoNextEpisode = prefs[LocalPlayerViewModel.AUTO_NEXT_KEY] ?: true,
         devAdaptiveGlassScroll = prefs[DevPreferencesKeys.ADAPTIVE_GLASS_SCROLL] ?: false,
-        devSelectDockNavigation = prefs[DevPreferencesKeys.SELECT_DOCK_NAVIGATION] ?: false,
-        devGlassCapsuleDock = prefs[DevPreferencesKeys.GLASS_CAPSULE_DOCK] ?: false,
-        devStagedSheetMotion = prefs[DevPreferencesKeys.STAGED_SHEET_MOTION] ?: false,
+        devLegacyUi = prefs[DevPreferencesKeys.LEGACY_UI] ?: false,
         devGithubUpdatesEnabled = githubUpdatesEnabled,
         isExportingLogs = t.isExportingLogs,
         isExportingPdf = t.isExportingPdf,
@@ -202,6 +200,7 @@ class SettingsViewModel(
     }
 
     init {
+        dropRetiredUiFlags()
         viewModelScope.launch {
             val v = runCatching {
                 val pInfo = app.packageManager.getPackageInfo(app.packageName, 0)
@@ -333,21 +332,24 @@ class SettingsViewModel(
         }
     }
 
-    fun setDevSelectDockNavigation(enabled: Boolean) {
+    /**
+     * Переключение классического интерфейса. [onApplied] вызывается после записи — экран
+     * пересоздаёт активити: смена режима меняет структуру дерева над `layerBackdrop`, и живое
+     * переключение могло бы на кадр оставить стекло плоским.
+     */
+    fun setDevLegacyUi(enabled: Boolean, onApplied: () -> Unit) {
         viewModelScope.launch {
-            settingsDataStore.edit { it[DevPreferencesKeys.SELECT_DOCK_NAVIGATION] = enabled }
+            settingsDataStore.edit { it[DevPreferencesKeys.LEGACY_UI] = enabled }
+            onApplied()
         }
     }
 
-    fun setDevGlassCapsuleDock(enabled: Boolean) {
+    /** Три прежних флага интерфейса больше ничего не значат — вычищаем их из настроек. */
+    private fun dropRetiredUiFlags() {
         viewModelScope.launch {
-            settingsDataStore.edit { it[DevPreferencesKeys.GLASS_CAPSULE_DOCK] = enabled }
-        }
-    }
-
-    fun setDevStagedSheetMotion(enabled: Boolean) {
-        viewModelScope.launch {
-            settingsDataStore.edit { it[DevPreferencesKeys.STAGED_SHEET_MOTION] = enabled }
+            settingsDataStore.edit { prefs ->
+                DevPreferencesKeys.RETIRED_UI_FLAGS.forEach { key -> prefs.remove(key) }
+            }
         }
     }
 

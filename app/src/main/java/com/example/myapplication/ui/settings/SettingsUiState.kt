@@ -23,12 +23,8 @@ data class SettingsUiState(
     /** Включать следующую серию по концу текущей. По умолчанию ВКЛ — см. `AUTO_NEXT_KEY`. */
     val autoNextEpisode: Boolean = true,
     val devAdaptiveGlassScroll: Boolean = false,
-    /** Новая корневая навигация (док-селектор + рабочая область из пяти страниц). */
-    val devSelectDockNavigation: Boolean = false,
-    /** Новый вид нижнего дока: капсула матового стекла с подвижной подсветкой. */
-    val devGlassCapsuleDock: Boolean = false,
-    /** Двухфазный морф нижних панелей вместо выезда снизу. */
-    val devStagedSheetMotion: Boolean = false,
+    /** Классический интерфейс вместо нового (по умолчанию — новый), см. `DevPreferencesKeys.LEGACY_UI`. */
+    val devLegacyUi: Boolean = false,
     val devGithubUpdatesEnabled: Boolean = false,
     val isExportingLogs: Boolean = false,
     val isExportingPdf: Boolean = false,
@@ -58,4 +54,7 @@ data class SettingsUiState(
     val apkDownloadProgress: Float = 0f,
     val pendingApkPathForInstall: String? = null,
     val latestReleaseHtmlUrl: String? = null,
-)
+) {
+    /** Новый интерфейс (рабочая область, капсульный док, матовое стекло) — режим по умолчанию. */
+    val modernUi: Boolean get() = !devLegacyUi
+}

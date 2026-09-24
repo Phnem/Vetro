@@ -134,7 +134,7 @@ fun AppNavGraph(
     // пара для shared-bounds морфа. Флаг читается из StateFlow в момент перехода, а не подпиской —
     // граф не должен перекомпоновываться на каждое изменение настроек.
     fun workspaceModal(entry: NavBackStackEntry) =
-        settingsViewModel.uiState.value.devSelectDockNavigation && entry.isWorkspaceModal()
+        settingsViewModel.uiState.value.modernUi && entry.isWorkspaceModal()
 
     SharedTransitionLayout {
         Box(Modifier.fillMaxSize()) {
@@ -295,7 +295,7 @@ fun AppNavGraph(
                 // Две навигации никогда не смонтированы одновременно — иначе задвоятся ключи
                 // shared-element (иконки старого дока и экраны-цели).
                 val settingsState by settingsViewModel.uiState.collectAsStateWithLifecycle()
-                if (settingsState.devSelectDockNavigation) {
+                if (settingsState.modernUi) {
                     WorkspaceScreen(
                         navController = navController,
                         homeViewModel = homeViewModel,

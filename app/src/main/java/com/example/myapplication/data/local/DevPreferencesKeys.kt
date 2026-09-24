@@ -40,22 +40,19 @@ object DevPreferencesKeys {
     val TEMP_PLAYER_PROMO_V333_DISMISSED = booleanPreferencesKey("temp_player_promo_v333_dismissed")
 
     /**
-     * Новая корневая навигация: док-селектор + рабочая область из пяти страниц
-     * (см. `ui/workspace/WorkspaceScreen.kt`). Отсутствие ключа = ВЫКЛ, приложение
-     * ведёт себя как раньше. Временный ключ: удаляется вместе со старым доком
-     * после обкатки.
+     * Классический интерфейс: прежний док с жидким стеклом и окна вместо страниц. Отсутствие
+     * ключа = ВЫКЛ, то есть по умолчанию работает новый интерфейс — рабочая область со свайпом
+     * между разделами, капсульный док из матового стекла и морф панелей из дока.
+     *
+     * Заменил три отдельных dev-флага (навигация свайпом, матовый док, морф панелей): из восьми
+     * их сочетаний осмысленных было два.
      */
-    val SELECT_DOCK_NAVIGATION = booleanPreferencesKey("dev_select_dock_navigation")
+    val LEGACY_UI = booleanPreferencesKey("dev_legacy_ui")
 
-    /**
-     * Новый вид нижнего дока: капсула матового стекла с подвижной подсветкой активного пункта,
-     * без подписей (см. `ui/home/CapsuleGlassDock.kt`). Отсутствие ключа = ВЫКЛ.
-     */
-    val GLASS_CAPSULE_DOCK = booleanPreferencesKey("dev_glass_capsule_dock")
-
-    /**
-     * Новая анимация нижних панелей: двухфазный морф из кнопки дока через промежуточную форму,
-     * вместо выезда снизу (см. `ui/shared/StagedSheetMotion.kt`). Отсутствие ключа = ВЫКЛ.
-     */
-    val STAGED_SHEET_MOTION = booleanPreferencesKey("dev_staged_sheet_motion")
+    /** Ключи трёх прежних флагов — удаляются из настроек один раз, см. [LEGACY_UI]. */
+    val RETIRED_UI_FLAGS = listOf(
+        booleanPreferencesKey("dev_select_dock_navigation"),
+        booleanPreferencesKey("dev_glass_capsule_dock"),
+        booleanPreferencesKey("dev_staged_sheet_motion"),
+    )
 }

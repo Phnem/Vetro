@@ -1,6 +1,6 @@
 package com.example.myapplication.ui.settings
 
-import android.content.Context
+import android.app.Activity
 import android.content.Intent
 import android.widget.Toast
 import androidx.core.net.toUri
@@ -18,7 +18,6 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -42,21 +41,15 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AutoFixHigh
-import androidx.compose.material.icons.filled.Translate
 import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.filled.Code
-import androidx.compose.material.icons.filled.Dock
-import androidx.compose.material.icons.filled.OpenInFull
-import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.FileOpen
 import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.filled.PlayCircle
@@ -70,8 +63,6 @@ import androidx.compose.material.icons.outlined.Category
 import androidx.compose.material.icons.outlined.DarkMode
 import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material.icons.outlined.LightMode
-import androidx.compose.material.icons.outlined.ManageAccounts
-import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.SystemUpdate
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -115,7 +106,6 @@ import com.phnem.vetro.R
 import com.example.myapplication.data.models.AppTheme
 import com.example.myapplication.data.models.AppUpdateStatus
 import com.example.myapplication.data.models.UiStrings
-import com.example.myapplication.network.AppContentType
 import com.example.myapplication.network.AppLanguage
 import com.example.myapplication.ui.navigation.navigateToWelcome
 import com.example.myapplication.ui.shared.rememberDockAutoHide
@@ -643,9 +633,10 @@ fun SettingsScreen(
                                 onHideShareToggle = { performHaptic(view, "light"); viewModel.setDevHideShare(it) },
                                 onFpsOverlayToggle = { performHaptic(view, "light"); viewModel.setDevFpsOverlay(it) },
                                 onAdaptiveGlassToggle = { performHaptic(view, "light"); viewModel.setDevAdaptiveGlassScroll(it) },
-                                onSelectDockNavigationToggle = { performHaptic(view, "light"); viewModel.setDevSelectDockNavigation(it) },
-                                onGlassCapsuleDockToggle = { performHaptic(view, "light"); viewModel.setDevGlassCapsuleDock(it) },
-                                onStagedSheetMotionToggle = { performHaptic(view, "light"); viewModel.setDevStagedSheetMotion(it) },
+                                onLegacyUiToggle = { enabled ->
+                                    performHaptic(view, "light")
+                                    viewModel.setDevLegacyUi(enabled) { (context as? Activity)?.recreate() }
+                                },
                                 onGithubUpdatesToggle = { enabled ->
                                     performHaptic(view, "light")
                                     if (enabled) showGithubUpdatesEnableDialog = true
@@ -900,9 +891,7 @@ private fun DeveloperGroups(
     onHideShareToggle: (Boolean) -> Unit,
     onFpsOverlayToggle: (Boolean) -> Unit,
     onAdaptiveGlassToggle: (Boolean) -> Unit,
-    onSelectDockNavigationToggle: (Boolean) -> Unit,
-    onGlassCapsuleDockToggle: (Boolean) -> Unit,
-    onStagedSheetMotionToggle: (Boolean) -> Unit,
+    onLegacyUiToggle: (Boolean) -> Unit,
     onGithubUpdatesToggle: (Boolean) -> Unit,
     onExportLogs: () -> Unit,
     onExportPdf: () -> Unit,
@@ -956,65 +945,22 @@ private fun DeveloperGroups(
                 },
                 {
                     // Подписи зашиты здесь, а не в UiStrings: там 252 поля из 254 допустимых
-                    // (за пределом RELEASE падает с VerifyError в clinit), а тумблер временный —
-                    // уедет вместе со старым доком.
+                    // (за пределом RELEASE падает с VerifyError в clinit).
                     val ru = strings.languageName == "RU"
                     IosRow(
-                        title = if (ru) "Навигация свайпом" else "Swipe navigation",
+                        title = if (ru) "Классический интерфейс" else "Classic interface",
                         subtitle = if (ru) {
-                            "Док-селектор и пять страниц вместо открытия окон"
+                            "Старый док, жидкое стекло, окна вместо страниц"
                         } else {
-                            "Select dock with five pages instead of opening screens"
+                            "Old dock, liquid glass, screens instead of pages"
                         },
                         isDark = isDark,
                         icon = Icons.Filled.ViewCarousel,
                         iconBackground = devIcon,
                         trailing = {
                             IosSwitch(
-                                checked = uiState.devSelectDockNavigation,
-                                onCheckedChange = onSelectDockNavigationToggle,
-                            )
-                        },
-                    )
-                },
-                {
-                    // Подписи зашиты здесь по той же причине, что у соседнего тумблера: в
-                    // UiStrings свободных полей почти не осталось, а оба пункта временные.
-                    val ru = strings.languageName == "RU"
-                    IosRow(
-                        title = if (ru) "Док из матового стекла" else "Frosted glass dock",
-                        subtitle = if (ru) {
-                            "Капсула с подвижной подсветкой активного пункта, без подписей"
-                        } else {
-                            "Capsule with a sliding highlight, icons only"
-                        },
-                        isDark = isDark,
-                        icon = Icons.Filled.Dock,
-                        iconBackground = devIcon,
-                        trailing = {
-                            IosSwitch(
-                                checked = uiState.devGlassCapsuleDock,
-                                onCheckedChange = onGlassCapsuleDockToggle,
-                            )
-                        },
-                    )
-                },
-                {
-                    val ru = strings.languageName == "RU"
-                    IosRow(
-                        title = if (ru) "Морф панелей из дока" else "Staged sheet morph",
-                        subtitle = if (ru) {
-                            "Статистика раскрывается из своей кнопки, а не выезжает снизу"
-                        } else {
-                            "Stats grows out of its own button instead of sliding up"
-                        },
-                        isDark = isDark,
-                        icon = Icons.Filled.OpenInFull,
-                        iconBackground = devIcon,
-                        trailing = {
-                            IosSwitch(
-                                checked = uiState.devStagedSheetMotion,
-                                onCheckedChange = onStagedSheetMotionToggle,
+                                checked = uiState.devLegacyUi,
+                                onCheckedChange = onLegacyUiToggle,
                             )
                         },
                     )

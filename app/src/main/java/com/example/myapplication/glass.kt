@@ -11,11 +11,8 @@ import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
-import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.runtime.LaunchedEffect
@@ -23,7 +20,6 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -36,23 +32,18 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.wrapContentHeight
-import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Sort
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.outlined.FilterList
 import androidx.compose.material.icons.outlined.Settings
@@ -61,30 +52,21 @@ import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import com.example.myapplication.ui.home.CapsuleDockItem
-import com.example.myapplication.ui.home.CapsuleGlassDock
 import com.example.myapplication.ui.shared.FrostedMaterials
 import com.example.myapplication.ui.shared.frostedGlass
-import com.example.myapplication.ui.shared.LocalGlassCapsuleDock
-import com.example.myapplication.ui.shared.stagedMorphOrigin
-import androidx.compose.runtime.mutableIntStateOf
+import com.example.myapplication.ui.shared.LocalModernUi
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.CornerRadius
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.RoundRect
@@ -95,7 +77,6 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.StrokeJoin
-import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.toArgb
@@ -104,7 +85,6 @@ import androidx.compose.ui.graphics.vector.path
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
-import android.os.Build
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.res.painterResource
@@ -115,22 +95,17 @@ import com.example.myapplication.data.models.UiStrings
 import com.example.myapplication.network.AppLanguage
 import com.example.myapplication.ui.home.WorkspaceSortNotificationActions
 import com.example.myapplication.ui.navigation.navigateToAddEdit
-import com.example.myapplication.ui.navigation.navigateToSettings
 import com.example.myapplication.ui.shared.GlassPreset
 import com.example.myapplication.ui.shared.adaptiveGlassBackdrop
 import com.example.myapplication.ui.shared.rememberAdaptiveGlassEffects
 import com.example.myapplication.ui.shared.components.GenreFilterPillSelection
 import com.example.myapplication.ui.shared.components.GlassIconButton
 import com.example.myapplication.ui.shared.fluidClickable
-import com.example.myapplication.ui.shared.gradientHighlightBorder
 import com.example.myapplication.ui.shared.theme.BrandBlue
 import com.example.myapplication.ui.shared.theme.DarkBackground
-import com.example.myapplication.ui.shared.theme.OverlayGlassPanel
 import com.example.myapplication.ui.shared.theme.OverlayThemeTokens
 import com.example.myapplication.ui.shared.theme.MotionTokens
 import com.example.myapplication.ui.shared.theme.IosDesign
-import com.example.myapplication.ui.shared.theme.iosSheetContainer
-import com.example.myapplication.ui.shared.theme.SquircleCornerShape
 import com.example.myapplication.ui.shared.theme.SquircleShape
 import com.example.myapplication.ui.shared.components.GrabberHandle
 import com.example.myapplication.ui.shared.components.MotionBottomSheet
@@ -223,7 +198,7 @@ fun GlassActionDock(
     // бы как недоделка. Ветка структурная, и переключение тумблера на живом экране может один
     // раз показать плоскую заливку — для dev-флага это приемлемо, восстановление штатное
     // (см. GlassBackdropRecovery).
-    val frosted = LocalGlassCapsuleDock.current
+    val frosted = LocalModernUi.current
     val frostedMaterial = FrostedMaterials.dock()
     val dockShape = RoundedCornerShape(32.dp)
     val topPadding by animateDpAsState(
@@ -348,166 +323,6 @@ fun GlassBottomNavigation(
     val view = LocalView.current
     val isDark = isAppInDarkTheme()
 
-    // Dev-тумблер «Док из матового стекла»: другой материал и другая раскладка — это
-    // самостоятельный компонент, а не набор условий внутри прежнего. Ветвление одно и на самом
-    // верху, поэтому старый док остаётся ровно таким, каким был.
-    if (LocalGlassCapsuleDock.current) {
-        val ruDock = currentLanguage == AppLanguage.RU
-        // Подсветка отмечает последний открытый раздел: у классического дока постоянного
-        // «текущего экрана» нет — его пункты открывают окна и оверлеи поверх коллекции.
-        var lastOpened by rememberSaveable { mutableIntStateOf(-1) }
-        // Пункты — те же четыре, что и у прежнего дока, и в том же порядке: тумблер меняет вид,
-        // а не состав навигации.
-        //
-        // Иконки собираются ЗДЕСЬ вместе со своими shared-element ключами. Три из четырёх
-        // открывают окно морфом из собственной иконки, и ключи обязаны совпадать с теми, что
-        // ждут принимающие экраны, — иначе окна открываются без анимации.
-        CapsuleGlassDock(
-            backdrop = backdrop,
-            items = listOf(
-                CapsuleDockItem(
-                    contentDescription = if (ruDock) "Кадр" else "Frame",
-                    onClick = {
-                        performHaptic(view, "light")
-                        lastOpened = 0
-                        onInspectClick()
-                    },
-                ) { tint ->
-                    with(sharedTransitionScope) {
-                        Box(
-                            modifier = Modifier
-                                .size(DockSharedBoundsSize)
-                                .sharedBounds(
-                                    rememberSharedContentState(key = "inspect_container"),
-                                    animatedVisibilityScope = animatedVisibilityScope,
-                                    resizeMode = SharedTransitionScope.ResizeMode.RemeasureToBounds,
-                                ),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Icon(
-                                painter = painterResource(R.drawable.frame_inspect_24),
-                                contentDescription = if (ruDock) "Кадр" else "Frame",
-                                tint = tint,
-                                modifier = Modifier
-                                    .size(DockIconSize)
-                                    .sharedElement(
-                                        rememberSharedContentState(key = "inspect_icon"),
-                                        animatedVisibilityScope = animatedVisibilityScope,
-                                    ),
-                            )
-                        }
-                    }
-                },
-                CapsuleDockItem(
-                    contentDescription = if (ruDock) "Статистика" else "Stats",
-                    onClick = {
-                        performHaptic(view, "light")
-                        lastOpened = 1
-                        onShowStats()
-                    },
-                    isMorphOrigin = true,
-                ) { tint ->
-                    // Статистика — единственный пункт без shared-element: она раскрывается не
-                    // окном, а панелью поверх экрана (см. StagedSheetMotion.kt).
-                    Icon(
-                        imageVector = HeroiconsSquaresPlus,
-                        contentDescription = if (ruDock) "Статистика" else "Stats",
-                        tint = tint,
-                        modifier = Modifier.size(DockIconSize),
-                    )
-                },
-                CapsuleDockItem(
-                    contentDescription = if (ruDock) "Добавить" else "Add",
-                    onClick = {
-                        performHaptic(view, "success")
-                        lastOpened = 2
-                        nav.navigateToAddEdit()
-                    },
-                ) { tint ->
-                    with(sharedTransitionScope) {
-                        Box(
-                            modifier = Modifier
-                                .size(DockSharedBoundsSize)
-                                .sharedBounds(
-                                    rememberSharedContentState(key = "fab_container"),
-                                    animatedVisibilityScope = animatedVisibilityScope,
-                                    resizeMode = SharedTransitionScope.ResizeMode.RemeasureToBounds,
-                                    clipInOverlayDuringTransition = OverlayClip(CircleShape),
-                                ),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Icon(
-                                imageVector = HeroiconsPlus,
-                                contentDescription = if (ruDock) "Добавить" else "Add",
-                                tint = tint,
-                                modifier = Modifier
-                                    .size(DockIconSize)
-                                    .sharedElement(
-                                        rememberSharedContentState(key = "fab_icon"),
-                                        animatedVisibilityScope = animatedVisibilityScope,
-                                    ),
-                            )
-                        }
-                    }
-                },
-                CapsuleDockItem(
-                    contentDescription = if (ruDock) "Настройки" else "Settings",
-                    onClick = {
-                        performHaptic(view, "light")
-                        lastOpened = 3
-                        onSettingsClick()
-                    },
-                ) { tint ->
-                    with(sharedTransitionScope) {
-                        Box(
-                            modifier = Modifier
-                                .size(DockSharedBoundsSize)
-                                .sharedBounds(
-                                    rememberSharedContentState(key = "settings_container"),
-                                    animatedVisibilityScope = animatedVisibilityScope,
-                                    // scaleToBounds, как и у прежнего дока: RemeasureToBounds
-                                    // пересобирал бы весь список настроек на каждом кадре и
-                                    // ронял FPS.
-                                    resizeMode = SharedTransitionScope.ResizeMode.scaleToBounds(),
-                                ),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Icon(
-                                imageVector = Icons.Outlined.Settings,
-                                contentDescription = if (ruDock) "Настройки" else "Settings",
-                                tint = tint,
-                                modifier = Modifier
-                                    .size(DockIconSize)
-                                    .sharedElement(
-                                        rememberSharedContentState(key = "settings_icon"),
-                                        animatedVisibilityScope = animatedVisibilityScope,
-                                    ),
-                            )
-                        }
-                    }
-                },
-            ),
-            selectedIndex = lastOpened.takeIf { it >= 0 },
-            trailingButton = CapsuleDockItem(
-                contentDescription = if (ruDock) "Поиск" else "Search",
-                onClick = {
-                    performHaptic(view, "light")
-                    onSearchClick()
-                },
-            ) { tint ->
-                Icon(
-                    imageVector = Icons.Default.Search,
-                    contentDescription = if (ruDock) "Поиск" else "Search",
-                    tint = tint,
-                    modifier = Modifier.size(DockIconSize),
-                )
-            },
-            trailingActive = isSearchActive,
-            modifier = modifier.padding(bottom = 24.dp),
-        )
-        return
-    }
-
     val glassEffects = rememberAdaptiveGlassEffects(GlassPreset.CompactNav)
     // Более «пухлая» капсула (референс — Telegram): выше и с полным пилюльным скруглением.
     val navHeight = 74.dp
@@ -591,9 +406,6 @@ fun GlassBottomNavigation(
                     modifier = Modifier
                         .width(60.dp)
                         .clip(RoundedCornerShape(20.dp))
-                        // Точка, из которой раскрывается панель статистики. Два dev-тумблера
-                        // независимы, поэтому морф обязан работать и со старым доком.
-                        .stagedMorphOrigin()
                         .clickable(
                             interactionSource = remember { MutableInteractionSource() },
                             indication = null
