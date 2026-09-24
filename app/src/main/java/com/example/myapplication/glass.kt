@@ -194,6 +194,11 @@ fun GlassActionDock(
     onOpenStats: () -> Unit = {},
     /** См. одноимённый параметр [WorkspaceSortNotificationActions] — док только прокидывает его. */
     showMiddleAction: Boolean = true,
+    /**
+     * Отдельная капля слева от капсулы (колокольчик центра уведомлений). Живёт внутри той же
+     * анимации появления, что и капсула: приезжает и уезжает вместе с ней, а не своей дорогой.
+     */
+    leading: (@Composable () -> Unit)? = null,
 ) {
     val isDark = isAppInDarkTheme()
     val glassEffects = rememberAdaptiveGlassEffects(GlassPreset.Card)
@@ -242,76 +247,82 @@ fun GlassActionDock(
             .offset { IntOffset(0, topShift.value.roundToPx()) }
             .statusBarsPadding()
     ) {
-        Box {
-            Box(
-                Modifier
-                    .matchParentSize()
-                    .clip(dockShape)
-                    .then(
-                        if (frosted) {
-                            Modifier.frostedGlass(
-                                backdrop = backdrop,
-                                shape = dockShape,
-                                material = frostedMaterial,
-                            )
-                        } else {
-                            Modifier
-                                .adaptiveGlassBackdrop(
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            leading?.invoke()
+            Box {
+                Box(
+                    Modifier
+                        .matchParentSize()
+                        .clip(dockShape)
+                        .then(
+                            if (frosted) {
+                                Modifier.frostedGlass(
                                     backdrop = backdrop,
                                     shape = dockShape,
-                                    effects = glassEffects,
+                                    material = frostedMaterial,
                                 )
-                                // Кант матового материала рисует он сам — второй поверх него
-                                // дал бы двойную линию по тому же контуру.
-                                .border(0.5.dp, borderColor, dockShape)
-                        },
-                    )
-            ) {
-                // Блик — часть жидкого рецепта. У матового материала свой кант и своя подсветка,
-                // и второй контур поверх них давал двойную линию.
-                if (!frosted) {
-                    Spacer(
-                        modifier = Modifier
-                            .matchParentSize()
-                            .drawWithCache {
-                                val rect = Rect(offset = Offset.Zero, size = size)
-                                val path = Path().apply { addRoundRect(RoundRect(rect, CornerRadius(32.dp.toPx()))) }
-                                val stroke = Stroke(width = 1.dp.toPx())
-                                onDrawBehind {
-                                    val alpha = shineAlpha.value
-                                    if (alpha <= 0f) return@onDrawBehind
-                                    drawPath(
-                                        path,
-                                        brush = Brush.verticalGradient(
-                                            colors = listOf(
-                                                shineColorBase.copy(alpha = shineColorBase.alpha * alpha),
-                                                Color.Transparent,
-                                                Color.Transparent,
-                                                shineColorBase.copy(alpha = 0.05f * alpha)
-                                            )
-                                        ),
-                                        style = stroke,
+                            } else {
+                                Modifier
+                                    .adaptiveGlassBackdrop(
+                                        backdrop = backdrop,
+                                        shape = dockShape,
+                                        effects = glassEffects,
                                     )
+                                    // Кант матового материала рисует он сам — второй поверх него
+                                    // дал бы двойную линию по тому же контуру.
+                                    .border(0.5.dp, borderColor, dockShape)
+                            },
+                        )
+                ) {
+                    // Блик — часть жидкого рецепта. У матового материала свой кант и своя подсветка,
+                    // и второй контур поверх них давал двойную линию.
+                    if (!frosted) {
+                        Spacer(
+                            modifier = Modifier
+                                .matchParentSize()
+                                .drawWithCache {
+                                    val rect = Rect(offset = Offset.Zero, size = size)
+                                    val path = Path().apply { addRoundRect(RoundRect(rect, CornerRadius(32.dp.toPx()))) }
+                                    val stroke = Stroke(width = 1.dp.toPx())
+                                    onDrawBehind {
+                                        val alpha = shineAlpha.value
+                                        if (alpha <= 0f) return@onDrawBehind
+                                        drawPath(
+                                            path,
+                                            brush = Brush.verticalGradient(
+                                                colors = listOf(
+                                                    shineColorBase.copy(alpha = shineColorBase.alpha * alpha),
+                                                    Color.Transparent,
+                                                    Color.Transparent,
+                                                    shineColorBase.copy(alpha = 0.05f * alpha)
+                                                )
+                                            ),
+                                            style = stroke,
+                                        )
+                                    }
                                 }
-                            }
-                    )
+                        )
+                    }
                 }
-            }
 
-            WorkspaceSortNotificationActions(
-                strings = strings,
-                filterSelectedTags = filterSelectedTags,
-                updatesCount = updates.size,
-                onOpenSort = onOpenSort,
-                onOpenNotifications = onOpenNotifications,
-                onOpenMediaTypeFilter = onOpenMediaTypeFilter,
-                dockButtonBackground = buttonBgColor,
-                useDockSizing = true,
-                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                middleAction = middleAction,
-                onOpenStats = onOpenStats,
-                showMiddleAction = showMiddleAction,
-            )
+                WorkspaceSortNotificationActions(
+                    strings = strings,
+                    filterSelectedTags = filterSelectedTags,
+                    updatesCount = updates.size,
+                    onOpenSort = onOpenSort,
+                    onOpenNotifications = onOpenNotifications,
+                    onOpenMediaTypeFilter = onOpenMediaTypeFilter,
+                    dockButtonBackground = buttonBgColor,
+                    useDockSizing = true,
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                    middleAction = middleAction,
+                    onOpenStats = onOpenStats,
+                    showMiddleAction = showMiddleAction,
+                )
+            }
         }
     }
 }

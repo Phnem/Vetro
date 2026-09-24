@@ -483,6 +483,15 @@ class HomeViewModel(
         }
     }
 
+    /** «Очистить всё» центра уведомлений: убрать все обновления и пометить их прочитанными. */
+    fun markAllUpdatesRead(updates: List<AnimeUpdate>, ctx: Context) {
+        if (updates.isEmpty()) return
+        viewModelScope.launch {
+            localDataSource.markUpdatesRead(updates)
+            updates.forEach { cancelAnimeUpdateNotification(ctx, it.animeId) }
+        }
+    }
+
     private fun cancelAnimeUpdateNotification(ctx: Context, animeId: String) {
         // Только снимаем пуш этого тайтла из шторки. Сводку НЕ переотправляем —
         // при открытом приложении системные уведомления не показываем вовсе.

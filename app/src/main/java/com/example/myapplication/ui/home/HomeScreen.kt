@@ -1,5 +1,10 @@
 package com.example.myapplication.ui.home
 
+import com.example.myapplication.ui.home.updates.notificationStrings
+import com.example.myapplication.ui.home.updates.NotificationCenter
+import com.example.myapplication.ui.home.updates.NotificationBellButton
+import com.example.myapplication.ui.home.updates.NotificationBellAnchor
+import com.example.myapplication.ui.home.updates.EpisodeNotificationTray
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.animation.core.tween
@@ -339,9 +344,19 @@ fun HomeScreen(
     // Флаг скролла читается подпиской, а не в композиции: иначе начало и конец каждого жеста
     // пересобирали бы всю главную.
     val currentOnContentScrollChange by rememberUpdatedState(onContentScrollChange)
+    // Новый интерфейс: обновления серий показываются стопкой только до первого действия
+    // пользователя, дальше живут в колокольчике у верхнего дока (см. EpisodeNotificationTray).
+    val notificationTray: EpisodeNotificationTray = koinInject()
+    val bellAnchor = remember { NotificationBellAnchor() }
+    var notificationCenterOpen by remember { mutableStateOf(false) }
+    var updateStackGone by remember { mutableStateOf(notificationTray.collapsed) }
+    val collapseUpdatesToBell: () -> Unit = { if (hostedInWorkspace) notificationTray.collapse() }
     LaunchedEffect(listState) {
         snapshotFlow { listState.isScrollInProgress }.collect { inProgress ->
-            if (inProgress) cloudSyncPillDismissed = true
+            if (inProgress) {
+                cloudSyncPillDismissed = true
+                collapseUpdatesToBell()
+            }
             currentOnContentScrollChange(inProgress)
         }
     }
@@ -407,6 +422,13 @@ fun HomeScreen(
             viewModel.setGenreFilterVisible(false)
         }
     }
+    val notificationStrings = remember(currentLanguage) { notificationStrings(currentLanguage) }
+    val openNotificationCenter: () -> Unit = {
+        performHaptic(view, "light")
+        dismissCloudSyncPill()
+        notificationTray.collapse()
+        notificationCenterOpen = !notificationCenterOpen
+    }
     val openMediaTypeFilter: () -> Unit = {
         performHaptic(view, "light")
         dismissCloudSyncPill()
@@ -435,8 +457,12 @@ fun HomeScreen(
 
     // Любая шторка/диалог/оверлей поверх главной → док рабочей области уезжает вниз: он
     // соседний узел, сам про эти состояния не знает.
-    val anyOverlayVisible = shouldBlur || anyHomeSheetOpen || showRecsSheet || isSearchVisible
-    LaunchedEffect(anyOverlayVisible) { onOverlayVisibleChange(anyOverlayVisible) }
+    val anyOverlayVisible = shouldBlur || anyHomeSheetOpen || showRecsSheet || isSearchVisible ||
+        notificationCenterOpen
+    LaunchedEffect(anyOverlayVisible) {
+        onOverlayVisibleChange(anyOverlayVisible)
+        if (anyOverlayVisible) collapseUpdatesToBell()
+    }
     LaunchedEffect(finalDockVisible) { onDockVisibleChange(finalDockVisible) }
     // Уход со страницы посреди скролла не должен оставить чужой док спрятанным или его стекло
     // в экономном режиме навсегда.
@@ -772,6 +798,7 @@ fun HomeScreen(
                                             // Тап по карточке — полноэкранные детали; кнопка справа-внизу — редактирование.
                                             val openDetails: () -> Unit = {
                                                 performHaptic(view, "light")
+                                                collapseUpdatesToBell()
                                                 navController.navigateToDetails(anime.id)
                                             }
                                             val openEdit: () -> Unit = {
@@ -1154,6 +1181,21 @@ fun HomeScreen(
                             .padding(top = 20.dp, bottom = 8.dp)
                             .padding(horizontal = 24.dp)
                     ) {
+                        if (hostedInWorkspace) {
+                            // Колокольчик в развёрнутой шапке — обычная кнопка, как его соседи.
+                            NotificationBellButton(
+                                count = uiState.updates.size,
+                                glass = false,
+                                backdrop = backdrop,
+                                anchor = bellAnchor,
+                                contentDescription = notificationStrings.bell,
+                                onClick = openNotificationCenter,
+                                size = 48.dp,
+                                modifier = Modifier
+                                    .align(Alignment.CenterEnd)
+                                    .padding(end = 96.dp),
+                            )
+                        }
                         WorkspaceSortNotificationActions(
                             strings = strings,
                             filterSelectedTags = uiState.filterTags,
@@ -1207,13 +1249,29 @@ fun HomeScreen(
                             showCSheet = true
                         },
                         showMiddleAction = !mergedDockMode,
+                        // Колокольчик — отдельной каплей слева от капсулы, не внутри неё.
+                        leading = if (hostedInWorkspace) {
+                            {
+                                NotificationBellButton(
+                                    count = uiState.updates.size,
+                                    glass = true,
+                                    backdrop = backdrop,
+                                    anchor = bellAnchor,
+                                    contentDescription = notificationStrings.bell,
+                                    onClick = openNotificationCenter,
+                                )
+                            }
+                        } else {
+                            null
+                        },
                     )
                 }
             }
 
             // iOS-стиль: пуш-стопка обновлений серий у верхней кромки главного экрана,
-            // поверх всего. Пропадает, когда пользователь разобрал все карточки.
-            if (uiState.updates.isNotEmpty()) {
+            // поверх всего. Пропадает, когда пользователь разобрал все карточки. В новом
+            // интерфейсе — ещё и когда схлопнулась в колокольчик.
+            if (uiState.updates.isNotEmpty() && !(hostedInWorkspace && updateStackGone)) {
                 EpisodeUpdateStack(
                     updates = uiState.updates,
                     coverPathFor = { animeId ->
@@ -1221,6 +1279,7 @@ fun HomeScreen(
                     },
                     onOpen = { update ->
                         performHaptic(view, "light")
+                        collapseUpdatesToBell()
                         navController.navigateToDetails(update.animeId)
                     },
                     onDismiss = { update ->
@@ -1232,7 +1291,39 @@ fun HomeScreen(
                         .align(Alignment.TopCenter)
                         .zIndex(40f)
                         .statusBarsPadding()
-                        .padding(top = 8.dp, start = 12.dp, end = 12.dp)
+                        .padding(top = 8.dp, start = 12.dp, end = 12.dp),
+                    collapsing = hostedInWorkspace && notificationTray.collapsed,
+                    collapseTarget = { bellAnchor.center },
+                    onCollapsed = { updateStackGone = true },
+                )
+            }
+
+            if (hostedInWorkspace) {
+                NotificationCenter(
+                    open = notificationCenterOpen,
+                    updates = uiState.updates,
+                    coverPathFor = { animeId ->
+                        viewModel.getImgPath(viewModel.getAnimeById(animeId)?.imageFileName)
+                    },
+                    bellCenter = { bellAnchor.center },
+                    backdrop = backdrop,
+                    strings = notificationStrings,
+                    onOpenUpdate = { update ->
+                        performHaptic(view, "light")
+                        notificationCenterOpen = false
+                        navController.navigateToDetails(update.animeId)
+                    },
+                    onDismissUpdate = { update ->
+                        performHaptic(view, "light")
+                        viewModel.dismissUpdate(update, ctx)
+                    },
+                    onClearAll = {
+                        performHaptic(view, "success")
+                        viewModel.markAllUpdatesRead(uiState.updates, ctx)
+                        notificationCenterOpen = false
+                    },
+                    onClose = { notificationCenterOpen = false },
+                    modifier = Modifier.zIndex(45f),
                 )
             }
 

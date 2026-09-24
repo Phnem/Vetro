@@ -1,5 +1,10 @@
 package com.example.myapplication.ui.home.updates
 
+import androidx.compose.ui.util.lerp
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onPlaced
+import androidx.compose.ui.geometry.Offset
 import com.kyant.backdrop.backdrops.emptyBackdrop
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
@@ -94,7 +99,11 @@ import kotlin.math.sign
 
 private const val VISIBLE_BACK_CARDS = 2
 private const val BACK_SCALE_STEP = 0.05f
-private val CARD_HEIGHT = 76.dp
+internal val CARD_HEIGHT = 76.dp
+
+/** Отставание каждой следующей карточки при схлопывании и её конечный масштаб в колокольчике. */
+private const val COLLAPSE_STAGGER = 0.12f
+private const val COLLAPSE_SCALE = 0.18f
 private val BACK_PEEK = 9.dp
 /** Доля ширины карточки, после которой отпущенный свайп засчитывается как отказ. */
 private const val SWIPE_DISMISS_FRACTION = 0.32f
@@ -108,6 +117,13 @@ fun EpisodeUpdateStack(
     /** Живая запись сцены под плашкой — то, что матовое стекло размывает. */
     backdrop: Backdrop,
     modifier: Modifier = Modifier,
+    /**
+     * Новый интерфейс: стопка схлопывается в колокольчик. Пока true — карточки улетают в точку
+     * [collapseTarget] (центр колокольчика в координатах корня), по окончании — [onCollapsed].
+     */
+    collapsing: Boolean = false,
+    collapseTarget: () -> Offset? = { null },
+    onCollapsed: () -> Unit = {},
 ) {
     val scope = rememberCoroutineScope()
     val density = LocalDensity.current
@@ -128,14 +144,34 @@ fun EpisodeUpdateStack(
     val visible = updates.filter { it.animeId !in departedIds }
     if (visible.isEmpty()) return
 
+    // Схлопывание (UNIVERSAL_MOTION_SPEC §5, выход): содержимое гаснет коротким EaseExit, оболочки
+    // летят в колокольчик пружиной springExit с каскадом — ближняя к нему верхняя карточка первой.
+    val collapse = remember { Animatable(0f) }
+    val collapseLight = remember { Animatable(1f) }
+    val currentOnCollapsed by rememberUpdatedState(onCollapsed)
+    LaunchedEffect(collapsing) {
+        if (!collapsing) return@LaunchedEffect
+        launch {
+            collapseLight.animateTo(0f, tween(MotionTokens.EaseExitMillis, easing = MotionTokens.EaseExit))
+        }
+        collapse.animateTo(1f, MotionTokens.springExit())
+        currentOnCollapsed()
+    }
+    var stackOrigin by remember { mutableStateOf(Offset.Zero) }
+
     val top = visible.first()
     val offsetX = remember(top.animeId) { Animatable(0f) }
     val offsetY = remember(top.animeId) { Animatable(0f) }
     var departing by remember(top.animeId) { mutableStateOf(false) }
 
-    BoxWithConstraints(modifier = modifier.fillMaxWidth()) {
+    BoxWithConstraints(
+        modifier = modifier
+            .fillMaxWidth()
+            .onPlaced { stackOrigin = it.boundsInRoot().topLeft },
+    ) {
         val widthPx = with(density) { maxWidth.toPx() }
         val peekPx = with(density) { BACK_PEEK.toPx() }
+        val cardHeightPx = with(density) { CARD_HEIGHT.toPx() }
         val dismissThresholdPx = widthPx * SWIPE_DISMISS_FRACTION
         val flyOutXPx = widthPx * 1.2f
         val flyOutYPx = with(density) { 480.dp.toPx() }
@@ -198,7 +234,22 @@ fun EpisodeUpdateStack(
                     val nextScale = 1f - BACK_SCALE_STEP * (index - 1)
                     currentScale + (nextScale - currentScale) * progress()
                 }
-                fun alpha(): Float = if (isTop) {
+                // Доля пути в колокольчик для этой карточки: задние стартуют с отставанием.
+                fun collapseProgress(): Float {
+                    val lag = index * COLLAPSE_STAGGER
+                    return ((collapse.value - lag) / (1f - lag)).coerceIn(0f, 1f)
+                }
+                fun collapseShift(): Offset {
+                    val p = collapseProgress()
+                    val target = collapseTarget() ?: return Offset.Zero
+                    if (p <= 0f) return Offset.Zero
+                    val cardCenter = Offset(
+                        stackOrigin.x + widthPx / 2f,
+                        stackOrigin.y + translateY() + cardHeightPx / 2f,
+                    )
+                    return (target - cardCenter) * p
+                }
+                fun alpha(): Float = collapseLight.value * if (isTop) {
                     val horizontalFade = abs(offsetX.value) / (widthPx * 0.9f)
                     val verticalFade = -offsetY.value / flyOutYPx
                     (1f - maxOf(horizontalFade, verticalFade)).coerceIn(0f, 1f)
@@ -236,13 +287,14 @@ fun EpisodeUpdateStack(
                             // слоем роняет его в плоскую заливку — известные грабли этой
                             // кодовой базы (см. тот же приём у дока рабочей области).
                             .offset {
+                                val shift = collapseShift()
                                 IntOffset(
-                                    x = if (isTop) offsetX.value.roundToInt() else 0,
-                                    y = translateY().roundToInt(),
+                                    x = ((if (isTop) offsetX.value else 0f) + shift.x).roundToInt(),
+                                    y = (translateY() + shift.y).roundToInt(),
                                 )
                             }
                             .graphicsLayer {
-                                val scale = scale()
+                                val scale = scale() * lerp(1f, COLLAPSE_SCALE, collapseProgress())
                                 scaleX = scale
                                 scaleY = scale
                                 rotationZ = if (isTop) {
@@ -279,7 +331,7 @@ fun EpisodeUpdateStack(
 // ==========================================
 
 @Composable
-private fun EpisodeUpdateCard(
+internal fun EpisodeUpdateCard(
     update: AnimeUpdate,
     coverPath: String?,
     isDark: Boolean,

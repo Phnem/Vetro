@@ -223,6 +223,21 @@ class AnimeLocalDataSource(
         mirrorCoordinator.requestExportIfEnabled()
     }
 
+    /**
+     * «Прочитано» для пачки обновлений: каждое уходит из списка и запоминается как отклонённое на
+     * своём числе серий, чтобы следующая проверка не вернула его снова. Одной транзакцией.
+     */
+    suspend fun markUpdatesRead(updates: List<AnimeUpdate>) {
+        val queries = db().animeQueries
+        queries.transaction {
+            updates.forEach { update ->
+                queries.setIgnored(anime_id = update.animeId, new_episodes = update.newEpisodes.toLong())
+                queries.deleteUpdateByAnimeId(update.animeId)
+            }
+        }
+        mirrorCoordinator.requestExportIfEnabled()
+    }
+
     suspend fun removeUpdate(animeId: String) {
         db().animeQueries.deleteUpdateByAnimeId(animeId)
         mirrorCoordinator.requestExportIfEnabled()

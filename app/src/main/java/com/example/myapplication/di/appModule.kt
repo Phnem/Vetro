@@ -50,6 +50,8 @@ val appModule = module {
     single<AnimeRepository> { AnimeRepository(apiService = get(), localDataSource = get()) }
     single { AppUpdateRepository(settingsDataStore = get(named("settings")), animeRepository = get()) }
     single<GenreRepository> { GenreRepository() }
+    // Стопка обновлений → колокольчик: живёт до смерти процесса, то есть до холодного старта.
+    single { com.example.myapplication.ui.home.updates.EpisodeNotificationTray() }
     single { GeminiStructuredClient(get()) }
     single { AiLlmEndpoint(get()) }
     single { AiProviderLatencyProber(get(), get()) }

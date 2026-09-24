@@ -1,5 +1,8 @@
 package com.example.myapplication.ui.workspace
 
+import kotlinx.coroutines.flow.first
+import androidx.compose.runtime.snapshotFlow
+import com.example.myapplication.ui.home.updates.EpisodeNotificationTray
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.ExperimentalSharedTransitionApi
@@ -146,6 +149,15 @@ fun WorkspaceScreen(
         drawRect(screenBg)
         drawContent()
     }
+
+    // Свайп между страницами и меню дока — тоже «пользователь что-то делает»: стопка обновлений
+    // серий схлопывается в колокольчик (см. EpisodeNotificationTray).
+    val notificationTray: EpisodeNotificationTray = koinInject()
+    LaunchedEffect(pagerState) {
+        snapshotFlow { pagerState.isScrollInProgress }.first { it }
+        notificationTray.collapse()
+    }
+    LaunchedEffect(menuOpen) { if (menuOpen) notificationTray.collapse() }
 
     // Пока страницы едут, их стекло неподвижно относительно собственных бэкдропов — координаты
     // ему не нужны, и kyant не должен пересчитывать его на каждом кадре (см. PinnableBackdrop).
