@@ -4,6 +4,7 @@ import android.app.PendingIntent
 import android.content.Intent
 import android.os.Handler
 import android.os.Looper
+import android.os.Bundle
 import androidx.media3.common.Player
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.util.UnstableApi
@@ -12,6 +13,8 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.session.CommandButton
 import androidx.media3.session.MediaLibraryService
 import androidx.media3.session.MediaSession
+import androidx.media3.session.SessionCommand
+import androidx.media3.session.SessionResult
 import com.example.myapplication.audiobooks.domain.source.ManifestResolver
 import com.example.myapplication.audiobooks.domain.model.TrackUriCodec
 import com.example.myapplication.MainActivity
@@ -32,6 +35,8 @@ class AudiobookPlaybackService : MediaLibraryService() {
     private lateinit var player: ExoPlayer
     private lateinit var session: MediaLibrarySession
     private lateinit var resumptionStore: PlaybackResumptionStore
+    private lateinit var sleepTimer: SleepTimerController
+    private var sleepRemainingMs = -1L
     private val recoveryScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var retryingMediaId: String? = null
     private val handler = Handler(Looper.getMainLooper())
@@ -44,6 +49,10 @@ class AudiobookPlaybackService : MediaLibraryService() {
         }
     }
     private val playerListener = object : Player.Listener {
+        override fun onIsPlayingChanged(isPlaying: Boolean) {
+            sleepTimer.onPlaybackChanged()
+        }
+
         override fun onEvents(player: Player, events: Player.Events) {
             if (player.currentMediaItem != null) resumptionStore.save(player)
             val currentId = player.currentMediaItem?.mediaId
@@ -77,6 +86,11 @@ class AudiobookPlaybackService : MediaLibraryService() {
         super.onCreate()
         resumptionStore = PlaybackResumptionStore(this)
         player = AudiobookPlayerFactory.create(this, manifestResolver)
+        player.skipSilenceEnabled = getSharedPreferences(PREFS, MODE_PRIVATE).getBoolean(AudiobookSessionCommands.SKIP_SILENCE, false)
+        sleepTimer = SleepTimerController(player) { remaining ->
+            sleepRemainingMs = remaining ?: -1L
+            publishSessionState()
+        }
         player.addListener(playerListener)
 
         val launchApp = PendingIntent.getActivity(
@@ -88,6 +102,7 @@ class AudiobookPlaybackService : MediaLibraryService() {
         )
         session = MediaLibrarySession.Builder(this, player, SessionCallback(resumptionStore))
             .setSessionActivity(launchApp)
+            .setSessionExtras(sessionState())
             .setMediaButtonPreferences(
                 listOf(
                     CommandButton.Builder(CommandButton.ICON_SKIP_BACK_15)
@@ -114,6 +129,7 @@ class AudiobookPlaybackService : MediaLibraryService() {
 
     override fun onDestroy() {
         handler.removeCallbacks(savePosition)
+        sleepTimer.cancel()
         recoveryScope.cancel()
         resumptionStore.save(player)
         player.removeListener(playerListener)
@@ -122,9 +138,63 @@ class AudiobookPlaybackService : MediaLibraryService() {
         super.onDestroy()
     }
 
-    private class SessionCallback(
+    private fun sessionState() = Bundle().apply {
+        putLong(AudiobookSessionCommands.REMAINING_MS, sleepRemainingMs)
+        putBoolean(AudiobookSessionCommands.SKIP_SILENCE, player.skipSilenceEnabled)
+    }
+
+    private fun publishSessionState() {
+        if (::session.isInitialized) session.setSessionExtras(sessionState())
+    }
+
+    private inner class SessionCallback(
         private val store: PlaybackResumptionStore,
     ) : MediaLibrarySession.Callback {
+        override fun onConnect(
+            session: MediaSession,
+            controller: MediaSession.ControllerInfo,
+        ): MediaSession.ConnectionResult {
+            val default = super.onConnect(session, controller)
+            if (!default.isAccepted || controller.packageName != packageName) return default
+            val commands = default.availableSessionCommands.buildUpon()
+                .add(AudiobookSessionCommands.setSleepTimer)
+                .add(AudiobookSessionCommands.cancelSleepTimer)
+                .add(AudiobookSessionCommands.setSkipSilence)
+                .build()
+            return MediaSession.ConnectionResult.AcceptedResultBuilder(session, controller)
+                .setAvailableSessionCommands(commands)
+                .build()
+        }
+
+        override fun onCustomCommand(
+            session: MediaSession,
+            controller: MediaSession.ControllerInfo,
+            customCommand: SessionCommand,
+            args: Bundle,
+        ): ListenableFuture<SessionResult> {
+            if (controller.packageName != packageName) {
+                return Futures.immediateFuture(SessionResult(SessionResult.RESULT_ERROR_PERMISSION_DENIED))
+            }
+            when (customCommand.customAction) {
+                AudiobookSessionCommands.setSleepTimer.customAction -> {
+                    val minutes = args.getInt(AudiobookSessionCommands.MINUTES)
+                    if (minutes !in 1..240) {
+                        return Futures.immediateFuture(SessionResult(SessionResult.RESULT_ERROR_BAD_VALUE))
+                    }
+                    sleepTimer.start(minutes)
+                }
+                AudiobookSessionCommands.cancelSleepTimer.customAction -> sleepTimer.cancel()
+                AudiobookSessionCommands.setSkipSilence.customAction -> {
+                    player.skipSilenceEnabled = args.getBoolean(AudiobookSessionCommands.SKIP_SILENCE)
+                    getSharedPreferences(PREFS, MODE_PRIVATE).edit()
+                        .putBoolean(AudiobookSessionCommands.SKIP_SILENCE, player.skipSilenceEnabled).apply()
+                    publishSessionState()
+                }
+                else -> return super.onCustomCommand(session, controller, customCommand, args)
+            }
+            return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
+        }
+
         override fun onPlaybackResumption(
             mediaSession: MediaSession,
             controller: MediaSession.ControllerInfo,
@@ -144,5 +214,6 @@ class AudiobookPlaybackService : MediaLibraryService() {
 
     private companion object {
         const val POSITION_SAVE_INTERVAL_MS = 5_000L
+        const val PREFS = "audiobook_player_options"
     }
 }

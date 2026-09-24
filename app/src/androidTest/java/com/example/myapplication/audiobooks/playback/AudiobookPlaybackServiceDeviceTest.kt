@@ -5,6 +5,7 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.os.SystemClock
+import android.os.Bundle
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.session.MediaController
@@ -56,12 +57,38 @@ class AudiobookPlaybackServiceDeviceTest {
             await(15_000) { onMain { first.isPlaying && first.currentPosition > 0L } }
             assertEquals(15_000L, onMain { first.seekBackIncrement })
             assertEquals(30_000L, onMain { first.seekForwardIncrement })
+            assertTrue(onMain { first.availableSessionCommands.contains(AudiobookSessionCommands.setSleepTimer) })
+            onMain {
+                first.sendCustomCommand(AudiobookSessionCommands.setSleepTimer,
+                    Bundle().apply { putInt(AudiobookSessionCommands.MINUTES, 1) })
+            }.get(5, TimeUnit.SECONDS)
+            await(5_000) { onMain { first.sessionExtras.getLong(AudiobookSessionCommands.REMAINING_MS, -1) > 0 } }
+            val remainingBefore = onMain { first.sessionExtras.getLong(AudiobookSessionCommands.REMAINING_MS) }
+            SystemClock.sleep(1_200)
+            await(5_000) {
+                onMain { first.sessionExtras.getLong(AudiobookSessionCommands.REMAINING_MS) < remainingBefore }
+            }
+            onMain {
+                first.sendCustomCommand(AudiobookSessionCommands.cancelSleepTimer, Bundle.EMPTY)
+            }.get(5, TimeUnit.SECONDS)
+            await(5_000) { onMain { first.sessionExtras.getLong(AudiobookSessionCommands.REMAINING_MS) == -1L } }
+            onMain {
+                first.sendCustomCommand(AudiobookSessionCommands.setSkipSilence,
+                    Bundle().apply { putBoolean(AudiobookSessionCommands.SKIP_SILENCE, true) })
+            }.get(5, TimeUnit.SECONDS)
+            await(5_000) { onMain { first.sessionExtras.getBoolean(AudiobookSessionCommands.SKIP_SILENCE) } }
             val manager = context.getSystemService(NotificationManager::class.java)
             await(10_000) { manager.activeNotifications.any { it.packageName == context.packageName } }
             SystemClock.sleep(1_500)
             onMain { first.pause() }
             await(5_000) { (PlaybackResumptionStore(context).load()?.positionMs ?: 0L) > 0L }
         } finally {
+            runCatching {
+                onMain {
+                    first.sendCustomCommand(AudiobookSessionCommands.setSkipSilence,
+                        Bundle().apply { putBoolean(AudiobookSessionCommands.SKIP_SILENCE, false) })
+                }.get(5, TimeUnit.SECONDS)
+            }
             onMain { first.release() }
         }
 

@@ -1,6 +1,7 @@
 package com.example.myapplication.audiobooks.ui
 
 import android.content.ComponentName
+import android.os.Bundle
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.VectorConverter
@@ -32,6 +33,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
@@ -63,6 +65,8 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.IntOffset
@@ -77,6 +81,7 @@ import com.example.myapplication.audiobooks.domain.model.TrackUriCodec
 import com.example.myapplication.audiobooks.domain.source.ManifestResolver
 import com.example.myapplication.audiobooks.domain.timeline.BookTimeline
 import com.example.myapplication.audiobooks.playback.AudiobookPlaybackService
+import com.example.myapplication.audiobooks.playback.AudiobookSessionCommands
 import com.example.myapplication.network.AppLanguage
 import com.example.myapplication.ui.shared.theme.MotionTokens
 import com.phnem.vetro.BuildConfig
@@ -103,6 +108,8 @@ fun AudiobookPlayerHost(language: AppLanguage = AppLanguage.RU, modifier: Modifi
     var controller by remember { mutableStateOf<MediaController?>(null) }
     var playing by remember { mutableStateOf<PlayingBook?>(null) }
     val position = remember { mutableLongStateOf(0L) }
+    val sleepRemaining = remember { mutableLongStateOf(-1L) }
+    var skipSilence by remember { mutableStateOf(false) }
     var timeline by remember { mutableStateOf<BookTimeline?>(null) }
     var sheet by remember { mutableStateOf<PlayerSheet?>(null) }
     val expansion = remember { Animatable(0f) }
@@ -120,6 +127,8 @@ fun AudiobookPlayerHost(language: AppLanguage = AppLanguage.RU, modifier: Modifi
                 position.longValue = current?.positionMs ?: 0L
                 playing = current?.copy(positionMs = 0L)
             }
+            sleepRemaining.longValue = sessionController.sessionExtras.getLong(AudiobookSessionCommands.REMAINING_MS, -1L)
+            skipSilence = sessionController.sessionExtras.getBoolean(AudiobookSessionCommands.SKIP_SILENCE, false)
             listener = object : Player.Listener {
                 override fun onEvents(player: Player, events: Player.Events) {
                     sessionController.snapshot().let { current ->
@@ -135,6 +144,8 @@ fun AudiobookPlayerHost(language: AppLanguage = AppLanguage.RU, modifier: Modifi
                     val structural = current?.copy(positionMs = 0L)
                     if (playing != structural) playing = structural
                 }
+                sleepRemaining.longValue = sessionController.sessionExtras.getLong(AudiobookSessionCommands.REMAINING_MS, -1L)
+                skipSilence = sessionController.sessionExtras.getBoolean(AudiobookSessionCommands.SKIP_SILENCE, false)
                 delay(when {
                     playing == null -> 400L
                     expansion.value < 0.01f -> 1_000L
@@ -183,6 +194,8 @@ fun AudiobookPlayerHost(language: AppLanguage = AppLanguage.RU, modifier: Modifi
                 onCollapse = { scope.launch { expansion.animateTo(0f, MotionTokens.largeSurfaceExit()) } },
                 onShowChapters = { sheet = PlayerSheet.CHAPTERS },
                 onShowSpeed = { sheet = PlayerSheet.SPEED },
+                onShowTimer = { sheet = PlayerSheet.TIMER },
+                sleepRemainingMs = sleepRemaining.longValue,
                 modifier = Modifier.fillMaxSize().graphicsLayer {
                     val progress = expansion.value.coerceIn(0f, 1f)
                     val miniLeft = miniOffset.value.x
@@ -238,14 +251,15 @@ fun AudiobookPlayerHost(language: AppLanguage = AppLanguage.RU, modifier: Modifi
         ModalBottomSheet(onDismissRequest = { sheet = null }) {
             when (sheet) {
                 PlayerSheet.CHAPTERS -> ChaptersSheet(book, timeline, controller!!, strings) { sheet = null }
-                PlayerSheet.SPEED -> SpeedSheet(book, controller!!, strings)
+                PlayerSheet.SPEED -> SpeedSheet(book, controller!!, strings, skipSilence)
+                PlayerSheet.TIMER -> SleepTimerSheet(controller!!, sleepRemaining.longValue, strings) { sheet = null }
                 null -> Unit
             }
         }
     }
 }
 
-private enum class PlayerSheet { CHAPTERS, SPEED }
+private enum class PlayerSheet { CHAPTERS, SPEED, TIMER }
 
 private data class PlayingBook(
     val mediaId: String,
@@ -347,6 +361,8 @@ private fun FullAudiobookPlayer(
     onCollapse: () -> Unit,
     onShowChapters: () -> Unit,
     onShowSpeed: () -> Unit,
+    onShowTimer: () -> Unit,
+    sleepRemainingMs: Long,
     modifier: Modifier = Modifier,
 ) {
     val ref = remember(book.uri) { TrackUriCodec.decode(book.uri) }
@@ -427,7 +443,8 @@ private fun FullAudiobookPlayer(
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(7.dp)) {
                 PlayerTile("${book.speed}×", strings.playbackSpeed, Modifier.weight(1f), onShowSpeed)
                 PlayerTile("≡", strings.chapters, Modifier.weight(1f), onShowChapters)
-                PlayerTile("◴", "Таймер", Modifier.weight(1f))
+                PlayerTile("◴", if (sleepRemainingMs >= 0) formatTime(sleepRemainingMs) else strings.sleepTimerShort,
+                    Modifier.weight(1f), onShowTimer)
                 PlayerTile("♫", "Озвучка", Modifier.weight(1f))
             }
         }
@@ -484,7 +501,8 @@ private fun ChaptersSheet(book: PlayingBook, timeline: BookTimeline?, controller
 }
 
 @Composable
-private fun SpeedSheet(book: PlayingBook, controller: MediaController, strings: AudiobookStrings) {
+private fun SpeedSheet(book: PlayingBook, controller: MediaController, strings: AudiobookStrings,
+                       skipSilence: Boolean) {
     Column(Modifier.fillMaxWidth().padding(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text("${strings.playbackSpeed} ${book.speed}×", fontSize = 24.sp, fontWeight = FontWeight.Bold)
         Slider(value = book.speed.coerceIn(0.5f, 3f), onValueChange = {
@@ -495,6 +513,47 @@ private fun SpeedSheet(book: PlayingBook, controller: MediaController, strings: 
                 Button(onClick = { controller.setPlaybackSpeed(speed) }) { Text("${speed}×") }
             }
         }
+        Button(onClick = {
+            controller.sendCustomCommand(AudiobookSessionCommands.setSkipSilence,
+                Bundle().apply { putBoolean(AudiobookSessionCommands.SKIP_SILENCE, !skipSilence) })
+        }) { Text("${strings.skipSilence}: ${if (skipSilence) "✓" else "○"}") }
+    }
+}
+
+@Composable
+private fun SleepTimerSheet(controller: MediaController, remainingMs: Long, strings: AudiobookStrings,
+                            onDismiss: () -> Unit) {
+    var customMinutes by remember { mutableStateOf("") }
+    Column(Modifier.fillMaxWidth().padding(24.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Text(strings.sleepTimer, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+        if (remainingMs >= 0L) {
+            Text(formatTime(remainingMs))
+            Button(onClick = {
+                controller.sendCustomCommand(AudiobookSessionCommands.cancelSleepTimer, Bundle.EMPTY)
+                onDismiss()
+            }) { Text(strings.cancelTimer) }
+        }
+        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            for (minutes in listOf(5, 10, 15, 30, 45, 60)) {
+                Button(onClick = {
+                    controller.sendCustomCommand(AudiobookSessionCommands.setSleepTimer,
+                        Bundle().apply { putInt(AudiobookSessionCommands.MINUTES, minutes) })
+                    onDismiss()
+                }) { Text("$minutes ${strings.minutesUnit}") }
+            }
+        }
+        OutlinedTextField(value = customMinutes, onValueChange = { value ->
+            customMinutes = value.filter(Char::isDigit).take(3)
+        }, label = { Text(strings.customMinutes) }, singleLine = true,
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+            modifier = Modifier.fillMaxWidth())
+        val minutes = customMinutes.toIntOrNull()
+        Button(onClick = {
+            controller.sendCustomCommand(AudiobookSessionCommands.setSleepTimer,
+                Bundle().apply { putInt(AudiobookSessionCommands.MINUTES, minutes ?: 0) })
+            onDismiss()
+        }, enabled = minutes != null && minutes in 1..240) { Text(strings.startTimer) }
     }
 }
 
