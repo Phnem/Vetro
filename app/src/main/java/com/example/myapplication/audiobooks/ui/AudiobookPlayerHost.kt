@@ -4,6 +4,7 @@ import android.content.ComponentName
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.background
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
@@ -32,6 +33,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -43,7 +45,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.layout.ContentScale
@@ -144,13 +150,56 @@ fun AudiobookPlayerHost(language: AppLanguage = AppLanguage.RU, modifier: Modifi
     }
     if (book == null || controller == null) return
 
-    val isFull = expansion.value > 0.5f
+    val isFull by remember { derivedStateOf { expansion.value > 0.5f } }
+    val showFull by remember { derivedStateOf { expansion.value > 0.35f } }
+    val showMini by remember { derivedStateOf { expansion.value < 0.35f } }
+    val flightArtwork = remember {
+        Brush.verticalGradient(listOf(Color(0xFF254657), Color(0xFF775B71), Color(0xFFB78260)))
+    }
     BackHandler(enabled = isFull || sheet != null) {
         if (sheet != null) sheet = null else scope.launch { expansion.animateTo(0f, MotionTokens.largeSurfaceExit()) }
     }
 
     Box(modifier.fillMaxSize()) {
-        if (expansion.value > 0.01f) {
+        Canvas(Modifier.fillMaxSize()) {
+            val progress = expansion.value.coerceIn(0f, 1f)
+            if (progress > 0.01f && progress < 0.99f) {
+                val miniLeft = 16.dp.toPx()
+                val miniTop = size.height - 170.dp.toPx()
+                val miniWidth = size.width - 32.dp.toPx()
+                val miniHeight = 68.dp.toPx()
+                val left = miniLeft * (1f - progress)
+                val top = miniTop * (1f - progress)
+                val width = miniWidth + (size.width - miniWidth) * progress
+                val height = miniHeight + (size.height - miniHeight) * progress
+                drawRoundRect(
+                    color = Color(0xFF241F2B),
+                    topLeft = Offset(left, top),
+                    size = Size(width, height),
+                    cornerRadius = CornerRadius(22.dp.toPx() * (1f - progress)),
+                )
+                val artStartLeft = miniLeft + 8.dp.toPx()
+                val artStartTop = miniTop + 9.dp.toPx()
+                val artStartSize = 50.dp.toPx()
+                val artEndWidth = size.width * 0.68f
+                val artEndHeight = artEndWidth / 0.76f
+                val artEndLeft = (size.width - artEndWidth) / 2f
+                val artEndTop = size.height * 0.105f
+                drawRoundRect(
+                    brush = flightArtwork,
+                    topLeft = Offset(
+                        artStartLeft + (artEndLeft - artStartLeft) * progress,
+                        artStartTop + (artEndTop - artStartTop) * progress,
+                    ),
+                    size = Size(
+                        artStartSize + (artEndWidth - artStartSize) * progress,
+                        artStartSize + (artEndHeight - artStartSize) * progress,
+                    ),
+                    cornerRadius = CornerRadius((10f + 8f * progress).dp.toPx()),
+                )
+            }
+        }
+        if (showFull) {
             FullAudiobookPlayer(
                 book = book,
                 timeline = timeline,
@@ -161,12 +210,25 @@ fun AudiobookPlayerHost(language: AppLanguage = AppLanguage.RU, modifier: Modifi
                 onShowChapters = { sheet = PlayerSheet.CHAPTERS },
                 onShowSpeed = { sheet = PlayerSheet.SPEED },
                 modifier = Modifier.fillMaxSize().graphicsLayer {
-                    alpha = expansion.value
-                    translationY = size.height * (1f - expansion.value) * 0.16f
+                    val progress = expansion.value.coerceIn(0f, 1f)
+                    val miniLeft = 16.dp.toPx()
+                    val miniTop = size.height - 170.dp.toPx()
+                    val miniWidth = size.width - 32.dp.toPx()
+                    val miniHeight = 68.dp.toPx()
+                    val shellWidth = miniWidth + (size.width - miniWidth) * progress
+                    val shellHeight = miniHeight + (size.height - miniHeight) * progress
+                    transformOrigin = TransformOrigin(0f, 0f)
+                    scaleX = shellWidth / size.width
+                    scaleY = shellHeight / size.height
+                    translationX = miniLeft * (1f - progress)
+                    translationY = miniTop * (1f - progress)
+                    clip = true
+                    shape = RoundedCornerShape((22f * (1f - progress)).dp)
+                    alpha = ((progress - 0.35f) / 0.65f).coerceIn(0f, 1f)
                 },
             )
         }
-        if (expansion.value < 0.99f) {
+        if (showMini) {
             MiniAudiobookPlayer(
                 book = book,
                 timeline = timeline,
@@ -178,7 +240,7 @@ fun AudiobookPlayerHost(language: AppLanguage = AppLanguage.RU, modifier: Modifi
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .padding(start = 16.dp, end = 16.dp, bottom = 102.dp)
-                    .graphicsLayer { alpha = 1f - expansion.value },
+                    .graphicsLayer { alpha = (1f - expansion.value / 0.35f).coerceIn(0f, 1f) },
             )
         }
     }

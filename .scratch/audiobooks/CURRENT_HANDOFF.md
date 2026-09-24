@@ -1,5 +1,9 @@
 # Current handoff
 
+## Checkout isolation
+
+Audiobook implementation continues only in `D:\AndroidStudioProjects\Vetro-collection-audiobooks` on `codex/audiobooks-implementation`, forked from shared baseline `5b5d618`. The original `D:\AndroidStudioProjects\Vetro-collection` checkout stays on the other agent's `perf/v3.3.5`; do not edit or build there for audiobook work. User paused feature work until this separation was complete. The latest visual corrections and two attached references are recorded in `issues/10-player-ui.md` and `references/img/`.
+
 ## Goal and canonical documents
 
 Add audiobooks as Vetro's fifth media type: a Books home with animated shelves, details, mini/full player, background playback, local folder, multi-source search/aggregation, offline downloads, and safe local-first storage. Follow `.scratch/audiobooks/MASTER_PLAN.md` and `spec/`. User decisions Q1–Q8 and WorkId UUID are recorded there.
@@ -10,7 +14,7 @@ AB-01…AB-09 completed, some with documented deviations in their tickets and `E
 
 AB-09 implemented `LocalFolderSource`, SAF grant, bounded scan, natural audio ordering, stable UUID identities, file/embedded chapter metadata, and compact Books entry. Three Xiaomi tests passed. User manually selected a synthetic folder; `SampleBook · 2` appeared and `dumpsys media_session` showed `PLAYING` for the smoke app. The temporary button now reports playback start. Fixture and saved grant were removed; see `reviews/09-local-folder-source.md`. Real chapter corpus still needs AB-38 validation.
 
-AB-10 is implementing. `AudiobookPlayerHost.kt` is wired above NavHost and in the debug smoke Activity. Mini/full screen, controls, chapter list, speed, progress and logical URI resumption are present. Emulator API 37 AndroidTest passed with generated local WAVs, including chapter jump and 1.5× speed; screenshots are in `reviews/assets`. A lifecycle crash was fixed by binding MediaController with application context. Physical Xiaomi UI/frame smoke is pending user unlock. Full morph, origin flight, real art/background and 20-cycle frame gate remain; do not mark AB-10 done yet. See `issues/10-player-ui.md`.
+AB-10 is implementing. `AudiobookPlayerHost.kt` is wired above NavHost and in the debug smoke Activity. Mini/full screen, controls, chapter list, speed, progress and logical URI resumption are present. Emulator API 37 AndroidTest passed repeatedly with generated local WAVs, including chapter jump and 1.5× speed. A lifecycle crash was fixed by binding MediaController with application context. Xiaomi mini/full UI and three 20-cycle runs passed without crash. The current transition has a moving shell and placeholder cover flight; last run measured 44/3826 frames >32 ms, so the strict frame gate is still open. Real cover/origin, cached backdrop, further profiling and accessibility remain. See `issues/10-player-ui.md` and `reviews/assets/ab10-phone-20cycles-art-shell.txt`.
 
 AB-08 added `BookTimeline`, `MediaManifest`, stable `TrackUriCodec`, `ManifestResolver`, `VetroAudioDataSource`, queue builder, and one-time service retry for 401/403/410. JVM tests, three Xiaomi Android tests, and release build passed. HTTP 403/410 integration smoke belongs to AB-17 when the first live online source exists; chapter title changes inside M4B belong to AB-10; stream cache belongs to AB-17. See `issues/08-timeline-and-resolving-data-source.md` and `reviews/08-timeline-and-resolving-data-source.md`.
 
@@ -28,4 +32,4 @@ AB-03 player host and AB-04 shelf motion prototypes live in separate worktrees u
 
 ## Next work
 
-Create detailed AB-10 ticket from `spec/10-screen-player.md` and `issues/03-prototype-player-host.md`. Integrate the isolated player prototype into production Books flow with mini/full player, controls, timeline and chapters, then run the physical Xiaomi frame gate. AB-03 prototype missed the strict target (18/2966 frames >32 ms), so profile and optimize before declaring AB-10 done. Preserve other agent's workspace changes.
+Continue AB-10 in the audiobook namespace. Profile >32 ms frames on Xiaomi without screen recording and improve the transition while keeping the visual shell/cover flight. Integrate a real Books card origin and artwork when available, then retest the 0-frame gate. Do not close AB-10 yet. The other agent is concurrently changing video/local-player files, Settings, navigation and shared UI; inspect before editing, do not reset or revert their work. Our phone package is only `com.phnem.vetro.ab07smoke`; `com.phnem.vetro.perf` belongs to the other agent and must remain.
