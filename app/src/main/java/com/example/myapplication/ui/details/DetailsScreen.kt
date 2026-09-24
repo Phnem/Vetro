@@ -2,6 +2,8 @@ package com.example.myapplication.ui.details
 
 import com.example.myapplication.ui.shared.theme.IosScroll
 import com.example.myapplication.ui.shared.glassControl
+import com.example.myapplication.ui.shared.StatusBarIconsOverArt
+import androidx.compose.ui.platform.LocalDensity
 import com.example.myapplication.ui.shared.LocalModernUi
 import android.graphics.BitmapFactory
 
@@ -131,6 +133,13 @@ fun DetailsScreen(
         initialPage = if (openEpisodes) 1 else 0,
         pageCount = { 2 },
     )
+    // Значки статус-бара белые, пока под ним арт страницы «Детали»; на странице серий и когда
+    // лист наехал на арт — по теме.
+    var heroUnderStatusBar by remember { mutableStateOf(true) }
+    val statusBarOverArt by remember {
+        derivedStateOf { pagerState.currentPage == 0 && heroUnderStatusBar }
+    }
+    StatusBarIconsOverArt(statusBarOverArt)
 
     val displayTitle = when (language) {
         AppLanguage.EN -> current.titleEn?.takeIf { it.isNotBlank() } ?: current.title
@@ -188,6 +197,7 @@ fun DetailsScreen(
                             performHaptic(view, "light")
                             openEpisodes()
                         },
+                        onHeroUnderStatusBar = { heroUnderStatusBar = it },
                     )
 
                     else -> if (isManga) MangaChaptersPage(
@@ -307,6 +317,7 @@ private fun DetailsInfoPage(
     onDownload: () -> Unit,
     onToggleFavorite: () -> Unit,
     onOpenSeason: () -> Unit,
+    onHeroUnderStatusBar: (Boolean) -> Unit,
 ) {
     val context = LocalContext.current
     val details = (uiState as? DetailsUiState.Success)?.details
@@ -344,6 +355,16 @@ private fun DetailsInfoPage(
     val sheetOverlap = 28.dp
     val sheetCorner = 30.dp
     val scrollState = rememberScrollState()
+
+    // Арт под статус-баром, пока верх листа ниже статус-бара. Меняется один раз за прокрутку.
+    val density = LocalDensity.current
+    val statusBarPx = WindowInsets.statusBars.getTop(density)
+    val sheetTopPx = with(density) { (heroHeight - sheetOverlap).toPx() }
+    val heroUnderStatusBar by remember(statusBarPx, sheetTopPx) {
+        derivedStateOf { sheetTopPx - scrollState.value > statusBarPx }
+    }
+    val reportHero by rememberUpdatedState(onHeroUnderStatusBar)
+    LaunchedEffect(heroUnderStatusBar) { reportHero(heroUnderStatusBar) }
 
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
         val viewportHeight = maxHeight
