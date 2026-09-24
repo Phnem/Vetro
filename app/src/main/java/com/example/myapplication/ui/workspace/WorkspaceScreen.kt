@@ -27,7 +27,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
@@ -51,6 +55,7 @@ import com.example.myapplication.ui.navigation.navigateToInspect
 import com.example.myapplication.ui.navigation.navigateToWelcome
 import com.example.myapplication.ui.shared.DONATION_URL
 import com.example.myapplication.ui.shared.LocalAdaptiveGlassScrollInProgress
+import com.example.myapplication.ui.shared.LocalBackdropPinned
 import com.example.myapplication.ui.shared.theme.MotionTokens
 import com.example.myapplication.utils.getStrings
 import com.example.myapplication.utils.performHaptic
@@ -82,8 +87,6 @@ fun WorkspaceScreen(
     val view = LocalView.current
     val context = LocalContext.current
     val language by homeViewModel.uiLanguage.collectAsStateWithLifecycle()
-    val homeUiState by homeViewModel.uiState.collectAsStateWithLifecycle()
-    val syncReport by homeViewModel.syncReport.collectAsStateWithLifecycle()
 
     // Выделенная долгим удержанием карточка запирает рабочую область: страницы не листаются,
     // док гаснет и не нажимается. Скрим самого меню лежит внутри главной и до дока не достаёт —
@@ -153,8 +156,13 @@ fun WorkspaceScreen(
         drawContent()
     }
 
+    // Пока страницы едут, их стекло неподвижно относительно собственных бэкдропов — координаты
+    // ему не нужны, и kyant не должен пересчитывать его на каждом кадре (см. PinnableBackdrop).
+    val pinnedDuringSwipe = remember(pagerState) { { pagerState.isScrollInProgress } }
+
     Box(modifier = Modifier.fillMaxSize()) {
         Box(modifier = Modifier.fillMaxSize().layerBackdrop(backdrop)) {
+        CompositionLocalProvider(LocalBackdropPinned provides pinnedDuringSwipe) {
         HorizontalPager(
             state = pagerState,
             modifier = Modifier.fillMaxSize(),
@@ -196,11 +204,16 @@ fun WorkspaceScreen(
             }
         }
         }
+        }
 
         // Панель подключения и синхронизации: раньше жила в верхнем доке главной, теперь
         // открывается пунктом настроек. Рендерим её здесь, поверх пейджера, — своим скримом
         // она накрывает и док.
         if (syncPanelState.currentState || syncPanelState.targetState) {
+            // Подписки — только пока панель на экране: состояние главной меняется на каждую букву
+            // поиска, и держать его в корне значило пересобирать рабочую область вместе с доком.
+            val homeUiState by homeViewModel.uiState.collectAsStateWithLifecycle()
+            val syncReport by homeViewModel.syncReport.collectAsStateWithLifecycle()
             Box(modifier = Modifier.fillMaxSize().zIndex(8f)) {
                 NotificationSyncOverlay(
                     syncCoordinator = koinInject(),
@@ -222,6 +235,7 @@ fun WorkspaceScreen(
         }
 
         if (showStats) {
+            val homeUiState by homeViewModel.uiState.collectAsStateWithLifecycle()
             LaunchedEffect(Unit) { homeViewModel.loadStatsAnimeList() }
             StatsOverlay(
                 animeList = homeUiState.statsAnimeList,
@@ -237,7 +251,7 @@ fun WorkspaceScreen(
             origin = menuOrigin,
             backdrop = backdrop,
             onDismiss = { menuOpen = false },
-            items = ttmMenuItems(
+            items = remember(language) { ttmMenuItems(
                 language = language,
                 onStats = { showStats = true },
                 onFrame = {
@@ -254,7 +268,7 @@ fun WorkspaceScreen(
                         context.startActivity(Intent(Intent.ACTION_VIEW, DONATION_URL.toUri()))
                     }
                 },
-            ),
+            ) },
         )
 
         CompositionLocalProvider(LocalAdaptiveGlassScrollInProgress provides dockGlassStatic) {
@@ -267,11 +281,13 @@ fun WorkspaceScreen(
                 menuOpen = true
             },
             onMenuBounds = { menuOrigin = it },
-            menuWindowMorph = MenuWindowMorph(
-                sharedTransitionScope = sharedTransitionScope,
-                animatedVisibilityScope = animatedVisibilityScope,
-                key = menuWindowKey,
-            ),
+            menuWindowMorph = remember(menuWindowKey, sharedTransitionScope, animatedVisibilityScope) {
+                MenuWindowMorph(
+                    sharedTransitionScope = sharedTransitionScope,
+                    animatedVisibilityScope = animatedVisibilityScope,
+                    key = menuWindowKey,
+                )
+            },
             // targetPage, а не settledPage: как только жест перешёл порог, пилюля уже едет к
             // новому разделу. С settledPage она стояла бы на старом до конца анимации и потом
             // прыгала.
@@ -311,22 +327,48 @@ private fun Modifier.workspacePageMotion(pagerState: PagerState, index: Int): Mo
         translationX = transform.translationXFraction * size.width
         shape = RoundedCornerShape(transform.cornerDp.dp)
         clip = transform.cornerDp > 0f
-        // Тень по ведущему краю наезжающей страницы — обычная теневая высота слоя: рисовать её
-        // самим нельзя, снаружи клипа кисть не достаёт.
-        shadowElevation = transform.shadowAlpha * PAGE_SHADOW_ELEVATION.toPx()
     }
     .drawWithContent {
-        drawContent()
         // Второй расчёт вместо общего состояния: функция чистая и дешёвая, а лишний
         // `mutableStateOf` между слоем и отрисовкой добавил бы кадр рассинхрона.
-        val dim = pagerState.transformFor(index).dimAlpha
-        if (dim > 0f) drawRect(color = Color.Black, alpha = dim)
+        val transform = pagerState.transformFor(index)
+        // Тень по ведущему краю наезжающей страницы — градиентом слева от её границы. Раньше это
+        // была `shadowElevation` слоя на весь экран: RenderThread заново строил мягкую тень
+        // полноэкранного контура на каждом кадре свайпа. У наезжающей страницы клипа нет
+        // (скругление только у уходящей), поэтому рисовать за её левым краем можно.
+        if (transform.shadowAlpha > 0f) {
+            val width = PAGE_SHADOW_WIDTH.toPx()
+            drawRect(
+                brush = Brush.horizontalGradient(
+                    0f to Color.Transparent,
+                    1f to Color.Black.copy(alpha = PAGE_SHADOW_MAX_ALPHA * transform.shadowAlpha),
+                    startX = -width,
+                    endX = 0f,
+                ),
+                topLeft = Offset(-width, 0f),
+                size = Size(width, size.height),
+            )
+        }
+        drawContent()
+        if (transform.dimAlpha > 0f) drawRect(color = Color.Black, alpha = transform.dimAlpha)
     }
+    // Содержимое страницы — в собственном offscreen-слое: растеризуется в текстуру, когда
+    // меняется само, а на кадрах свайпа только масштабируется и сдвигается.
+    //
+    // Без этого содержимое заново проигрывалось на каждом кадре свайпа под масштабом уходящей
+    // страницы, а скругления-сквирклы (произвольный контур) Skia на каждом таком проходе
+    // растеризует маской на CPU и грузит текстурой: в трассе ~12 загрузок на кадр, 58 % кадров
+    // длиннее 16,7 мс. Включать слой только на время свайпа пробовали: первый кадр растеризует
+    // обе страницы сразу и даёт рывок в начале жеста (4,5 % против 1,4 % кадров > 16,7 мс), а
+    // выигрыш в обычном скролле в пределах шума. Цена — текстура размером со страницу.
+    .graphicsLayer(compositingStrategy = CompositingStrategy.Offscreen)
 
 private fun PagerState.transformFor(index: Int): PageTransform =
     workspacePageTransform(workspacePageOffset(index, currentPage, currentPageOffsetFraction))
 
-private val PAGE_SHADOW_ELEVATION = 24.dp
+/** Ширина и предельная плотность тени по ведущему краю наезжающей страницы. */
+private val PAGE_SHADOW_WIDTH = 24.dp
+private const val PAGE_SHADOW_MAX_ALPHA = 0.22f
 
 /** Ключи shared-bounds корней окон — те же, что ждут InspectScreen и AddEditScreen. */
 private const val MENU_WINDOW_INSPECT = "inspect_container"

@@ -1,5 +1,6 @@
 package com.example.myapplication.ui.settings
 
+import com.example.myapplication.ui.shared.rememberPinnableBackdrop
 import android.app.Activity
 import android.content.Intent
 import android.widget.Toast
@@ -688,6 +689,7 @@ fun SettingsScreen(
                         .align(Alignment.BottomEnd)
                         .padding(bottom = 24.dp + bottomInset, end = 24.dp)
                 ) {
+                    val shareBackdrop = rememberPinnableBackdrop(backdrop)
                     // Тот же рецепт жидкого стекла, что у бегунка рейтинга: сэмплируем
                     // общий backdrop списка, слабый blur + крупная линза преломляют контент
                     // под кнопкой, сверху — стеклянный блик и светлая окантовка.
@@ -696,7 +698,7 @@ fun SettingsScreen(
                             .size(58.dp)
                             .clip(CircleShape)
                             .drawBackdrop(
-                                backdrop = backdrop,
+                                backdrop = shareBackdrop,
                                 shape = { CircleShape },
                                 effects = {
                                     vibrancy()

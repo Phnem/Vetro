@@ -234,34 +234,39 @@ fun Modifier.frostedGlass(
     // пикселя, и «волосок» превращается в жирную рамку.
     val hairline = with(density) { 1f.toDp() }
     val noiseBrush = rememberNoiseBrush()
+    val source = rememberPinnableBackdrop(backdrop)
 
-    val body = if (SystemBlurAvailable) {
-        Modifier.drawBackdrop(
-            backdrop = backdrop,
-            shape = { shape },
-            effects = {
-                // Порядок важен: сначала размываем, потом правим цвет. Обратный порядок
-                // размазывает уже усиленную насыщенность и даёт грязный ореол.
-                blur(blurPx)
-                colorControls(
-                    contrast = material.contrast,
-                    saturation = material.saturation,
-                )
-            },
-            highlight = { material.highlight },
-            shadow = { material.shadow },
-            // Тинт — поверх обработанного бэкдропа, а не примешан к нему фоном: «размытие до
-            // тинта» из документа на практике означает именно это.
-            onDrawSurface = { drawRect(material.tint) },
-            onDrawFront = { drawNoise(noiseBrush, material.noiseAlpha) },
-        )
-    } else {
-        Modifier
-            .background(material.fallbackFill, shape)
-            .drawWithContent {
-                drawContent()
-                drawNoise(noiseBrush, material.noiseAlpha)
-            }
+    // Цепочка запоминается: `drawBackdrop` каждый раз создаёт новый ShapeProvider без `equals`, и
+    // любая рекомпозиция вызывающего пересобирала бы RenderEffect и перерисовывала тень.
+    val body = remember(source, shape, material, blurPx, noiseBrush) {
+        if (SystemBlurAvailable) {
+            Modifier.drawBackdrop(
+                backdrop = source,
+                shape = { shape },
+                effects = {
+                    // Порядок важен: сначала размываем, потом правим цвет. Обратный порядок
+                    // размазывает уже усиленную насыщенность и даёт грязный ореол.
+                    blur(blurPx)
+                    colorControls(
+                        contrast = material.contrast,
+                        saturation = material.saturation,
+                    )
+                },
+                highlight = { material.highlight },
+                shadow = { material.shadow },
+                // Тинт — поверх обработанного бэкдропа, а не примешан к нему фоном: «размытие до
+                // тинта» из документа на практике означает именно это.
+                onDrawSurface = { drawRect(material.tint) },
+                onDrawFront = { drawNoise(noiseBrush, material.noiseAlpha) },
+            )
+        } else {
+            Modifier
+                .background(material.fallbackFill, shape)
+                .drawWithContent {
+                    drawContent()
+                    drawNoise(noiseBrush, material.noiseAlpha)
+                }
+        }
     }
 
     // Кант отдельным узлом: `border` сам строит обводку по контуру формы, поэтому капсула и

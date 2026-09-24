@@ -8,6 +8,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
@@ -84,6 +85,18 @@ data class AdaptiveGlassEffects(
 @Composable
 fun rememberAdaptiveGlassEffects(preset: GlassPreset): AdaptiveGlassEffects {
     val adaptiveEnabled = LocalAdaptiveGlassEnabled.current
+    // Без адаптива (по умолчанию) и в матовом режиме, где эти значения вообще не читаются,
+    // четыре анимации ниже крутились бы вхолостую на каждой поверхности: цели у них постоянные.
+    if (!adaptiveEnabled || LocalModernUi.current) {
+        return remember(preset) {
+            AdaptiveGlassEffects(
+                blur = preset.fullBlur,
+                lensRefraction = preset.lensRefraction,
+                lensDepth = preset.lensDepth,
+                scrimAlpha = 0f,
+            )
+        }
+    }
     val scrollInProgress = LocalAdaptiveGlassScrollInProgress.current
     val isDark = isAppInDarkTheme()
 
@@ -161,9 +174,10 @@ fun Modifier.adaptiveGlassBackdrop(
     } else {
         Color.Unspecified
     }
-    return this
-        .drawBackdrop(
-            backdrop = backdrop,
+    val source = rememberPinnableBackdrop(backdrop)
+    val glass = remember(source, shape, blurPx, lensRefractionPx, lensDepthPx) {
+        Modifier.drawBackdrop(
+            backdrop = source,
             shape = { shape },
             effects = {
                 vibrancy()
@@ -173,6 +187,9 @@ fun Modifier.adaptiveGlassBackdrop(
                 }
             },
         )
+    }
+    return this
+        .then(glass)
         .then(
             if (scrimColor != Color.Unspecified) {
                 Modifier.background(scrimColor, shape)

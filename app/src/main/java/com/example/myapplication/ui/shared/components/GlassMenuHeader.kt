@@ -1,5 +1,6 @@
 package com.example.myapplication.ui.shared.components
 
+import com.example.myapplication.ui.shared.rememberPinnableBackdrop
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -63,6 +64,9 @@ fun GlassMenuHeader(
     iconModifier: Modifier = Modifier,
 ) {
     val view = LocalView.current
+    // Шапка стоит внутри страниц рабочей области — во время свайпа её стекло не должно
+    // пересчитываться на каждом кадре (см. PinnableBackdrop).
+    val source = rememberPinnableBackdrop(backdrop)
     // Лёгкий фрост поверх линзы, чтобы капсула читалась и на плоском (не-hero) фоне списка.
     val surfaceTint = if (isDark) Color.White.copy(alpha = 0.08f) else Color.White.copy(alpha = 0.55f)
     val borderColor = if (isDark) Color.White.copy(alpha = 0.20f) else Color.Black.copy(alpha = 0.08f)
@@ -82,7 +86,7 @@ fun GlassMenuHeader(
                 .size(48.dp)
                 .clip(CircleShape)
                 .drawBackdrop(
-                    backdrop = backdrop,
+                    backdrop = source,
                     shape = { CircleShape },
                     effects = {
                         vibrancy()
@@ -116,7 +120,7 @@ fun GlassMenuHeader(
                 .height(48.dp)
                 .clip(RoundedCornerShape(100.dp))
                 .drawBackdrop(
-                    backdrop = backdrop,
+                    backdrop = source,
                     shape = { RoundedCornerShape(100.dp) },
                     effects = {
                         vibrancy()
