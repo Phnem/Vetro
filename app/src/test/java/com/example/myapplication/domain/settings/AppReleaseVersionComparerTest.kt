@@ -37,4 +37,11 @@ class AppReleaseVersionComparerTest {
     fun same_triple_dual_prerelease_no_banner() {
         assertFalse(AppReleaseVersionComparer.isRemoteSemanticallyNewer("1.0.0-beta.1", "v1.0.0-rc.1"))
     }
+
+    @Test
+    fun uppercase_v_prefix_parses_like_lowercase() {
+        assertFalse(AppReleaseVersionComparer.isRemoteSemanticallyNewer("V3.3.4-Beta", "v3.3.4-Beta"))
+        assertFalse(AppReleaseVersionComparer.isRemoteSemanticallyNewer("V3.3.4-Beta", "v3.3.3-Alpha"))
+        assertTrue(AppReleaseVersionComparer.isRemoteSemanticallyNewer("V3.3.4-Beta", "v3.3.5-Beta"))
+    }
 }
