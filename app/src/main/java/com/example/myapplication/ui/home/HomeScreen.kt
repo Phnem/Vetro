@@ -1006,9 +1006,15 @@ fun HomeScreen(
                                     modifier = Modifier.matchParentSize()
                                 ) {}
                                 Box(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+                                    // Цвет от темы, как у поля поиска под чипами: матовое стекло в
+                                    // светлой теме почти белое, и белые подписи на нём пропадали.
                                     Text(
                                         text = label,
-                                        color = if (isSelected) Color.White else Color.White.copy(alpha = 0.8f),
+                                        color = if (isSelected) {
+                                            MaterialTheme.colorScheme.onSurface
+                                        } else {
+                                            MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                                        },
                                         fontSize = 13.sp,
                                         fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                                         fontFamily = SnProFamily
