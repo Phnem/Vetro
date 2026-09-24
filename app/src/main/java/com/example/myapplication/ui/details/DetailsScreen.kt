@@ -2,6 +2,7 @@ package com.example.myapplication.ui.details
 
 import com.example.myapplication.ui.shared.theme.IosScroll
 import com.example.myapplication.ui.shared.glassControl
+import com.example.myapplication.ui.shared.LocalModernUi
 import android.graphics.BitmapFactory
 
 import androidx.compose.animation.AnimatedVisibility
@@ -909,7 +910,9 @@ private fun DetailsGlassBackButton(
         Icon(
             Icons.AutoMirrored.Filled.ArrowBack,
             contentDescription = "Back",
-            tint = Color.White,
+            // Белая стрелка — для прозрачного «жидкого» стекла поверх арта. Матовая подложка
+            // (glassControl в новом интерфейсе) в светлой теме почти белая: стрелка на ней терялась.
+            tint = if (LocalModernUi.current) MaterialTheme.colorScheme.onSurface else Color.White,
             modifier = Modifier.size(22.dp),
         )
     }
