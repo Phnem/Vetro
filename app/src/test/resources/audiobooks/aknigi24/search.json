@@ -1,0 +1,85 @@
+{
+  "capturedAt": "2026-09-23",
+  "kind": "search",
+  "url": "https://aknigi24.com/search?q=%D0%A7%D0%B5%D1%85%D0%BE%D0%B2",
+  "title": "«Чехов» — аудиокниги слушать онлайн и скачать бесплатно | Aknigi24",
+  "canonical": "https://aknigi24.com/search?q=%D0%A7%D0%B5%D1%85%D0%BE%D0%B2",
+  "headings": [
+    "Поиск: \"Чехов\""
+  ],
+  "ogImageHost": "aknigi24.com",
+  "forms": [
+    {
+      "action": "https://aknigi24.com/search",
+      "method": "GET",
+      "inputs": [
+        "q"
+      ]
+    },
+    {
+      "action": "https://aknigi24.com/search",
+      "method": "GET",
+      "inputs": [
+        "q"
+      ]
+    }
+  ],
+  "sampleLinks": [
+    {
+      "url": "https://aknigi24.com/book/ves-cexov-cast-1-cexov-anton-abdullaev-dzaxangir",
+      "text": "4.37 101 ч 2 мин"
+    },
+    {
+      "url": "https://aknigi24.com/book/cexov-pro-seks-cexov-anton-doktor-alesin",
+      "text": "3 мин"
+    },
+    {
+      "url": "https://aknigi24.com/book/ves-cexov-cast-2-cexov-anton-abdullaev-dzaxangir",
+      "text": "5.00 50 ч 3 мин"
+    },
+    {
+      "url": "https://aknigi24.com/book/cexov-zaicev-boris-starcikov-stepan",
+      "text": "1.00 6 ч"
+    },
+    {
+      "url": "https://aknigi24.com/book/perepiska-ap-cexova-cexov-anton-burova-mariia",
+      "text": "21 ч 59 мин"
+    },
+    {
+      "url": "https://aknigi24.com/book/7-stranic-cexova-cexov-anton-burluckii-andrei",
+      "text": "1 ч 3 мин"
+    },
+    {
+      "url": "https://aknigi24.com/book/pamiati-cexova-kuprin-aleksandr-lomakin-pavel",
+      "text": "4.13 1 ч 17 мин"
+    },
+    {
+      "url": "https://aknigi24.com/book/drama-na-oxote-cexov-anton-abdullaev-dzaxangir",
+      "text": "14 ч 41 мин"
+    },
+    {
+      "url": "https://aknigi24.com/book/gost-cexov-anton-zabolotnyi-evgenii",
+      "text": "3.88 11 мин"
+    },
+    {
+      "url": "https://aknigi24.com/book/dorogaia-sobaka-cexov-anton-vasilevskii-petr",
+      "text": "6 мин"
+    },
+    {
+      "url": "https://aknigi24.com/book/supruga-cexov-anton-zuravleva-elena",
+      "text": "3.95 18 мин"
+    },
+    {
+      "url": "https://aknigi24.com/book/o-brennosti-cexov-anton-misin-aleksei",
+      "text": "3.92 4 мин"
+    }
+  ],
+  "mediaElementCount": 0,
+  "sourceElementCount": 0,
+  "mediaUrlCount": 0,
+  "mediaHosts": [],
+  "jsonLdCount": 2,
+  "restrictionEvidence": [],
+  "htmlBytes": 79823,
+  "note": "Compact structural fixture. Media URLs, descriptions and page scripts intentionally omitted."
+}

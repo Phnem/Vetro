@@ -68,8 +68,16 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import com.example.myapplication.ui.home.CapsuleDockItem
+import com.example.myapplication.ui.home.CapsuleGlassDock
+import com.example.myapplication.ui.shared.FrostedMaterials
+import com.example.myapplication.ui.shared.frostedGlass
+import com.example.myapplication.ui.shared.LocalGlassCapsuleDock
+import com.example.myapplication.ui.shared.stagedMorphOrigin
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -125,6 +133,7 @@ import com.example.myapplication.ui.shared.theme.iosSheetContainer
 import com.example.myapplication.ui.shared.theme.SquircleCornerShape
 import com.example.myapplication.ui.shared.theme.SquircleShape
 import com.example.myapplication.ui.shared.components.GrabberHandle
+import com.example.myapplication.ui.shared.components.MotionBottomSheet
 import com.example.myapplication.ui.shared.components.rememberIosSheetSwipe
 import com.example.myapplication.ui.shared.theme.SnProFamily
 import com.example.myapplication.ui.shared.theme.iosRowHighlight
@@ -205,9 +214,17 @@ fun GlassActionDock(
     middleAction: com.example.myapplication.ui.home.TopDockMiddleAction =
         com.example.myapplication.ui.home.TopDockMiddleAction.SYNC_PANEL,
     onOpenStats: () -> Unit = {},
+    /** См. одноимённый параметр [WorkspaceSortNotificationActions] — док только прокидывает его. */
+    showMiddleAction: Boolean = true,
 ) {
     val isDark = isAppInDarkTheme()
     val glassEffects = rememberAdaptiveGlassEffects(GlassPreset.Card)
+    // Тот же тумблер, что у нижнего дока: два дока одного экрана из разных материалов выглядели
+    // бы как недоделка. Ветка структурная, и переключение тумблера на живом экране может один
+    // раз показать плоскую заливку — для dev-флага это приемлемо, восстановление штатное
+    // (см. GlassBackdropRecovery).
+    val frosted = LocalGlassCapsuleDock.current
+    val frostedMaterial = FrostedMaterials.dock()
     val dockShape = RoundedCornerShape(32.dp)
     val topPadding by animateDpAsState(
         targetValue = if (isFloating) 16.dp else 0.dp,
@@ -250,8 +267,25 @@ fun GlassActionDock(
                 Modifier
                     .matchParentSize()
                     .clip(dockShape)
-                    .adaptiveGlassBackdrop(backdrop = backdrop, shape = dockShape, effects = glassEffects)
-                    .border(0.5.dp, borderColor, dockShape)
+                    .then(
+                        if (frosted) {
+                            Modifier.frostedGlass(
+                                backdrop = backdrop,
+                                shape = dockShape,
+                                material = frostedMaterial,
+                            )
+                        } else {
+                            Modifier
+                                .adaptiveGlassBackdrop(
+                                    backdrop = backdrop,
+                                    shape = dockShape,
+                                    effects = glassEffects,
+                                )
+                                // Кант матового материала рисует он сам — второй поверх него
+                                // дал бы двойную линию по тому же контуру.
+                                .border(0.5.dp, borderColor, dockShape)
+                        },
+                    )
             ) {
                 if (shineAlpha > 0f) {
                     Canvas(modifier = Modifier.matchParentSize()) {
@@ -285,6 +319,7 @@ fun GlassActionDock(
                 modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
                 middleAction = middleAction,
                 onOpenStats = onOpenStats,
+                showMiddleAction = showMiddleAction,
             )
         }
     }
@@ -312,6 +347,167 @@ fun GlassBottomNavigation(
 ) {
     val view = LocalView.current
     val isDark = isAppInDarkTheme()
+
+    // Dev-тумблер «Док из матового стекла»: другой материал и другая раскладка — это
+    // самостоятельный компонент, а не набор условий внутри прежнего. Ветвление одно и на самом
+    // верху, поэтому старый док остаётся ровно таким, каким был.
+    if (LocalGlassCapsuleDock.current) {
+        val ruDock = currentLanguage == AppLanguage.RU
+        // Подсветка отмечает последний открытый раздел: у классического дока постоянного
+        // «текущего экрана» нет — его пункты открывают окна и оверлеи поверх коллекции.
+        var lastOpened by rememberSaveable { mutableIntStateOf(-1) }
+        // Пункты — те же четыре, что и у прежнего дока, и в том же порядке: тумблер меняет вид,
+        // а не состав навигации.
+        //
+        // Иконки собираются ЗДЕСЬ вместе со своими shared-element ключами. Три из четырёх
+        // открывают окно морфом из собственной иконки, и ключи обязаны совпадать с теми, что
+        // ждут принимающие экраны, — иначе окна открываются без анимации.
+        CapsuleGlassDock(
+            backdrop = backdrop,
+            items = listOf(
+                CapsuleDockItem(
+                    contentDescription = if (ruDock) "Кадр" else "Frame",
+                    onClick = {
+                        performHaptic(view, "light")
+                        lastOpened = 0
+                        onInspectClick()
+                    },
+                ) { tint ->
+                    with(sharedTransitionScope) {
+                        Box(
+                            modifier = Modifier
+                                .size(DockSharedBoundsSize)
+                                .sharedBounds(
+                                    rememberSharedContentState(key = "inspect_container"),
+                                    animatedVisibilityScope = animatedVisibilityScope,
+                                    resizeMode = SharedTransitionScope.ResizeMode.RemeasureToBounds,
+                                ),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Icon(
+                                painter = painterResource(R.drawable.frame_inspect_24),
+                                contentDescription = if (ruDock) "Кадр" else "Frame",
+                                tint = tint,
+                                modifier = Modifier
+                                    .size(DockIconSize)
+                                    .sharedElement(
+                                        rememberSharedContentState(key = "inspect_icon"),
+                                        animatedVisibilityScope = animatedVisibilityScope,
+                                    ),
+                            )
+                        }
+                    }
+                },
+                CapsuleDockItem(
+                    contentDescription = if (ruDock) "Статистика" else "Stats",
+                    onClick = {
+                        performHaptic(view, "light")
+                        lastOpened = 1
+                        onShowStats()
+                    },
+                    isMorphOrigin = true,
+                ) { tint ->
+                    // Статистика — единственный пункт без shared-element: она раскрывается не
+                    // окном, а панелью поверх экрана (см. StagedSheetMotion.kt).
+                    Icon(
+                        imageVector = HeroiconsSquaresPlus,
+                        contentDescription = if (ruDock) "Статистика" else "Stats",
+                        tint = tint,
+                        modifier = Modifier.size(DockIconSize),
+                    )
+                },
+                CapsuleDockItem(
+                    contentDescription = if (ruDock) "Добавить" else "Add",
+                    onClick = {
+                        performHaptic(view, "success")
+                        lastOpened = 2
+                        nav.navigateToAddEdit()
+                    },
+                ) { tint ->
+                    with(sharedTransitionScope) {
+                        Box(
+                            modifier = Modifier
+                                .size(DockSharedBoundsSize)
+                                .sharedBounds(
+                                    rememberSharedContentState(key = "fab_container"),
+                                    animatedVisibilityScope = animatedVisibilityScope,
+                                    resizeMode = SharedTransitionScope.ResizeMode.RemeasureToBounds,
+                                    clipInOverlayDuringTransition = OverlayClip(CircleShape),
+                                ),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Icon(
+                                imageVector = HeroiconsPlus,
+                                contentDescription = if (ruDock) "Добавить" else "Add",
+                                tint = tint,
+                                modifier = Modifier
+                                    .size(DockIconSize)
+                                    .sharedElement(
+                                        rememberSharedContentState(key = "fab_icon"),
+                                        animatedVisibilityScope = animatedVisibilityScope,
+                                    ),
+                            )
+                        }
+                    }
+                },
+                CapsuleDockItem(
+                    contentDescription = if (ruDock) "Настройки" else "Settings",
+                    onClick = {
+                        performHaptic(view, "light")
+                        lastOpened = 3
+                        onSettingsClick()
+                    },
+                ) { tint ->
+                    with(sharedTransitionScope) {
+                        Box(
+                            modifier = Modifier
+                                .size(DockSharedBoundsSize)
+                                .sharedBounds(
+                                    rememberSharedContentState(key = "settings_container"),
+                                    animatedVisibilityScope = animatedVisibilityScope,
+                                    // scaleToBounds, как и у прежнего дока: RemeasureToBounds
+                                    // пересобирал бы весь список настроек на каждом кадре и
+                                    // ронял FPS.
+                                    resizeMode = SharedTransitionScope.ResizeMode.scaleToBounds(),
+                                ),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.Settings,
+                                contentDescription = if (ruDock) "Настройки" else "Settings",
+                                tint = tint,
+                                modifier = Modifier
+                                    .size(DockIconSize)
+                                    .sharedElement(
+                                        rememberSharedContentState(key = "settings_icon"),
+                                        animatedVisibilityScope = animatedVisibilityScope,
+                                    ),
+                            )
+                        }
+                    }
+                },
+            ),
+            selectedIndex = lastOpened.takeIf { it >= 0 },
+            trailingButton = CapsuleDockItem(
+                contentDescription = if (ruDock) "Поиск" else "Search",
+                onClick = {
+                    performHaptic(view, "light")
+                    onSearchClick()
+                },
+            ) { tint ->
+                Icon(
+                    imageVector = Icons.Default.Search,
+                    contentDescription = if (ruDock) "Поиск" else "Search",
+                    tint = tint,
+                    modifier = Modifier.size(DockIconSize),
+                )
+            },
+            trailingActive = isSearchActive,
+            modifier = modifier.padding(bottom = 24.dp),
+        )
+        return
+    }
+
     val glassEffects = rememberAdaptiveGlassEffects(GlassPreset.CompactNav)
     // Более «пухлая» капсула (референс — Telegram): выше и с полным пилюльным скруглением.
     val navHeight = 74.dp
@@ -395,6 +591,9 @@ fun GlassBottomNavigation(
                     modifier = Modifier
                         .width(60.dp)
                         .clip(RoundedCornerShape(20.dp))
+                        // Точка, из которой раскрывается панель статистики. Два dev-тумблера
+                        // независимы, поэтому морф обязан работать и со старым доком.
+                        .stagedMorphOrigin()
                         .clickable(
                             interactionSource = remember { MutableInteractionSource() },
                             indication = null
@@ -524,6 +723,16 @@ fun GlassBottomNavigation(
         )
     }
 }
+
+/**
+ * Габариты иконки капсульного дока.
+ *
+ * [DockSharedBoundsSize] — узел shared-element перехода; он же задаёт, из какого прямоугольника
+ * иконка вырастает в окно, поэтому совпадает с прежним доком: геометрия перехода не должна
+ * зависеть от того, какой тумблер включён.
+ */
+private val DockSharedBoundsSize = 36.dp
+private val DockIconSize = 26.dp
 
 /** Подпись под иконкой дока (референс — Telegram). Компактная, приглушённая.
  *  8.5sp + колонка 60dp: длинные русские подписи («Статистика», «Настройки»)
@@ -756,43 +965,16 @@ fun SortFilterOverlay(
     BackHandler { onDismiss() }
 
     Box(modifier = Modifier.fillMaxSize()) {
-        AnimatedVisibility(
+        // Шторка выезжает снизу и уходит вниз; физика и хореография — в MotionBottomSheet.
+        MotionBottomSheet(
             visibleState = visibleState,
-            enter = fadeIn(animationSpec = tween(MotionTokens.ScrimFadeMillis)),
-            exit = fadeOut(animationSpec = tween(MotionTokens.ScrimFadeMillis))
-        ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color.Black.copy(alpha = OverlayThemeTokens.scrimAlpha(isDark)))
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null
-                    ) { onDismiss() }
-            )
-        }
-
-        AnimatedVisibility(
-            visibleState = visibleState,
-            enter = slideInVertically(
-                initialOffsetY = { it },
-                animationSpec = MotionTokens.sheetPresent()
-            ) + fadeIn(),
-            exit = slideOutVertically(
-                targetOffsetY = { it },
-                animationSpec = MotionTokens.sheetDismissForced()
-            ) + fadeOut(),
-            modifier = Modifier.align(Alignment.BottomCenter)
+            onDismiss = onDismiss,
+            isDark = isDark,
+            swipe = swipe,
+            panelModifier = Modifier.fillMaxWidth(),
         ) {
             Column(
                 modifier = Modifier
-                    .then(swipe.panelModifier)
-                    .fillMaxWidth()
-                    .iosSheetContainer(
-                        SquircleCornerShape(IosDesign.SheetCorner, IosDesign.SheetCorner, 0.dp, 0.dp),
-                        isDark,
-                        IosDesign.sheetSurface(isDark),
-                    )
                     .navigationBarsPadding()
                     .padding(bottom = 12.dp)
             ) {
@@ -1337,46 +1519,15 @@ fun GenreFilterOverlay(
     BackHandler { onDismiss() }
     
     Box(modifier = Modifier.fillMaxSize()) {
-        AnimatedVisibility(
+        // Bottom sheet «фильтр по жанрам»: выезжает снизу и уходит вниз (см. MotionBottomSheet).
+        MotionBottomSheet(
             visibleState = visibleState,
-            enter = fadeIn(tween(200)),
-            exit = fadeOut(tween(150))
+            onDismiss = onDismiss,
+            isDark = isDark,
+            swipe = swipe,
+            panelModifier = Modifier.fillMaxWidth(),
         ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color.Black.copy(alpha = OverlayThemeTokens.scrimAlpha(isDark)))
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null
-                    ) { onDismiss() }
-            )
-        }
-        
-        AnimatedVisibility(
-            visibleState = visibleState,
-            // Bottom sheet «фильтр по жанрам» (§7): появление sheetPresent, дисмисс — forced-затухание.
-            enter = slideInVertically(
-                initialOffsetY = { it },
-                animationSpec = MotionTokens.sheetPresent()
-            ) + fadeIn(),
-            exit = slideOutVertically(
-                targetOffsetY = { it },
-                animationSpec = MotionTokens.sheetDismissForced()
-            ) + fadeOut(),
-            modifier = Modifier.align(Alignment.BottomCenter)
-        ) {
-            Column(
-                modifier = Modifier
-                    .then(swipe.panelModifier)
-                    .fillMaxWidth()
-                    .iosSheetContainer(
-                        SquircleCornerShape(IosDesign.SheetCorner, IosDesign.SheetCorner, 0.dp, 0.dp),
-                        isDark,
-                        IosDesign.sheetSurface(isDark),
-                    )
-                    .navigationBarsPadding()
-            ) {
+            Column(modifier = Modifier.navigationBarsPadding()) {
                 GrabberHandle(isDark, modifier = swipe.handleModifier)
                 Column(
                     modifier = Modifier

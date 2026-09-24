@@ -1,5 +1,6 @@
 package com.example.myapplication.ui.details
 
+import com.example.myapplication.domain.seasons.displayLabel
 import com.example.myapplication.media.download.DownloadQuality
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.tween
@@ -210,7 +211,7 @@ private fun SeasonStep(
     ) {
         itemsIndexed(seasons) { index, season ->
             SingleChoiceRow(
-                title = if (ru) "Сезон ${season.seasonNumber}" else "Season ${season.seasonNumber}",
+                title = season.displayLabel(ru),
                 subtitle = if (ru) "${season.episodes} эп." else "${season.episodes} ep.",
                 selected = index == selectedIndex,
                 onClick = { onSelect(index) },

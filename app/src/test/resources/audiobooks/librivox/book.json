@@ -1,0 +1,81 @@
+{
+  "sourceUrl": "https://librivox.org/api/feed/audiobooks/?id=52&format=json&extended=1&coverart=1",
+  "books": [
+    {
+      "id": "52",
+      "title": "Letters of Two Brides",
+      "url_text_source": "https://www.gutenberg.org/etext/1941",
+      "language": "English",
+      "copyright_year": "1902",
+      "num_sections": "57",
+      "url_rss": "https://librivox.org/rss/52",
+      "url_zip_file": "https://archive.org/compress/letters_brides_0709_librivox/formats=64KBPS MP3&file=/letters_brides_0709_librivox.zip",
+      "url_project": "",
+      "url_librivox": "https://librivox.org/letters-of-two-brides-by-honore-de-balzac/",
+      "url_other": "",
+      "totaltime": "9:09:20",
+      "totaltimesecs": 32960,
+      "authors": [
+        {
+          "id": "86",
+          "first_name": "Honoré de",
+          "last_name": "Balzac",
+          "dob": "1799",
+          "dod": "1850"
+        }
+      ],
+      "coverart_jpg": "https://www.archive.org/download/LibrivoxCdCoverArt12/Letters_Two_Brides_1110.jpg",
+      "coverart_pdf": "https://www.archive.org/download/LibrivoxCdCoverArt12/Letters_Two_Brides_1110.pdf",
+      "coverart_thumbnail": "https://www.archive.org/download/LibrivoxCdCoverArt12/Letters_Two_Brides_1110_thumb.jpg",
+      "url_iarchive": "https://www.archive.org/details/letters_brides_0709_librivox",
+      "sections": [
+        {
+          "id": "121136",
+          "section_number": "1",
+          "title": "Letter 1",
+          "listen_url": "https://www.archive.org/download/letters_brides_0709_librivox/letters_of_two_brides_01_debalzac_64kb.mp3",
+          "language": "English",
+          "playtime": "1764",
+          "file_name": null,
+          "readers": [
+            {
+              "reader_id": "19",
+              "display_name": "Kara Shallenberg (1969-2023)"
+            }
+          ]
+        },
+        {
+          "id": "121137",
+          "section_number": "2",
+          "title": "Letter 2",
+          "listen_url": "https://www.archive.org/download/letters_brides_0709_librivox/letters_of_two_brides_02_debalzac_64kb.mp3",
+          "language": "English",
+          "playtime": "790",
+          "file_name": null,
+          "readers": [
+            {
+              "reader_id": "19",
+              "display_name": "Kara Shallenberg (1969-2023)"
+            }
+          ]
+        }
+      ],
+      "genres": [
+        {
+          "id": "8",
+          "name": "Epistolary Fiction"
+        }
+      ],
+      "translators": [
+        {
+          "id": "9787",
+          "first_name": "R. S.",
+          "last_name": "Scott",
+          "dob": "",
+          "dod": "fl.1899"
+        }
+      ]
+    }
+  ],
+  "note": "First two of 57 sections; description omitted."
+}

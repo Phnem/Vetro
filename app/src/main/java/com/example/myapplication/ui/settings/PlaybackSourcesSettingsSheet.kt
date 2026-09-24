@@ -17,6 +17,7 @@ import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -25,6 +26,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -57,6 +59,10 @@ fun PlaybackSourcesSettingsSheet(
     }
     val ru = language == AppLanguage.RU
     val editor = state.editor
+    // Цвет содержимого задаём явно. Хост листа его не объявляет, а умолчание `LocalContentColor` —
+    // чёрный: на тёмной теме заголовок и названия источников сливались с фоном. Полагаться на то,
+    // что цвет «придёт сверху», нельзя — сюда он не приходит.
+    CompositionLocalProvider(LocalContentColor provides MaterialTheme.colorScheme.onSurface) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -139,6 +145,7 @@ fun PlaybackSourcesSettingsSheet(
             )
         }
         Spacer(Modifier.height(8.dp))
+    }
     }
 }
 

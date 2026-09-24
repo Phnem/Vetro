@@ -99,15 +99,19 @@ class SeasonEpisodesResolver(
             ?: return fallbackSingleSeason(anime)
 
         val graph = gatherFranchise(self)
-        // Порядок строим по ПОЛНОМУ графу (фильмы/OVA внутри цепочки — тоже рёбра), а в сезоны
-        // отбираем уже потом: иначе «S2 → фильм → S3» разваливается на два куска.
-        val ordered = orderByRelations(graph.nodes)
-            .filter { it.isSeasonFormat() }
-            .ifEmpty { listOf(self) }
+        // Порядок строим по ПОЛНОМУ графу (фильмы/OVA внутри цепочки — тоже рёбра), а разбираем
+        // уже потом: иначе «S2 → фильм → S3» разваливается на два куска.
+        val chain = orderByRelations(graph.nodes)
+        val orderedSeasons = chain.filter { it.isSeasonFormat() }.ifEmpty { listOf(self) }
+        // Спецвыпуски идут ПОСЛЕ сезонов и своей нумерацией: вклинить OVA между сезонами значит
+        // сдвинуть номера всех последующих, а по ним источники просмотра ищут релиз.
+        val orderedSpecials = chain.filter { it.isSpecialFormat() && it !in orderedSeasons }
+        val ordered = orderedSeasons + orderedSpecials
 
         val seasons = ArrayList<SeasonInfo>(ordered.size)
         var allResolved = true
         for ((index, node) in ordered.withIndex()) {
+            val special = index >= orderedSeasons.size
             val ongoing = node.status == "RELEASING"
             val declared = node.totalEpisodes
             val aired = node.airedEpisodes.takeIf { it > 0 }
@@ -133,7 +137,10 @@ class SeasonEpisodesResolver(
             }
 
             if (episodes == null) {
-                allResolved = false
+                // Незакрытый счётчик спецвыпуска записи не портит: `complete` описывает цепочку
+                // СЕЗОНОВ, а анонсированная-но-невышедшая OVA есть у половины франшиз. Иначе одна
+                // такая строка навсегда сажала бы тайтл на суточный TTL и съедала слот прохода.
+                if (!special) allResolved = false
                 continue
             }
             seasons += SeasonInfo(
@@ -145,12 +152,15 @@ class SeasonEpisodesResolver(
                 malId = node.malId,
                 source = source,
                 title = node.titleEnglish ?: node.titleRomaji,
+                kind = if (special) SeasonKind.Special else SeasonKind.Season,
+                format = node.format.takeIf { special },
             )
         }
         if (seasons.isEmpty()) return fallbackSingleSeason(anime)
 
-        // Пропуск в середине цепочки съедает нумерацию — перенумеруем по порядку.
-        val renumbered = seasons.mapIndexed { i, s -> s.copy(seasonNumber = i + 1) }
+        // Пропуск в середине цепочки съедает нумерацию — перенумеруем по порядку, но раздельно:
+        // сезоны продолжают сквозной ряд, спецвыпуски встают за ними и на него не влияют.
+        val renumbered = renumberChain(seasons)
         val withStreaming = if (includeStoredStreaming) {
             mergeStreamingSeasons(anime.id, renumbered)
         } else {
@@ -178,10 +188,14 @@ class SeasonEpisodesResolver(
      */
     private fun mergeStreamingSeasons(animeId: String, resolved: List<SeasonInfo>): List<SeasonInfo> {
         val discovered = store.entryFor(animeId)?.seasons.orEmpty()
-            .filter { it.source in StreamingSeasonDiscovery.STREAMING_SOURCES }
+            .filter { it.source in StreamingSeasonDiscovery.STREAMING_SOURCES && !it.isSpecial }
         if (discovered.isEmpty()) return resolved
 
-        val byNumber = resolved.associateByTo(LinkedHashMap()) { it.seasonNumber }
+        // Источники просмотра нумеруют только сезоны; спецвыпуски в их шкале не участвуют и
+        // сливать их по номеру нельзя — номер у них свой, продолжающий сезонный ряд.
+        val specials = resolved.filter { it.isSpecial }
+        val byNumber = resolved.filterNot { it.isSpecial }
+            .associateByTo(LinkedHashMap()) { it.seasonNumber }
         for (season in discovered) {
             val existing = byNumber[season.seasonNumber]
             byNumber[season.seasonNumber] = when {
@@ -194,7 +208,28 @@ class SeasonEpisodesResolver(
                 else -> existing
             }
         }
-        return byNumber.values.sortedBy { it.seasonNumber }
+        // Номера сезонов НЕ пересчитываем: строка от источника просмотра несёт его собственный
+        // номер (у него бывают дыры), и по нему же мы потом просим у него серии. Спецвыпуски
+        // живут в своём диапазоне и столкнуться с сезонами не могут.
+        return byNumber.values.sortedBy { it.seasonNumber } + specials
+    }
+
+    /**
+     * Нумерация цепочки: сезоны получают 1..N, спецвыпуски — свой диапазон от
+     * [SPECIAL_SEASON_BASE].
+     *
+     * Номера должны быть уникальны — это ключ строки и в UI (раскрытие карточки, обложки), и в
+     * ключах серий [com.example.myapplication.ui.details.EpisodeKey]; совпавший номер у сезона и
+     * OVA склеил бы их прогресс в один, а LazyColumn на дубликате ключа падает.
+     */
+    private fun renumberChain(rows: List<SeasonInfo>): List<SeasonInfo> {
+        val seasons = rows.filterNot { it.isSpecial }.mapIndexed { i, row ->
+            row.copy(seasonNumber = i + 1)
+        }
+        val specials = rows.filter { it.isSpecial }.mapIndexed { i, row ->
+            row.copy(seasonNumber = SPECIAL_SEASON_BASE + i)
+        }
+        return seasons + specials
     }
 
     // ==========================================================
@@ -430,6 +465,14 @@ class SeasonEpisodesResolver(
     private fun EpisodeCheckMedia.isSeasonFormat(): Boolean =
         format == null || format in SEASON_FORMATS
 
+    /**
+     * Смотрибельное, но не сезон: OVA, спецвыпуски, полнометражки франшизы.
+     *
+     * Обход и раньше шёл через эти узлы ради связности цепочки — просто выбрасывал их на выходе,
+     * и половина франшизы оставалась недоступной из списка серий.
+     */
+    private fun EpisodeCheckMedia.isSpecialFormat(): Boolean = format in SPECIAL_FORMATS
+
     // ==========================================================
     // Сопоставление и сетевые мелочи
     // ==========================================================
@@ -488,5 +531,11 @@ class SeasonEpisodesResolver(
         const val MAX_NODES = 40
         const val MAX_LEVELS = 12
         val SEASON_FORMATS = setOf("TV", "TV_SHORT", "ONA")
+
+        /**
+         * ONA сюда не попадает намеренно: у стримингов это полноценные сезоны, а не бонус.
+         * MUSIC пропущен — клипы смотреть как серии никто не просил.
+         */
+        val SPECIAL_FORMATS = setOf("OVA", "SPECIAL", "MOVIE")
     }
 }

@@ -25,10 +25,30 @@ import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.CancellationException
 import org.koin.compose.koinInject
 
+/**
+ * Предложение вернуть автоматический пропуск.
+ *
+ * Появляется сразу после прыжка и живёт [UNDO_WINDOW_SECONDS] секунд: автопропуск — единственное
+ * действие плеера, которое происходит без нажатия, и отменить его надо успеть, не ставя видео на
+ * паузу. Окно короткое намеренно — дольше кнопка начинает жить своей жизнью поверх кадра.
+ */
+data class SkipUndoOffer(
+    /** Сколько секунд осталось: 5, 4, 3, 2, 1. Ноль наружу не отдаём — предложение уже снято. */
+    val secondsLeft: Int,
+    /** Что пропустили: опенинг или эндинг. */
+    val segment: SkipSegment,
+)
+
 data class MediaSkipPlaybackState(
     val activeSegment: SkipSegment?,
     val manualSkip: () -> Unit,
+    /** `null` — отменять нечего. */
+    val undoOffer: SkipUndoOffer? = null,
+    val undoSkip: () -> Unit = {},
 )
+
+/** Сколько секунд показывать предложение отмены. */
+const val UNDO_WINDOW_SECONDS = 5
 
 /**
  * Common Compose adapter around [MediaSkipCoordinator]. It deliberately has no controls/PiP input:
@@ -146,10 +166,17 @@ fun rememberMediaSkipPlayback(
         }
     }
 
+    // Куда возвращаться и что именно вернуть. Отдельно от счётчика секунд: счётчик тикает
+    // каждую секунду, а это не меняется всё окно отмены.
+    var undoTarget by remember(mediaKey) { mutableStateOf<Pair<Long, SkipSegment>?>(null) }
+    var undoSecondsLeft by remember(mediaKey) { mutableStateOf(0) }
+
     LaunchedEffect(mediaKey, active, positionMs, autoSkipEnabled) {
         val decision = coordinator.automaticSeek(mediaKey, positionMs, autoSkipEnabled)
         if (decision != null) {
             player.seekTo(decision.targetMs)
+            undoTarget = decision.fromMs to decision.segment
+            undoSecondsLeft = UNDO_WINDOW_SECONDS
             SkipDiagnostics.logOnce(
                 diagnosticEpisodeKey,
                 currentResolution,
@@ -157,6 +184,17 @@ fun rememberMediaSkipPlayback(
                 decision,
             )
         }
+    }
+
+    // Обратный отсчёт идёт по реальному времени, а не по позиции плеера: на паузе предложение
+    // тоже обязано истечь, иначе кнопка висит над кадром, пока пользователь не вернётся.
+    LaunchedEffect(undoTarget) {
+        if (undoTarget == null) return@LaunchedEffect
+        while (undoSecondsLeft > 0) {
+            kotlinx.coroutines.delay(1_000L)
+            undoSecondsLeft -= 1
+        }
+        undoTarget = null
     }
 
     return MediaSkipPlaybackState(
@@ -170,6 +208,20 @@ fun rememberMediaSkipPlayback(
                     durationMs,
                     decision,
                 )
+            }
+        },
+        undoOffer = undoTarget
+            ?.takeIf { undoSecondsLeft > 0 }
+            ?.let { (_, segment) -> SkipUndoOffer(undoSecondsLeft, segment) },
+        undoSkip = {
+            undoTarget?.let { (fromMs, segment) ->
+                // Порядок важен: сначала отказ, потом перемотка. Перемотка назад в сегмент —
+                // это ровно тот разрыв позиции, который снимает дедупликацию, и без
+                // предварительного отказа автопропуск сработал бы снова мгновенно.
+                coordinator.declineAutomatic(mediaKey, segment)
+                player.seekTo(fromMs)
+                undoTarget = null
+                undoSecondsLeft = 0
             }
         },
     )

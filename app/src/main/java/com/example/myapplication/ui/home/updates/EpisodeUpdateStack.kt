@@ -3,7 +3,6 @@ package com.example.myapplication.ui.home.updates
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.draggable
@@ -17,6 +16,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -41,7 +41,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -52,6 +51,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import coil3.compose.AsyncImage
@@ -60,11 +60,16 @@ import coil3.request.crossfade
 import coil3.size.Size
 import com.example.myapplication.data.models.AnimeUpdate
 import com.example.myapplication.isAppInDarkTheme
+import com.example.myapplication.ui.shared.FrostedMaterial
+import com.example.myapplication.ui.shared.FrostedMaterials
+import com.example.myapplication.ui.shared.frostedGlass
 import com.example.myapplication.ui.shared.theme.MotionTokens
+import com.kyant.backdrop.Backdrop
 import kotlinx.coroutines.launch
 import java.io.File
 import java.util.Locale
 import kotlin.math.abs
+import kotlin.math.roundToInt
 import kotlin.math.sign
 
 // ==========================================
@@ -72,8 +77,13 @@ import kotlin.math.sign
 // Одна карточка — одиночный баннер; несколько — стопка, где старые выглядывают
 // снизу (уже и ниже), как сложенные уведомления на iPhone.
 //
-// Фон карточки НЕПРОЗРАЧНЫЙ: верхняя полностью перекрывает стопку, поэтому текст
-// задних карточек не просвечивает (была «каша» на полупрозрачном стекле).
+// Верхняя карточка — матовое стекло (см. FrostedGlass.kt): под плашкой едет список обложек,
+// и диффузия честно показывает, что она лежит ПОВЕРХ контента, а не заменяет его собой.
+//
+// Задние карточки стопки остаются НЕПРОЗРАЧНЫМИ. Это не упрощение, а требование читаемости:
+// сквозь полупрозрачную стопку просвечивал текст нижних карточек и превращался в кашу. Набор
+// модификаторов у них при этом тот же — меняется только материал, иначе смена верхней карточки
+// перестраивала бы цепочку узлов на живом компоненте и роняла запись бэкдропа.
 //
 // Кнопок нет: серии проставляются автоматически, карточка только сообщает о выходе.
 // Тап по плашке = открыть Details тайтла; свайп верхней влево/вправо = смахнуть.
@@ -85,7 +95,6 @@ private const val VISIBLE_BACK_CARDS = 2
 private const val BACK_SCALE_STEP = 0.05f
 private val CARD_HEIGHT = 76.dp
 private val BACK_PEEK = 9.dp
-private val CARD_SHADOW = 14.dp
 /** Доля ширины карточки, после которой отпущенный свайп засчитывается как отказ. */
 private const val SWIPE_DISMISS_FRACTION = 0.32f
 
@@ -95,17 +104,19 @@ fun EpisodeUpdateStack(
     coverPathFor: (animeId: String) -> String?,
     onOpen: (AnimeUpdate) -> Unit,
     onDismiss: (AnimeUpdate) -> Unit,
+    /** Живая запись сцены под плашкой — то, что матовое стекло размывает. */
+    backdrop: Backdrop,
     modifier: Modifier = Modifier,
 ) {
     val scope = rememberCoroutineScope()
     val density = LocalDensity.current
     val isDark = isAppInDarkTheme()
 
-    // iOS-палитра: непрозрачные карточки, мягкая тень, брендовый оранжевый акцент.
-    val cardColor = if (isDark) Color(0xFF1C1C1E) else Color.White
+    // iOS-палитра: брендовый оранжевый акцент, текст под цвет темы.
     val onCard = if (isDark) Color.White else Color(0xFF1C1C1E)
-    val hairline = if (isDark) Color.White.copy(alpha = 0.08f) else Color.Black.copy(alpha = 0.06f)
     val accent = Color(0xFFE85002)
+    val topMaterial = FrostedMaterials.notification()
+    val stackedMaterial = FrostedMaterials.stackedNotification()
 
     // Улетевшие, но ещё не удалённые из БД карточки: скрываем до обновления Flow.
     val departedIds: SnapshotStateList<String> = remember { mutableStateListOf() }
@@ -213,9 +224,17 @@ fun EpisodeUpdateStack(
                     Box(
                         modifier = gestureModifier
                             .zIndex((100 - index).toFloat())
+                            // Сдвиг — через offset (раскладкой), а НЕ через translation в
+                            // graphicsLayer: стекло сэмплит бэкдроп по положению узла, и сдвиг
+                            // слоем роняет его в плоскую заливку — известные грабли этой
+                            // кодовой базы (см. тот же приём у дока рабочей области).
+                            .offset {
+                                IntOffset(
+                                    x = if (isTop) offsetX.value.roundToInt() else 0,
+                                    y = translateY.roundToInt(),
+                                )
+                            }
                             .graphicsLayer {
-                                translationX = if (isTop) offsetX.value else 0f
-                                translationY = translateY
                                 scaleX = scale
                                 scaleY = scale
                                 rotationZ = if (isTop) {
@@ -230,9 +249,9 @@ fun EpisodeUpdateStack(
                             // Memo: resolve пути идёт в БД, а стопка рекомпозируется каждый кадр драга.
                             coverPath = remember(update.animeId) { coverPathFor(update.animeId) },
                             isDark = isDark,
-                            cardColor = cardColor,
+                            backdrop = backdrop,
+                            material = if (isTop) topMaterial else stackedMaterial,
                             onCard = onCard,
-                            hairline = hairline,
                             accent = accent,
                             dimmed = !isTop,
                             clickEnabled = isTop && !departing,
@@ -254,9 +273,9 @@ private fun EpisodeUpdateCard(
     update: AnimeUpdate,
     coverPath: String?,
     isDark: Boolean,
-    cardColor: Color,
+    backdrop: Backdrop,
+    material: FrostedMaterial,
     onCard: Color,
-    hairline: Color,
     accent: Color,
     dimmed: Boolean,
     clickEnabled: Boolean,
@@ -268,10 +287,10 @@ private fun EpisodeUpdateCard(
         modifier = Modifier
             .fillMaxWidth()
             .height(CARD_HEIGHT)
-            .shadow(CARD_SHADOW, tileShape, clip = false)
+            // Тень, кант и подсветка живут внутри материала: отдельный `shadow` поверх стекла
+            // рисовал бы вторую тень по тому же контуру.
             .clip(tileShape)
-            .background(cardColor)
-            .border(1.dp, hairline, tileShape)
+            .frostedGlass(backdrop = backdrop, shape = tileShape, material = material)
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,

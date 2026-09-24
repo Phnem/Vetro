@@ -54,3 +54,6 @@ __pycache__/
 /katana_animation.html
 /.scratch/vetro_readme_audit.png
 /Screen_Recording_20260730_153543_Pinterest.mp4
+
+# graft's local graph cache — regenerable, not committed (run `graft build`).
+/graft/

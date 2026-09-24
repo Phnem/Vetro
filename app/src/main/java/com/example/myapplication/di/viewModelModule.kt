@@ -114,6 +114,7 @@ val viewModelModule = module {
             webLinksStore = get(),
             seasonEpisodesStore = get(),
             seasonEpisodesResolver = get(),
+            seasonCatchUp = get(),
         )
     }
     // Local player (isolated feature — remove to unwire it).

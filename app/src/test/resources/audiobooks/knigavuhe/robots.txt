@@ -1,0 +1,18 @@
+User-agent: *
+Disallow: /letter/
+Disallow: /authors/letter/
+Disallow: /readers/letter/
+Disallow: /setdesign/
+Clean-param: button /search/
+Clean-param: any_word /search/
+Clean-param: __lredir /
+Clean-param: __lredir_from /
+Clean-param: promo /
+Clean-param: _noredir /
+Clean-param: from /paid/
+Clean-param: utm_source /
+Clean-param: utm_medium /
+Clean-param: utm_campaign /
+Clean-param: utm_term /
+Clean-param: utm_content /
+Host: https://knigavuhe.org/

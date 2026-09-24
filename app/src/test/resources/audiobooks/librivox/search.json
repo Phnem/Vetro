@@ -1,0 +1,59 @@
+{
+  "books": [
+    {
+      "id": "830",
+      "title": "Allan Quatermain",
+      "url_text_source": "https://www.gutenberg.org/etext/711",
+      "language": "English",
+      "copyright_year": "1887",
+      "num_sections": "25",
+      "url_rss": "https://librivox.org/rss/830",
+      "url_zip_file": "https://archive.org/compress/allan_quatermain_librivox/formats=64KBPS MP3&file=/allan_quatermain_librivox.zip",
+      "url_project": "https://en.wikipedia.org/wiki/Allan_Quatermain_(novel)",
+      "url_librivox": "https://librivox.org/allan-quatermain-by-h-rider-haggard",
+      "url_other": "",
+      "totaltime": "13:07:04",
+      "totaltimesecs": 47224,
+      "authors": [
+        {
+          "id": "171",
+          "first_name": "H. Rider",
+          "last_name": "Haggard",
+          "dob": "1856",
+          "dod": "1925"
+        }
+      ]
+    },
+    {
+      "id": "1181",
+      "title": "All Round the Year",
+      "url_text_source": "https://www.gutenberg.org/etext/20404",
+      "language": "English",
+      "copyright_year": "1880",
+      "num_sections": "1",
+      "url_rss": "https://librivox.org/rss/1181",
+      "url_zip_file": "https://archive.org/compress/all_round_the_year_librivox/formats=64KBPS MP3&file=/all_round_the_year_librivox.zip",
+      "url_project": "",
+      "url_librivox": "https://librivox.org/all-round-the-year-by-e-nesbit-and-s-nesbit/",
+      "url_other": "",
+      "totaltime": "0:12:48",
+      "totaltimesecs": 768,
+      "authors": [
+        {
+          "id": "24",
+          "first_name": "E.",
+          "last_name": "Nesbit",
+          "dob": "1858",
+          "dod": "1924"
+        },
+        {
+          "id": "6245",
+          "first_name": "Saretta",
+          "last_name": "Nesbit",
+          "dob": "1844",
+          "dod": "1899"
+        }
+      ]
+    }
+  ]
+}

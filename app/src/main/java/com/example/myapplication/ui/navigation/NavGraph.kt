@@ -3,6 +3,8 @@ package com.example.myapplication.ui.navigation
 import androidx.compose.animation.EnterExitState
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionLayout
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateDp
 import androidx.compose.animation.core.tween
@@ -16,6 +18,7 @@ import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
+import androidx.navigation.NavBackStackEntry
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
@@ -43,6 +46,8 @@ import com.example.myapplication.ui.settings.SettingsScreen
 import com.example.myapplication.ui.settings.SettingsViewModel
 import com.example.myapplication.ui.splash.SplashViewModel
 import com.example.myapplication.ui.workspace.WorkspaceScreen
+import com.example.myapplication.audiobooks.ui.AudiobookPlayerHost
+import androidx.media3.common.util.UnstableApi
 import com.example.myapplication.ui.splash.VetroSplashScreen
 import com.example.myapplication.utils.getStrings
 import com.example.myapplication.utils.getWelcomeStrings
@@ -66,7 +71,48 @@ private fun splashEnterZoom() =
             animationSpec = tween(SplashZoomMillis, easing = FastOutSlowInEasing),
         )
 
-@OptIn(ExperimentalSharedTransitionApi::class)
+/**
+ * Окно из меню ТТМ вырастает из гнезда «Ещё» и схлопывается обратно в него — это shared-bounds
+ * морф самих экранов (см. WorkspaceDock и корни InspectScreen / AddEditScreen). Переход маршрута
+ * отвечает только за то, что лежит ВНЕ морфа (фон и плавающие кнопки формы): это содержимое, и
+ * по §5 спеки оно проявляется, когда оболочка почти раскрылась, а гаснет первым.
+ */
+private fun workspaceModalEnter() =
+    fadeIn(
+        animationSpec = tween(
+            durationMillis = MotionTokens.EaseEnterMillis,
+            delayMillis = MotionTokens.WindowContentRevealDelayMillis,
+            easing = MotionTokens.EaseEnter,
+        ),
+    )
+
+private fun workspaceModalExit() =
+    fadeOut(animationSpec = tween(MotionTokens.EaseExitMillis, easing = MotionTokens.EaseExit))
+
+/**
+ * Главная под окном из меню только притухает, без «вдавливания»: гнездо, в которое окно
+ * схлопнется, лежит на ней, и масштаб главной сдвинул бы цель посреди полёта.
+ */
+private fun homeDimExit() =
+    fadeOut(animationSpec = tween(300, easing = MotionTokens.EaseExit), targetAlpha = 0.55f)
+
+private fun homeDimPopEnter() =
+    fadeIn(animationSpec = tween(220, easing = MotionTokens.EaseEnter), initialAlpha = 0.55f)
+
+/** «Вдавливание» главной под экраном поверх неё (физика IosSheetScaffold). */
+private fun homeDepressExit() =
+    scaleOut(
+        targetScale = 0.92f,
+        animationSpec = MotionTokens.sheetPresent(),
+    ) + fadeOut(animationSpec = tween(300), targetAlpha = 0.55f)
+
+private fun homeDepressPopEnter() =
+    scaleIn(
+        initialScale = 0.92f,
+        animationSpec = MotionTokens.sheetDismissForced(),
+    ) + fadeIn(animationSpec = tween(220), initialAlpha = 0.55f)
+
+@OptIn(ExperimentalSharedTransitionApi::class, UnstableApi::class)
 @Composable
 fun AppNavGraph(
     navController: NavHostController,
@@ -84,7 +130,14 @@ fun AppNavGraph(
         homeViewModel.scheduleBackgroundWork(context)
     }
 
+    // Модальные переходы нужны только рабочей области: в старом доке у тех же экранов есть
+    // пара для shared-bounds морфа. Флаг читается из StateFlow в момент перехода, а не подпиской —
+    // граф не должен перекомпоновываться на каждое изменение настроек.
+    fun workspaceModal(entry: NavBackStackEntry) =
+        settingsViewModel.uiState.value.devSelectDockNavigation && entry.isWorkspaceModal()
+
     SharedTransitionLayout {
+        Box(Modifier.fillMaxSize()) {
         NavHost(
             navController = navController,
             startDestination = startDestination
@@ -220,19 +273,17 @@ fun AppNavGraph(
                 // и слегка гаснет, при закрытии деталей — физично возвращается. Predictive
                 // back сикает popEnter — возврат следует за пальцем.
                 exitTransition = {
-                    if (targetState.destination.isDetailsDestination()) {
-                        scaleOut(
-                            targetScale = 0.92f,
-                            animationSpec = MotionTokens.sheetPresent(),
-                        ) + fadeOut(animationSpec = tween(300), targetAlpha = 0.55f)
-                    } else null
+                    when {
+                        targetState.destination.isDetailsDestination() -> homeDepressExit()
+                        workspaceModal(targetState) -> homeDimExit()
+                        else -> null
+                    }
                 },
                 popEnterTransition = {
                     if (initialState.destination.isDetailsDestination()) {
-                        scaleIn(
-                            initialScale = 0.92f,
-                            animationSpec = MotionTokens.sheetDismissForced(),
-                        ) + fadeIn(animationSpec = tween(220), initialAlpha = 0.55f)
+                        homeDepressPopEnter()
+                    } else if (workspaceModal(initialState)) {
+                        homeDimPopEnter()
                     } else if (initialState.destination.isSplashDestination()) {
                         splashEnterZoom()
                     } else {
@@ -248,7 +299,6 @@ fun AppNavGraph(
                     WorkspaceScreen(
                         navController = navController,
                         homeViewModel = homeViewModel,
-                        inspectViewModel = inspectViewModel,
                         settingsViewModel = settingsViewModel,
                         sharedTransitionScope = this@SharedTransitionLayout,
                         animatedVisibilityScope = this,
@@ -292,7 +342,10 @@ fun AppNavGraph(
                 )
             }
 
-            composable<AddEditRoute> { backStackEntry ->
+            composable<AddEditRoute>(
+                enterTransition = { if (workspaceModal(targetState)) workspaceModalEnter() else null },
+                popExitTransition = { if (workspaceModal(initialState)) workspaceModalExit() else null },
+            ) { backStackEntry ->
                 val route = backStackEntry.toRoute<AddEditRoute>()
                 AddEditScreen(
                     navController = navController,
@@ -315,7 +368,10 @@ fun AppNavGraph(
                 )
             }
 
-            composable<InspectRoute> {
+            composable<InspectRoute>(
+                enterTransition = { if (workspaceModal(targetState)) workspaceModalEnter() else null },
+                popExitTransition = { if (workspaceModal(initialState)) workspaceModalExit() else null },
+            ) {
                 InspectScreen(
                     navController = navController,
                     viewModel = inspectViewModel,
@@ -325,6 +381,9 @@ fun AppNavGraph(
                 )
             }
 
+        }
+        val audiobookLanguage by homeViewModel.uiLanguage.collectAsStateWithLifecycle()
+        AudiobookPlayerHost(audiobookLanguage)
         }
     }
 }

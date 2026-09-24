@@ -69,7 +69,24 @@ class SeasonEpisodesStore(context: Context) {
     suspend fun put(entry: SeasonEpisodesEntry) {
         ensureLoaded()
         mutex.withLock {
-            val map = _flow.value.toMutableMap().apply { put(entry.animeId, entry) }
+            // Отметка о догоне принадлежит тайтлу, а не конкретному резолву: резолвер и
+            // discovery собирают запись с нуля и о ней не знают, а затереть её нулём значит
+            // снять паузу и пустить каскад по кругу.
+            val kept = _flow.value[entry.animeId]?.lastCatchUpAt ?: 0L
+            val merged = if (entry.lastCatchUpAt == 0L) entry.copy(lastCatchUpAt = kept) else entry
+            val map = _flow.value.toMutableMap().apply { put(entry.animeId, merged) }
+            _flow.value = map
+            persist(map)
+        }
+    }
+
+    /** Отметить, что догон расклада по тайтлу только что запускался (см. [SeasonEpisodesEntry.lastCatchUpAt]). */
+    suspend fun markCatchUp(animeId: String, atMillis: Long = System.currentTimeMillis()) {
+        ensureLoaded()
+        mutex.withLock {
+            val entry = _flow.value[animeId] ?: return
+            val map = _flow.value.toMutableMap()
+                .apply { put(animeId, entry.copy(lastCatchUpAt = atMillis)) }
             _flow.value = map
             persist(map)
         }

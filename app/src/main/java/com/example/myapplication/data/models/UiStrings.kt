@@ -299,6 +299,17 @@ data class NotificationStrings(
     val notifUpdateBodyFormat: String,
     /** Сводка группы: "%d обновлений серий" */
     val notifGroupSummaryFormat: String,
+    /** Системные уведомления о новых главах манги — отдельный канал от серий. */
+    val notifMangaChannelName: String,
+    val notifMangaChannelDesc: String,
+    /** "Новая глава: %s" */
+    val notifMangaTitleFormat: String,
+    /** "+%1$d гл. · последняя %2$s" */
+    val notifMangaBodyFormat: String,
+    /** "+%d новых глав" — когда номер последней главы неизвестен. */
+    val notifMangaBodyCountFormat: String,
+    /** Сводка группы: "Новые главы: %d" */
+    val notifMangaGroupSummaryFormat: String,
     /** Метрика последнего sync: успешные операции / ошибки / всего (AssistChip). */
     val nottifSyncChipSynced: String,
     val nottifSyncChipErrors: String,

@@ -114,6 +114,8 @@ private fun mergeSettingsUi(
         autoNextEpisode = prefs[LocalPlayerViewModel.AUTO_NEXT_KEY] ?: true,
         devAdaptiveGlassScroll = prefs[DevPreferencesKeys.ADAPTIVE_GLASS_SCROLL] ?: false,
         devSelectDockNavigation = prefs[DevPreferencesKeys.SELECT_DOCK_NAVIGATION] ?: false,
+        devGlassCapsuleDock = prefs[DevPreferencesKeys.GLASS_CAPSULE_DOCK] ?: false,
+        devStagedSheetMotion = prefs[DevPreferencesKeys.STAGED_SHEET_MOTION] ?: false,
         devGithubUpdatesEnabled = githubUpdatesEnabled,
         isExportingLogs = t.isExportingLogs,
         isExportingPdf = t.isExportingPdf,
@@ -334,6 +336,18 @@ class SettingsViewModel(
     fun setDevSelectDockNavigation(enabled: Boolean) {
         viewModelScope.launch {
             settingsDataStore.edit { it[DevPreferencesKeys.SELECT_DOCK_NAVIGATION] = enabled }
+        }
+    }
+
+    fun setDevGlassCapsuleDock(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsDataStore.edit { it[DevPreferencesKeys.GLASS_CAPSULE_DOCK] = enabled }
+        }
+    }
+
+    fun setDevStagedSheetMotion(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsDataStore.edit { it[DevPreferencesKeys.STAGED_SHEET_MOTION] = enabled }
         }
     }
 

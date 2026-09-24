@@ -44,6 +44,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import com.example.myapplication.ui.shared.components.FormatCategoryTile
 import com.example.myapplication.ui.shared.components.GrabberHandle
+import com.example.myapplication.ui.shared.components.MotionBottomSheet
 import com.example.myapplication.ui.shared.components.rememberIosSheetSwipe
 import com.example.myapplication.ui.shared.components.IosRow
 import com.example.myapplication.ui.shared.components.IosRowDivider
@@ -156,43 +157,17 @@ fun MediaTypeFilterOverlay(
     )
 
     Box(modifier = Modifier.fillMaxSize()) {
-        AnimatedVisibility(
+        // Шторка выезжает снизу и уходит вниз; физика и хореография — в MotionBottomSheet.
+        MotionBottomSheet(
             visibleState = visibleState,
-            enter = fadeIn(tween(200)),
-            exit = fadeOut(tween(150)),
-        ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.4f))
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null,
-                    ) { onDismiss() },
-            )
-        }
-
-        AnimatedVisibility(
-            visibleState = visibleState,
-            enter = slideInVertically(
-                initialOffsetY = { it },
-                animationSpec = MotionTokens.sheetPresent(),
-            ) + fadeIn(),
-            exit = slideOutVertically(
-                targetOffsetY = { it },
-                animationSpec = MotionTokens.sheetDismissForced(),
-            ) + fadeOut(),
-            modifier = Modifier.align(Alignment.BottomCenter),
+            onDismiss = onDismiss,
+            isDark = isDark,
+            swipe = swipe,
+            panelModifier = Modifier.fillMaxWidth(),
+            scrimAlpha = 0.4f,
         ) {
             Column(
                 modifier = Modifier
-                    .then(swipe.panelModifier)
-                    .fillMaxWidth()
-                    .iosSheetContainer(
-                        SquircleCornerShape(IosDesign.SheetCorner, IosDesign.SheetCorner, 0.dp, 0.dp),
-                        isDark,
-                        IosDesign.sheetSurface(isDark),
-                    )
                     .navigationBarsPadding()
                     .padding(bottom = 12.dp),
             ) {

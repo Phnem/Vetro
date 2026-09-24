@@ -1,0 +1,75 @@
+{
+  "capturedAt": "2026-09-23",
+  "kind": "search",
+  "url": "https://audioaz.com/en/search?q=the+time+machine",
+  "title": "Search Results for \"the time machine\" | AudioAZ | AudioAZ.com 🎧📚",
+  "canonical": "https://audioaz.com/en/search",
+  "headings": [
+    "Free Apps",
+    "Search",
+    "Search Results for \"the time machine\""
+  ],
+  "ogImageHost": null,
+  "forms": [
+    {
+      "action": "https://audioaz.com/en/search",
+      "method": "GET",
+      "inputs": [
+        "q"
+      ]
+    },
+    {
+      "action": "https://audioaz.com/en/search",
+      "method": "GET",
+      "inputs": [
+        "q"
+      ]
+    }
+  ],
+  "sampleLinks": [
+    {
+      "url": "https://audioaz.com/en/audiobooks?page=1&sort=popular",
+      "text": "Popular"
+    },
+    {
+      "url": "https://audioaz.com/en/audiobook/the-time-machine-by-hg-wells",
+      "text": "audiobook"
+    },
+    {
+      "url": "https://audioaz.com/en/audiobook/the-time-machine-version-2-by-h-g-wells",
+      "text": "audiobook"
+    },
+    {
+      "url": "https://audioaz.com/en/audiobook/the-time-machine-v3-by-h-g-wells",
+      "text": "audiobook"
+    },
+    {
+      "url": "https://audioaz.com/en/audiobook/the-time-machine-by-h-g-wells-2",
+      "text": "audiobook"
+    },
+    {
+      "url": "https://audioaz.com/en/audiobook/the-time-machine-version-5-by-h-g-wells",
+      "text": "audiobook"
+    },
+    {
+      "url": "https://audioaz.com/en/audiobook/the-time-machine-version-6-by-h-g-wells",
+      "text": "audiobook"
+    },
+    {
+      "url": "https://audioaz.com/en/audiobook/the-time-machine-version-7-by-h-g-wells",
+      "text": "audiobook"
+    },
+    {
+      "url": "https://audioaz.com/en/page/audiobooks-app",
+      "text": "App"
+    }
+  ],
+  "mediaElementCount": 0,
+  "sourceElementCount": 0,
+  "mediaUrlCount": 0,
+  "mediaHosts": [],
+  "jsonLdCount": 2,
+  "restrictionEvidence": [],
+  "htmlBytes": 180469,
+  "note": "Compact structural fixture. Media URLs, descriptions and page scripts intentionally omitted."
+}

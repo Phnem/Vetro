@@ -1,0 +1,19 @@
+User-agent: *
+Disallow: /book/*/download
+Disallow: /book/*/part
+Disallow: /book/*/full
+Disallow: /book/*/rate
+Disallow: /api/
+Disallow: /login
+Disallow: /register
+Disallow: /password/
+Disallow: /profile
+Disallow: /settings
+Disallow: /favorites
+Disallow: /history
+Disallow: /books/
+Disallow: /logout
+
+Clean-param: sort&dir
+
+Sitemap: https://aknigi24.com/sitemap.xml

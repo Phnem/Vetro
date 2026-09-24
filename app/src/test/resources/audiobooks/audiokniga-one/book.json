@@ -1,0 +1,104 @@
+{
+  "capturedAt": "2026-09-23",
+  "kind": "book",
+  "url": "https://audiokniga.one/17630-sbornik-radiopostanovok-1.html",
+  "title": "Сборник радиопостановок № 1 — Антон Чехов — слушать онлайн",
+  "canonical": "https://audiokniga.one/17630-sbornik-radiopostanovok-1.html",
+  "headings": [
+    "Сборник радиопостановок № 1",
+    "Аудиокнига «Сборник радиопостановок № 1». Автор - Антон Чехов. Аннотация:",
+    "Все книги цикла «Сборник радиопостановок А. Чехова»"
+  ],
+  "ogImageHost": "images.audiokniga.one",
+  "forms": [
+    {
+      "action": "https://audiokniga.one/",
+      "method": "GET",
+      "inputs": [
+        "do",
+        "subaction",
+        "story"
+      ]
+    },
+    {
+      "action": "https://audiokniga.one/17630-sbornik-radiopostanovok-1.html",
+      "method": "POST",
+      "inputs": [
+        "name",
+        "g_recaptcha_response",
+        "g-recaptcha-response",
+        "subaction",
+        "post_id",
+        "user_hash"
+      ]
+    },
+    {
+      "action": "https://audiokniga.one/17630-sbornik-radiopostanovok-1.html",
+      "method": "POST",
+      "inputs": [
+        "login_name",
+        "login_password",
+        "login_not_save",
+        "login"
+      ]
+    }
+  ],
+  "sampleLinks": [
+    {
+      "url": "https://audiokniga.one/",
+      "text": "Audio Kniga .one"
+    },
+    {
+      "url": "https://audiokniga.one/genres.html",
+      "text": "Жанры"
+    },
+    {
+      "url": "https://audiokniga.one/xfsearch/avtor/",
+      "text": "Авторы"
+    },
+    {
+      "url": "https://audiokniga.one/xfsearch/ispolnitel/",
+      "text": "Исполнители"
+    },
+    {
+      "url": "https://audiokniga.one/pravoobladateljam.html",
+      "text": "Правообладателям"
+    },
+    {
+      "url": "https://audiokniga.one/feed/",
+      "text": "Лента"
+    },
+    {
+      "url": "https://audiokniga.one/random.html",
+      "text": "Случайная аудиокнига"
+    },
+    {
+      "url": "https://audiokniga.one/books-history/",
+      "text": "Моя история"
+    },
+    {
+      "url": "https://audiokniga.one/favorites/",
+      "text": "Книжная полка"
+    },
+    {
+      "url": "https://audiokniga.one/24952-ispytano-na-sebe.html",
+      "text": "Испытано на себе Ник Перумов Фантастика"
+    },
+    {
+      "url": "https://audiokniga.one/24951-prokljatie-berezovki.html",
+      "text": "Проклятие Берёзовки Ирина Семакина Мистика, ужасы"
+    },
+    {
+      "url": "https://audiokniga.one/24950-extremis-malis-extrema-remedia.html",
+      "text": "Extremis malis, extrema remedia Юлия Олейник Фантастика, ужасы"
+    }
+  ],
+  "mediaElementCount": 1,
+  "sourceElementCount": 0,
+  "mediaUrlCount": 0,
+  "mediaHosts": [],
+  "jsonLdCount": 2,
+  "restrictionEvidence": [],
+  "htmlBytes": 83459,
+  "note": "Compact structural fixture. Media URLs, descriptions and page scripts intentionally omitted."
+}

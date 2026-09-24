@@ -1,0 +1,82 @@
+{
+  "capturedAt": "2026-09-23",
+  "kind": "book",
+  "url": "https://goldenaudiobooks.com/ernest-cline-ready-player-one-audio-book/",
+  "title": "Ernest Cline - Ready Player One Audiobook (Free Online)",
+  "canonical": "https://goldenaudiobooks.com/ernest-cline-ready-player-one-audio-book/",
+  "headings": [
+    "Ernest Cline – Ready Player One Audiobook",
+    "Post navigation"
+  ],
+  "ogImageHost": "goldenaudiobooks.com",
+  "forms": [
+    {
+      "action": "https://goldenaudiobooks.com/",
+      "method": "GET",
+      "inputs": [
+        "s",
+        "id"
+      ]
+    }
+  ],
+  "sampleLinks": [
+    {
+      "url": "https://goldenaudiobooks.com/ernest-cline-ready-player-one-audio-book/#site-main",
+      "text": "Skip to content"
+    },
+    {
+      "url": "https://goldenaudiobooks.com/",
+      "text": "Goldenaudiobooks"
+    },
+    {
+      "url": "https://goldenaudiobooks.com",
+      "text": "Home"
+    },
+    {
+      "url": "https://goldenaudiobooks.com/category/bestsellers/",
+      "text": "Bestsellers"
+    },
+    {
+      "url": "https://goldenaudiobooks.com/category/action/",
+      "text": "Action"
+    },
+    {
+      "url": "https://goldenaudiobooks.com/category/audio-fantasy/",
+      "text": "Fantasy"
+    },
+    {
+      "url": "https://goldenaudiobooks.com/ernest-cline-ready-player-one-audiobook-free-online/",
+      "text": "Ready Player One"
+    },
+    {
+      "url": "https://goldenaudiobooks.com/ready-player-two/",
+      "text": "Ready Player Two"
+    },
+    {
+      "url": "https://goldenaudiobooks.com/?s=harry+potter",
+      "text": "Harry Potter"
+    },
+    {
+      "url": "https://goldenaudiobooks.com/?s=harry+potter+jim+dale",
+      "text": "Jim Dale"
+    },
+    {
+      "url": "https://goldenaudiobooks.com/?s=harry+potter+stephen+fry",
+      "text": "Stephen Fry"
+    },
+    {
+      "url": "https://goldenaudiobooks.com/?s=shades+",
+      "text": "Fifty Shades"
+    }
+  ],
+  "mediaElementCount": 16,
+  "sourceElementCount": 16,
+  "mediaUrlCount": 48,
+  "mediaHosts": [
+    "ipaudio.club"
+  ],
+  "jsonLdCount": 1,
+  "restrictionEvidence": [],
+  "htmlBytes": 87109,
+  "note": "Compact structural fixture. Media URLs, descriptions and page scripts intentionally omitted."
+}

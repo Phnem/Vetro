@@ -9,8 +9,11 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.graphics.drawable.Icon
+import android.os.Build
 import android.util.Rational
+import androidx.activity.ComponentActivity
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
 import com.phnem.vetro.R
 
 /**
@@ -36,6 +39,46 @@ data class PipPlaybackCommands(
  */
 interface PipHostActivity {
     fun updatePipCommands(commands: PipPlaybackCommands?)
+}
+
+/**
+ * Закрыли ли PiP-окно крестиком — в отличие от разворота обратно в полный экран.
+ *
+ * Отдельного колбэка на крестик система не даёт: оба исхода приходят одним и тем же
+ * `onPictureInPictureModeChanged(false)`. Различает их состояние жизненного цикла. Развёрнутая
+ * активити к этому моменту снова видима (STARTED и выше), закрытую — остановили, и она осталась
+ * в CREATED.
+ */
+fun ComponentActivity.pipWindowWasClosed(isInPictureInPictureMode: Boolean): Boolean =
+    !isInPictureInPictureMode && !lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)
+
+/**
+ * Реакция плеер-активити на закрытие PiP-окна.
+ *
+ * Активити после крестика остаётся жива: её всего лишь остановили, а ExoPlayer внутри продолжает
+ * играть — пользователь закрыл окно и слушает серию в фоне. Достаточно довести активити до конца:
+ * плеер освобождается там же, где и создавался, на разборке композиции.
+ */
+fun ComponentActivity.finishIfPipWindowClosed(isInPictureInPictureMode: Boolean) {
+    if (pipWindowWasClosed(isInPictureInPictureMode) && !isFinishing) finish()
+}
+
+/**
+ * Та же развязка, но со стороны `onStop()` — на случай прошивки с другим порядком колбэков.
+ *
+ * Различение по жизненному циклу выше опирается на то, что к приходу
+ * `onPictureInPictureModeChanged(false)` активити уже остановлена. Контрактом это не закреплено,
+ * это наблюдаемое поведение AOSP, и прошивка, зовущая колбэк ДО `onStop()`, вернула бы исходную
+ * ошибку — серия играет в фоне, и никакого признака этого в коде нет. Проверка в `onStop()`
+ * ловит оба порядка и стоит одного сравнения.
+ *
+ * @param wasInPip была ли активити в PiP хоть раз за свою жизнь; экран, в PiP не уходивший,
+ *   закрывать по уходу в фон нельзя — это обычное переключение приложений.
+ */
+fun ComponentActivity.finishIfStoppedOutsidePip(wasInPip: Boolean) {
+    if (!wasInPip || isFinishing || isChangingConfigurations) return
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && isInPictureInPictureMode) return
+    finish()
 }
 
 /**

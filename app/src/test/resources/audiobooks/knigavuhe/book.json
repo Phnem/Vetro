@@ -1,0 +1,86 @@
+{
+  "capturedAt": "2026-09-23",
+  "kind": "book",
+  "url": "https://knigavuhe.org/book/khameleon-5/",
+  "title": "Хамелеон (слушать аудиокнигу бесплатно) - автор Антон Чехов, читает Александр Водяной",
+  "canonical": "https://knigavuhe.org/book/khameleon-5/",
+  "headings": [
+    "Хамелеон автор Антон Чехов читает Александр Водяной",
+    "Аудиокниги слушать онлайн"
+  ],
+  "ogImageHost": "s1.knigavuhe.org",
+  "forms": [
+    {
+      "action": "https://knigavuhe.org/search/",
+      "method": "GET",
+      "inputs": [
+        "q"
+      ]
+    },
+    {
+      "action": "https://knigavuhe.org/book/khameleon-5/",
+      "method": "GET",
+      "inputs": [
+        "token"
+      ]
+    }
+  ],
+  "sampleLinks": [
+    {
+      "url": "https://knigavuhe.org/setdesign/new/?f=%2Fbook%2Fkhameleon-5%2F&theme=dark",
+      "text": "Тёмная тема в новом дизайне"
+    },
+    {
+      "url": "https://knigavuhe.org/login/",
+      "text": "Войти на сайт"
+    },
+    {
+      "url": "https://knigavuhe.org/genres/",
+      "text": "Жанры"
+    },
+    {
+      "url": "https://knigavuhe.org/authors/",
+      "text": "Авторы"
+    },
+    {
+      "url": "https://knigavuhe.org/readers/",
+      "text": "Исполнители"
+    },
+    {
+      "url": "https://knigavuhe.org/genre/klassika/",
+      "text": "Классика"
+    },
+    {
+      "url": "https://knigavuhe.org/author/anton-chekhov/",
+      "text": "Антон Чехов"
+    },
+    {
+      "url": "https://knigavuhe.org/reader/vodjanojj-aleksandr/",
+      "text": "Александр Водяной"
+    },
+    {
+      "url": "https://knigavuhe.org/book/khameleon/",
+      "text": "Хамелеон"
+    },
+    {
+      "url": "https://knigavuhe.org/reader/abdullaev-dzhakhangir/",
+      "text": "Джахангира Абдуллаева"
+    },
+    {
+      "url": "https://knigavuhe.org/book/khameleon-1/",
+      "text": "Хамелеон"
+    },
+    {
+      "url": "https://knigavuhe.org/reader/atim/",
+      "text": "A.Tim"
+    }
+  ],
+  "mediaElementCount": 0,
+  "sourceElementCount": 0,
+  "mediaUrlCount": 0,
+  "mediaHosts": [],
+  "jsonLdCount": 0,
+  "restrictionEvidence": [],
+  "htmlBytes": 50684,
+  "note": "Compact structural fixture. Media URLs, descriptions and page scripts intentionally omitted."
+}

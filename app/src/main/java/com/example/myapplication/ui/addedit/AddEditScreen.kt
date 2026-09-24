@@ -5,6 +5,8 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -130,11 +132,43 @@ fun AddEditScreen(
         drawContent()
     }
 
+    // Новое добавление открывается окном из кнопки: форма идёт своей дорожкой (§5 спеки
+    // движения) — проявляется, когда оболочка почти раскрылась, и гаснет первой при закрытии.
+    // Редактирование из карточки морфит по-своему, его не трогаем.
+    val windowContentAlpha by animatedVisibilityScope.transition.animateFloat(
+        transitionSpec = {
+            if (targetState == EnterExitState.Visible) {
+                tween(
+                    durationMillis = MotionTokens.EaseEnterMillis,
+                    delayMillis = MotionTokens.WindowContentRevealDelayMillis,
+                    easing = MotionTokens.EaseEnter,
+                )
+            } else {
+                tween(MotionTokens.EaseExitMillis, easing = MotionTokens.EaseExit)
+            }
+        },
+        label = "addEditContentAlpha",
+    ) { state -> if (animeId != null || state == EnterExitState.Visible) 1f else 0f }
+
     with(sharedTransitionScope) {
         val sharedModifier = if (animeId == null) {
             Modifier.sharedBounds(
                 rememberSharedContentState(key = "fab_container"),
                 animatedVisibilityScope = animatedVisibilityScope,
+                // Оболочка (фон бэкдропа) видна с первого кадра; уходя, гаснет, пока
+                // схлопывается в кнопку.
+                enter = EnterTransition.None,
+                exit = fadeOut(
+                    tween(
+                        durationMillis = WINDOW_SHELL_FADE_MS,
+                        delayMillis = MotionTokens.EaseExitMillis,
+                        easing = MotionTokens.EaseExit,
+                    ),
+                ),
+                // Открытие: окно — цель, и пружина берётся с его стороны.
+                boundsTransform = { _, _ -> MotionTokens.largeSurfaceEnterBounds },
+                // Remeasure, а не scaleToBounds: внутри лежит layerBackdrop, и его запись при
+                // масштабировании в overlay — та же связка, что роняла Inspect в SIGSEGV.
                 resizeMode = SharedTransitionScope.ResizeMode.RemeasureToBounds,
                 clipInOverlayDuringTransition = OverlayClip(RoundedCornerShape(32.dp))
             )
@@ -171,10 +205,16 @@ fun AddEditScreen(
                         .fillMaxSize()
                         .then(sharedModifier)
                         .clip(RoundedCornerShape(32.dp))
+                        // Оболочка морфа. Фон бэкдропа (`drawRect(bg)`) уходит только в запись
+                        // для стекла, а на экране окно красил внешний Box — ВНЕ shared bounds.
+                        // При закрытии он гас вместе с формой, и в кнопку схлопывалась пустота.
+                        .background(bg)
                         .layerBackdrop(backdrop)
                 ) {
                     Box(
-                        modifier = Modifier.matchParentSize()
+                        modifier = Modifier
+                            .matchParentSize()
+                            .graphicsLayer { alpha = windowContentAlpha }
                     ) {
                         val scrollState = rememberScrollState()
 
@@ -525,3 +565,6 @@ fun AddEditScreen(
         }
     }
 }
+
+/** Оболочка окна гаснет, пока схлопывается в кнопку. */
+private const val WINDOW_SHELL_FADE_MS = 200

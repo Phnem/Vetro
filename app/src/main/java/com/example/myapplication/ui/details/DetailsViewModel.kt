@@ -12,6 +12,7 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import com.example.myapplication.data.local.SeasonEpisodesStore
 import com.example.myapplication.data.local.WebLinksStore
 import com.example.myapplication.domain.enrichment.weblinks.ResolvedWebLink
+import com.example.myapplication.domain.seasons.SeasonCatchUp
 import com.example.myapplication.domain.seasons.SeasonEpisodesResolver
 import com.example.myapplication.domain.seasons.SeasonInfo
 import kotlinx.coroutines.delay
@@ -33,6 +34,7 @@ class DetailsViewModel(
     private val webLinksStore: WebLinksStore,
     private val seasonEpisodesStore: SeasonEpisodesStore,
     private val seasonEpisodesResolver: SeasonEpisodesResolver,
+    private val seasonCatchUp: SeasonCatchUp,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow<DetailsUiState>(DetailsUiState.Idle)
@@ -65,6 +67,11 @@ class DetailsViewModel(
         viewModelScope.launch {
             seasonEpisodesStore.ensureLoaded()
             runCatching { seasonEpisodesResolver.ensureResolved(animeId) }
+            // Пуш сказал «5-я серия 3-го сезона», а в раскладе два сезона — значит он отстал, и
+            // пользователю нечего доказывать это кнопкой «Найти ещё». Проверка дешёвая: сверка
+            // с уже посчитанным прогрессом выходящего сезона, сеть трогается только при
+            // доказанном расхождении.
+            runCatching { seasonCatchUp.catchUp(animeId) }
         }
         viewModelScope.launch {
             val prefs = settingsDataStore.data.first()

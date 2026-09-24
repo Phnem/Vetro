@@ -1,0 +1,88 @@
+{
+  "capturedAt": "2026-09-23",
+  "kind": "restricted",
+  "url": "https://knigavuhe.org/book/kontrapunkt/",
+  "title": "Контрапункт (слушать аудиокнигу бесплатно) - автор Олдос Хаксли",
+  "canonical": "https://knigavuhe.org/book/kontrapunkt/",
+  "headings": [
+    "Контрапункт автор Олдос Хаксли читает Вячеслав Герасимов",
+    "Аудиокниги слушать онлайн"
+  ],
+  "ogImageHost": "s5.knigavuhe.org",
+  "forms": [
+    {
+      "action": "https://knigavuhe.org/search/",
+      "method": "GET",
+      "inputs": [
+        "q"
+      ]
+    },
+    {
+      "action": "https://knigavuhe.org/book/kontrapunkt/",
+      "method": "GET",
+      "inputs": [
+        "token"
+      ]
+    }
+  ],
+  "sampleLinks": [
+    {
+      "url": "https://knigavuhe.org/setdesign/new/?f=%2Fbook%2Fkontrapunkt%2F&theme=dark",
+      "text": "Тёмная тема в новом дизайне"
+    },
+    {
+      "url": "https://knigavuhe.org/login/",
+      "text": "Войти на сайт"
+    },
+    {
+      "url": "https://knigavuhe.org/genres/",
+      "text": "Жанры"
+    },
+    {
+      "url": "https://knigavuhe.org/authors/",
+      "text": "Авторы"
+    },
+    {
+      "url": "https://knigavuhe.org/readers/",
+      "text": "Исполнители"
+    },
+    {
+      "url": "https://knigavuhe.org/genre/roman-proza/",
+      "text": "Роман и проза"
+    },
+    {
+      "url": "https://knigavuhe.org/author/oldos-khaksli/",
+      "text": "Олдос Хаксли"
+    },
+    {
+      "url": "https://knigavuhe.org/reader/gerasimov-vjacheslav/",
+      "text": "Вячеслав Герасимов"
+    },
+    {
+      "url": "https://knigavuhe.org/book/rajj-i-ad/",
+      "text": "Рай и ад Олдос Хаксли Андрей Вильколек"
+    },
+    {
+      "url": "https://knigavuhe.org/book/zavodnojj-apelsin/",
+      "text": "Заводной апельсин Энтони Бёрджесс Константин Третьяков"
+    },
+    {
+      "url": "https://knigavuhe.org/book/izbrannoe-padenie-postoronnijj-chuma/",
+      "text": "Избранное (Падение. Посторонний. Чума) Альбер Камю Вячеслав Задворных"
+    },
+    {
+      "url": "https://knigavuhe.org/book/djavol-nosit-prada/",
+      "text": "Дьявол носит Prada Лорен Вайсбергер Леонтина Броцкая"
+    }
+  ],
+  "mediaElementCount": 0,
+  "sourceElementCount": 0,
+  "mediaUrlCount": 0,
+  "mediaHosts": [],
+  "jsonLdCount": 0,
+  "restrictionEvidence": [
+    "Доступ к аудиокниге ограничен по просьбе правообладателя"
+  ],
+  "htmlBytes": 44133,
+  "note": "Compact structural fixture. Media URLs, descriptions and page scripts intentionally omitted."
+}

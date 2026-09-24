@@ -260,6 +260,8 @@ fun StreamPlayerSurface(
                 fit = fit,
                 skipVisible = !autoSkipEnabled && activeSegment != null,
                 onSkip = skipPlayback.manualSkip,
+                undoOffer = skipPlayback.undoOffer,
+                onUndoSkip = skipPlayback.undoSkip,
                 onBack = onBack,
                 onEnterPip = onEnterPip,
                 onSelectSpeed = {

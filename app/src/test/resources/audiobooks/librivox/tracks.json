@@ -1,0 +1,22 @@
+{
+  "sections": [
+    {
+      "id": "121136",
+      "section_number": "1",
+      "title": "Letter 1",
+      "listen_url": "https://www.archive.org/download/letters_brides_0709_librivox/letters_of_two_brides_01_debalzac_64kb.mp3",
+      "language": "English",
+      "playtime": "1764",
+      "file_name": null
+    },
+    {
+      "id": "121137",
+      "section_number": "2",
+      "title": "Letter 2",
+      "listen_url": "https://www.archive.org/download/letters_brides_0709_librivox/letters_of_two_brides_02_debalzac_64kb.mp3",
+      "language": "English",
+      "playtime": "790",
+      "file_name": null
+    }
+  ]
+}

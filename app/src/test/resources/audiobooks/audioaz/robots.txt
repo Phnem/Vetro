@@ -1,0 +1,51 @@
+# Default rules for all bots
+User-agent: *
+Allow: /
+Disallow: /account*
+Disallow: /video*
+Disallow: /ytb*
+Disallow: /api*
+Disallow: /random
+Disallow: /*?ic=*
+Crawl-delay: 1
+
+# Googlebot specific rules
+User-agent: Googlebot
+Allow: /
+Disallow: /account*
+Disallow: /api*
+Disallow: /random
+Disallow: /*?ic=*
+
+# Bingbot specific rules
+User-agent: Bingbot
+Allow: /
+Disallow: /account*
+Disallow: /api*
+Disallow: /random
+
+# Host
+Host: https://audioaz.com
+
+# Clean-param for Yandex
+Clean-param: type /
+
+# Sitemaps
+Sitemap: https://audioaz.com/sitemap.xml
+Sitemap: https://audioaz.com/en/sitemap/audiobooks.xml
+Sitemap: https://audioaz.com/en/sitemap/podcasts.xml
+Sitemap: https://audioaz.com/en/sitemap/genres.xml
+Sitemap: https://audioaz.com/en/sitemap/authors.xml
+Sitemap: https://audioaz.com/en/sitemap/posts.xml
+Sitemap: https://audioaz.com/vi/sitemap/audiobooks.xml
+Sitemap: https://audioaz.com/vi/sitemap/podcasts.xml
+Sitemap: https://audioaz.com/vi/sitemap/genres.xml
+Sitemap: https://audioaz.com/vi/sitemap/authors.xml
+Sitemap: https://audioaz.com/de/sitemap/audiobooks.xml
+Sitemap: https://audioaz.com/de/sitemap/podcasts.xml
+Sitemap: https://audioaz.com/es/sitemap/audiobooks.xml
+Sitemap: https://audioaz.com/es/sitemap/podcasts.xml
+Sitemap: https://audioaz.com/ru/sitemap/audiobooks.xml
+Sitemap: https://audioaz.com/ru/sitemap/podcasts.xml
+Sitemap: https://audioaz.com/zh/sitemap/audiobooks.xml
+Sitemap: https://audioaz.com/zh/sitemap/podcasts.xml

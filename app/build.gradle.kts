@@ -19,6 +19,9 @@ fun oauthProp(name: String): String =
         ?.takeIf { it.isNotBlank() }
         ?: localProperties.getProperty(name, "")
 
+// Device smoke uses one stable side-by-side package and never replaces the user's Vetro install.
+val audiobookSmokeBuild = providers.gradleProperty("audiobookSmokeBuild").orNull == "true"
+
 sqldelight {
     databases {
         create("AnimeDatabase") {
@@ -41,6 +44,7 @@ android {
 
         buildConfigField("String", "GITHUB_OWNER", "\"Phnem\"")
         buildConfigField("String", "GITHUB_REPO", "\"Vetro-Collection\"")
+        buildConfigField("boolean", "AUDIOBOOKS_ENABLED", "false")
         buildConfigField(
             "String",
             "SHIKIMORI_CLIENT_ID",
@@ -109,7 +113,14 @@ android {
     }
 
     buildTypes {
+        debug {
+            if (audiobookSmokeBuild) applicationIdSuffix = ".ab07smoke"
+        }
         release {
+            if (audiobookSmokeBuild) {
+                applicationIdSuffix = ".ab07smoke"
+                signingConfig = signingConfigs.getByName("debug")
+            }
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(
@@ -176,8 +187,11 @@ dependencies {
     implementation(libs.media3.exoplayer.hls)
     implementation(libs.media3.exoplayer.dash)
     implementation(libs.media3.ui)
+    implementation(libs.media3.ui.compose)
     implementation(libs.media3.session)
+    implementation(libs.media3.inspector)
     implementation(libs.media3.datasource.okhttp)
+    implementation(libs.media3.exoplayer.workmanager)
     implementation(libs.jsoup)
     implementation(libs.androidx.documentfile)
     implementation(libs.androidx.palette)

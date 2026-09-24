@@ -1,5 +1,7 @@
 package com.example.myapplication.ui.shared.theme
 
+import androidx.compose.animation.core.CubicBezierEasing
+import androidx.compose.animation.core.Easing
 import androidx.compose.animation.core.FiniteAnimationSpec
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.SpringSpec
@@ -72,6 +74,40 @@ object MotionTokens {
     /** Попап-диалог: «усадка сверху» 1.15→1.0 с лёгкой ударной физикой. */
     fun <T> dialogPop(): SpringSpec<T> = spring(dampingRatio = 0.75f, stiffness = 500f)
 
+    // ---- Крупные поверхности (UNIVERSAL_MOTION_SPEC.md, §4, закон 4 «Large») -----
+    // Шторки и полноэкранные окна: масса больше, чем у меню, поэтому период у верхней границы
+    // нормативного диапазона. Вход и выход — разные пружины (закон 5).
+
+    /** Появление: T≈0.46 с, ζ 0.92 — перелёт ≈0.1%, на глаз его нет, но ход мягкий. */
+    fun <T> largeSurfaceEnter(): SpringSpec<T> = spring(dampingRatio = 0.92f, stiffness = 186.6f)
+
+    /**
+     * Уход: критическое затухание и ≈60–65% времени входа (T≈0.30 с) — закрытие освобождает
+     * дорогу, а не прощается покачиванием.
+     */
+    fun <T> largeSurfaceExit(): SpringSpec<T> = spring(dampingRatio = 1f, stiffness = 438.6f)
+
+    /** То же для `boundsTransform` окна, вырастающего из кнопки. */
+    val largeSurfaceEnterBounds: SpringSpec<Rect> =
+        spring(dampingRatio = 0.92f, stiffness = 186.6f, visibilityThreshold = Rect.VisibilityThreshold)
+    val largeSurfaceExitBounds: SpringSpec<Rect> =
+        spring(dampingRatio = 1f, stiffness = 438.6f, visibilityThreshold = Rect.VisibilityThreshold)
+
+    /** `EaseEnter` (§4): проявление содержимого, когда оболочка уже набрала площадь. */
+    val EaseEnter: Easing = CubicBezierEasing(0.16f, 1f, 0.3f, 1f)
+    const val EaseEnterMillis: Int = 140
+
+    /** `EaseExit` (§4): содержимое гаснет раньше, чем край оболочки пройдёт через него. */
+    val EaseExit: Easing = CubicBezierEasing(0.32f, 0.72f, 0f, 1f)
+    const val EaseExitMillis: Int = 100
+
+    /**
+     * Когда проявляется содержимое окна, вырастающего из кнопки (§5): к этому моменту оболочка
+     * на пружине [largeSurfaceEnterBounds] прошла ≈80% пути, и текст появляется почти на месте,
+     * а не внутри крошечной плашки.
+     */
+    const val WindowContentRevealDelayMillis: Int = 200
+
     // ---- Типизированные удобные алиасы (частые случаи) -----------------------
 
     val standardFloat: SpringSpec<Float> = standard()
@@ -98,6 +134,9 @@ object MotionTokens {
 
     /** Scrim/диалог: строго синхронный fade со входом контента (§10, §3.2). */
     const val ScrimFadeMillis: Int = 250
+
+    /** Уход скрима: ≈65% входа (закон 5) — фон возвращается, не дожидаясь, пока уедет шторка. */
+    const val ScrimExitMillis: Int = 160
 
     /** Каскад появления пунктов меню (§5.1): delay = index * этого. */
     const val MenuItemCascadeStaggerMillis: Int = 30

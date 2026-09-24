@@ -31,6 +31,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -53,6 +54,8 @@ import androidx.compose.material.icons.filled.AutoFixHigh
 import androidx.compose.material.icons.filled.Translate
 import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.filled.Code
+import androidx.compose.material.icons.filled.Dock
+import androidx.compose.material.icons.filled.OpenInFull
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.FileOpen
 import androidx.compose.material.icons.filled.PictureAsPdf
@@ -126,6 +129,7 @@ import com.example.myapplication.ui.shared.components.IosSheetScaffold
 import com.example.myapplication.ui.shared.components.IosListGroup
 import com.example.myapplication.ui.shared.components.IosRow
 import com.example.myapplication.ui.shared.components.IosSegmentedControl
+import com.example.myapplication.ui.shared.DONATION_URL
 import com.example.myapplication.ui.shared.components.IosSwitch
 import com.example.myapplication.ui.shared.theme.BrandBlue
 import com.example.myapplication.ui.shared.theme.BrandBlueSoft
@@ -152,7 +156,7 @@ import com.kyant.backdrop.effects.blur
 import com.kyant.backdrop.effects.lens
 import com.kyant.backdrop.effects.vibrancy
 
-private const val TRIBUTE_DONATION_URL = "https://web.tribute.tg/e/Tb"
+// Ссылка живёт в ui/shared/Links.kt — её открывает ещё и меню дока рабочей области.
 
 // Единая палитра icon-well по категориям (IosDesign.Category — один цвет = одна категория).
 private val IconLanguage = IosDesign.Category.Language
@@ -329,6 +333,7 @@ fun SettingsScreen(
     }
 
     val statusBarTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+    val navigationBarBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
 
     IosSheetScaffold(
         sheetVisible = activeSheet != null,
@@ -383,7 +388,11 @@ fun SettingsScreen(
                     contentPadding = PaddingValues(
                         // Резерв под плавающую стеклянную шапку (§11): statusBar + пузырёк 48 + отступы.
                         top = statusBarTop + 76.dp,
-                        bottom = 120.dp + bottomInset,
+                        // Снизу резервируем ровно занятое место: нав-панель, док (его высоту
+                        // присылает вызывающий) и воздух. Прежние 120dp ПОВЕРХ инсета дока были
+                        // ничем не заняты — список прокручивался на пол-экрана мимо последнего
+                        // пункта, и это читалось как сломанный overscroll.
+                        bottom = 24.dp + bottomInset + navigationBarBottom,
                     ),
                     verticalArrangement = Arrangement.spacedBy(30.dp),
                 ) {
@@ -431,17 +440,6 @@ fun SettingsScreen(
                                         },
                                         showChevron = true,
                                         onClick = { performHaptic(view, "light"); activeSheet = SettingsOverlaySheet.Picker("theme") },
-                                    )
-                                },
-                                {
-                                    IosRow(
-                                        title = strings.contentTypeTitle,
-                                        isDark = isDark,
-                                        iconRes = R.drawable.hugeicon_content,
-                                        iconWell = false,
-                                        value = if (uiState.contentType == AppContentType.MOVIE) strings.typeMovies else strings.typeAnime,
-                                        showChevron = true,
-                                        onClick = { performHaptic(view, "light"); activeSheet = SettingsOverlaySheet.Picker("content") },
                                     )
                                 },
                             ),
@@ -608,7 +606,7 @@ fun SettingsScreen(
                                         showChevron = true,
                                         onClick = {
                                             performHaptic(view, "light")
-                                            context.startActivity(Intent(Intent.ACTION_VIEW, TRIBUTE_DONATION_URL.toUri()))
+                                            context.startActivity(Intent(Intent.ACTION_VIEW, DONATION_URL.toUri()))
                                         },
                                     )
                                 },
@@ -646,6 +644,8 @@ fun SettingsScreen(
                                 onFpsOverlayToggle = { performHaptic(view, "light"); viewModel.setDevFpsOverlay(it) },
                                 onAdaptiveGlassToggle = { performHaptic(view, "light"); viewModel.setDevAdaptiveGlassScroll(it) },
                                 onSelectDockNavigationToggle = { performHaptic(view, "light"); viewModel.setDevSelectDockNavigation(it) },
+                                onGlassCapsuleDockToggle = { performHaptic(view, "light"); viewModel.setDevGlassCapsuleDock(it) },
+                                onStagedSheetMotionToggle = { performHaptic(view, "light"); viewModel.setDevStagedSheetMotion(it) },
                                 onGithubUpdatesToggle = { enabled ->
                                     performHaptic(view, "light")
                                     if (enabled) showGithubUpdatesEnableDialog = true
@@ -791,21 +791,6 @@ fun SettingsScreen(
                             activeSheet = null
                         },
                     )
-                    activeSheet == SettingsOverlaySheet.Picker("content") -> IosSelectionSheet(
-                        title = strings.contentTypeTitle,
-                        options = listOf(
-                            IosSelectionOption(strings.typeAnime, Icons.Outlined.Category, IconContent),
-                            IosSelectionOption(strings.typeMovies, Icons.Outlined.Category, IconContent),
-                        ),
-                        selectedIndex = if (uiState.contentType == AppContentType.MOVIE) 1 else 0,
-                        isDark = isDark,
-                        cardCornerRadius = 22.dp,
-                        onSelect = { i ->
-                            performHaptic(view, "light")
-                            viewModel.setContentType(if (i == 1) AppContentType.MOVIE else AppContentType.ANIME)
-                            activeSheet = null
-                        },
-                    )
                     activeSheet == SettingsOverlaySheet.Cloud -> CloudSettingsSheet(
                         onDismiss = { activeSheet = null },
                         onLogout = { activeSheet = null; navController.navigateToWelcome() },
@@ -916,6 +901,8 @@ private fun DeveloperGroups(
     onFpsOverlayToggle: (Boolean) -> Unit,
     onAdaptiveGlassToggle: (Boolean) -> Unit,
     onSelectDockNavigationToggle: (Boolean) -> Unit,
+    onGlassCapsuleDockToggle: (Boolean) -> Unit,
+    onStagedSheetMotionToggle: (Boolean) -> Unit,
     onGithubUpdatesToggle: (Boolean) -> Unit,
     onExportLogs: () -> Unit,
     onExportPdf: () -> Unit,
@@ -986,6 +973,48 @@ private fun DeveloperGroups(
                             IosSwitch(
                                 checked = uiState.devSelectDockNavigation,
                                 onCheckedChange = onSelectDockNavigationToggle,
+                            )
+                        },
+                    )
+                },
+                {
+                    // Подписи зашиты здесь по той же причине, что у соседнего тумблера: в
+                    // UiStrings свободных полей почти не осталось, а оба пункта временные.
+                    val ru = strings.languageName == "RU"
+                    IosRow(
+                        title = if (ru) "Док из матового стекла" else "Frosted glass dock",
+                        subtitle = if (ru) {
+                            "Капсула с подвижной подсветкой активного пункта, без подписей"
+                        } else {
+                            "Capsule with a sliding highlight, icons only"
+                        },
+                        isDark = isDark,
+                        icon = Icons.Filled.Dock,
+                        iconBackground = devIcon,
+                        trailing = {
+                            IosSwitch(
+                                checked = uiState.devGlassCapsuleDock,
+                                onCheckedChange = onGlassCapsuleDockToggle,
+                            )
+                        },
+                    )
+                },
+                {
+                    val ru = strings.languageName == "RU"
+                    IosRow(
+                        title = if (ru) "Морф панелей из дока" else "Staged sheet morph",
+                        subtitle = if (ru) {
+                            "Статистика раскрывается из своей кнопки, а не выезжает снизу"
+                        } else {
+                            "Stats grows out of its own button instead of sliding up"
+                        },
+                        isDark = isDark,
+                        icon = Icons.Filled.OpenInFull,
+                        iconBackground = devIcon,
+                        trailing = {
+                            IosSwitch(
+                                checked = uiState.devStagedSheetMotion,
+                                onCheckedChange = onStagedSheetMotionToggle,
                             )
                         },
                     )

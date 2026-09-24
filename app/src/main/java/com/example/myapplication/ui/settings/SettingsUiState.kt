@@ -25,6 +25,10 @@ data class SettingsUiState(
     val devAdaptiveGlassScroll: Boolean = false,
     /** Новая корневая навигация (док-селектор + рабочая область из пяти страниц). */
     val devSelectDockNavigation: Boolean = false,
+    /** Новый вид нижнего дока: капсула матового стекла с подвижной подсветкой. */
+    val devGlassCapsuleDock: Boolean = false,
+    /** Двухфазный морф нижних панелей вместо выезда снизу. */
+    val devStagedSheetMotion: Boolean = false,
     val devGithubUpdatesEnabled: Boolean = false,
     val isExportingLogs: Boolean = false,
     val isExportingPdf: Boolean = false,

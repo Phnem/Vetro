@@ -1,0 +1,86 @@
+{
+  "capturedAt": "2026-09-23",
+  "kind": "collection",
+  "url": "https://knigavuhe.org/book/rasskazy-86/",
+  "title": "Рассказы (слушать аудиокнигу бесплатно) - автор Антон Чехов",
+  "canonical": "https://knigavuhe.org/book/rasskazy-86/",
+  "headings": [
+    "Рассказы автор Антон Чехов читает Татьяна Николашина",
+    "Аудиокниги слушать онлайн"
+  ],
+  "ogImageHost": "s5.knigavuhe.org",
+  "forms": [
+    {
+      "action": "https://knigavuhe.org/search/",
+      "method": "GET",
+      "inputs": [
+        "q"
+      ]
+    },
+    {
+      "action": "https://knigavuhe.org/book/rasskazy-86/",
+      "method": "GET",
+      "inputs": [
+        "token"
+      ]
+    }
+  ],
+  "sampleLinks": [
+    {
+      "url": "https://knigavuhe.org/setdesign/new/?f=%2Fbook%2Frasskazy-86%2F&theme=dark",
+      "text": "Тёмная тема в новом дизайне"
+    },
+    {
+      "url": "https://knigavuhe.org/login/",
+      "text": "Войти на сайт"
+    },
+    {
+      "url": "https://knigavuhe.org/genres/",
+      "text": "Жанры"
+    },
+    {
+      "url": "https://knigavuhe.org/authors/",
+      "text": "Авторы"
+    },
+    {
+      "url": "https://knigavuhe.org/readers/",
+      "text": "Исполнители"
+    },
+    {
+      "url": "https://knigavuhe.org/genre/klassika/",
+      "text": "Классика"
+    },
+    {
+      "url": "https://knigavuhe.org/author/anton-chekhov/",
+      "text": "Антон Чехов"
+    },
+    {
+      "url": "https://knigavuhe.org/reader/tatjana-nikolashina/",
+      "text": "Татьяна Николашина"
+    },
+    {
+      "url": "https://knigavuhe.org/book/nebesnoe-i-zemnoe/",
+      "text": "Небесное и земное Владимир Лучит Борис Кригер"
+    },
+    {
+      "url": "https://knigavuhe.org/book/luch-sveta/",
+      "text": "Луч света Брэд Торгерсен Владислав Копп"
+    },
+    {
+      "url": "https://knigavuhe.org/book/vykhodnojj-1/",
+      "text": "Выходной Джей Арс Владимир Князев"
+    },
+    {
+      "url": "https://knigavuhe.org/book/kalasy-pad-sjarpom-tvaim/",
+      "text": "Каласы пад сярпом тваім Владимир Короткевич Артисты театра и кино"
+    }
+  ],
+  "mediaElementCount": 0,
+  "sourceElementCount": 0,
+  "mediaUrlCount": 0,
+  "mediaHosts": [],
+  "jsonLdCount": 0,
+  "restrictionEvidence": [],
+  "htmlBytes": 66869,
+  "note": "Compact structural fixture. Media URLs, descriptions and page scripts intentionally omitted."
+}

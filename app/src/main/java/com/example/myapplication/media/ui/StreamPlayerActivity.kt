@@ -72,7 +72,10 @@ import com.example.myapplication.media.source.PlaybackIdentity
 import com.example.myapplication.media.source.rankVideosForResolution
 import com.example.myapplication.ui.shared.theme.OneUiTheme
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.isActive
@@ -83,6 +86,16 @@ import okhttp3.OkHttpClient
 import org.koin.android.ext.android.inject
 import org.koin.core.qualifier.named
 import kotlin.math.abs
+
+/**
+ * Область для записи прогресса просмотра, переживающая закрытие экрана.
+ *
+ * `lifecycleScope` отменяется на `onDestroy`, а выход из плеера — это `onStop` и сразу `onDestroy`:
+ * запись, не успевшая взять мьютекс стора, до диска не доезжала, и пользователь терял последние
+ * секунды просмотра именно при выходе. Область живёт столько же, сколько процесс, и хранит ровно
+ * одну короткую задачу за раз.
+ */
+private val progressScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
 /**
  * Header-aware remote playback using the same custom Exo controls as the local player.
@@ -102,6 +115,8 @@ class StreamPlayerActivity : ComponentActivity(), PipHostActivity {
     private var activeEpisode: Int = 1
     private val pipState = mutableStateOf(false)
     private val pipActions = PipActionsController(this)
+    /** Экран хоть раз уходил в PiP — см. [finishIfStoppedOutsidePip]. */
+    private var wasInPip = false
 
     override fun updatePipCommands(commands: PipPlaybackCommands?) {
         pipActions.setCommands(commands)
@@ -318,7 +333,14 @@ class StreamPlayerActivity : ComponentActivity(), PipHostActivity {
                             sameUrlRetryUsed = false
                             manualSwitchFallback = null
                             current = refreshed.copy(resolvedAt = System.currentTimeMillis())
-                        } else {
+                        } else if (player.playbackState != Player.STATE_READY) {
+                            // Замены нет — но исходный поток мог ожить сам, пока мы её искали:
+                            // короткий обрыв связи ExoPlayer переживает своим буфером. Плашка
+                            // «источник умер» поверх живого кадра врёт и запирает экран.
+                            //
+                            // Смотрим на состояние потока, а не на isPlaying: поставленная
+                            // пользователем пауза — это не мёртвый источник, но и наоборот,
+                            // молчать про мёртвый источник из-за паузы тоже нельзя.
                             playbackError = "Источник больше не отвечает. Попробуйте ещё раз."
                         }
                     }
@@ -483,6 +505,10 @@ class StreamPlayerActivity : ComponentActivity(), PipHostActivity {
                     val listener = object : Player.Listener {
                         override fun onIsPlayingChanged(playing: Boolean) {
                             pipPlaying = playing
+                            // Поток пошёл дальше — значит он жив, что бы ни решил резолвер
+                            // замены секунду назад. Плашка снимается по факту, а не по кнопке:
+                            // раньше её приходилось смахивать перезаходом в плеер.
+                            if (playing) playbackError = null
                         }
 
                         override fun onPlayerError(error: PlaybackException) {
@@ -674,6 +700,10 @@ class StreamPlayerActivity : ComponentActivity(), PipHostActivity {
     override fun onStop() {
         persistActivePlayer()
         super.onStop()
+        // Страховка к проверке в onPictureInPictureModeChanged: порядок этих двух колбэков
+        // контрактом не закреплён, и на прошивке с обратным порядком крестик снова оставлял бы
+        // серию играть в фоне.
+        finishIfStoppedOutsidePip(wasInPip)
     }
 
     override fun onPictureInPictureModeChanged(
@@ -682,6 +712,10 @@ class StreamPlayerActivity : ComponentActivity(), PipHostActivity {
     ) {
         super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
         pipState.value = isInPictureInPictureMode
+        if (isInPictureInPictureMode) wasInPip = true
+        // Крестик на окне закрывает экран целиком — иначе остановленная активити остаётся жива
+        // и продолжает играть серию в фоне.
+        finishIfPipWindowClosed(isInPictureInPictureMode)
     }
 
     private fun enterPip() {
@@ -698,7 +732,10 @@ class StreamPlayerActivity : ComponentActivity(), PipHostActivity {
         val duration = player.duration
         if (duration <= 0L || activeAnimeId.isBlank()) return
         val position = player.currentPosition.coerceIn(0L, duration)
-        lifecycleScope.launch {
+        // НЕ lifecycleScope: закрытие экрана (крестик PiP, «назад») ведёт из onStop прямо в
+        // onDestroy, и запись, не успевшая взять мьютекс стора, отменялась бы вместе с ним —
+        // пользователь терял бы последние секунды просмотра ровно при выходе.
+        progressScope.launch {
             playbackStore.saveProgress(
                 animeId = activeAnimeId,
                 season = activeSeason,

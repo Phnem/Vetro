@@ -1,0 +1,88 @@
+{
+  "sourceUrl": "https://archive.org/metadata/letters_brides_0709_librivox",
+  "metadata": {
+    "identifier": "letters_brides_0709_librivox",
+    "title": "Letters of Two Brides",
+    "creator": "Honore de Balzac",
+    "mediatype": "audio",
+    "collection": [
+      "librivoxaudio",
+      "audio_bookspoetry"
+    ]
+  },
+  "files": [
+    {
+      "name": "letters_of_two_brides_01_debalzac.mp3",
+      "source": "original",
+      "format": "VBR MP3",
+      "creator": "Honore de Balzac",
+      "album": "Letters of Two Brides",
+      "title": "Letter 01",
+      "md5": "d69c4ad83f0f391b4d0641c4af4fca7a",
+      "track": "1/57",
+      "mtime": "1189204345",
+      "size": "28232014",
+      "crc32": "ae488862",
+      "sha1": "492fddc7a8abb3b34508a0668ccda243b1f60498",
+      "length": "1764.5",
+      "height": "0",
+      "width": "0",
+      "artist": "Honore de Balzac",
+      "genre": "Speech",
+      "external-identifier-match-date": "acoustid:2019-04-11T00:05:56Z",
+      "external-identifier": "urn:acoustid:2708a18a-fbef-472e-a311-a62a434f2890"
+    },
+    {
+      "name": "letters_of_two_brides_01_debalzac_64kb.mp3",
+      "source": "derivative",
+      "creator": "Honore de Balzac",
+      "title": "Letter 01",
+      "album": "Letters of Two Brides",
+      "bitrate": "64",
+      "length": "29:24",
+      "format": "64Kbps MP3",
+      "original": "letters_of_two_brides_01_debalzac.mp3",
+      "md5": "22b2f5a53d183f2455a79464d5ac3eea",
+      "mtime": "1189204687",
+      "size": "14115653",
+      "crc32": "74a80ebf",
+      "sha1": "af95063122334f5f8ba68eb12d616409e95778db",
+      "height": "0",
+      "width": "0"
+    },
+    {
+      "name": "LettersOfTwoBridesPart1_librivox.m4b",
+      "source": "original",
+      "mtime": "1442744885",
+      "size": "135963063",
+      "md5": "63557e8d9f974616afbeb5902214234d",
+      "crc32": "030dc617",
+      "sha1": "af541fe295e1fda6b755f0a8c7b4c8a8a2e7c531",
+      "format": "Audiobook"
+    },
+    {
+      "name": "Letters_Two_Brides_1110.jpg",
+      "source": "original",
+      "format": "JPEG",
+      "mtime": "1371916130",
+      "size": "136018",
+      "md5": "cdfc5afbc40e36c6eccb54a589e024eb",
+      "crc32": "28157e45",
+      "sha1": "bd733895f27b28f54749c169f89726fade18e1f2",
+      "rotation": "0"
+    },
+    {
+      "name": "Letters_Two_Brides_1110_djvu.xml",
+      "source": "derivative",
+      "format": "Djvu XML",
+      "original": "Letters_Two_Brides_1110_hocr.html",
+      "mtime": "1632008224",
+      "size": "16189",
+      "md5": "ade745ad76406e3c5c529b29d9e6e3cc",
+      "crc32": "aef05ab2",
+      "sha1": "314eb91058884bfee461d4bcef6433310076cc03"
+    }
+  ],
+  "originalFileCount": 481,
+  "note": "Representative files only; no media bytes."
+}

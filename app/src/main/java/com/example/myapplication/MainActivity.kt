@@ -52,6 +52,12 @@ import io.github.jan.supabase.SupabaseClient
 import com.example.myapplication.ui.settings.UpdateChangelogSheet
 import com.example.myapplication.ui.debug.FpsOverlay
 import com.example.myapplication.ui.shared.LocalAdaptiveGlassEnabled
+import com.example.myapplication.ui.shared.LocalGlassCapsuleDock
+import com.example.myapplication.ui.shared.LocalStagedMorphOrigin
+import com.example.myapplication.ui.shared.LocalWorkspaceSearch
+import com.example.myapplication.ui.shared.WorkspaceSearchState
+import com.example.myapplication.ui.shared.StagedMorphOriginState
+import com.example.myapplication.ui.shared.LocalStagedSheetMotion
 import com.example.myapplication.ui.shared.theme.OneUiTheme
 import com.example.myapplication.ui.settings.SettingsOverlayMotion
 import com.example.myapplication.ui.settings.SettingsViewModel
@@ -155,8 +161,14 @@ class MainActivity : ComponentActivity() {
 
                 val overlayVisible = showStartupUpdateOverlay
 
+                val stagedMorphOrigin = remember { StagedMorphOriginState() }
+                val workspaceSearch = remember { WorkspaceSearchState() }
                 CompositionLocalProvider(
                     LocalAdaptiveGlassEnabled provides settingsState.devAdaptiveGlassScroll,
+                    LocalGlassCapsuleDock provides settingsState.devGlassCapsuleDock,
+                    LocalStagedSheetMotion provides settingsState.devStagedSheetMotion,
+                    LocalStagedMorphOrigin provides stagedMorphOrigin,
+                    LocalWorkspaceSearch provides workspaceSearch,
                 ) {
                 Box(
                     modifier = Modifier

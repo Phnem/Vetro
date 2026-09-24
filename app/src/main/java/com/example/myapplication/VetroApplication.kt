@@ -14,6 +14,7 @@ import org.koin.core.context.startKoin
 import com.example.myapplication.di.appModule
 import com.example.myapplication.di.databaseModule
 import com.example.myapplication.di.viewModelModule
+import com.example.myapplication.di.audiobookModule
 import com.example.myapplication.manga.ui.RegionBitmapDecoder
 import com.example.myapplication.network.di.coreNetworkModule
 
@@ -27,6 +28,7 @@ class VetroApplication : Application(), SingletonImageLoader.Factory {
                 coreNetworkModule,
                 com.example.myapplication.sync.supabase.supabaseModule,
                 appModule,
+                audiobookModule,
                 databaseModule,
                 viewModelModule
             )

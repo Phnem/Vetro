@@ -1,0 +1,81 @@
+{
+  "capturedAt": "2026-09-23",
+  "kind": "book",
+  "url": "https://101audiobooks.com/arthur-c-clarke-2001-audiobook/",
+  "title": "Listen to: Arthur C. Clarke - 2001 Audiobook",
+  "canonical": "https://101audiobooks.com/arthur-c-clarke-2001-audiobook/",
+  "headings": [
+    "Listen to: Arthur C. Clarke – 2001 Audiobook",
+    "Post navigation"
+  ],
+  "ogImageHost": null,
+  "forms": [
+    {
+      "action": "https://101audiobooks.com/",
+      "method": "GET",
+      "inputs": [
+        "s"
+      ]
+    }
+  ],
+  "sampleLinks": [
+    {
+      "url": "https://101audiobooks.com/arthur-c-clarke-2001-audiobook/#content",
+      "text": "Skip to content"
+    },
+    {
+      "url": "https://101audiobooks.com/",
+      "text": "Free Audiobooks"
+    },
+    {
+      "url": "https://101audiobooks.com/Series/bestsellers/",
+      "text": "Best Sellers"
+    },
+    {
+      "url": "https://101audiobooks.com/Series/fantasy-audio/",
+      "text": "Fantasy"
+    },
+    {
+      "url": "https://101audiobooks.com/Series/science-fiction-audiobooks/",
+      "text": "Sci-Fi"
+    },
+    {
+      "url": "https://101audiobooks.com/Series/roman/",
+      "text": "Romance"
+    },
+    {
+      "url": "https://101audiobooks.com/?s=Harry+Potter",
+      "text": "Harry Potter"
+    },
+    {
+      "url": "https://101audiobooks.com/?s=Star+Wars",
+      "text": "Star Wars"
+    },
+    {
+      "url": "https://101audiobooks.com/?s=george+martin",
+      "text": "George R. R. Martin"
+    },
+    {
+      "url": "https://101audiobooks.com/privacy-policy/",
+      "text": "Privacy Policy"
+    },
+    {
+      "url": "https://101audiobooks.com/arthur-c-clarke-2001-audiobook/",
+      "text": "April 28, 2021"
+    },
+    {
+      "url": "https://101audiobooks.com/author/audiobooks-hq/",
+      "text": "audiobooks hq"
+    }
+  ],
+  "mediaElementCount": 7,
+  "sourceElementCount": 7,
+  "mediaUrlCount": 21,
+  "mediaHosts": [
+    "ipaudio.club"
+  ],
+  "jsonLdCount": 1,
+  "restrictionEvidence": [],
+  "htmlBytes": 62430,
+  "note": "Compact structural fixture. Media URLs, descriptions and page scripts intentionally omitted."
+}

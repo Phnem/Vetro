@@ -37,6 +37,8 @@ import com.example.myapplication.updates.SeriesEpisodeCheckUseCase
 import com.example.myapplication.updates.EpisodeUpdateCheckCoordinator
 import com.example.myapplication.notifications.AnimeNotifier
 import com.example.myapplication.notifications.AnimeNotifierImpl
+import com.example.myapplication.notifications.MangaNotifier
+import com.example.myapplication.notifications.MangaNotifierImpl
 import kotlinx.coroutines.flow.first
 import org.koin.android.ext.koin.androidContext
 import org.koin.core.qualifier.named
@@ -92,6 +94,15 @@ val appModule = module {
             localDataSource = get(),
             store = get(),
             seasonEpisodesResolver = get(),
+        )
+    }
+    // Догон расклада сезонов, когда он отстал от пришедшего уведомления о новой серии.
+    single {
+        com.example.myapplication.domain.seasons.SeasonCatchUp(
+            localDataSource = get(),
+            store = get(),
+            resolver = get(),
+            discovery = get(),
         )
     }
     // Local player (isolated feature — remove these lines to unwire it).
@@ -172,6 +183,14 @@ val appModule = module {
                 get<com.example.myapplication.manga.source.RemangaSource>(),
                 get<com.example.myapplication.manga.source.MangaDexSource>(),
             ),
+        )
+    }
+    // Новые главы по привязкам — тем же фоновым проходом, что и новые серии.
+    single {
+        com.example.myapplication.manga.updates.MangaUpdateCheckUseCase(
+            bindingStore = get(),
+            chapterCache = get(),
+            sourceEngine = get(),
         )
     }
 
@@ -270,6 +289,13 @@ val appModule = module {
     }
     single { com.example.myapplication.media.source.movieseries.ProviderHealthStore(androidContext()) }
     single { com.example.myapplication.media.source.movieseries.custom.CustomSourceStore(androidContext()) }
+    // Привязка интерфейса обязательна: Koin разрешает зависимость по ОБЪЯВЛЕННОМУ типу, а
+    // CustomSourceRegistry и CustomSourceSettingsService просят InstalledSourceStore. Без этой
+    // строки открытие «Источников видео» роняло приложение — одна конкретная регистрация
+    // интерфейс собой не закрывает. Тот же приём, что у PlaybackSourceConfigStore выше.
+    single<com.example.myapplication.media.source.movieseries.custom.InstalledSourceStore> {
+        get<com.example.myapplication.media.source.movieseries.custom.CustomSourceStore>()
+    }
     single { com.example.myapplication.media.source.movieseries.custom.CustomSourceInstaller() }
     single {
         com.example.myapplication.media.source.movieseries.custom.CustomSourceRegistry(
@@ -330,6 +356,7 @@ val appModule = module {
     }
     single { CollectionPdfGenerator(androidContext()) }
     single<AnimeNotifier> { AnimeNotifierImpl(context = androidContext()) }
+    single<MangaNotifier> { MangaNotifierImpl(context = androidContext()) }
     single { RecommendationCacheStore(androidContext()) }
     single { CoverDescriptorCacheStore(androidContext()) }
     single {

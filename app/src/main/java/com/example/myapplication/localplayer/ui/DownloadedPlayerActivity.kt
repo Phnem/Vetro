@@ -28,10 +28,15 @@ import androidx.lifecycle.repeatOnLifecycle
 import androidx.media3.exoplayer.ExoPlayer
 import com.example.myapplication.localplayer.model.LocalEpisode
 import com.example.myapplication.media.progress.EpisodePlaybackStore
+import com.example.myapplication.media.ui.finishIfPipWindowClosed
+import com.example.myapplication.media.ui.finishIfStoppedOutsidePip
 import com.example.myapplication.media.ui.PipActionsController
 import com.example.myapplication.media.ui.PipHostActivity
 import com.example.myapplication.media.ui.PipPlaybackCommands
 import com.example.myapplication.ui.shared.theme.OneUiTheme
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
@@ -39,6 +44,16 @@ import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
 import org.koin.android.ext.android.inject
 import org.koin.core.qualifier.named
+
+/**
+ * Область для записи прогресса просмотра, переживающая закрытие экрана.
+ *
+ * `lifecycleScope` отменяется на `onDestroy`, а выход из плеера — это `onStop` и сразу `onDestroy`:
+ * запись, не успевшая взять мьютекс стора, до диска не доезжала, и пользователь терял последние
+ * секунды просмотра именно при выходе. Область живёт столько же, сколько процесс, и хранит ровно
+ * одну короткую задачу за раз.
+ */
+private val progressScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
 /**
  * Plays app-owned downloaded files in the same custom Exo UI as the SAF local library.
@@ -52,6 +67,8 @@ class DownloadedPlayerActivity : ComponentActivity(), PipHostActivity {
     private var episodes: List<LocalEpisode> = emptyList()
     private val pipState = mutableStateOf(false)
     private val pipActions = PipActionsController(this)
+    /** Экран хоть раз уходил в PiP — см. [finishIfStoppedOutsidePip]. */
+    private var wasInPip = false
 
     override fun updatePipCommands(commands: PipPlaybackCommands?) {
         pipActions.setCommands(commands)
@@ -131,9 +148,13 @@ class DownloadedPlayerActivity : ComponentActivity(), PipHostActivity {
     override fun onStop() {
         val snapshot = progressSnapshot()
         if (snapshot != null) {
-            lifecycleScope.launch { save(snapshot) }
+            // НЕ lifecycleScope: закрытие экрана ведёт из onStop прямо в onDestroy, и запись
+            // прогресса отменялась бы вместе с ним.
+            progressScope.launch { save(snapshot) }
         }
         super.onStop()
+        // Страховка к проверке в onPictureInPictureModeChanged — см. finishIfStoppedOutsidePip.
+        finishIfStoppedOutsidePip(wasInPip)
     }
 
     override fun onPictureInPictureModeChanged(
@@ -142,6 +163,10 @@ class DownloadedPlayerActivity : ComponentActivity(), PipHostActivity {
     ) {
         super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
         pipState.value = isInPictureInPictureMode
+        if (isInPictureInPictureMode) wasInPip = true
+        // Крестик на окне закрывает экран целиком — иначе остановленная активити остаётся жива
+        // и продолжает играть серию в фоне.
+        finishIfPipWindowClosed(isInPictureInPictureMode)
     }
 
     private fun enterPip() {

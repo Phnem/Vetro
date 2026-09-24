@@ -69,6 +69,7 @@ import androidx.compose.ui.geometry.isSpecified
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerInputScope
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChanged
@@ -331,22 +332,22 @@ private fun ReaderContent(
                                     onPageChanged(page, offsetStep.toFloat() / OffsetSteps)
                                 }
                         }
-                        LazyColumn(
-                            state = listState,
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .pointerInput(Unit) {
-                                    detectTapGestures(onTap = { chromeVisible = !chromeVisible })
-                                },
-                        ) {
-                            items(state.pages.size) { index ->
-                                PageImage(
-                                    page = state.pages[index],
-                                    contentScale = ContentScale.FillWidth,
-                                    cropBorders = cropBorders,
-                                    ru = ru,
-                                    modifier = Modifier.fillMaxWidth(),
-                                )
+                        ZoomableWebtoon(
+                            onToggleChrome = { chromeVisible = !chromeVisible },
+                        ) { zoomModifier ->
+                            LazyColumn(
+                                state = listState,
+                                modifier = zoomModifier.fillMaxSize(),
+                            ) {
+                                items(state.pages.size) { index ->
+                                    PageImage(
+                                        page = state.pages[index],
+                                        contentScale = ContentScale.FillWidth,
+                                        cropBorders = cropBorders,
+                                        ru = ru,
+                                        modifier = Modifier.fillMaxWidth(),
+                                    )
+                                }
                             }
                         }
                     }
@@ -553,6 +554,108 @@ private fun FittedZoomablePage(
                     translationY = offsetY
                 },
         )
+    }
+}
+
+/**
+ * Щипок по вебтун-ленте.
+ *
+ * Постраничный режим увеличивает одну страницу ([FittedZoomablePage]), у ленты страницы нет —
+ * полоса тянется на несколько экранов и рвать её на куски ради зума нельзя. Поэтому масштабируется
+ * сам список целиком, вокруг центра: раскладка от этого не меняется, а прокрутка остаётся
+ * прокруткой — просто проезжает по увеличенной картинке быстрее.
+ *
+ * Разделение пальцев жёсткое и намеренное: щипок и горизонтальная панорама — только двумя
+ * пальцами, один палец всегда достаётся `LazyColumn`. Иначе увеличенная лента переставала
+ * скроллиться — ровно та ловушка, из-за которой в постраничном режиме не годится
+ * `Modifier.transformable` (см. [zoomAndPan]).
+ *
+ * Вертикаль панораме не отдаём вовсе: по ней ходит скролл, и второй источник сдвига по той же оси
+ * дрался бы с ним за одно и то же движение.
+ *
+ * @param content получает модификатор с жестами и трансформацией; его обязан носить сам список,
+ *   чтобы узел не появлялся и не исчезал по ходу зума (над ним лежит `layerBackdrop` дока).
+ */
+@Composable
+private fun ZoomableWebtoon(
+    onToggleChrome: () -> Unit,
+    content: @Composable (Modifier) -> Unit,
+) {
+    var scale by remember { mutableFloatStateOf(1f) }
+    var offsetX by remember { mutableFloatStateOf(0f) }
+
+    content(
+        Modifier
+            .pointerInput(Unit) {
+                webtoonPinch(
+                    scaleProvider = { scale },
+                    onTransform = { zoomChange, panX ->
+                        scale = (scale * zoomChange).coerceIn(MIN_SCALE, MAX_SCALE)
+                        offsetX = if (scale > 1f) {
+                            val limit = size.width * (scale - 1f) / 2f
+                            (offsetX + panX).coerceIn(-limit, limit)
+                        } else {
+                            0f
+                        }
+                    },
+                )
+            }
+            .pointerInput(Unit) {
+                detectTapGestures(
+                    onTap = { onToggleChrome() },
+                    onDoubleTap = {
+                        if (scale > 1f) {
+                            scale = 1f
+                            offsetX = 0f
+                        } else {
+                            scale = DOUBLE_TAP_SCALE
+                        }
+                    },
+                )
+            }
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+                translationX = offsetX
+            },
+    )
+}
+
+/**
+ * Щипок и горизонтальная панорама, не отбирающие прокрутку у ленты.
+ *
+ * Два отличия от постраничного [zoomAndPan], и оба вынужденные.
+ *
+ * 1. **Разбор идёт на [PointerEventPass.Initial].** Жесты доходят до обработчиков изнутри наружу,
+ *    а этот модификатор носит сам `LazyColumn` — значит на обычном проходе список видит движение
+ *    ПЕРВЫМ и, перевалив порог вертикального скролла, потребляет его. Щипок после этого упирался
+ *    бы в проверку «событие уже потреблено» и срывался, а сработает он или нет — решала бы
+ *    разница в доли секунды между касаниями двух пальцев. У пейджера этой беды нет: его ось
+ *    перпендикулярна.
+ * 2. **Потребляем только то, чем реально воспользовались.** Два пальца, положенные на экран без
+ *    щипка (обычная привычка листать с планшета), иначе замораживали бы ленту: событие съедено,
+ *    а не сделано ничего.
+ *
+ * Одиночный палец не трогаем ни при каком масштабе: в ленте он всегда означает прокрутку.
+ */
+private suspend fun PointerInputScope.webtoonPinch(
+    scaleProvider: () -> Float,
+    onTransform: (zoom: Float, panX: Float) -> Unit,
+) {
+    awaitEachGesture {
+        awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+        do {
+            val event = awaitPointerEvent(PointerEventPass.Initial)
+            if (event.changes.count { it.pressed } < 2) continue
+            val zoom = event.calculateZoom()
+            val panX = event.calculatePan().x
+            val panned = panX != 0f && scaleProvider() > 1f
+            if (zoom == 1f && !panned) continue
+            onTransform(zoom, panX)
+            // Потребляем всё движение щипка, а не только сработавшую часть: остаток иначе доедет
+            // до списка и прокрутит его на полглавы.
+            event.changes.forEach { if (it.positionChanged()) it.consume() }
+        } while (event.changes.any { it.pressed })
     }
 }
 

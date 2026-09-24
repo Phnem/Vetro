@@ -12,6 +12,11 @@ data class SkipSeekDecision(
     val segment: SkipSegment,
     val targetMs: Long,
     val reason: SkipSeekReason,
+    /**
+     * Откуда прыгнули. Нужна, чтобы отмена вернула ровно туда, где пользователь был, а не к
+     * началу сегмента: в опенинг можно войти и с середины — перемоткой или возобновлением.
+     */
+    val fromMs: Long = 0L,
 )
 
 /**
@@ -26,6 +31,18 @@ class MediaSkipCoordinator {
     private var lastAutomaticSegment: SegmentIdentity? = null
     private var pendingAutomaticTargetMs: Long? = null
 
+    /**
+     * Сегменты, от автопропуска которых пользователь отказался.
+     *
+     * Отдельно от [lastAutomaticSegment], который всего лишь не даёт прыгнуть дважды подряд и
+     * сбрасывается любой перемоткой. Отмена — это перемотка НАЗАД в тот самый сегмент, то есть
+     * ровно тот случай, когда дедупликация снимается: без явного отказа автопропуск сработал бы
+     * снова через долю секунды, и кнопка отмены не работала бы вовсе.
+     *
+     * Живёт до конца серии: пользователь отказался смотреть не этот кадр, а этот опенинг.
+     */
+    private val declined = mutableSetOf<SegmentIdentity>()
+
     fun install(key: SkipMediaKey, resolved: SkipSegmentResolution) {
         val mediaChanged = currentKey != key
         currentKey = key
@@ -33,6 +50,7 @@ class MediaSkipCoordinator {
         if (mediaChanged) {
             lastAutomaticSegment = null
             pendingAutomaticTargetMs = null
+            declined.clear()
         }
     }
 
@@ -58,15 +76,32 @@ class MediaSkipCoordinator {
         if (!enabled) return null
         val identity = SegmentIdentity(active.startMs, active.endMs, active.kind)
         if (lastAutomaticSegment == identity) return null
+        if (identity in declined) return null
         lastAutomaticSegment = identity
         pendingAutomaticTargetMs = active.endMs
-        return SkipSeekDecision(active, active.endMs, SkipSeekReason.AUTOMATIC)
+        return SkipSeekDecision(active, active.endMs, SkipSeekReason.AUTOMATIC, positionMs)
     }
 
     fun manualSeek(key: SkipMediaKey, positionMs: Long): SkipSeekDecision? {
         val active = activeSegment(key, positionMs) ?: return null
-        return SkipSeekDecision(active, active.endMs, SkipSeekReason.MANUAL)
+        return SkipSeekDecision(active, active.endMs, SkipSeekReason.MANUAL, positionMs)
     }
+
+    /**
+     * Пользователь отменил автопропуск этого сегмента: больше его не трогаем до конца серии.
+     *
+     * Ручной пропуск при этом остаётся доступен — отказ касается только автоматики.
+     */
+    fun declineAutomatic(key: SkipMediaKey, segment: SkipSegment) {
+        if (key != currentKey) return
+        declined += SegmentIdentity(segment.startMs, segment.endMs, segment.kind)
+        lastAutomaticSegment = null
+        pendingAutomaticTargetMs = null
+    }
+
+    /** Отказывались ли уже от автопропуска этого сегмента. */
+    fun isDeclined(segment: SkipSegment): Boolean =
+        SegmentIdentity(segment.startMs, segment.endMs, segment.kind) in declined
 
     /**
      * A resume/user/source seek is a fresh segment-entry check, even if Compose saw no null gap.

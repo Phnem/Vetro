@@ -50,6 +50,7 @@ import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PictureInPictureAlt
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.ScreenRotation
+import androidx.compose.material.icons.automirrored.rounded.Undo
 import androidx.compose.material.icons.rounded.SkipNext
 import androidx.compose.material.icons.rounded.SkipPrevious
 import androidx.compose.material.icons.rounded.Speed
@@ -175,6 +176,14 @@ fun PlayerControlsOverlay(
     fit: VideoFit,
     skipVisible: Boolean,
     onSkip: () -> Unit,
+    /**
+     * Предложение вернуть автоматический пропуск; `null` — предлагать нечего.
+     *
+     * С [skipVisible] не пересекается: ручная кнопка живёт при ВЫКЛЮЧЕННОМ автопропуске, эта —
+     * только после его срабатывания. Поэтому обе занимают одно место в углу.
+     */
+    undoOffer: SkipUndoOffer? = null,
+    onUndoSkip: () -> Unit = {},
     onRotate: () -> Unit,
     onBack: () -> Unit,
     onEnterPip: () -> Unit,
@@ -356,6 +365,10 @@ fun PlayerControlsOverlay(
                 // Половина экрана, где начался жест, — на весь жест. Палец, переехавший середину,
                 // не должен посреди свайпа перескочить с яркости на громкость.
                 var zone = VerticalZone.Brightness
+                // Свайп, начатый у верхней кромки, уровни не трогает: это промах по системной
+                // шторке, а не попытка покрутить громкость (см. LEVEL_DEAD_ZONE_TOP_DP).
+                var levelsBlocked = false
+                val deadZonePx = LEVEL_DEAD_ZONE_TOP_DP * density
                 detectDragGestures(
                     onDragStart = { offset ->
                         // Во время удержания палец принадлежит ускорению, а не свайпам.
@@ -364,6 +377,7 @@ fun PlayerControlsOverlay(
                         totalX = 0f
                         totalY = 0f
                         zone = verticalZoneAt(offset.x, size.width.toFloat())
+                        levelsBlocked = isLevelDeadZone(offset.y, deadZonePx)
                     },
                     onDragEnd = {
                         if (!blocked && axis == DragAxis.Horizontal && duration > 0) {
@@ -394,7 +408,7 @@ fun PlayerControlsOverlay(
                                     target = startPos
                                     seekPreview = SeekPreview(startPos, target, duration)
                                 }
-                                DragAxis.Vertical -> levels.begin(zone)
+                                DragAxis.Vertical -> if (!levelsBlocked) levels.begin(zone)
                                 DragAxis.Undecided -> Unit
                             }
                         }
@@ -406,10 +420,12 @@ fun PlayerControlsOverlay(
                                     .coerceIn(0L, duration)
                                 seekPreview = SeekPreview(startPos, target, duration)
                             }
-                            DragAxis.Vertical -> levels.nudge(
-                                zone,
-                                levelDelta(dragAmount.y, size.height.toFloat()),
-                            )
+                            DragAxis.Vertical -> if (!levelsBlocked) {
+                                levels.nudge(
+                                    zone,
+                                    levelDelta(dragAmount.y, size.height.toFloat()),
+                                )
+                            }
                             // Порог ещё не пройден — ось не выбрана, и трогать нечего.
                             DragAxis.Undecided -> Unit
                         }
@@ -517,6 +533,23 @@ fun PlayerControlsOverlay(
                 backdrop = ambient.bottomBackdrop,
                 content = ambient.bottomContent,
                 onClick = onSkip,
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .navigationBarsPadding()
+                    .padding(end = 16.dp, bottom = 104.dp),
+            )
+        }
+
+        // Отмена только что сработавшего автопропуска — там же и в той же форме, что ручная
+        // кнопка: это то же самое действие в обратную сторону, и искать его в другом углу
+        // пользователю незачем.
+        if (undoOffer != null) {
+            UndoSkipButton(
+                secondsLeft = undoOffer.secondsLeft,
+                tint = ambient.bottomTint,
+                backdrop = ambient.bottomBackdrop,
+                content = ambient.bottomContent,
+                onClick = onUndoSkip,
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
                     .navigationBarsPadding()
@@ -1040,6 +1073,69 @@ private fun SkipButton(
         )
         Spacer(Modifier.width(6.dp))
         Icon(Icons.Rounded.SkipNext, contentDescription = null, tint = content, modifier = Modifier.size(24.dp))
+    }
+}
+
+/**
+ * Отмена автопропуска: тот же силуэт, что у [SkipButton], — та же капсула, тот же ambient-материал,
+ * то же место.
+ *
+ * Отличают её три вещи: текст, обратная иконка и счётчик оставшихся секунд. Счётчик здесь не
+ * украшение, а единственный способ показать, что предложение временное: кнопка появилась сама, без
+ * нажатия, и молча исчезающий элемент читался бы как сбой.
+ */
+@Composable
+private fun UndoSkipButton(
+    secondsLeft: Int,
+    tint: Color,
+    backdrop: DockBackdrop?,
+    content: Color,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier = modifier
+            .ambientDockSurface(Capsule, tint, backdrop)
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = onClick,
+            )
+            .padding(start = 20.dp, end = 12.dp, top = 12.dp, bottom = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = if (isRuLocale()) "Вернуть" else "Undo",
+            style = MaterialTheme.typography.titleMedium.copy(
+                fontFamily = SnProFamily,
+                fontWeight = FontWeight.SemiBold,
+            ),
+            color = content,
+        )
+        Spacer(Modifier.width(6.dp))
+        Icon(
+            Icons.AutoMirrored.Rounded.Undo,
+            contentDescription = null,
+            tint = content,
+            modifier = Modifier.size(24.dp),
+        )
+        Spacer(Modifier.width(8.dp))
+        Box(
+            modifier = Modifier
+                .size(24.dp)
+                .clip(CircleShape)
+                .background(content.copy(alpha = 0.16f)),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                text = secondsLeft.toString(),
+                style = MaterialTheme.typography.labelMedium.copy(
+                    fontFamily = SnProFamily,
+                    fontWeight = FontWeight.Bold,
+                ),
+                color = content,
+            )
+        }
     }
 }
 

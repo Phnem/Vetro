@@ -1,0 +1,99 @@
+{
+  "capturedAt": "2026-09-23",
+  "kind": "book",
+  "url": "https://aknigi24.com/book/ves-cexov-cast-1-cexov-anton-abdullaev-dzaxangir",
+  "title": "Весь Чехов. Часть 1 — слушать онлайн или скачать аудиокнигу бесплатно в mp3 | Чехов Антон | читает Абдуллаев Джахангир | Aknigi24",
+  "canonical": "https://aknigi24.com/book/ves-cexov-cast-1-cexov-anton-abdullaev-dzaxangir",
+  "headings": [
+    "Чехов Антон — Весь Чехов. Часть 1 Весь Чехов. Часть 1"
+  ],
+  "ogImageHost": "aknigi24.com",
+  "forms": [
+    {
+      "action": "https://aknigi24.com/search",
+      "method": "GET",
+      "inputs": [
+        "q"
+      ]
+    },
+    {
+      "action": "https://aknigi24.com/search",
+      "method": "GET",
+      "inputs": [
+        "q"
+      ]
+    },
+    {
+      "action": "https://aknigi24.com/book/ves-cexov-cast-1-cexov-anton-abdullaev-dzaxangir",
+      "method": "GET",
+      "inputs": [
+        "audiobook_id",
+        "channel",
+        "rating",
+        "hp_name",
+        "hp_time",
+        "parent_id",
+        "guest_name",
+        "guest_email"
+      ]
+    }
+  ],
+  "sampleLinks": [
+    {
+      "url": "https://aknigi24.com/login",
+      "text": "Войти"
+    },
+    {
+      "url": "https://aknigi24.com/genres",
+      "text": "Жанры"
+    },
+    {
+      "url": "https://aknigi24.com/genre/fantastika-fentezi",
+      "text": "Фантастика, фэнтези 8809"
+    },
+    {
+      "url": "https://aknigi24.com/genre/uzasy-mistika",
+      "text": "Ужасы, мистика 6146"
+    },
+    {
+      "url": "https://aknigi24.com/genre/detektivy-trillery",
+      "text": "Детективы, триллеры 4579"
+    },
+    {
+      "url": "https://aknigi24.com/genre/roman-proza",
+      "text": "Роман, проза 3033"
+    },
+    {
+      "url": "https://aknigi24.com/genre/klassika",
+      "text": "Классика 2106"
+    },
+    {
+      "url": "https://aknigi24.com/genre/ranobe-novelly",
+      "text": "Ранобэ, новеллы 1282"
+    },
+    {
+      "url": "https://aknigi24.com/genre/psixologiia-filosofiia",
+      "text": "Психология, философия 841"
+    },
+    {
+      "url": "https://aknigi24.com/genre/iumor-satira",
+      "text": "Юмор, сатира 740"
+    },
+    {
+      "url": "https://aknigi24.com/genre/audiospektakli",
+      "text": "Аудиоспектакли 571"
+    },
+    {
+      "url": "https://aknigi24.com/genre/audioskazki-i-rasskazy-dlia-detei",
+      "text": "Аудиосказки и рассказы для детей 461"
+    }
+  ],
+  "mediaElementCount": 1,
+  "sourceElementCount": 0,
+  "mediaUrlCount": 0,
+  "mediaHosts": [],
+  "jsonLdCount": 3,
+  "restrictionEvidence": [],
+  "htmlBytes": 104364,
+  "note": "Compact structural fixture. Media URLs, descriptions and page scripts intentionally omitted."
+}

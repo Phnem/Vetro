@@ -132,4 +132,18 @@ class PlayerZoomTest {
         // Без ступеней (аудио недоступно) — просто зажим, без округления.
         assertEquals(0.37f, quantizeLevel(0.37f, steps = 0), 0.001f)
     }
+
+    @Test
+    fun gesture_at_the_top_edge_is_dead() {
+        // Оттуда тянут системную шторку: промах по ней не должен выкручивать громкость.
+        assertTrue(isLevelDeadZone(y = 0f, deadZonePx = 140f))
+        assertTrue(isLevelDeadZone(y = 139f, deadZonePx = 140f))
+    }
+
+    @Test
+    fun gesture_below_the_dead_zone_still_controls_levels() {
+        assertFalse(isLevelDeadZone(y = 140f, deadZonePx = 140f))
+        assertFalse(isLevelDeadZone(y = 600f, deadZonePx = 140f))
+    }
+
 }

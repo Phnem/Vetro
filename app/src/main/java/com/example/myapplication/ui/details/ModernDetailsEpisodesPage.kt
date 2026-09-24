@@ -84,6 +84,7 @@ import coil3.request.ImageRequest
 import coil3.request.crossfade
 import com.example.myapplication.data.models.Anime
 import com.example.myapplication.domain.seasons.SeasonInfo
+import com.example.myapplication.domain.seasons.displayLabel
 import com.example.myapplication.localplayer.ui.DownloadedPlayerActivity
 import com.example.myapplication.media.progress.EpisodePlaybackProgress
 import com.example.myapplication.media.ui.StreamPlayerActivity
@@ -526,7 +527,7 @@ private fun SeasonHeaderCard(
             Column(Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        text = if (ru) "Сезон ${season.seasonNumber}" else "Season ${season.seasonNumber}",
+                        text = season.displayLabel(ru),
                         style = MaterialTheme.typography.titleMedium.copy(
                             fontFamily = SnProFamily,
                             fontWeight = FontWeight.Bold,

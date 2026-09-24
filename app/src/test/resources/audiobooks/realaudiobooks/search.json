@@ -1,0 +1,78 @@
+{
+  "capturedAt": "2026-09-23",
+  "kind": "search",
+  "url": "https://realaudiobooks.com/?s=the+time+machine",
+  "title": "You searched for the time machine - RealAudiobooks - Free Audiobooks Online",
+  "canonical": null,
+  "headings": [
+    "Results for “the time machine”"
+  ],
+  "ogImageHost": null,
+  "forms": [
+    {
+      "action": "https://realaudiobooks.com/",
+      "method": "GET",
+      "inputs": [
+        "s"
+      ]
+    }
+  ],
+  "sampleLinks": [
+    {
+      "url": "https://realaudiobooks.com/",
+      "text": "R Audiobooks"
+    },
+    {
+      "url": "https://realaudiobooks.com/category/literature-fiction/",
+      "text": "Literature & Fiction"
+    },
+    {
+      "url": "https://realaudiobooks.com/category/fantasy/",
+      "text": "Fantasy"
+    },
+    {
+      "url": "https://realaudiobooks.com/category/romance/",
+      "text": "Romance"
+    },
+    {
+      "url": "https://realaudiobooks.com/category/uncategorized/",
+      "text": "Uncategorized"
+    },
+    {
+      "url": "https://realaudiobooks.com/category/mystery/",
+      "text": "Mystery"
+    },
+    {
+      "url": "https://realaudiobooks.com/contact/",
+      "text": "Contact"
+    },
+    {
+      "url": "https://realaudiobooks.com/the-time-machine-h-g-wells-baud/",
+      "text": "Listen"
+    },
+    {
+      "url": "https://realaudiobooks.com/?s=H.%20G.%20Wells",
+      "text": "H. G. Wells"
+    },
+    {
+      "url": "https://realaudiobooks.com/category/adults/",
+      "text": "Adults"
+    },
+    {
+      "url": "https://realaudiobooks.com/m-mitchell-waldrop-the-dream-machine-m-mitchell-waldrop-unabridged/",
+      "text": "Listen"
+    },
+    {
+      "url": "https://realaudiobooks.com/?s=M.%20Mitchell%20Waldrop",
+      "text": "M. Mitchell Waldrop"
+    }
+  ],
+  "mediaElementCount": 0,
+  "sourceElementCount": 0,
+  "mediaUrlCount": 0,
+  "mediaHosts": [],
+  "jsonLdCount": 1,
+  "restrictionEvidence": [],
+  "htmlBytes": 31481,
+  "note": "Compact structural fixture. Media URLs, descriptions and page scripts intentionally omitted."
+}

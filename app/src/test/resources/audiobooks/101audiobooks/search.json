@@ -1,0 +1,98 @@
+{
+  "capturedAt": "2026-09-23",
+  "kind": "search",
+  "url": "https://101audiobooks.com/?s=arthur+c+clarke",
+  "title": "You searched for arthur c clarke - Free Audiobooks",
+  "canonical": null,
+  "headings": [
+    "Search Results for: arthur c clarke",
+    "Listen to: Arthur C. Clarke – 2001 Audiobook",
+    "Listen to: 2001 Audiobook – Arthur C. Clarke",
+    "Listen to: Rendezvous with Rama Audiobook – Arthur C. Clarke",
+    "Listen to: Arthur C. Clarke – 2001 A Space Odyssey Audiobook",
+    "Listen to: The City And the Stars Audiobook – Arthur C. Clarke",
+    "Listen to: Arthur C. Clarke – Rama II Audiobook",
+    "Listen to: Arthur C. Clarke – Childhood’s End Audiobook",
+    "Listen to: Arthur C. Clarke – Rendezvous with Rama Audiobook",
+    "Posts pagination"
+  ],
+  "ogImageHost": null,
+  "forms": [
+    {
+      "action": "https://101audiobooks.com/",
+      "method": "GET",
+      "inputs": [
+        "s"
+      ]
+    },
+    {
+      "action": "https://101audiobooks.com/",
+      "method": "GET",
+      "inputs": [
+        "s"
+      ]
+    }
+  ],
+  "sampleLinks": [
+    {
+      "url": "https://101audiobooks.com/?s=arthur+c+clarke#content",
+      "text": "Skip to content"
+    },
+    {
+      "url": "https://101audiobooks.com/",
+      "text": "Free Audiobooks"
+    },
+    {
+      "url": "https://101audiobooks.com/Series/bestsellers/",
+      "text": "Best Sellers"
+    },
+    {
+      "url": "https://101audiobooks.com/Series/fantasy-audio/",
+      "text": "Fantasy"
+    },
+    {
+      "url": "https://101audiobooks.com/Series/science-fiction-audiobooks/",
+      "text": "Sci-Fi"
+    },
+    {
+      "url": "https://101audiobooks.com/Series/roman/",
+      "text": "Romance"
+    },
+    {
+      "url": "https://101audiobooks.com/?s=Harry+Potter",
+      "text": "Harry Potter"
+    },
+    {
+      "url": "https://101audiobooks.com/?s=Star+Wars",
+      "text": "Star Wars"
+    },
+    {
+      "url": "https://101audiobooks.com/?s=george+martin",
+      "text": "George R. R. Martin"
+    },
+    {
+      "url": "https://101audiobooks.com/privacy-policy/",
+      "text": "Privacy Policy"
+    },
+    {
+      "url": "https://101audiobooks.com/arthur-c-clarke-2001-audiobook/",
+      "text": "Listen to: Arthur C. Clarke – 2001 Audiobook"
+    },
+    {
+      "url": "https://101audiobooks.com/author/audiobooks-hq/",
+      "text": "audiobooks hq"
+    }
+  ],
+  "mediaElementCount": 85,
+  "sourceElementCount": 85,
+  "mediaUrlCount": 255,
+  "mediaHosts": [
+    "ipaudio.club",
+    "ipaudio3.club",
+    "ipaudio6.com"
+  ],
+  "jsonLdCount": 1,
+  "restrictionEvidence": [],
+  "htmlBytes": 140125,
+  "note": "Compact structural fixture. Media URLs, descriptions and page scripts intentionally omitted."
+}

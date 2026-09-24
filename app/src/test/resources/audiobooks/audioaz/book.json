@@ -1,0 +1,86 @@
+{
+  "capturedAt": "2026-09-23",
+  "kind": "book",
+  "url": "https://audioaz.com/en/audiobook/the-time-machine-version-7-by-h-g-wells",
+  "title": "Listen to The Time Machine (Version 7) by H. G. Wells - Free Audiobook | AudioAZ | AudioAZ.com 🎧📚",
+  "canonical": "https://audioaz.com/en/audiobook/the-time-machine-version-7-by-h-g-wells",
+  "headings": [
+    "Free Apps",
+    "The Time Machine (Version 7)",
+    "1 / 17 Introduction",
+    "About",
+    "Comments",
+    "Discover More",
+    "More from H. G. Wells"
+  ],
+  "ogImageHost": "f.audioaz.com",
+  "forms": [
+    {
+      "action": "https://audioaz.com/en/search",
+      "method": "GET",
+      "inputs": [
+        "q"
+      ]
+    }
+  ],
+  "sampleLinks": [
+    {
+      "url": "https://audioaz.com/en/browse",
+      "text": "Browse"
+    },
+    {
+      "url": "https://audioaz.com/en/podcasts?page=1&sort=recent",
+      "text": "Podcasts"
+    },
+    {
+      "url": "https://audioaz.com/en/audiobooks?page=1&sort=popular",
+      "text": "Popular"
+    },
+    {
+      "url": "https://audioaz.com/en/az-list/all",
+      "text": "A-Z List"
+    },
+    {
+      "url": "https://audioaz.com/en/genres",
+      "text": "Genres"
+    },
+    {
+      "url": "https://audioaz.com/en/languages",
+      "text": "Languages"
+    },
+    {
+      "url": "https://audioaz.com/en/authors",
+      "text": "Authors"
+    },
+    {
+      "url": "https://audioaz.com/en/comments",
+      "text": "Comments"
+    },
+    {
+      "url": "https://audioaz.com/en/posts?page=1",
+      "text": "Blog"
+    },
+    {
+      "url": "https://audioaz.com/en",
+      "text": "AudioAZ"
+    },
+    {
+      "url": "https://audioaz.com/en/account",
+      "text": "Account"
+    },
+    {
+      "url": "https://audioaz.com/en/history",
+      "text": "Listening History"
+    }
+  ],
+  "mediaElementCount": 1,
+  "sourceElementCount": 2,
+  "mediaUrlCount": 18,
+  "mediaHosts": [
+    "archive.org"
+  ],
+  "jsonLdCount": 4,
+  "restrictionEvidence": [],
+  "htmlBytes": 223461,
+  "note": "Compact structural fixture. Media URLs, descriptions and page scripts intentionally omitted."
+}

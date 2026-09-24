@@ -46,4 +46,16 @@ object DevPreferencesKeys {
      * после обкатки.
      */
     val SELECT_DOCK_NAVIGATION = booleanPreferencesKey("dev_select_dock_navigation")
+
+    /**
+     * Новый вид нижнего дока: капсула матового стекла с подвижной подсветкой активного пункта,
+     * без подписей (см. `ui/home/CapsuleGlassDock.kt`). Отсутствие ключа = ВЫКЛ.
+     */
+    val GLASS_CAPSULE_DOCK = booleanPreferencesKey("dev_glass_capsule_dock")
+
+    /**
+     * Новая анимация нижних панелей: двухфазный морф из кнопки дока через промежуточную форму,
+     * вместо выезда снизу (см. `ui/shared/StagedSheetMotion.kt`). Отсутствие ключа = ВЫКЛ.
+     */
+    val STAGED_SHEET_MOTION = booleanPreferencesKey("dev_staged_sheet_motion")
 }

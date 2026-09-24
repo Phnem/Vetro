@@ -3,6 +3,7 @@ package com.example.myapplication.ui.home
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
@@ -54,6 +55,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
+import kotlinx.coroutines.flow.first
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -78,9 +81,18 @@ import com.example.myapplication.network.AppLanguage
 import com.example.myapplication.isAppInDarkTheme
 import com.example.myapplication.ui.home.stats.StatsCardDeckContent
 import com.example.myapplication.ui.home.stats.StatsCardDetailContent
+import androidx.compose.foundation.layout.offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.IntOffset
+import kotlin.math.roundToInt
 import com.example.myapplication.ui.shared.inertialCollision
 import com.example.myapplication.ui.shared.rememberInertialCollisionState
 import com.example.myapplication.ui.shared.components.GrabberHandle
+import com.example.myapplication.ui.shared.components.MotionBottomSheet
 import com.example.myapplication.ui.shared.components.rememberIosSheetSwipe
 import com.example.myapplication.ui.shared.theme.IosDesign
 import com.example.myapplication.ui.shared.theme.SquircleCornerShape
@@ -115,6 +127,11 @@ fun StatsOverlay(
     val explanationCoordinator: StatsExplanationCoordinator = koinInject()
     val explanations by explanationCoordinator.state.collectAsState()
 
+    // Состояние шторки — отдельным объектом, чтобы снимать оверлей ровно тогда, когда она
+    // действительно схлопнулась, а не по таймеру.
+    val panelState = remember { MutableTransitionState(false) }
+    panelState.targetState = visible
+
     LaunchedEffect(Unit) { visible = true }
 
     fun triggerDismiss() {
@@ -123,7 +140,9 @@ fun StatsOverlay(
 
     LaunchedEffect(visible) {
         if (!visible) {
-            kotlinx.coroutines.delay(250)
+            // Фиксированная задержка обрывала закрытие на середине: панель пропадала вместо
+            // того, чтобы схлопнуться.
+            snapshotFlow { panelState.isIdle && !panelState.currentState }.first { it }
             onDismiss()
         }
     }
@@ -139,61 +158,29 @@ fun StatsOverlay(
         }
     }
 
-    val panelBg = if (isDark) DarkBackground else MaterialTheme.colorScheme.surface
-    val panelCorner = 28.dp
     val swipe = rememberIosSheetSwipe { triggerDismiss() }
 
-    Box(
+    BoxWithConstraints(
         modifier = Modifier
             .fillMaxSize()
             .zIndex(10f),
         contentAlignment = Alignment.BottomCenter
     ) {
-        AnimatedVisibility(
-            visible = visible,
-            enter = fadeIn(tween(200)),
-            exit = fadeOut(tween(150))
+        // Шторка выезжает снизу и уходит вниз (см. MotionBottomSheet). По высоте — по контенту
+        // (когда жанров нет — короткая, без пустоты снизу), но не выше 92% экрана; StatsContent
+        // внутри скроллится, если контент высокий.
+        MotionBottomSheet(
+            visibleState = panelState,
+            onDismiss = ::triggerDismiss,
+            isDark = isDark,
+            swipe = swipe,
+            panelModifier = Modifier
+                .fillMaxWidth()
+                .heightIn(max = maxHeight * 0.92f),
         ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color.Black.copy(alpha = OverlayThemeTokens.scrimAlpha(isDark)))
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null
-                    ) { triggerDismiss() }
-            )
-        }
-
-        AnimatedVisibility(
-            visible = visible,
-            enter = slideInVertically(
-                initialOffsetY = { it },
-                animationSpec = MotionTokens.sheetPresent()
-            ) + fadeIn(),
-            exit = slideOutVertically(
-                targetOffsetY = { it },
-                animationSpec = MotionTokens.sheetDismissForced()
-            ) + fadeOut()
-        ) {
-            BoxWithConstraints {
-                // Панель по высоте контента (когда жанров нет — короткая, без пустоты снизу),
-                // но не выше 92% экрана; StatsContent внутри скроллится, если контент высокий.
-                val maxSheetHeight = maxHeight * 0.92f
-                Column(
-                    modifier = Modifier
-                        .then(swipe.panelModifier)
-                        .fillMaxWidth()
-                        .heightIn(max = maxSheetHeight)
-                        .iosSheetContainer(
-                            SquircleCornerShape(IosDesign.SheetCorner, IosDesign.SheetCorner, 0.dp, 0.dp),
-                            isDark,
-                            IosDesign.sheetSurface(isDark),
-                        )
-                        .navigationBarsPadding(),
-                ) {
-                    GrabberHandle(isDark, modifier = swipe.handleModifier)
-                    StatsContent(
+            Column(modifier = Modifier.navigationBarsPadding()) {
+                GrabberHandle(isDark, modifier = swipe.handleModifier)
+                StatsContent(
                     animeList = animeList,
                     strings = strings,
                     appLanguage = appLanguage,
@@ -205,8 +192,7 @@ fun StatsOverlay(
                     onCardTap = { expandedCard = it },
                     onBackFromDetail = { expandedCard = null },
                     onDismiss = ::triggerDismiss
-                    )
-                }
+                )
             }
         }
     }

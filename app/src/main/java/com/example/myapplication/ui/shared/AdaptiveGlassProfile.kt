@@ -26,6 +26,18 @@ val LocalAdaptiveGlassEnabled = compositionLocalOf { true }
 /** True while the main collection list is scrolling (drag or fling). */
 val LocalAdaptiveGlassScrollInProgress = compositionLocalOf { false }
 
+/**
+ * Dev toggle: нижний док — капсула матового стекла вместо прежнего «жидкого» (по умолчанию выкл).
+ *
+ * Через CompositionLocal, а не параметром: док стоит глубоко внутри экрана коллекции, и тянуть
+ * временный флаг через всю цепочку вызовов ради тумблера, который уедет после обкатки, дороже, чем
+ * он стоит.
+ */
+val LocalGlassCapsuleDock = compositionLocalOf { false }
+
+/** Dev toggle: нижние панели раскрываются морфом из своей кнопки (по умолчанию выкл). */
+val LocalStagedSheetMotion = compositionLocalOf { false }
+
 enum class GlassPreset(
     val fullBlur: Dp,
     val reducedBlur: Dp,
@@ -117,12 +129,31 @@ fun rememberAdaptiveGlassEffects(preset: GlassPreset): AdaptiveGlassEffects {
     )
 }
 
+/**
+ * Нанести «жидкое» стекло — ИЛИ матовое, если включён тумблер материала.
+ *
+ * Развилка стоит здесь, в одной точке, а не у каждого вызывающего. Материал — это свойство всего
+ * приложения, а не отдельной кнопки: док из матового стекла рядом с линзовым поиском и линзовой
+ * шапкой выглядит не как новый вид, а как недоделка. Поэтому тумблер переключает ВСЕ поверхности,
+ * которые строятся этим модификатором, и вызывающим про это знать не нужно.
+ *
+ * Ветка структурная — она меняет набор узлов цепочки, и переключение тумблера на живом экране
+ * может один раз показать плоскую заливку вместо стекла (известные грабли `layerBackdrop` в этой
+ * кодовой базе). Для dev-флага это приемлемо: восстановление штатное, см. `GlassBackdropRecovery`.
+ */
 @Composable
 fun Modifier.adaptiveGlassBackdrop(
     backdrop: Backdrop,
     shape: Shape,
     effects: AdaptiveGlassEffects,
 ): Modifier {
+    if (LocalGlassCapsuleDock.current) {
+        return this.frostedGlass(
+            backdrop = backdrop,
+            shape = shape,
+            material = FrostedMaterials.dock(),
+        )
+    }
     val density = LocalDensity.current
     val blurPx = with(density) { effects.blur.toPx() }
     val lensRefractionPx = with(density) { effects.lensRefraction.toPx() }

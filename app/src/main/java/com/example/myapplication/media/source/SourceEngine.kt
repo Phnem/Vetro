@@ -4,6 +4,7 @@ import android.util.Log
 import com.example.myapplication.data.local.WebLinksStore
 import com.example.myapplication.data.models.Anime
 import com.example.myapplication.domain.seasons.SeasonInfo
+import com.example.myapplication.domain.seasons.forSourceLookup
 import com.example.myapplication.media.source.movieseries.MovieSeriesStreamingProvider
 import com.example.myapplication.media.source.movieseries.NoProviderHealth
 import com.example.myapplication.media.source.movieseries.ProviderHealthRegistry
@@ -39,7 +40,13 @@ class SourceEngine(
         PlaybackRequest(anime, episodeNumber, seasonInfo, language)
     ).hostersOrEmpty
 
-    suspend fun resolve(request: PlaybackRequest): PlaybackResolution {
+    suspend fun resolve(incoming: PlaybackRequest): PlaybackResolution {
+        // Единственная точка, где номер сезона приводится к шкале источников. Спецвыпуск (OVA,
+        // фильм франшизы) — самостоятельный релиз, а не N-й сезон, и его технический номер ни
+        // одному источнику показывать нельзя: AniLibria берёт релиз ИНДЕКСОМ по цепочке и молча
+        // отдала бы чужой сезон. Нормализуем здесь, а не в каждом провайдере, — иначе следующий
+        // добавленный источник снова забудет это сделать.
+        val request = incoming.copy(seasonInfo = incoming.seasonInfo?.forSourceLookup())
         if (request.episodeNumber <= 0) return PlaybackResolution.NoMatch
         val route = PlaybackRoutingPolicy.route(request.mediaType, request.language)
         if (route == PlaybackRoute.None) return PlaybackResolution.NotConfigured(request.mediaType)

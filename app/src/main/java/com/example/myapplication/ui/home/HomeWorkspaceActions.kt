@@ -28,6 +28,7 @@ import androidx.compose.ui.unit.dp
 import com.example.myapplication.HeroiconsRectangleStack
 import com.example.myapplication.data.models.UiStrings
 import com.example.myapplication.isAppInDarkTheme
+import com.example.myapplication.ui.shared.stagedMorphOrigin
 import com.example.myapplication.ui.shared.theme.BrandBlue
 import com.example.myapplication.ui.shared.theme.BrandRed
 
@@ -61,6 +62,14 @@ fun WorkspaceSortNotificationActions(
     modifier: Modifier = Modifier,
     middleAction: TopDockMiddleAction = TopDockMiddleAction.SYNC_PANEL,
     onOpenStats: () -> Unit = {},
+    /**
+     * Показывать ли среднюю кнопку.
+     *
+     * В объединённом режиме её содержимое (статистика и панель синхронизации) уехало в меню
+     * нижнего дока, и верхнему доку остаются ровно две вещи: сортировка и тип контента. Держать
+     * третью кнопку, дублирующую пункт меню, значит предлагать два пути к одному экрану.
+     */
+    showMiddleAction: Boolean = true,
 ) {
     // Иконки дока — ярче/белее: чистый белый на полной непрозрачности в тёмной теме.
     val iconTint = if (isAppInDarkTheme()) Color.White else MaterialTheme.colorScheme.onSurface
@@ -93,8 +102,18 @@ fun WorkspaceSortNotificationActions(
         } else {
             Modifier
         }
+        if (showMiddleAction) {
         BadgedBox(
-            modifier = notifModifier,
+            modifier = notifModifier.then(
+                // Морф панели идёт ИЗ этой кнопки (см. StagedSheetMotion.kt). В рабочей области
+                // нижний док переключает страницы, поэтому единственная точка входа в
+                // статистику — здесь, и расти панель обязана отсюда.
+                if (middleAction == TopDockMiddleAction.STATS) {
+                    Modifier.stagedMorphOrigin()
+                } else {
+                    Modifier
+                },
+            ),
             badge = {
                 // Счётчик обновлений относится к панели подключения; у статистики его нет.
                 if (middleAction == TopDockMiddleAction.SYNC_PANEL && updatesCount > 0) {
@@ -131,6 +150,7 @@ fun WorkspaceSortNotificationActions(
                     tint = iconTint,
                 )
             }
+        }
         }
         val settingsModifier = if (useDockSizing) {
             Modifier

@@ -31,11 +31,16 @@ internal fun mergeSeasonDiscovery(
     known: List<SeasonInfo>,
     discovered: List<DiscoveredSeason>,
 ): List<SeasonInfo> {
-    val byNumber = known.associateByTo(LinkedHashMap()) { it.seasonNumber }
+    // Спецвыпуски (OVA, фильмы) в шкале источников просмотра не существуют: те нумеруют только
+    // сезоны. Сливаем сезонную часть, а спецвыпуски возвращаем в хвост нетронутыми — их номера
+    // лежат в своём диапазоне ([SPECIAL_SEASON_BASE]) и с сезонными пересечься не могут.
+    val seasonsOnly = known.filterNot { it.isSpecial }
+    val specials = known.filter { it.isSpecial }
+    val byNumber = seasonsOnly.associateByTo(LinkedHashMap()) { it.seasonNumber }
     for ((source, seasons) in discovered.groupBy { it.source }) {
-        mergeOneSourceInto(byNumber, known, seasons, source)
+        mergeOneSourceInto(byNumber, seasonsOnly, seasons, source)
     }
-    return byNumber.values.sortedBy { it.seasonNumber }
+    return byNumber.values.sortedBy { it.seasonNumber } + specials
 }
 
 /**
@@ -61,6 +66,9 @@ private fun mergeOneSourceInto(
 
     for (season in discovered) {
         if (season.seasonNumber <= 0 || season.episodes <= 0) continue
+        // Номер из диапазона спецвыпусков источник выдать не может — это мусор из разбора
+        // страницы, и пустив его дальше, мы бы затёрли им строку OVA.
+        if (season.seasonNumber >= SPECIAL_SEASON_BASE) continue
         if (alignment != null) {
             // Сезон-склейка знает сумму по нескольким каталожным сезонам — переносить её
             // в одну строку значит её завысить. Каталог здесь точнее, оставляем как есть.

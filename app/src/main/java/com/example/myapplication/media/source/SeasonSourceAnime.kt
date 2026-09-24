@@ -39,7 +39,10 @@ internal fun Anime.seasonSourceQuery(seasonInfo: SeasonInfo?): SeasonSourceQuery
     if (seasonInfo == null) {
         return SeasonSourceQuery(this, seasonNumber = 1, seasonIdentifiable = false)
     }
-    val seasonNumber = seasonInfo.seasonNumber.coerceAtLeast(1)
+    // Спецвыпуск — самостоятельный релиз, а не N-й сезон: его номер в расклад вписан лишь затем,
+    // чтобы строки не делили один ключ. Отдать его источнику значило бы попросить несуществующий
+    // «сезон 5» вместо OVA, у которой своя страница.
+    val seasonNumber = if (seasonInfo.isSpecial) 1 else seasonInfo.seasonNumber.coerceAtLeast(1)
     val seasonTitle = seasonInfo.title?.trim().orEmpty()
     if (seasonTitle.isEmpty()) {
         // Строка сезона от источника просмотра («Найти ещё») названия не несёт. Раньше здесь

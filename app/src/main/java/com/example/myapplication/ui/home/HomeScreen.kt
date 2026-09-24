@@ -107,6 +107,8 @@ import com.example.myapplication.ui.home.recommendations.getRecommendationsStrin
 import com.example.myapplication.ui.home.cardmenu.CardActionMenuOverlay
 import com.example.myapplication.ui.home.cardmenu.CardMenuTarget
 import com.example.myapplication.ui.home.updates.EpisodeUpdateStack
+import com.example.myapplication.ui.shared.LocalGlassCapsuleDock
+import com.example.myapplication.ui.shared.LocalWorkspaceSearch
 import com.example.myapplication.ui.navigation.navigateToAddEdit
 import com.example.myapplication.ui.navigation.navigateToDetails
 import com.example.myapplication.ui.navigation.navigateToInspect
@@ -212,6 +214,8 @@ fun HomeScreen(
     var pendingSwipeReset by remember { mutableStateOf<(suspend () -> Unit)?>(null) }
     /** Карточка, поднятая долгим удержанием (контекстное меню). */
     var cardMenuTarget by remember { mutableStateOf<CardMenuTarget?>(null) }
+    // Отдельно от цели: меню обязано дожить до конца своего закрытия, см. CardActionMenuOverlay.
+    var cardMenuVisible by remember { mutableStateOf(false) }
     LaunchedEffect(cardMenuTarget != null) { onCardSelectionChange(cardMenuTarget != null) }
     DisposableEffect(Unit) {
         onDispose {
@@ -290,6 +294,33 @@ fun HomeScreen(
 
     // Правило автоскрытия общее с доком рабочей области — оно живёт в `rememberDockAutoHide`.
     val dockAutoHide = rememberDockAutoHide()
+    // Поиск в рабочей области открывается кнопкой дока, а док живёт снаружи пейджера —
+    // общаются они заявками (см. WorkspaceSearchState). В классическом режиме связи нет:
+    // там кнопка поиска стоит в том же доке, что и всё остальное.
+    val workspaceSearch = LocalWorkspaceSearch.current
+    // Объединённый режим: рабочая область + капсульный док. Только в нём у нижнего дока есть
+    // меню, в которое переехали статистика и синхронизация.
+    val mergedDockMode = hostedInWorkspace && LocalGlassCapsuleDock.current
+    if (hostedInWorkspace) {
+        LaunchedEffect(isSearchVisible) { workspaceSearch.report(isSearchVisible) }
+        // Уехали на дальний раздел — пейджер выбрасывает страницу из композиции вместе с её
+        // состоянием поиска. Не сообщить об этом значит оставить кнопку дока подсвеченной над
+        // поиском, которого больше нет: первое нажатие тогда уходило бы впустую, на «закрыть».
+        DisposableEffect(Unit) { onDispose { workspaceSearch.report(false) } }
+        LaunchedEffect(workspaceSearch.pending) {
+            when (workspaceSearch.consume()) {
+                true -> isSearchVisible = true
+                false -> {
+                    isSearchVisible = false
+                    viewModel.updateSearchQuery("")
+                    focusManager.clearFocus()
+                    kbd?.hide()
+                }
+                null -> Unit
+            }
+        }
+    }
+
     val finalDockVisible = dockAutoHide.visible || isSearchVisible
 
     BackHandler(enabled = isSearchVisible || uiState.searchQuery.isNotEmpty()) {
@@ -750,6 +781,7 @@ fun HomeScreen(
                                                                     isFavorite = anime.isFavorite,
                                                                     boundsInRoot = bounds,
                                                                 )
+                                                                cardMenuVisible = true
                                                             },
                                                         )
                                                     }
@@ -1097,6 +1129,9 @@ fun HomeScreen(
                                 dismissCloudSyncPill()
                                 showCSheet = true
                             },
+                            // В объединённом режиме статистика и синхронизация уехали в меню
+                            // нижнего дока — верхнему остаются сортировка и тип контента.
+                            showMiddleAction = !mergedDockMode,
                         )
                     }
                 }
@@ -1123,6 +1158,7 @@ fun HomeScreen(
                             dismissCloudSyncPill()
                             showCSheet = true
                         },
+                        showMiddleAction = !mergedDockMode,
                     )
                 }
             }
@@ -1143,6 +1179,7 @@ fun HomeScreen(
                         performHaptic(view, "light")
                         viewModel.dismissUpdate(update, ctx)
                     },
+                    backdrop = backdrop,
                     modifier = Modifier
                         .align(Alignment.TopCenter)
                         .zIndex(40f)
@@ -1158,28 +1195,31 @@ fun HomeScreen(
                 val systemBars = WindowInsets.systemBars.asPaddingValues()
                 CardActionMenuOverlay(
                     target = target,
+                    visible = cardMenuVisible,
+                    backdrop = backdrop,
                     // Ряд кнопок не должен уезжать под док рабочей области и нав-бар.
                     bottomInset = systemBars.calculateBottomPadding() + 100.dp,
                     topInset = systemBars.calculateTopPadding() + 8.dp,
-                    onDismiss = { cardMenuTarget = null },
+                    onDismiss = { cardMenuVisible = false },
+                    onClosed = { cardMenuTarget = null },
                     onToggleFavorite = {
                         performHaptic(view, "light")
                         animeToFavorite = list.firstOrNull { it.id == target.state.id }
-                        cardMenuTarget = null
+                        cardMenuVisible = false
                     },
                     onDelete = {
                         performHaptic(view, "warning")
                         animeToDelete = list.firstOrNull { it.id == target.state.id }
-                        cardMenuTarget = null
+                        cardMenuVisible = false
                     },
                     onEdit = {
                         performHaptic(view, "light")
-                        cardMenuTarget = null
+                        cardMenuVisible = false
                         navController.navigateToAddEdit(target.state.id)
                     },
                     onDetails = {
                         performHaptic(view, "light")
-                        cardMenuTarget = null
+                        cardMenuVisible = false
                         navController.navigateToDetails(target.state.id)
                     },
                     modifier = Modifier.zIndex(50f),

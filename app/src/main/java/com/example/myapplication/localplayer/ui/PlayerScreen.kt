@@ -361,6 +361,8 @@ fun PlayerScreen(
                 // Кнопку показываем только когда автоскип ВЫКЛ и мы внутри отрезка опенинга/эндинга.
                 skipVisible = !autoSkipEnabled && activeSegment != null,
                 onSkip = skipPlayback.manualSkip,
+                undoOffer = skipPlayback.undoOffer,
+                onUndoSkip = skipPlayback.undoSkip,
                 onBack = onBack,
                 onEnterPip = onEnterPip,
                 onSelectSpeed = { s -> speed = s; exoPlayer.playbackParameters = PlaybackParameters(s) },

@@ -1,5 +1,28 @@
 # Media3 API research for streaming reliability Level 1
 
+## Audiobook gate update — 2026-09-23 (AB-02)
+
+This section supersedes the older version-status snapshot below for the audiobook work.
+The [official Media3 release table](https://developer.android.com/jetpack/androidx/releases/media3)
+lists **1.11.1** (2026-09-10) as the latest stable release. The official dependency table
+requires the same version for ExoPlayer, HLS, DASH, UI, session, Compose UI, OkHttp datasource,
+and ExoPlayer WorkManager. `media3-ui-compose` supplies core state holders for a custom UI;
+the Material3 UI artifact is unnecessary for Vetro's custom controls.
+
+Media3 1.11.0 upgraded its own Kotlin compiler from 2.0.20 to 2.2.0. The app currently uses
+Kotlin 2.1.0; AB-02 must validate the resulting metadata compatibility by compiling rather than
+assuming that a Kotlin upgrade is required. The project's `minSdk` 26 is above the general
+AndroidX 24 baseline. Release notes identify HLS, player surface, session, and ABR changes,
+so compile plus device smoke are separate gates. The existing app uses `PlayerView`,
+`DefaultLoadControl`, a custom `AdaptiveTrackSelection`, and standalone `MediaSession`; it does
+not currently use `setCustomLayout` or a Media3 download service.
+
+Official references:
+
+- [Media3 releases](https://developer.android.com/jetpack/androidx/releases/media3)
+- [Media3 Compose UI](https://developer.android.com/media/media3/ui/compose)
+- [Media3 ExoPlayer setup](https://developer.android.com/media/media3/exoplayer/hello-world)
+
 Verified on 2026-07-31 against first-party Android documentation and the official
 `androidx/media` repository. The project currently pins every Media3 artifact to
 `1.4.1` in `gradle/libs.versions.toml`; its `minSdk` is 26.
@@ -315,4 +338,3 @@ Practical choices for this repository:
 3. **If the #3326 fix is mandatory immediately:** 1.11.0-rc01 contains it, but is
    prerelease. Otherwise wait for 1.11 stable before making that fix the basis of
    a production upgrade.
-

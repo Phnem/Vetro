@@ -1,0 +1,17 @@
+{
+  "sourceUrl": "https://archive.org/advancedsearch.php",
+  "response": {
+    "numFound": 103,
+    "start": 0,
+    "docs": [
+      {
+        "identifier": "encyclicalpopepiusix_2209_librivox",
+        "title": "Encyclical Letters of Pope Pius IX"
+      },
+      {
+        "identifier": "lifelettersmarywollstonecraftshelley_2507_librivox",
+        "title": "The Life and Letters of Mary Wollstonecraft Shelley, Volume 2"
+      }
+    ]
+  }
+}

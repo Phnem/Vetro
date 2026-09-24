@@ -60,6 +60,7 @@ import androidx.navigation.NavController
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 import coil3.request.crossfade
+import com.example.myapplication.domain.seasons.shortLabel
 import com.example.myapplication.data.models.Anime
 import com.example.myapplication.data.models.MediaType
 import com.example.myapplication.manga.ui.MangaChaptersPage
@@ -748,9 +749,9 @@ private fun SeasonChip(
         Spacer(Modifier.width(7.dp))
         Text(
             text = if (ru) {
-                "S${season.seasonNumber} · ${season.episodes} эп."
+                "${season.shortLabel(true)} · ${season.episodes} эп."
             } else {
-                "S${season.seasonNumber} · ${season.episodes} ep."
+                "${season.shortLabel(false)} · ${season.episodes} ep."
             },
             style = MaterialTheme.typography.labelLarge.copy(
                 fontFamily = SnProFamily,

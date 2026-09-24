@@ -42,6 +42,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.tween
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.zIndex
 import androidx.compose.ui.graphics.Brush
@@ -130,6 +133,23 @@ fun InspectScreen(
         uri?.let { viewModel.analyzeImage(context, it) }
     }
 
+    // Содержимое окна идёт своей дорожкой (§5 спеки движения): оболочка вырастает из кнопки
+    // сразу, а экран проявляется, когда она почти раскрылась, и гаснет первым при закрытии.
+    val windowContentAlpha by animatedVisibilityScope.transition.animateFloat(
+        transitionSpec = {
+            if (targetState == EnterExitState.Visible) {
+                tween(
+                    durationMillis = MotionTokens.EaseEnterMillis,
+                    delayMillis = MotionTokens.WindowContentRevealDelayMillis,
+                    easing = MotionTokens.EaseEnter,
+                )
+            } else {
+                tween(MotionTokens.EaseExitMillis, easing = MotionTokens.EaseExit)
+            }
+        },
+        label = "inspectContentAlpha",
+    ) { state -> if (state == EnterExitState.Visible) 1f else 0f }
+
     with(sharedTransitionScope) {
         Box(
             modifier = Modifier
@@ -137,11 +157,27 @@ fun InspectScreen(
                 .sharedBounds(
                     sharedContentState = rememberSharedContentState(key = "inspect_container"),
                     animatedVisibilityScope = animatedVisibilityScope,
-                    resizeMode = SharedTransitionScope.ResizeMode.RemeasureToBounds,
+                    // Оболочка видна с первого кадра — прозрачность содержимого ведёт
+                    // windowContentAlpha. Уходя, оболочка гаснет, пока схлопывается в кнопку.
+                    enter = EnterTransition.None,
+                    exit = fadeOut(
+                        tween(
+                            durationMillis = WINDOW_SHELL_FADE_MS,
+                            delayMillis = MotionTokens.EaseExitMillis,
+                            easing = MotionTokens.EaseExit,
+                        ),
+                    ),
+                    // Открытие: окно — цель, и пружина берётся с его стороны.
+                    boundsTransform = { _, _ -> MotionTokens.largeSurfaceEnterBounds },
+                    // Экран меряется один раз и масштабируется: перемерять пейджер и списки на
+                    // каждом кадре роста из 36dp в весь экран — провал FPS (закон 7).
+                    resizeMode = SharedTransitionScope.ResizeMode.scaleToBounds(),
                     clipInOverlayDuringTransition = OverlayClip(RoundedCornerShape(32.dp))
                 )
                 .clip(RoundedCornerShape(32.dp))
+                .background(Color.Black)
         ) {
+            Box(modifier = Modifier.graphicsLayer { alpha = windowContentAlpha }) {
             InspectVisualSearchTheme {
                 val cardShape = RoundedCornerShape(22.dp)
                 val outlineMuted = MaterialTheme.colorScheme.outline.copy(alpha = 0.45f)
@@ -424,9 +460,13 @@ fun InspectScreen(
                     )
                 }
             }
+            }
         }
     }
 }
+
+/** Оболочка окна гаснет, пока схлопывается в кнопку: к гнезду она подлетает уже прозрачной. */
+private const val WINDOW_SHELL_FADE_MS = 200
 
 @Composable
 private fun AiConnectPromptCard(

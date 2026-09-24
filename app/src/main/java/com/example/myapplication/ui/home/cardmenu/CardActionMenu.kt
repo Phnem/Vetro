@@ -48,8 +48,11 @@ import androidx.compose.ui.unit.dp
 import com.example.myapplication.isAppInDarkTheme
 import com.example.myapplication.ui.home.AnimeCardBody
 import com.example.myapplication.ui.home.AnimeCardState
+import com.example.myapplication.ui.shared.FrostedMaterials
+import com.example.myapplication.ui.shared.frostedGlass
 import com.example.myapplication.ui.shared.theme.MotionTokens
 import com.example.myapplication.ui.shared.theme.OverlayThemeTokens
+import com.kyant.backdrop.Backdrop
 import kotlin.math.roundToInt
 
 // ==========================================
@@ -81,10 +84,21 @@ data class CardMenuTarget(
 @Composable
 fun CardActionMenuOverlay(
     target: CardMenuTarget,
+    /**
+     * Показано ли меню.
+     *
+     * Отдельный признак, а не «есть цель — значит открыто»: уходить оверлей обязан так же, как
+     * пришёл, а для этого он должен пережить собственное закрытие. Цель снимает уже [onClosed],
+     * когда обратный ход доигран.
+     */
+    visible: Boolean,
+    /** Живой бэкдроп страницы: кнопки действий сделаны из матового стекла над её содержимым. */
+    backdrop: Backdrop,
     /** Нижняя занятая зона (док + нав-бар): ряд кнопок не должен под неё уезжать. */
     bottomInset: Dp,
     topInset: Dp,
     onDismiss: () -> Unit,
+    onClosed: () -> Unit,
     onToggleFavorite: () -> Unit,
     onDelete: () -> Unit,
     onEdit: () -> Unit,
@@ -99,9 +113,15 @@ fun CardActionMenuOverlay(
     var overlayOrigin by remember { mutableStateOf<Offset?>(null) }
 
     val progress = remember { Animatable(0f) }
-    LaunchedEffect(target.state.id) {
-        progress.snapTo(0f)
-        progress.animateTo(1f, animationSpec = MotionTokens.menuPop())
+    LaunchedEffect(visible) {
+        if (visible) {
+            progress.animateTo(1f, animationSpec = MotionTokens.menuPop())
+        } else {
+            // Обратный ход той же дорогой, но без отскока: уходящее меню освобождает карточку,
+            // а не прощается с ней. Цель снимаем ПОСЛЕ анимации — иначе снимать было бы нечего.
+            progress.animateTo(0f, animationSpec = MotionTokens.sheetDismissForced())
+            onClosed()
+        }
     }
 
     BoxWithConstraints(
@@ -199,25 +219,25 @@ fun CardActionMenuOverlay(
                 CardActionButton(
                     icon = if (target.isFavorite) Icons.Rounded.Star else Icons.Rounded.StarBorder,
                     tint = OverlayThemeTokens.FavoriteGold,
-                    isDark = isDark,
+                    backdrop = backdrop,
                     onClick = onToggleFavorite,
                 )
                 CardActionButton(
                     icon = Icons.Rounded.Delete,
                     tint = Color(0xFFE5382B),
-                    isDark = isDark,
+                    backdrop = backdrop,
                     onClick = onDelete,
                 )
                 CardActionButton(
                     icon = Icons.Filled.Edit,
                     tint = if (isDark) Color.White else Color(0xFF1C1C1E),
-                    isDark = isDark,
+                    backdrop = backdrop,
                     onClick = onEdit,
                 )
                 CardActionButton(
                     icon = Icons.Outlined.Info,
                     tint = if (isDark) Color.White else Color(0xFF1C1C1E),
-                    isDark = isDark,
+                    backdrop = backdrop,
                     onClick = onDetails,
                 )
             }
@@ -225,18 +245,29 @@ fun CardActionMenuOverlay(
     }
 }
 
+/**
+ * Круглая кнопка действия.
+ *
+ * Материал — матовое стекло, а не сплошная заливка: кнопка висит над затемнённым и размытым
+ * списком, то есть ровно над той информацией, ради которой стекло и существует. Сплошной кружок
+ * на этом фоне читался как вырезанная дырка.
+ */
 @Composable
 private fun CardActionButton(
     icon: ImageVector,
     tint: Color,
-    isDark: Boolean,
+    backdrop: Backdrop,
     onClick: () -> Unit,
 ) {
     Box(
         modifier = Modifier
             .size(ACTION_SIZE)
             .clip(CircleShape)
-            .background(if (isDark) Color(0xFF2C2C2E) else Color.White)
+            .frostedGlass(
+                backdrop = backdrop,
+                shape = CircleShape,
+                material = FrostedMaterials.dock(),
+            )
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,

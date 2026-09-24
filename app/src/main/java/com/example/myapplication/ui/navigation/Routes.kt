@@ -1,6 +1,8 @@
 package com.example.myapplication.ui.navigation
 
+import androidx.navigation.NavBackStackEntry
 import androidx.navigation.NavDestination
+import androidx.navigation.toRoute
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.serializer
 
@@ -51,4 +53,19 @@ fun NavDestination?.isDeepLinkReady(): Boolean {
 fun NavDestination?.isDetailsDestination(): Boolean {
     val route = this?.route ?: return false
     return route.contains("DetailsRoute")
+}
+
+/**
+ * Экран, который в рабочей области открывается модально из меню ТТМ: «Кадр» и добавление
+ * нового тайтла.
+ *
+ * У обоих корень — shared-bounds морф. В старом доке пара — иконка раздела, в рабочей области —
+ * гнездо «Ещё», из которого открыто меню (см. WorkspaceDock); переход маршрута здесь отвечает
+ * только за то, что лежит вне морфа. Редактирование существующего тайтла сюда не входит: оно
+ * морфит из карточки, и пара у него своя.
+ */
+fun NavBackStackEntry.isWorkspaceModal(): Boolean {
+    val route = destination.route ?: return false
+    if (route.contains("InspectRoute")) return true
+    return route.contains("AddEditRoute") && toRoute<AddEditRoute>().animeId == null
 }

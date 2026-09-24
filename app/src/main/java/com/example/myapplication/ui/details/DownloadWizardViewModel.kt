@@ -10,6 +10,8 @@ import com.example.myapplication.download.FileIpcManager
 import com.example.myapplication.download.InputTask
 import com.example.myapplication.download.OutputTask
 import com.example.myapplication.domain.seasons.SeasonInfo
+import com.example.myapplication.domain.seasons.displayLabel
+import com.example.myapplication.domain.seasons.forSourceLookup
 import com.example.myapplication.network.AppLanguage
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -139,7 +141,17 @@ class DownloadWizardViewModel(
         val region = if (language == AppLanguage.RU) "RU" else "EN"
         val moviesDir = getApplication<Application>()
             .getExternalFilesDir(Environment.DIRECTORY_MOVIES)?.absolutePath
-        val outputDir = "$moviesDir/Vetro/${animeTitle.sanitizeForPath()}/Season_${season.seasonNumber}"
+        // У спецвыпуска технический номер (см. SPECIAL_SEASON_BASE) — ни в путь, ни воркеру он
+        // не годится: «Season_1000» на диске, а по такому сезону источник ничего не отдаст.
+        // Папку называем по самому выпуску, а воркеру уходит его нормализованный номер.
+        val lookupSeason = season.forSourceLookup()
+        val seasonDir = if (season.isSpecial) {
+            "Special_${season.displayLabel(ru = false).sanitizeForPath()}" +
+                (season.title?.let { "_${it.sanitizeForPath()}" } ?: "")
+        } else {
+            "Season_${season.seasonNumber}"
+        }
+        val outputDir = "$moviesDir/Vetro/${animeTitle.sanitizeForPath()}/$seasonDir"
 
         val task = InputTask(
             taskId = taskId,
@@ -147,7 +159,7 @@ class DownloadWizardViewModel(
             searchQuery = animeTitle,
             region = region,
             episodeRange = episodeRange,
-            seasonNumber = season.seasonNumber,
+            seasonNumber = lookupSeason.seasonNumber,
             quality = quality.label,
             outputDir = outputDir,
             isDebug = false,

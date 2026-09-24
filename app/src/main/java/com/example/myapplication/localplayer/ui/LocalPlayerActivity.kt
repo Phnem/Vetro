@@ -61,6 +61,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.myapplication.localplayer.model.LocalEpisode
 import com.example.myapplication.domain.enrichment.CollectionEnrichmentCoordinator
 import com.example.myapplication.domain.enrichment.InteractiveMediaPauseViewModel
+import com.example.myapplication.media.ui.finishIfPipWindowClosed
+import com.example.myapplication.media.ui.finishIfStoppedOutsidePip
 import com.example.myapplication.media.ui.PipActionsController
 import com.example.myapplication.media.ui.PipHostActivity
 import com.example.myapplication.media.ui.PipPlaybackCommands
@@ -82,6 +84,8 @@ class LocalPlayerActivity : ComponentActivity(), PipHostActivity {
 
     private val enrichmentCoordinator: CollectionEnrichmentCoordinator by inject()
     private val pipState = androidx.compose.runtime.mutableStateOf(false)
+    /** Экран хоть раз уходил в PiP — см. [finishIfStoppedOutsidePip]. */
+    private var wasInPip = false
 
     // Кнопки PiP-окна; состояние в них присылает PlayerScreen, пока плеер жив.
     private val pipActions = PipActionsController(this)
@@ -145,6 +149,17 @@ class LocalPlayerActivity : ComponentActivity(), PipHostActivity {
     ) {
         super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
         pipState.value = isInPictureInPictureMode
+        if (isInPictureInPictureMode) wasInPip = true
+        // Крестик на окне закрывает экран целиком — иначе остановленная активити остаётся жива
+        // и продолжает играть серию в фоне.
+        finishIfPipWindowClosed(isInPictureInPictureMode)
+    }
+
+    override fun onStop() {
+        super.onStop()
+        // Страховка к проверке выше: порядок onStop и onPictureInPictureModeChanged контрактом
+        // не закреплён — см. finishIfStoppedOutsidePip.
+        finishIfStoppedOutsidePip(wasInPip)
     }
 
     override fun onDestroy() {

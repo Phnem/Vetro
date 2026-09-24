@@ -23,35 +23,42 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
+import android.content.Intent
+import androidx.compose.runtime.LaunchedEffect
+import androidx.core.net.toUri
 import com.example.myapplication.NotificationSyncOverlay
-import com.example.myapplication.ui.addedit.AddEditScreen
-import com.example.myapplication.ui.addedit.AddEditViewModel
 import com.example.myapplication.ui.home.HomeScreen
 import com.example.myapplication.ui.home.HomeViewModel
-import com.example.myapplication.ui.inspect.InspectScreen
-import com.example.myapplication.ui.inspect.InspectViewModel
+import com.example.myapplication.ui.home.CapsuleDockInset
+import com.example.myapplication.ui.home.StatsOverlay
 import com.example.myapplication.ui.settings.SettingsScreen
 import com.example.myapplication.ui.settings.SettingsViewModel
+import com.example.myapplication.ui.navigation.navigateToAddEdit
+import com.example.myapplication.ui.navigation.navigateToInspect
 import com.example.myapplication.ui.navigation.navigateToWelcome
+import com.example.myapplication.ui.shared.DONATION_URL
 import com.example.myapplication.ui.shared.LocalAdaptiveGlassScrollInProgress
+import com.example.myapplication.ui.shared.LocalGlassCapsuleDock
 import com.example.myapplication.ui.shared.theme.MotionTokens
 import com.example.myapplication.utils.getStrings
 import com.example.myapplication.utils.performHaptic
 import com.kyant.backdrop.backdrops.layerBackdrop
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import kotlinx.coroutines.launch
-import org.koin.androidx.compose.koinViewModel
 import org.koin.compose.koinInject
 
 /**
@@ -69,13 +76,13 @@ import org.koin.compose.koinInject
 fun WorkspaceScreen(
     navController: NavHostController,
     homeViewModel: HomeViewModel,
-    inspectViewModel: InspectViewModel,
     settingsViewModel: SettingsViewModel,
     sharedTransitionScope: SharedTransitionScope,
     animatedVisibilityScope: AnimatedVisibilityScope,
 ) {
     val scope = rememberCoroutineScope()
     val view = LocalView.current
+    val context = LocalContext.current
     val language by homeViewModel.uiLanguage.collectAsStateWithLifecycle()
     val homeUiState by homeViewModel.uiState.collectAsStateWithLifecycle()
     val syncReport by homeViewModel.syncReport.collectAsStateWithLifecycle()
@@ -93,9 +100,24 @@ fun WorkspaceScreen(
     var pageDockVisible by remember { mutableStateOf(true) }
     var pageScrollInProgress by remember { mutableStateOf(false) }
     var showSyncPanel by remember { mutableStateOf(false) }
+    // Меню последнего гнезда дока раскрывается поверх страницы, поэтому его состояние живёт
+    // рядом с доком, а не внутри какой-либо страницы.
+    var menuOpen by remember { mutableStateOf(false) }
+    var menuOrigin by remember { mutableStateOf<Rect?>(null) }
+    // Статистика переехала из верхнего дока в меню, поэтому и рисуется теперь здесь: страница
+    // коллекции к ней больше отношения не имеет.
+    var showStats by remember { mutableStateOf(false) }
+    // Какое окно открыто пунктом меню — его корень морфит из гнезда «Ещё» и обратно. Saveable:
+    // пока окно на экране, рабочая область снята с композиции, а на возврате ключ обязан быть
+    // тем же, иначе окну не во что схлопнуться.
+    var menuWindowKey by rememberSaveable { mutableStateOf<String?>(null) }
     val syncPanelState = remember { MutableTransitionState(false) }
     syncPanelState.targetState = showSyncPanel
     val dockHidden = homeOverlayVisible || settingsOverlayVisible || showSyncPanel || !pageDockVisible
+
+    // Док у двух режимов разной высоты, а страницы резервируют место под него сами. Константа
+    // «на всякий случай побольше» оставляла бы под капсулой полосу пустоты.
+    val dockInset = if (LocalGlassCapsuleDock.current) CapsuleDockInset else WorkspaceDockInset
 
     val pagerState = rememberPagerState(
         initialPage = WorkspacePage.Start.index,
@@ -107,11 +129,6 @@ fun WorkspaceScreen(
     val pagerScrolling by remember { derivedStateOf { pagerState.isScrollInProgress } }
     val dockGlassStatic = pageScrollInProgress || pagerScrolling
 
-    // Своя инстанция формы: у push-экрана редактирования она общая на весь граф, и
-    // `loadAnime(id)` затирал бы черновик страницы (и наоборот). Сброс черновика при уходе —
-    // TICKET-06.
-    val addPageViewModel: AddEditViewModel = koinViewModel(key = WORKSPACE_ADD_VM_KEY)
-
     val goTo: (WorkspacePage) -> Unit = { page ->
         scope.launch {
             pagerState.animateScrollToPage(page.index, animationSpec = MotionTokens.sheetPresent())
@@ -121,7 +138,10 @@ fun WorkspaceScreen(
     // targetPage, а не currentPage: во время броска пальцем «назад» должен считаться от того,
     // куда мы едем, иначе Back посреди жеста уводит не туда.
     val backTarget = WorkspacePage.backTargetFrom(WorkspacePage.ofIndex(pagerState.targetPage))
-    BackHandler(enabled = backTarget != null) {
+    // Открытое меню перехватывает «назад» первым: оно верхнее на экране, и листать страницу
+    // под ним было бы неожиданностью.
+    BackHandler(enabled = menuOpen) { menuOpen = false }
+    BackHandler(enabled = !menuOpen && backTarget != null) {
         backTarget?.let { target ->
             performHaptic(view, "light")
             goTo(target)
@@ -147,17 +167,6 @@ fun WorkspaceScreen(
         ) { index ->
             Box(modifier = Modifier.workspacePageMotion(pagerState, index)) {
             when (WorkspacePage.ofIndex(index)) {
-                // onBack не передаём: на странице кнопки «назад» нет (TICKET-07), системный
-                // Back перехватывает BackHandler рабочей области выше.
-                WorkspacePage.FRAME -> InspectScreen(
-                    navController = navController,
-                    viewModel = inspectViewModel,
-                    sharedTransitionScope = sharedTransitionScope,
-                    animatedVisibilityScope = animatedVisibilityScope,
-                    onOpenSettings = { goTo(WorkspacePage.SETTINGS) },
-                    bottomInset = WorkspaceDockInset,
-                )
-
                 WorkspacePage.HOME -> HomeScreen(
                     navController = navController,
                     viewModel = homeViewModel,
@@ -170,13 +179,9 @@ fun WorkspaceScreen(
                     onDockVisibleChange = { pageDockVisible = it },
                 )
 
-                WorkspacePage.ADD -> AddEditScreen(
-                    navController = navController,
-                    viewModel = addPageViewModel,
-                    animeId = null,
-                    sharedTransitionScope = sharedTransitionScope,
-                    animatedVisibilityScope = animatedVisibilityScope,
-                    onSaved = { goTo(WorkspacePage.HOME) },
+                WorkspacePage.BOOKS -> BooksScreen(
+                    language = language,
+                    bottomInset = dockInset,
                 )
 
                 WorkspacePage.SETTINGS -> SettingsScreen(
@@ -184,7 +189,7 @@ fun WorkspaceScreen(
                     viewModel = settingsViewModel,
                     sharedTransitionScope = sharedTransitionScope,
                     animatedVisibilityScope = animatedVisibilityScope,
-                    bottomInset = WorkspaceDockInset,
+                    bottomInset = dockInset,
                     onOpenSyncPanel = { showSyncPanel = true },
                     onOverlayVisibleChange = { settingsOverlayVisible = it },
                     onContentScrollChange = { pageScrollInProgress = it },
@@ -219,10 +224,57 @@ fun WorkspaceScreen(
             }
         }
 
+        if (showStats) {
+            LaunchedEffect(Unit) { homeViewModel.loadStatsAnimeList() }
+            StatsOverlay(
+                animeList = homeUiState.statsAnimeList,
+                strings = getStrings(language),
+                appLanguage = language,
+                footerPhrase = homeUiState.statsFooterPhrase,
+                onDismiss = { showStats = false },
+            )
+        }
+
+        TtmMenu(
+            expanded = menuOpen,
+            origin = menuOrigin,
+            backdrop = backdrop,
+            onDismiss = { menuOpen = false },
+            items = ttmMenuItems(
+                language = language,
+                onStats = { showStats = true },
+                onFrame = {
+                    menuWindowKey = MENU_WINDOW_INSPECT
+                    navController.navigateToInspect()
+                },
+                onSync = { showSyncPanel = true },
+                onAdd = {
+                    menuWindowKey = MENU_WINDOW_ADD
+                    navController.navigateToAddEdit()
+                },
+                onDonate = {
+                    runCatching {
+                        context.startActivity(Intent(Intent.ACTION_VIEW, DONATION_URL.toUri()))
+                    }
+                },
+            ),
+        )
+
         CompositionLocalProvider(LocalAdaptiveGlassScrollInProgress provides dockGlassStatic) {
         WorkspaceDock(
             backdrop = backdrop,
             hidden = dockHidden,
+            menuOpen = menuOpen,
+            onOpenMenu = {
+                performHaptic(view, "light")
+                menuOpen = true
+            },
+            onMenuBounds = { menuOrigin = it },
+            menuWindowMorph = MenuWindowMorph(
+                sharedTransitionScope = sharedTransitionScope,
+                animatedVisibilityScope = animatedVisibilityScope,
+                key = menuWindowKey,
+            ),
             // targetPage, а не settledPage: как только жест перешёл порог, пилюля уже едет к
             // новому разделу. С settledPage она стояла бы на старом до конца анимации и потом
             // прыгала.
@@ -279,5 +331,9 @@ private fun PagerState.transformFor(index: Int): PageTransform =
 
 private val PAGE_SHADOW_ELEVATION = 24.dp
 
+/** Ключи shared-bounds корней окон — те же, что ждут InspectScreen и AddEditScreen. */
+private const val MENU_WINDOW_INSPECT = "inspect_container"
+private const val MENU_WINDOW_ADD = "fab_container"
+
 /** Ключ Koin для формы-страницы: отделяет её ViewModel от push-экрана редактирования. */
-private const val WORKSPACE_ADD_VM_KEY = "workspace_add_edit"
+

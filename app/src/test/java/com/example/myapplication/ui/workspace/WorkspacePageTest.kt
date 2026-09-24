@@ -7,25 +7,29 @@ import org.junit.Test
 class WorkspacePageTest {
 
     @Test
-    fun `order is Home Settings Add Frame`() {
+    fun `order is Home Settings Books`() {
         // Порядок слева направо — решение пользователя, а не деталь реализации: он задаёт и
         // позицию в доке, и позицию страницы в пейджере.
         assertEquals(
             listOf(
                 WorkspacePage.HOME,
                 WorkspacePage.SETTINGS,
-                WorkspacePage.ADD,
-                WorkspacePage.FRAME,
+                WorkspacePage.BOOKS,
             ),
             WorkspacePage.Ordered,
         )
-        assertEquals(4, WorkspacePage.PageCount)
+        assertEquals(3, WorkspacePage.PageCount)
     }
 
     @Test
-    fun `stats is not a page - it stays a bottom sheet`() {
-        assert(WorkspacePage.Ordered.none { it.name == "STATS" }) {
-            "Статистика вернулась в страницы, хотя должна открываться шторкой из верхнего дока"
+    fun `only swipeable sections are pages`() {
+        // Всё, что открывается поверх текущей страницы, страницей быть не должно: попав в
+        // пейджер, оно стало бы доступно свайпом, а меню и разовые действия так не работают.
+        val notPages = listOf("STATS", "SYNC", "ADD", "FRAME", "MENU", "TTM", "DONATE")
+        notPages.forEach { name ->
+            assert(WorkspacePage.Ordered.none { it.name == name }) {
+                "$name вернулся в страницы, хотя живёт в меню дока"
+            }
         }
     }
 
@@ -52,8 +56,7 @@ class WorkspacePageTest {
     @Test
     fun `back from any section returns to home`() {
         listOf(
-            WorkspacePage.FRAME,
-            WorkspacePage.ADD,
+            WorkspacePage.BOOKS,
             WorkspacePage.SETTINGS,
         ).forEach { page ->
             assertEquals("back from $page", WorkspacePage.HOME, WorkspacePage.backTargetFrom(page))
