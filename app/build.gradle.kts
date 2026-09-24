@@ -200,6 +200,8 @@ dependencies {
     implementation(libs.navigation.compose)
     implementation(libs.activity.compose)
     implementation(libs.datastore.preferences)
+    // Только ради версии нативной библиотеки (16 КБ страницы) — см. комментарий в каталоге.
+    implementation(libs.androidx.graphics.path)
     implementation(libs.androidx.security.crypto)
     implementation(libs.backdrop)
 
