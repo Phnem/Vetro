@@ -1,9 +1,9 @@
 package com.example.myapplication.domain.stats
 
+import com.example.myapplication.data.local.AppLanguagePrefs
 import android.util.Log
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
-import androidx.datastore.preferences.core.stringPreferencesKey
 import com.example.myapplication.data.ai.AiCredentialsStore
 import com.example.myapplication.data.local.AnimeLocalDataSource
 import com.example.myapplication.data.local.StatsExplanationCacheStore
@@ -24,7 +24,6 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
-private val KEY_LANG = stringPreferencesKey("lang")
 
 /** Состояние AI-объяснения одной карточки статистики (для UI детального режима). */
 sealed interface StatsCardExplanationState {
@@ -66,7 +65,7 @@ class StatsExplanationCoordinator(
         if (started) return
         started = true
         val languageFlow = settingsDataStore.data
-            .map { prefs -> runCatching { AppLanguage.valueOf(prefs[KEY_LANG] ?: "EN") }.getOrDefault(AppLanguage.EN) }
+            .map { prefs -> AppLanguagePrefs.from(prefs) }
             .distinctUntilChanged()
         appScope.launch {
             combine(

@@ -1,10 +1,10 @@
 package com.example.myapplication.domain.enrichment
 
+import com.example.myapplication.data.local.AppLanguagePrefs
 import android.content.Context
 import android.util.Log
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
-import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.example.myapplication.data.ai.AiCredentialsStore
@@ -17,6 +17,7 @@ import com.example.myapplication.domain.titles.RussianTitleEnrichmentUseCase
 import com.example.myapplication.domain.titles.TitleEnrichmentUseCase
 import com.example.myapplication.network.AppContentType
 import com.example.myapplication.network.AppLanguage
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import org.koin.core.component.KoinComponent
@@ -78,6 +79,9 @@ class LiveMaintenanceWorker(
             maybeTranslateOneWithAi(hasAi)
 
             Result.success()
+        } catch (e: CancellationException) {
+            // Отмена WorkManager'ом — не сбой: пробрасываем, иначе работа помечается failure.
+            throw e
         } catch (e: Exception) {
             Log.w(TAG, "Live maintenance run failed", e)
             Result.failure()
@@ -116,8 +120,12 @@ class LiveMaintenanceWorker(
 
     private suspend fun fillTitlesViaApi(language: AppLanguage, hasAi: Boolean) {
         var processed = 0
+        // При подключённом AI «не нашли EN» не помечается (кандидат ждёт фазу 3), и запрос
+        // возвращает те же строки снова. Без учёта уже просмотренных цикл гонял бы один и тот же
+        // тайтл до MAX_TITLES_PER_RUN раз за заход.
+        val seenEn = HashSet<String>()
         loopEn@ while (!isStopped && processed < MAX_TITLES_PER_RUN) {
-            val batch = localDataSource.getAnimeNeedingTitleEn(TITLE_BATCH)
+            val batch = localDataSource.getAnimeNeedingTitleEn(TITLE_BATCH).filter { seenEn.add(it.id) }
             if (batch.isEmpty()) break
             for (anime in batch) {
                 if (isStopped || processed >= MAX_TITLES_PER_RUN) break@loopEn
@@ -192,14 +200,11 @@ class LiveMaintenanceWorker(
         }
     }
 
-    private suspend fun readLanguage(): AppLanguage {
-        val langStr = runCatching { settingsDataStore.data.first()[LANG_KEY] }.getOrNull() ?: "EN"
-        return runCatching { AppLanguage.valueOf(langStr) }.getOrDefault(AppLanguage.EN)
-    }
+    private suspend fun readLanguage(): AppLanguage =
+        AppLanguagePrefs.current(settingsDataStore)
 
     companion object {
         private const val TAG = "LiveMaintenance"
-        private val LANG_KEY = stringPreferencesKey("lang")
 
         private const val MAX_FIELDS_PER_RUN = 15
         private const val MAX_TITLES_PER_RUN = 20

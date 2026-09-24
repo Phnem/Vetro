@@ -97,7 +97,6 @@ import com.example.myapplication.sync.supabase.CollectionImageRestoreCoordinator
 import com.example.myapplication.sync.supabase.SupabaseSyncCoordinator
 import com.example.myapplication.utils.getCloudSyncPillStrings
 import com.example.myapplication.utils.getStrings
-import com.example.myapplication.utils.systemAppLanguage
 import com.example.myapplication.utils.performHaptic
 import com.example.myapplication.ui.home.recommendations.DiscoveryCard
 import com.example.myapplication.ui.home.recommendations.RecommendationsSheet
@@ -163,7 +162,7 @@ fun HomeScreen(
     val isCloudImageRestoring by collectionImageRestoreCoordinator.isRestoring.collectAsStateWithLifecycle()
     val currentLanguage by viewModel.uiLanguage.collectAsStateWithLifecycle()
     val strings = getStrings(currentLanguage)
-    val cloudSyncPillStrings = getCloudSyncPillStrings(systemAppLanguage())
+    val cloudSyncPillStrings = getCloudSyncPillStrings(currentLanguage)
     val syncReport by viewModel.syncReport.collectAsStateWithLifecycle()
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val list by viewModel.animeListFlow.collectAsStateWithLifecycle()

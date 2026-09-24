@@ -46,10 +46,7 @@ class AiLlmEndpoint(
     suspend fun validateApiKey(provider: AiProvider, apiKey: String): Result<Unit> = runCatching {
         val key = apiKey.trim()
         require(key.isNotEmpty()) { "Empty API key" }
-        val url = when (provider.authScheme) {
-            AiAuthScheme.QUERY_KEY -> "${provider.baseUrl}${provider.modelsPath}?key=$key"
-            else -> "${provider.baseUrl}${provider.modelsPath}"
-        }
+        val url = "${provider.baseUrl}${provider.modelsPath}"
         val response = httpClient.get(url) { applyAuth(provider, key) }
         ensureSuccess(response)
     }
@@ -102,7 +99,7 @@ class AiLlmEndpoint(
     ): String {
         val url = when (provider.apiStyle) {
             AiApiStyle.GEMINI ->
-                "${provider.baseUrl}/models/$model:generateContent?key=$apiKey"
+                "${provider.baseUrl}/models/$model:generateContent"
             else -> "${provider.baseUrl}${provider.chatPath}"
         }
         val response = httpClient.post(url) {
@@ -122,7 +119,7 @@ class AiLlmEndpoint(
                 header("x-api-key", apiKey)
                 header("anthropic-version", ANTHROPIC_VERSION)
             }
-            AiAuthScheme.QUERY_KEY -> Unit // ключ уже в URL
+            AiAuthScheme.GOOG_API_KEY_HEADER -> header(GOOG_API_KEY_HEADER, apiKey)
         }
     }
 
@@ -382,6 +379,7 @@ class AiLlmEndpoint(
     private companion object {
         const val DEFAULT_MAX_TOKENS = 4096
         const val ANTHROPIC_VERSION = "2023-06-01"
+        const val GOOG_API_KEY_HEADER = "x-goog-api-key"
         const val DEFAULT_RATE_LIMIT_BACKOFF_MS = 30_000L
     }
 }

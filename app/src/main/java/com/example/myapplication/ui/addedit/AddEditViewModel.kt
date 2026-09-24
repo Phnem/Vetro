@@ -1,8 +1,8 @@
 package com.example.myapplication.ui.addedit
 
+import com.example.myapplication.data.local.AppLanguagePrefs
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
-import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.myapplication.data.repository.ImageStorageRepository
@@ -22,7 +22,6 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-private val KEY_LANG = stringPreferencesKey("lang")
 
 class AddEditViewModel(
     private val getAnimeUseCase: GetAnimeForEditUseCase,
@@ -34,8 +33,7 @@ class AddEditViewModel(
 
     val uiLanguage: StateFlow<AppLanguage> = settingsDataStore.data
         .map { prefs ->
-            runCatching { AppLanguage.valueOf(prefs[KEY_LANG] ?: "EN") }
-                .getOrElse { AppLanguage.EN }
+            AppLanguagePrefs.from(prefs)
         }
         .stateIn(viewModelScope, SharingStarted.Eagerly, AppLanguage.EN)
 

@@ -11,6 +11,7 @@ import androidx.work.WorkManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
@@ -34,7 +35,9 @@ class SupabaseSyncCoordinator(
     val isSyncing: StateFlow<Boolean> get() = _isSyncing
     private val _lastSyncMessage = MutableStateFlow<String?>(null)
     val lastSyncMessage: StateFlow<String?> get() = _lastSyncMessage
-    private val scope = CoroutineScope(Dispatchers.IO)
+    // SupervisorJob: без него первое необработанное исключение в любом из launch'ей отменяло
+    // весь scope, и подписка на вход/выход пользователя молча умирала до перезапуска процесса.
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var realtimeSyncJob: kotlinx.coroutines.Job? = null
     private var realtimeChannelJob: kotlinx.coroutines.Job? = null
 

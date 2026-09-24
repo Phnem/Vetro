@@ -13,8 +13,11 @@ enum class AiAuthScheme {
     /** `x-api-key: <key>` (+ `anthropic-version`) — Anthropic. */
     X_API_KEY,
 
-    /** `?key=<key>` в query — Google Gemini. */
-    QUERY_KEY,
+    /**
+     * `x-goog-api-key: <key>` — Google Gemini. Раньше ключ шёл в query (`?key=`) и вместе с URL
+     * попадал в логи HTTP-клиента; заголовок Gemini принимает так же.
+     */
+    GOOG_API_KEY_HEADER,
 }
 
 /**
@@ -103,7 +106,7 @@ enum class AiProvider(
         displayName = "Gemini",
         validKeyPrefixes = listOf("AIza", "AQ."),
         iconRes = R.drawable.ic_ai_gemini,
-        authScheme = AiAuthScheme.QUERY_KEY,
+        authScheme = AiAuthScheme.GOOG_API_KEY_HEADER,
         apiStyle = AiApiStyle.GEMINI,
         baseUrl = "https://generativelanguage.googleapis.com/v1beta",
         chatPath = "/models",

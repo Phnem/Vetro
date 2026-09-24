@@ -1,10 +1,10 @@
 package com.example.myapplication.domain.enrichment.weblinks
 
+import com.example.myapplication.data.local.AppLanguagePrefs
 import android.content.Context
 import android.util.Log
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
-import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.example.myapplication.data.local.AnimeLocalDataSource
@@ -65,14 +65,11 @@ class WebLinkEnrichmentWorker(
         }
     }
 
-    private suspend fun readLanguage(): AppLanguage {
-        val langStr = runCatching { settingsDataStore.data.first()[LANG_KEY] }.getOrNull() ?: "EN"
-        return runCatching { AppLanguage.valueOf(langStr) }.getOrDefault(AppLanguage.EN)
-    }
+    private suspend fun readLanguage(): AppLanguage =
+        AppLanguagePrefs.current(settingsDataStore)
 
     companion object {
         private const val TAG = "WebLinkWorker"
-        private val LANG_KEY = stringPreferencesKey("lang")
         /** Сколько тайтлов за один заход, затем self-reschedule. */
         private const val CHUNK_PER_LANGUAGE = 10
         private const val CONTINUATION_DELAY_MS = 20_000L

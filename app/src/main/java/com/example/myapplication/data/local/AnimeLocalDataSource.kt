@@ -7,16 +7,10 @@ import com.example.myapplication.data.models.Anime
 import com.example.myapplication.data.models.AnimeUpdate
 import com.example.myapplication.data.models.MediaType
 import com.example.myapplication.data.models.RatingScale
-import kotlinx.collections.immutable.ImmutableList
-import kotlinx.collections.immutable.persistentListOf
-import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 
-@OptIn(ExperimentalCoroutinesApi::class)
 class AnimeLocalDataSource(
     private val factory: SQLDelightDatabaseFactory,
     private val mirrorCoordinator: DeveloperMirrorCoordinator
@@ -24,83 +18,16 @@ class AnimeLocalDataSource(
 
     private fun db(): AnimeDatabase = factory.getDatabase()
 
-    /**
-     * Реактивный поток; при reconnectDatabase() переподписывается на новое подключение (hot swap).
-     */
-    fun observeAllAnime(filterType: MediaType? = null): Flow<List<Anime>> = factory.dbConnectionTrigger.flatMapLatest {
-        if (filterType == null) {
-            db().animeQueries.getAllAnimeWithTagsConcat().asFlow()
-                .mapToList(Dispatchers.IO)
-                .map { rows ->
-                    rows.map { row ->
-                        Anime(
-                            id = row.id,
-                            title = row.title,
-                            titleEn = row.title_en,
-                            titleRu = row.title_ru,
-                            episodes = row.episodes.toInt(),
-                            rating = RatingScale.storedToDisplay(row.rating),
-                            imageFileName = row.imagePath,
-                            orderIndex = row.orderIndex.toInt(),
-                            dateAdded = row.dateAdded,
-                            isFavorite = row.isFavorite == 1L,
-                            tags = parseTagsConcat(row.tagsConcat),
-                            categoryType = row.categoryType ?: "",
-                            comment = row.comment,
-                            anilistId = row.anilist_id?.toInt(),
-                            malId = row.mal_id?.toInt(),
-                            shikimoriId = row.shikimori_id?.toInt(),
-                            anilistNotFoundAt = row.anilist_not_found_at,
-                            malNotFoundAt = row.mal_not_found_at,
-                            shikimoriNotFoundAt = row.shikimori_not_found_at,
-                            mediaType = MediaType.fromPersistedValue(row.mediaType),
-                            tmdbId = row.tmdb_id?.toInt(),
-                            kinopoiskId = row.kinopoisk_id?.toInt(),
-                            tmdbNotFoundAt = row.tmdb_not_found_at,
-                            kinopoiskNotFoundAt = row.kinopoisk_not_found_at,
-                            imdbId = row.imdb_id
-                        )
-                    }
-                }
+    /** Реактивный поток коллекции (опционально — одного типа медиа). */
+    fun observeAllAnime(filterType: MediaType? = null): Flow<List<Anime>> {
+        val queries = db().animeQueries
+        val query = if (filterType == null) {
+            queries.getAllAnimeWithTagsConcat(::concatRowToAnime)
         } else {
-            db().animeQueries.getAnimeWithTagsConcatByType(filterType.name).asFlow()
-                .mapToList(Dispatchers.IO)
-                .map { rows ->
-                    rows.map { row ->
-                        Anime(
-                            id = row.id,
-                            title = row.title,
-                            titleEn = row.title_en,
-                            titleRu = row.title_ru,
-                            episodes = row.episodes.toInt(),
-                            rating = RatingScale.storedToDisplay(row.rating),
-                            imageFileName = row.imagePath,
-                            orderIndex = row.orderIndex.toInt(),
-                            dateAdded = row.dateAdded,
-                            isFavorite = row.isFavorite == 1L,
-                            tags = parseTagsConcat(row.tagsConcat),
-                            categoryType = row.categoryType ?: "",
-                            comment = row.comment,
-                            anilistId = row.anilist_id?.toInt(),
-                            malId = row.mal_id?.toInt(),
-                            shikimoriId = row.shikimori_id?.toInt(),
-                            anilistNotFoundAt = row.anilist_not_found_at,
-                            malNotFoundAt = row.mal_not_found_at,
-                            shikimoriNotFoundAt = row.shikimori_not_found_at,
-                            mediaType = MediaType.fromPersistedValue(row.mediaType),
-                            tmdbId = row.tmdb_id?.toInt(),
-                            kinopoiskId = row.kinopoisk_id?.toInt(),
-                            tmdbNotFoundAt = row.tmdb_not_found_at,
-                            kinopoiskNotFoundAt = row.kinopoisk_not_found_at,
-                            imdbId = row.imdb_id
-                        )
-                    }
-                }
+            queries.getAnimeWithTagsConcatByType(filterType.name, ::concatRowToAnime)
         }
+        return query.asFlow().mapToList(Dispatchers.IO)
     }
-
-    /** Закрывает старый коннект и открывает новый (после миграции .copyTo). */
-    fun reconnectDatabase() = factory.reconnectDatabase()
 
     fun getAnimeCount(): Int {
         return db().animeQueries.getAnimeCount().executeAsOne().toInt()
@@ -110,128 +37,16 @@ class AnimeLocalDataSource(
         return db().animeQueries.getMaxOrderIndex().executeAsOne().toInt()
     }
 
-    fun getAllAnimeList(): List<Anime> {
-        return db().animeQueries.getAllAnime()
-            .executeAsList()
-            .map { row ->
-                mapRowToAnime(
-                    id = row.id,
-                    title = row.title,
-                    titleEn = row.title_en,
-                    titleRu = row.title_ru,
-                    imagePath = row.imagePath,
-                    episodes = row.episodes,
-                    rating = row.rating,
-                    orderIndex = row.orderIndex,
-                    dateAdded = row.dateAdded,
-                    isFavorite = row.isFavorite,
-                    categoryType = row.categoryType,
-                    comment = row.comment,
-                    anilistId = row.anilist_id,
-                    malId = row.mal_id,
-                    shikimoriId = row.shikimori_id,
-                    anilistNotFoundAt = row.anilist_not_found_at,
-                    shikimoriNotFoundAt = row.shikimori_not_found_at,
-                    mediaType = row.mediaType,
-                    tmdbId = row.tmdb_id,
-                    kinopoiskId = row.kinopoisk_id,
-                    tmdbNotFoundAt = row.tmdb_not_found_at,
-                    kinopoiskNotFoundAt = row.kinopoisk_not_found_at,
-                    imdbId = row.imdb_id,
-                )
-            }
-    }
+    fun getAllAnimeList(): List<Anime> =
+        db().animeQueries.getAllAnimeWithTagsConcat(::concatRowToAnime).executeAsList()
 
-    fun getAnimeById(id: String): Anime? {
-        return db().animeQueries
-            .getAnimeById(id)
-            .executeAsOneOrNull()
-            ?.let { row ->
-                mapRowToAnime(
-                    id = row.id,
-                    title = row.title,
-                    titleEn = row.title_en,
-                    titleRu = row.title_ru,
-                    imagePath = row.imagePath,
-                    episodes = row.episodes,
-                    rating = row.rating,
-                    orderIndex = row.orderIndex,
-                    dateAdded = row.dateAdded,
-                    isFavorite = row.isFavorite,
-                    categoryType = row.categoryType,
-                    comment = row.comment,
-                    anilistId = row.anilist_id,
-                    malId = row.mal_id,
-                    shikimoriId = row.shikimori_id,
-                    anilistNotFoundAt = row.anilist_not_found_at,
-                    shikimoriNotFoundAt = row.shikimori_not_found_at,
-                    mediaType = row.mediaType,
-                    tmdbId = row.tmdb_id,
-                    kinopoiskId = row.kinopoisk_id,
-                    tmdbNotFoundAt = row.tmdb_not_found_at,
-                    kinopoiskNotFoundAt = row.kinopoisk_not_found_at,
-                    imdbId = row.imdb_id,
-                )
-            }
-    }
+    fun getAnimeById(id: String): Anime? =
+        db().animeQueries.getAnimeWithTagsConcatById(id, ::concatRowToAnime).executeAsOneOrNull()
 
     suspend fun updateAnimeComment(id: String, comment: String) {
         db().animeQueries.updateAnimeComment(comment, System.currentTimeMillis(), id)
         mirrorCoordinator.requestExportIfEnabled()
     }
-
-    private fun mapRowToAnime(
-        id: String,
-        title: String,
-        titleEn: String? = null,
-        titleRu: String? = null,
-        imagePath: String?,
-        episodes: Long,
-        rating: Long,
-        orderIndex: Long,
-        dateAdded: Long,
-        isFavorite: Long,
-        categoryType: String?,
-        comment: String = "",
-        anilistId: Long? = null,
-        malId: Long? = null,
-        shikimoriId: Long? = null,
-        anilistNotFoundAt: Long? = null,
-        malNotFoundAt: Long? = null,
-        shikimoriNotFoundAt: Long? = null,
-        mediaType: String = MediaType.ANIME.name,
-        tmdbId: Long? = null,
-        kinopoiskId: Long? = null,
-        tmdbNotFoundAt: Long? = null,
-        kinopoiskNotFoundAt: Long? = null,
-        imdbId: String? = null,
-    ): Anime = Anime(
-        id = id,
-        title = title,
-        titleEn = titleEn,
-        titleRu = titleRu,
-        episodes = episodes.toInt(),
-        rating = RatingScale.storedToDisplay(rating),
-        imageFileName = imagePath,
-        orderIndex = orderIndex.toInt(),
-        dateAdded = dateAdded,
-        isFavorite = isFavorite == 1L,
-        tags = getTagsForAnime(id),
-        categoryType = categoryType ?: "",
-        comment = comment,
-        anilistId = anilistId?.toInt(),
-        malId = malId?.toInt(),
-        shikimoriId = shikimoriId?.toInt(),
-        anilistNotFoundAt = anilistNotFoundAt,
-        malNotFoundAt = malNotFoundAt,
-        shikimoriNotFoundAt = shikimoriNotFoundAt,
-        mediaType = MediaType.fromPersistedValue(mediaType),
-        tmdbId = tmdbId?.toInt(),
-        kinopoiskId = kinopoiskId?.toInt(),
-        tmdbNotFoundAt = tmdbNotFoundAt,
-        kinopoiskNotFoundAt = kinopoiskNotFoundAt,
-        imdbId = imdbId,
-    )
 
     suspend fun insertAnime(anime: Anime) {
         db().insertNewAnime(anime)
@@ -293,52 +108,15 @@ class AnimeLocalDataSource(
     }
 
     suspend fun insertAllAnime(list: List<Anime>) {
-        db().animeQueries.transaction {
-            list.forEach { anime ->
-                db().animeQueries.insertAnime(
-                    id = anime.id,
-                    title = anime.title,
-                    imagePath = anime.imageFileName,
-                    episodes = anime.episodes.toLong(),
-                    rating = RatingScale.displayToStored(anime.rating).toLong(),
-                    status = "watching",
-                    isFavorite = if (anime.isFavorite) 1L else 0L,
-                    updatedAt = System.currentTimeMillis(),
-                    orderIndex = anime.orderIndex.toLong(),
-                    dateAdded = anime.dateAdded,
-                    categoryType = anime.categoryType,
-                    comment = anime.comment,
-                    isAiRecommendation = 0L,
-                    anilist_id = anime.anilistId?.toLong(),
-                    mal_id = anime.malId?.toLong(),
-                    shikimori_id = anime.shikimoriId?.toLong(),
-                    anilist_not_found_at = anime.anilistNotFoundAt,
-                    mal_not_found_at = anime.malNotFoundAt,
-                    shikimori_not_found_at = anime.shikimoriNotFoundAt,
-                    isPrivate = 0L,
-                    encryptionIv = null,
-                    deletedAt = null,
-                    mediaType = anime.mediaType.name,
-                    title_en = anime.titleEn,
-                    title_ru = anime.titleRu,
-                    tmdb_id = anime.tmdbId?.toLong(),
-                    kinopoisk_id = anime.kinopoiskId?.toLong(),
-                    tmdb_not_found_at = anime.tmdbNotFoundAt,
-                    kinopoisk_not_found_at = anime.kinopoiskNotFoundAt,
-                    imdb_id = anime.imdbId,
-                )
-                anime.tags.forEach { tag ->
-                    db().animeQueries.insertAnimeTag(
-                        anime_id = anime.id,
-                        tag = tag
-                    )
-                }
-            }
+        val database = db()
+        val now = System.currentTimeMillis()
+        database.animeQueries.transaction {
+            list.forEach { anime -> database.insertAnimeRow(anime, updatedAt = now) }
         }
         mirrorCoordinator.requestExportIfEnabled()
     }
 
-    fun observeUpdates(): Flow<List<AnimeUpdate>> = factory.dbConnectionTrigger.flatMapLatest {
+    fun observeUpdates(): Flow<List<AnimeUpdate>> =
         db().animeQueries.getAllUpdates()
             .asFlow()
             .mapToList(Dispatchers.IO)
@@ -353,7 +131,6 @@ class AnimeLocalDataSource(
                     )
                 }
             }
-    }
 
     fun getUpdates(): List<AnimeUpdate> {
         return db().animeQueries.getAllUpdates()
@@ -393,22 +170,20 @@ class AnimeLocalDataSource(
 
     /** Прогресс выходящих сезонов (карточки «в процессе»): anime_id → снимок. */
     fun observeAiringProgress(): Flow<Map<String, com.example.myapplication.data.models.AiringProgress>> =
-        factory.dbConnectionTrigger.flatMapLatest {
-            db().airingProgressQueries.getAllAiringProgress()
-                .asFlow()
-                .mapToList(Dispatchers.IO)
-                .map { rows ->
-                    rows.associate { row ->
-                        row.anime_id to com.example.myapplication.data.models.AiringProgress(
-                            animeId = row.anime_id,
-                            seasonNumber = row.season_number?.toInt(),
-                            airedEpisodes = row.aired_episodes.toInt(),
-                            totalEpisodes = row.total_episodes?.toInt(),
-                            updatedAt = row.updated_at,
-                        )
-                    }
+        db().airingProgressQueries.getAllAiringProgress()
+            .asFlow()
+            .mapToList(Dispatchers.IO)
+            .map { rows ->
+                rows.associate { row ->
+                    row.anime_id to com.example.myapplication.data.models.AiringProgress(
+                        animeId = row.anime_id,
+                        seasonNumber = row.season_number?.toInt(),
+                        airedEpisodes = row.aired_episodes.toInt(),
+                        totalEpisodes = row.total_episodes?.toInt(),
+                        updatedAt = row.updated_at,
+                    )
                 }
-        }
+            }
 
     /** Разовый снимок прогресса сезонов (прошлый проход) — для закрытия завершённых. */
     fun getAiringProgressSnapshot(): Map<String, com.example.myapplication.data.models.AiringProgress> =
@@ -481,32 +256,8 @@ class AnimeLocalDataSource(
     }
 
     /** Строки без EN-названия и без отметки попытки — кандидаты для обогащения (Stage 7/8). */
-    fun getAnimeNeedingTitleEn(limit: Int): List<Anime> {
-        return db().animeQueries.selectNeedingTitleEn(limit.toLong())
-            .executeAsList()
-            .map { row ->
-                mapRowToAnime(
-                    id = row.id,
-                    title = row.title,
-                    titleEn = row.title_en,
-                    titleRu = row.title_ru,
-                    imagePath = row.imagePath,
-                    episodes = row.episodes,
-                    rating = row.rating,
-                    orderIndex = row.orderIndex,
-                    dateAdded = row.dateAdded,
-                    isFavorite = row.isFavorite,
-                    categoryType = row.categoryType,
-                    comment = row.comment,
-                    anilistId = row.anilist_id,
-                    malId = row.mal_id,
-                    shikimoriId = row.shikimori_id,
-                    anilistNotFoundAt = row.anilist_not_found_at,
-                    shikimoriNotFoundAt = row.shikimori_not_found_at,
-                    mediaType = row.mediaType
-                )
-            }
-    }
+    fun getAnimeNeedingTitleEn(limit: Int): List<Anime> =
+        db().animeQueries.selectNeedingTitleEn(limit.toLong(), ::concatRowToAnime).executeAsList()
 
     /** Сколько записей ещё ждут EN-названия (для прогресса дубляжа). */
     fun countAnimeNeedingTitleEn(): Int {
@@ -522,32 +273,8 @@ class AnimeLocalDataSource(
     }
 
     /** Записи без RU-названия и без отметки попытки — кандидаты обратного обогащения (Stage 10). */
-    fun getAnimeNeedingTitleRu(limit: Int): List<Anime> {
-        return db().animeQueries.selectNeedingTitleRu(limit.toLong())
-            .executeAsList()
-            .map { row ->
-                mapRowToAnime(
-                    id = row.id,
-                    title = row.title,
-                    titleEn = row.title_en,
-                    titleRu = row.title_ru,
-                    imagePath = row.imagePath,
-                    episodes = row.episodes,
-                    rating = row.rating,
-                    orderIndex = row.orderIndex,
-                    dateAdded = row.dateAdded,
-                    isFavorite = row.isFavorite,
-                    categoryType = row.categoryType,
-                    comment = row.comment,
-                    anilistId = row.anilist_id,
-                    malId = row.mal_id,
-                    shikimoriId = row.shikimori_id,
-                    anilistNotFoundAt = row.anilist_not_found_at,
-                    shikimoriNotFoundAt = row.shikimori_not_found_at,
-                    mediaType = row.mediaType
-                )
-            }
-    }
+    fun getAnimeNeedingTitleRu(limit: Int): List<Anime> =
+        db().animeQueries.selectNeedingTitleRu(limit.toLong(), ::concatRowToAnime).executeAsList()
 
     /** Сколько записей ещё ждут RU-названия. */
     fun countAnimeNeedingTitleRu(): Int {
@@ -695,22 +422,5 @@ class AnimeLocalDataSource(
             id = animeId
         )
         mirrorCoordinator.requestExportIfEnabled()
-    }
-
-    private fun getTagsForAnime(animeId: String): ImmutableList<String> {
-        return db().animeQueries.getAnimeTags(animeId).executeAsList().toImmutableList()
-    }
-
-    private fun parseTagsConcat(tagsConcat: String?): ImmutableList<String> {
-        val raw = tagsConcat?.trim().orEmpty()
-        if (raw.isEmpty()) return persistentListOf()
-        return raw.split(TAG_CONCAT_DELIMITER)
-            .map { it.trim() }
-            .filter { it.isNotEmpty() }
-            .toImmutableList()
-    }
-
-    private companion object {
-        private const val TAG_CONCAT_DELIMITER = '\u001F'
     }
 }

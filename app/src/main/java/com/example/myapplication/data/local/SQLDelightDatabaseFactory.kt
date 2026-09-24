@@ -7,27 +7,41 @@ import app.cash.sqldelight.db.SqlDriver
 import app.cash.sqldelight.driver.android.AndroidSqliteDriver
 import com.example.myapplication.data.local.AnimeDatabase
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.withContext
 import java.lang.reflect.Method
 
 class SQLDelightDatabaseFactory(private val context: Context) {
-    private var cachedDriver: SqlDriver? = null
-    private var database: AnimeDatabase? = null
 
-    /** При изменении триггера Flow в DataSource переподписываются на новое подключение. */
-    val dbConnectionTrigger = MutableStateFlow(0)
+    /**
+     * Драйвер открывается один раз и на весь процесс. `lazy` синхронизирован: при холодном старте
+     * к БД одновременно приходят сплэш, фоновый координатор статистики и воркеры, и без блокировки
+     * каждый мог открыть собственный драйвер. Flow, подписанный на один драйвер, не видит записей
+     * через другой — список «замерзал».
+     */
+    private val lazyDriver: SqlDriver by lazy {
+        alignLegacyAnimeDbUserVersionOnce()
+        AndroidSqliteDriver(
+            schema = AnimeDatabase.Schema,
+            context = context,
+            name = "anime.db"
+        )
+    }
 
-    private fun getDriver(): SqlDriver {
-        if (cachedDriver == null) {
-            alignLegacyAnimeDbUserVersion()
-            cachedDriver = AndroidSqliteDriver(
-                schema = AnimeDatabase.Schema,
-                context = context,
-                name = "anime.db"
-            )
-        }
-        return cachedDriver!!
+    private val lazyDatabase: AnimeDatabase by lazy { AnimeDatabase(lazyDriver) }
+
+    private fun getDriver(): SqlDriver = lazyDriver
+
+    /**
+     * Выравнивание легаси-установок нужно один раз на версию схемы: дальше колонки и
+     * `user_version` уже в порядке, а лишнее открытие файла и три PRAGMA на каждом холодном
+     * старте — чистые потери.
+     */
+    private fun alignLegacyAnimeDbUserVersionOnce() {
+        val prefs = context.getSharedPreferences(ALIGN_PREFS, Context.MODE_PRIVATE)
+        val key = "aligned_v${AnimeDatabase.Schema.version}"
+        if (prefs.getBoolean(key, false)) return
+        alignLegacyAnimeDbUserVersion()
+        prefs.edit().putBoolean(key, true).apply()
     }
 
     /**
@@ -108,20 +122,7 @@ class SQLDelightDatabaseFactory(private val context: Context) {
         }
     }
 
-    fun getDatabase(): AnimeDatabase {
-        if (database == null) {
-            database = AnimeDatabase(getDriver())
-        }
-        return database!!
-    }
-
-    /** Закрывает старый коннект и при следующем доступе открывает новый (после .copyTo миграции). */
-    fun reconnectDatabase() {
-        cachedDriver?.close()
-        cachedDriver = null
-        database = null
-        dbConnectionTrigger.value += 1
-    }
+    fun getDatabase(): AnimeDatabase = lazyDatabase
 
     suspend fun checkpoint() {
         withContext(Dispatchers.IO) {
@@ -148,5 +149,9 @@ class SQLDelightDatabaseFactory(private val context: Context) {
                 Log.w("SQLDelight", "Failed to checkpoint WAL", e)
             }
         }
+    }
+
+    private companion object {
+        const val ALIGN_PREFS = "anime_db_legacy_align"
     }
 }

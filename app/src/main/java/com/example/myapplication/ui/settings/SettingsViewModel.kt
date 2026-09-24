@@ -1,5 +1,6 @@
 package com.example.myapplication.ui.settings
 
+import com.example.myapplication.data.local.AppLanguagePrefs
 import android.app.Application
 import android.app.DownloadManager
 import android.content.BroadcastReceiver
@@ -57,7 +58,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 
-private val KEY_LANG = stringPreferencesKey("lang")
 private val KEY_THEME = stringPreferencesKey("theme")
 private val KEY_CONTENT_TYPE = stringPreferencesKey("contentType")
 private val KEY_DEV_MIRROR_DB = booleanPreferencesKey("dev_mirror_db_to_documents")
@@ -104,7 +104,7 @@ private fun mergeSettingsUi(
         else snap.persistedKind.toUiStatus()
 
     return SettingsUiState(
-        language = AppLanguage.valueOf(prefs[KEY_LANG] ?: "EN"),
+        language = AppLanguagePrefs.from(prefs),
         theme = runCatching { AppTheme.valueOf(prefs[KEY_THEME] ?: "SYSTEM") }.getOrElse { AppTheme.SYSTEM },
         contentType = runCatching { AppContentType.valueOf(prefs[KEY_CONTENT_TYPE] ?: "ANIME") }.getOrElse { AppContentType.ANIME },
         devMirrorDbToDocuments = prefs[KEY_DEV_MIRROR_DB] ?: false,
@@ -272,7 +272,7 @@ class SettingsViewModel(
 
     fun setLanguage(language: AppLanguage) {
         viewModelScope.launch {
-            settingsDataStore.edit { it[KEY_LANG] = language.name }
+            settingsDataStore.edit { it[AppLanguagePrefs.KEY] = language.name }
         }
     }
 
@@ -382,7 +382,7 @@ class SettingsViewModel(
                 settingsDataStore.data.first()[DevPreferencesKeys.GITHUB_UPDATES_ENABLED] == true
             if (!githubEnabled) return@launch
             ensureCurrentVersionFromPackage(context)
-            val lang = AppLanguage.valueOf(settingsDataStore.data.first()[KEY_LANG] ?: "EN")
+            val lang = AppLanguagePrefs.current(settingsDataStore)
             val strings = getStrings(lang)
             _transient.update {
                 it.copy(

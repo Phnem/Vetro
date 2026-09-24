@@ -2,6 +2,7 @@ package com.example.myapplication.network.di
 
 import android.util.Log
 import com.apollographql.apollo.ApolloClient
+import com.phnem.vetro.network.BuildConfig
 import com.example.myapplication.network.AniListRemoteDataSource
 import com.example.myapplication.network.AnilibriaRemoteDataSource
 import com.example.myapplication.network.ApiService
@@ -57,11 +58,15 @@ val coreNetworkModule = module {
             install(UserAgent) {
                 agent = "VetroApp/1.0 (https://github.com/2004i/Vetro)"
             }
-            install(Logging) {
-                level = LogLevel.INFO
-                logger = object : Logger {
-                    override fun log(message: String) {
-                        Log.d("Ktor", message)
+            // Только в отладочной сборке: в релизе лог каждого запроса — это и работа на каждом
+            // вызове, и утечка URL с параметрами в logcat.
+            if (BuildConfig.DEBUG) {
+                install(Logging) {
+                    level = LogLevel.INFO
+                    logger = object : Logger {
+                        override fun log(message: String) {
+                            Log.d("Ktor", message)
+                        }
                     }
                 }
             }
@@ -102,11 +107,13 @@ val coreNetworkModule = module {
                 connectTimeoutMillis = 8_000
                 socketTimeoutMillis = 12_000
             }
-            install(Logging) {
-                level = LogLevel.INFO
-                logger = object : Logger {
-                    override fun log(message: String) {
-                        Log.d("WebLinkKtor", message)
+            if (BuildConfig.DEBUG) {
+                install(Logging) {
+                    level = LogLevel.INFO
+                    logger = object : Logger {
+                        override fun log(message: String) {
+                            Log.d("WebLinkKtor", message)
+                        }
                     }
                 }
             }

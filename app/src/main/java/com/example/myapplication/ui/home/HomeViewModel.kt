@@ -1,5 +1,6 @@
 package com.example.myapplication.ui.home
 
+import com.example.myapplication.data.local.AppLanguagePrefs
 import android.app.NotificationManager
 import android.content.Context
 import androidx.datastore.core.DataStore
@@ -50,7 +51,6 @@ import androidx.work.*
 import com.example.myapplication.worker.AnimeUpdateWorker
 
 private val KEY_CONTENT_TYPE = stringPreferencesKey("contentType")
-private val KEY_LANG = stringPreferencesKey("lang")
 
 @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 class HomeViewModel(
@@ -177,8 +177,7 @@ class HomeViewModel(
     /** Language from DataStore — use this in UI instead of a separate SettingsViewModel (avoids duplicate VM scope). */
     val uiLanguage: StateFlow<AppLanguage> = settingsDataStore.data
         .map { prefs ->
-            runCatching { AppLanguage.valueOf(prefs[KEY_LANG] ?: "EN") }
-                .getOrElse { AppLanguage.EN }
+            AppLanguagePrefs.from(prefs)
         }
         .stateIn(viewModelScope, SharingStarted.Eagerly, AppLanguage.EN)
     /** TEMP V3.3.3 promo state. Remove with PlayerPowerPromoDialog after the campaign. */
@@ -459,11 +458,7 @@ class HomeViewModel(
         notifier.cancelAllUpdateNotifications(localDataSource.getUpdates().map { it.animeId })
     }
 
-    private suspend fun readLanguageFromSettings(): AppLanguage {
-        val prefs = settingsDataStore.data.first()
-        val raw = prefs[KEY_LANG] ?: "EN"
-        return runCatching { AppLanguage.valueOf(raw) }.getOrElse { AppLanguage.EN }
-    }
+    private suspend fun readLanguageFromSettings(): AppLanguage = AppLanguagePrefs.current(settingsDataStore)
 
     /**
      * Смахнули карточку «вышла новая серия». Серия уже проставлена автоматически

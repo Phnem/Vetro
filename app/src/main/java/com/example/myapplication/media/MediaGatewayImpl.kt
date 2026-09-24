@@ -1,5 +1,6 @@
 package com.example.myapplication.media
 
+import com.example.myapplication.data.local.AppLanguagePrefs
 import android.content.Context
 import android.util.Log
 import androidx.datastore.core.DataStore
@@ -29,7 +30,6 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
-import androidx.datastore.preferences.core.stringPreferencesKey
 import java.io.File
 import java.util.UUID
 
@@ -122,12 +122,10 @@ class MediaGatewayImpl(
 
     private suspend fun currentLanguage(): AppLanguage =
         settingsDataStore.data.map { prefs ->
-            runCatching { AppLanguage.valueOf(prefs[KEY_LANG] ?: "EN") }
-                .getOrElse { AppLanguage.EN }
+            AppLanguagePrefs.from(prefs)
         }.first()
 
     companion object {
         private const val TAG = "MediaGateway"
-        private val KEY_LANG = stringPreferencesKey("lang")
     }
 }
