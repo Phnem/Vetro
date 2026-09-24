@@ -14,9 +14,9 @@ try {
     & .\gradlew.bat :app:assembleDebug :app:assembleDebugAndroidTest -PaudiobookSmokeBuild=true -q --no-daemon --max-workers=2
     if ($LASTEXITCODE -ne 0) { throw 'Audiobook smoke build failed' }
 
-    & adb -s $DeviceId install -r $appApk
+    & adb -s $DeviceId install -r -d $appApk
     if ($LASTEXITCODE -ne 0) { throw 'Test app install failed' }
-    & adb -s $DeviceId install -r $testApk
+    & adb -s $DeviceId install -r -d $testApk
     if ($LASTEXITCODE -ne 0) { throw 'Test runner install failed' }
 
     $output = & adb -s $DeviceId shell am instrument -w -r -e class $TestClass "$testPackage/androidx.test.runner.AndroidJUnitRunner"

@@ -47,8 +47,7 @@ fun BooksScreen(
     Box(
         modifier = modifier
             .fillMaxSize()
-            .padding(bottom = bottomInset)
-            .padding(horizontal = 32.dp),
+            .padding(bottom = bottomInset),
         contentAlignment = Alignment.Center,
     ) {
         if (gate.enabled || BuildConfig.DEBUG) {

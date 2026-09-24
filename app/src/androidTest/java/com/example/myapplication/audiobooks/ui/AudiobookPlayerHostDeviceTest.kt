@@ -2,6 +2,7 @@ package com.example.myapplication.audiobooks.ui
 
 import android.content.ComponentName
 import android.content.Intent
+import android.graphics.Bitmap
 import android.net.Uri
 import android.os.SystemClock
 import android.view.accessibility.AccessibilityNodeInfo
@@ -38,13 +39,21 @@ class AudiobookPlayerHostDeviceTest {
         root.mkdirs()
         writeSilence(File(root, "01.wav"))
         writeSilence(File(root, "02.wav"))
+        Bitmap.createBitmap(8, 8, Bitmap.Config.ARGB_8888).apply {
+            eraseColor(android.graphics.Color.BLUE)
+            File(root, "cover.png").outputStream().use { compress(Bitmap.CompressFormat.PNG, 100, it) }
+            recycle()
+        }
         val tree = Uri.fromFile(root)
         val source = LocalFolderSource(context)
         val resolver = getKoin().get<ManifestResolver>()
         val book = source.addTree(tree).single()
+        assertEquals("cover.png", book.artworkUri?.lastPathSegment)
         val manifest = source.refresh(book.variant)
         resolver.put(manifest)
-        val items = PlaybackQueueBuilder.build(manifest, book.workId, book.narrationId, "AB10 Sample", "", "")
+        val items = PlaybackQueueBuilder.build(manifest, book.workId, book.narrationId, "AB10 Sample", "", "",
+            book.artworkUri?.toString())
+        assertEquals(book.artworkUri, items.first().mediaMetadata.artworkUri)
         val token = SessionToken(context, ComponentName(context, AudiobookPlaybackService::class.java))
         val future = MediaController.Builder(context, token).buildAsync()
         val controller = future.get(15, TimeUnit.SECONDS)
@@ -81,8 +90,8 @@ class AudiobookPlayerHostDeviceTest {
                 instrumentation.uiAutomation.takeScreenshot()?.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, output)
             }
             clickNode("Главы")
-            await(5_000) { findNode("02") != null }
-            clickNode("02")
+            await(5_000) { findNodeExact("02") != null }
+            clickNode("02", exact = true)
             await(5_000) { onMain { controller.currentMediaItemIndex == 1 } }
             clickNode("Скорость")
             await(5_000) { findNode("1.5×") != null }
@@ -116,8 +125,9 @@ class AudiobookPlayerHostDeviceTest {
         assertTrue("UI did not reach expected state: ${dumpUi()}", condition())
     }
 
-    private fun clickNode(label: String) {
-        val node = findNode(label) ?: throw AssertionError("Missing UI node: $label")
+    private fun clickNode(label: String, exact: Boolean = false) {
+        val node = (if (exact) findNodeExact(label) else findNode(label))
+            ?: throw AssertionError("Missing UI node: $label; ui=${dumpUi()}")
         var clickable: AccessibilityNodeInfo? = node
         while (clickable != null && !clickable.isClickable) clickable = clickable.parent
         assertTrue("Could not click $label", clickable?.performAction(AccessibilityNodeInfo.ACTION_CLICK) == true)
@@ -127,6 +137,16 @@ class AudiobookPlayerHostDeviceTest {
         fun visit(node: AccessibilityNodeInfo?): AccessibilityNodeInfo? {
             if (node == null) return null
             if (node.text?.contains(label) == true || node.contentDescription?.contains(label) == true) return node
+            for (index in 0 until node.childCount) visit(node.getChild(index))?.let { return it }
+            return null
+        }
+        return visit(InstrumentationRegistry.getInstrumentation().uiAutomation.rootInActiveWindow)
+    }
+
+    private fun findNodeExact(label: String): AccessibilityNodeInfo? {
+        fun visit(node: AccessibilityNodeInfo?): AccessibilityNodeInfo? {
+            if (node == null) return null
+            if (node.text?.toString() == label || node.contentDescription?.toString() == label) return node
             for (index in 0 until node.childCount) visit(node.getChild(index))?.let { return it }
             return null
         }

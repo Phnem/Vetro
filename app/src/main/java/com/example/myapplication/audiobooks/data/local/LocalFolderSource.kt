@@ -20,6 +20,7 @@ import com.example.myapplication.audiobooks.domain.source.ManifestSource
 import com.example.myapplication.audiobooks.domain.source.NaturalAudioOrder
 import java.io.File
 import java.io.FileNotFoundException
+import java.security.MessageDigest
 import java.util.Base64
 import java.util.UUID
 import java.util.concurrent.TimeUnit
@@ -33,6 +34,7 @@ data class LocalBook(
     val title: String,
     val folderUri: Uri,
     val fileCount: Int,
+    val artworkUri: Uri? = null,
 )
 
 /** SAF-backed books. Only the tree grant is persisted; playable file URIs stay in manifests. */
@@ -124,18 +126,18 @@ class LocalFolderSource(private val context: Context) : ManifestSource {
         val books = ArrayList<LocalBook>()
         val rootFiles = audioFiles(root, includeDirectories = false)
         if (rootFiles.isNotEmpty()) {
-            books += localBook(treeUri, root, rootFiles.size)
+            books += localBook(treeUri, root, rootFiles)
         }
         for (folder in children.asSequence().filter { it.isDirectory }.take(MAX_BOOKS)) {
             val files = audioFiles(folder)
             if (files.isNotEmpty()) {
-                books += localBook(treeUri, folder, files.size)
+                books += localBook(treeUri, folder, files)
             }
         }
         return books
     }
 
-    private fun localBook(treeUri: Uri, folder: DocumentFile, fileCount: Int): LocalBook {
+    private fun localBook(treeUri: Uri, folder: DocumentFile, files: List<DocumentFile>): LocalBook {
         val variant = encode(treeUri, folder.uri)
         fun stableId(kind: String): String {
             val key = "$kind:${variant.value}"
@@ -149,8 +151,41 @@ class LocalFolderSource(private val context: Context) : ManifestSource {
             narrationId = NarrationId(stableId("narration")),
             title = folder.name ?: "Audiobook",
             folderUri = folder.uri,
-            fileCount = fileCount,
+            fileCount = files.size,
+            artworkUri = findArtwork(folder, files),
         )
+    }
+
+    /** A local book owns its artwork: prefer an image beside the tracks, then embedded audio art. */
+    private fun findArtwork(folder: DocumentFile, tracks: List<DocumentFile>): Uri? {
+        val images = runCatching { folder.listFiles().filter { file ->
+            file.isFile && file.name.orEmpty().substringAfterLast('.', "").lowercase() in IMAGE_EXTENSIONS
+        } }.getOrDefault(emptyList())
+        val preferred = images.minByOrNull { image ->
+            val name = image.name.orEmpty().substringBeforeLast('.').lowercase()
+            COVER_NAMES.indexOf(name).takeIf { it >= 0 } ?: COVER_NAMES.size
+        }?.takeIf { image -> image.name.orEmpty().substringBeforeLast('.').lowercase() in COVER_NAMES }
+        val chosen = preferred ?: images.singleOrNull()
+        if (chosen != null) return chosen.uri
+
+        val key = tracks.take(3).joinToString("|") { "${it.uri}:${it.length()}:${it.lastModified()}" }
+        val digest = MessageDigest.getInstance("SHA-256").digest(key.toByteArray())
+            .take(12).joinToString("") { "%02x".format(it) }
+        val directory = File(context.filesDir, "audiobook_covers").apply { mkdirs() }
+        val cached = File(directory, "$digest.img")
+        if (cached.isFile && cached.length() > 0) return Uri.fromFile(cached)
+        val picture = tracks.take(3).firstNotNullOfOrNull { track ->
+            runCatching {
+                MediaMetadataRetriever().use { retriever ->
+                    retriever.setDataSource(context, track.uri)
+                    retriever.embeddedPicture
+                }
+            }.getOrNull()?.takeIf { it.size in 1..MAX_EMBEDDED_ART_BYTES }
+        } ?: return null
+        return runCatching {
+            cached.outputStream().use { it.write(picture) }
+            Uri.fromFile(cached)
+        }.getOrNull()
     }
 
     private fun audioFiles(folder: DocumentFile, includeDirectories: Boolean = true): List<DocumentFile> {
@@ -247,5 +282,8 @@ class LocalFolderSource(private val context: Context) : ManifestSource {
         const val INSPECT_TIMEOUT_SECONDS = 15L
         val AUDIO_EXTENSIONS = setOf("mp3", "m4b", "m4a", "aac", "ogg", "opus", "flac", "wav")
         val CHAPTER_FORMATS = setOf("mp3", "m4b", "m4a")
+        val IMAGE_EXTENSIONS = setOf("jpg", "jpeg", "png", "webp")
+        val COVER_NAMES = listOf("cover", "folder", "front", "artwork")
+        const val MAX_EMBEDDED_ART_BYTES = 8 * 1024 * 1024
     }
 }
