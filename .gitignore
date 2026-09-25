@@ -16,6 +16,8 @@
 local.properties
 **/build/
 **/generated/
+# Baseline/startup profile is source: it ships in release builds (see :baselineprofile).
+!/app/src/release/generated/
 .kotlin/
 wrapper/
 app/release/
