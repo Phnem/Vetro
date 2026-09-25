@@ -1,6 +1,9 @@
 package com.example.myapplication.media.source
 
 import com.example.myapplication.media.downloadableCandidates
+import com.example.myapplication.media.fitCandidatesToBudget
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -67,5 +70,27 @@ class DownloadCapabilityTest {
             downloadableCandidates(signedReferer, emptyList())
         }
         assertFalse(signedReferer.withoutPersistedSecrets().headers.containsKey("Referer"))
+    }
+
+    @Test
+    fun `fallback candidates are trimmed from the tail to fit the work input budget`() {
+        // Как у Kodik: два десятка потоков с Referer — вместе больше потолка WorkManager (10 КБ).
+        val kodik = (1..23).map { i ->
+            VetroVideo(
+                url = "https://cloud.kodik-storage.com/useruploads/${"x".repeat(80)}/$i/720.mp4:hls:manifest.m3u8",
+                label = "Kodik $i · 720p",
+                headers = mapOf("Referer" to "https://kodik.info/seria/$i/${"y".repeat(60)}/720p", "User-Agent" to "Mozilla/5.0"),
+                downloadAllowed = true,
+            )
+        }
+        val json = Json { encodeDefaults = true }
+        val encode: (List<VetroVideo>) -> String = { json.encodeToString(it) }
+        assertTrue(encode(kodik).length > 10_240)
+
+        val fitted = fitCandidatesToBudget(kodik, 6_000, encode)
+
+        assertTrue(fitted.isNotEmpty())
+        assertTrue(encode(fitted).toByteArray().size <= 6_000)
+        assertEquals(kodik.take(fitted.size), fitted) // хвост, а не лучшие
     }
 }

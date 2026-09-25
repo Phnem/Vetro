@@ -73,7 +73,10 @@ class MediaGatewayImpl(
         )
 
         val candidates = downloadableCandidates(video, fallbackVideos)
-        val persistedCandidates = candidates.map(VetroVideo::withoutPersistedSecrets)
+        val persistedCandidates = fitCandidatesToBudget(
+            candidates.map(VetroVideo::withoutPersistedSecrets),
+            CANDIDATES_BUDGET_BYTES,
+        ) { json.encodeToString(it) }
         val data = workDataOf(
             MediaDownloadWorker.KEY_JOB_ID to jobId,
             MediaDownloadWorker.KEY_URL to video.url,
@@ -110,6 +113,9 @@ class MediaGatewayImpl(
         }.first()
 
     companion object {
+        /** Из 10 КБ входа задачи: остальное — URL, заголовки, путь, ключи. */
+        private const val CANDIDATES_BUDGET_BYTES = 6_000
+
         private const val TAG = "MediaGateway"
     }
 }

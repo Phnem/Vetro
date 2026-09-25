@@ -57,6 +57,23 @@ interface MediaGateway {
 /** Можно ли отдать поток фоновой загрузке: источник разрешает и в URL нет секретов. */
 internal fun VetroVideo.isDownloadable(): Boolean = downloadAllowed && isSafeForBackgroundPersistence()
 
+/**
+ * Запасные потоки, которые влезают во вход задачи WorkManager: у него потолок 10 КБ на весь
+ * `Data`, а у Kodik на серию два десятка потоков с заголовками — задача не ставилась вовсе
+ * («Data cannot occupy more than 10240 bytes»). Список уже ранжирован, отбрасываем хвост.
+ */
+internal fun fitCandidatesToBudget(
+    candidates: List<VetroVideo>,
+    budgetBytes: Int,
+    encode: (List<VetroVideo>) -> String,
+): List<VetroVideo> {
+    var fitted = candidates
+    while (fitted.size > 1 && encode(fitted).toByteArray(Charsets.UTF_8).size > budgetBytes) {
+        fitted = fitted.dropLast(1)
+    }
+    return fitted
+}
+
 internal fun downloadableCandidates(
     video: VetroVideo,
     fallbackVideos: List<VetroVideo>,

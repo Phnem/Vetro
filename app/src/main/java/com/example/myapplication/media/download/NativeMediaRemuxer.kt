@@ -40,6 +40,22 @@ object NativeMediaRemuxer {
                 throw IOException("Transport stream has no supported video track")
             }
 
+            // AAC из TS приходит в ADTS: MP4 ждёт голые кадры и csd-0 (см. AdtsFrames).
+            val aacSampleRates = HashMap<Int, Int>()
+            val aacTimelines = HashMap<Int, AdtsFrames.Timeline>()
+            for ((inputIndex, format) in selectedTracks) {
+                if (format.getString(MediaFormat.KEY_MIME) != MediaFormat.MIMETYPE_AUDIO_AAC) continue
+                val sampleRate = format.getIntegerOrNull(MediaFormat.KEY_SAMPLE_RATE) ?: continue
+                aacSampleRates[inputIndex] = sampleRate
+                if (format.containsKey(MediaFormat.KEY_IS_ADTS)) format.setInteger(MediaFormat.KEY_IS_ADTS, 0)
+                if (!format.containsKey(CSD_0)) {
+                    val channels = format.getIntegerOrNull(MediaFormat.KEY_CHANNEL_COUNT) ?: 2
+                    val objectType = format.getIntegerOrNull(MediaFormat.KEY_AAC_PROFILE) ?: AAC_LC
+                    AdtsFrames.audioSpecificConfig(sampleRate, channels, objectType)
+                        ?.let { format.setByteBuffer(CSD_0, ByteBuffer.wrap(it)) }
+                }
+            }
+
             val muxer = MediaMuxer(
                 temp.absolutePath,
                 MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4,
@@ -66,14 +82,29 @@ object NativeMediaRemuxer {
                     buffer.clear()
                     val size = extractor.readSampleData(buffer, 0)
                     if (size < 0) break
-                    val outputTrack = outputTracks[extractor.sampleTrackIndex]
-                    if (outputTrack != null) {
-                        info.set(
-                            0,
-                            size,
-                            extractor.sampleTime.coerceAtLeast(0L),
-                            extractor.sampleFlags,
-                        )
+                    val inputTrack = extractor.sampleTrackIndex
+                    val outputTrack = outputTracks[inputTrack]
+                    val sampleTime = extractor.sampleTime.coerceAtLeast(0L)
+                    val aacSampleRate = aacSampleRates[inputTrack]
+                    val adts = if (aacSampleRate != null) AdtsFrames.split(buffer, 0, size) else emptyList()
+                    if (outputTrack != null && adts.isNotEmpty()) {
+                        // Один сэмпл MP4 = один кадр AAC (1024 отсчёта); время — непрерывный счёт
+                        // кадров (см. AdtsFrames.Timeline), частота — из заголовка кадра.
+                        val rate = adts.first().sampleRate.takeIf { it > 0 } ?: aacSampleRate!!
+                        val frameUs = AAC_FRAME_SAMPLES * 1_000_000L / rate
+                        val start = aacTimelines.getOrPut(inputTrack) { AdtsFrames.Timeline() }
+                            .place(sampleTime, adts.size, frameUs)
+                        adts.forEachIndexed { index, frame ->
+                            info.set(
+                                frame.payloadOffset,
+                                frame.payloadSize,
+                                start + index * frameUs,
+                                extractor.sampleFlags,
+                            )
+                            muxer.writeSampleData(outputTrack, buffer, info)
+                        }
+                    } else if (outputTrack != null) {
+                        info.set(0, size, sampleTime, extractor.sampleFlags)
                         muxer.writeSampleData(outputTrack, buffer, info)
                     }
                     extractor.advance()
@@ -105,4 +136,10 @@ object NativeMediaRemuxer {
     class RemuxCancelledException : IOException("Native remux cancelled")
 
     private const val DEFAULT_BUFFER_BYTES = 4 * 1024 * 1024
+    private const val CSD_0 = "csd-0"
+    private const val AAC_LC = 2
+    private const val AAC_FRAME_SAMPLES = 1024L
+
+    private fun MediaFormat.getIntegerOrNull(key: String): Int? =
+        if (containsKey(key)) runCatching { getInteger(key) }.getOrNull() else null
 }
