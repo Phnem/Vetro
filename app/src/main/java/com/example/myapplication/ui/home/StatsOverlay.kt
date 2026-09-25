@@ -79,7 +79,7 @@ import com.example.myapplication.domain.stats.StatsCardExplanationState
 import com.example.myapplication.domain.stats.StatsCardKind
 import com.example.myapplication.domain.stats.StatsExplanationCoordinator
 import com.example.myapplication.network.AppLanguage
-import com.example.myapplication.isAppInDarkTheme
+import com.example.myapplication.ui.shared.theme.isAppInDarkTheme
 import com.example.myapplication.ui.home.stats.StatsCardDeckContent
 import com.example.myapplication.ui.home.stats.StatsCardDetailContent
 import androidx.compose.foundation.layout.offset

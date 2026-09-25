@@ -66,7 +66,7 @@ import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupPositionProvider
 import androidx.compose.ui.window.PopupProperties
 import androidx.compose.ui.zIndex
-import com.example.myapplication.isAppInDarkTheme
+import com.example.myapplication.ui.shared.theme.isAppInDarkTheme
 import com.example.myapplication.domain.enrichment.weblinks.ApprovedSite
 import com.example.myapplication.domain.enrichment.weblinks.ResolvedWebLink
 import com.example.myapplication.network.AppLanguage

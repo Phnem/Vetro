@@ -73,7 +73,7 @@ import com.example.myapplication.media.progress.EpisodePlaybackStore
 import com.example.myapplication.media.source.VetroVideo
 import com.example.myapplication.media.source.PlaybackIdentity
 import com.example.myapplication.media.source.rankVideosForResolution
-import com.example.myapplication.ui.shared.theme.OneUiTheme
+import com.example.myapplication.ui.shared.theme.AppThemed
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -190,7 +190,7 @@ class StreamPlayerActivity : ComponentActivity(), PipHostActivity {
         activeEpisode = initialEpisode
 
         setContent {
-            OneUiTheme {
+            AppThemed(settings) {
                 val playerSettingsState = rememberPlayerSettings(settings)
                 CompositionLocalProvider(LocalPlayerLanguage provides playerSettingsState.value.language) {
                     val scope = rememberCoroutineScope()

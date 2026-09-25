@@ -37,10 +37,11 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
-import com.example.myapplication.isAppInDarkTheme
+import com.example.myapplication.ui.shared.theme.isAppInDarkTheme
 import com.example.myapplication.ui.shared.theme.MotionTokens
 import com.example.myapplication.utils.getAddEditCommentStrings
 import com.example.myapplication.utils.getStrings
+import com.example.myapplication.utils.Haptic
 import com.example.myapplication.utils.performHaptic
 import com.example.myapplication.network.AppLanguage
 import com.example.myapplication.ui.shared.components.rating.RatingOverlayHost
@@ -244,7 +245,7 @@ fun AddEditScreen(
                             animeId = animeId,
                             animatedVisibilityScope = animatedVisibilityScope,
                             onClick = {
-                                performHaptic(view, "light")
+                                performHaptic(view, Haptic.Light)
                                 launcher.launch("image/*")
                             }
                         )
@@ -324,7 +325,7 @@ fun AddEditScreen(
                         AddEditEpisodeQuickSelect(
                             selectedEpisodes = uiState.episodes,
                             onSelect = { selectedEp ->
-                                performHaptic(view, "light")
+                                performHaptic(view, Haptic.Light)
                                 viewModel.onEvent(AddEditEvent.OnEpisodesChanged(selectedEp))
                             }
                         )
@@ -373,7 +374,7 @@ fun AddEditScreen(
                                         )
                                     }
                                 }
-                                performHaptic(view, "light")
+                                performHaptic(view, Haptic.Light)
                             }
                         )
                     }
@@ -457,7 +458,7 @@ fun AddEditScreen(
                                 interactionSource = remember { MutableInteractionSource() },
                                 indication = null,
                                 onClick = {
-                                    performHaptic(view, "light")
+                                    performHaptic(view, Haptic.Light)
                                     navController.popBackStack()
                                 }
                             ),
@@ -540,7 +541,7 @@ fun AddEditScreen(
                             .border(0.5.dp, Color.White.copy(alpha = 0.2f), CircleShape)
                             .clickable {
                                 if (uiState.isLoading) return@clickable
-                                performHaptic(view, "success")
+                                performHaptic(view, Haptic.Success)
                                 if (uiState.isValid) {
                                     viewModel.onEvent(AddEditEvent.OnSave)
                                 } else {

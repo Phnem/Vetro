@@ -18,7 +18,7 @@ import com.example.myapplication.manga.domain.MangaChapter
 import com.example.myapplication.domain.enrichment.CollectionEnrichmentCoordinator
 import com.example.myapplication.domain.enrichment.InteractiveMediaPauseViewModel
 import com.example.myapplication.network.AppLanguage
-import com.example.myapplication.ui.shared.theme.OneUiTheme
+import com.example.myapplication.ui.shared.theme.AppThemed
 import kotlinx.coroutines.flow.map
 import org.koin.android.ext.android.inject
 import org.koin.androidx.viewmodel.ext.android.viewModel
@@ -54,7 +54,7 @@ class MangaReaderActivity : ComponentActivity() {
         hideSystemBars()
 
         setContent {
-            OneUiTheme {
+            AppThemed(settings) {
                 val state by viewModel.state.collectAsState()
                 val mode by viewModel.readerMode.collectAsState()
                 val direction by viewModel.pageDirection.collectAsState()

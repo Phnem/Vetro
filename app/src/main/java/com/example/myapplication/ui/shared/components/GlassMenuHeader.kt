@@ -32,8 +32,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.example.myapplication.isAppInDarkTheme
+import com.example.myapplication.ui.shared.theme.isAppInDarkTheme
 import com.example.myapplication.ui.shared.theme.SnProFamily
+import com.example.myapplication.utils.Haptic
 import com.example.myapplication.utils.performHaptic
 import com.kyant.backdrop.Backdrop
 import com.kyant.backdrop.drawBackdrop
@@ -101,7 +102,7 @@ fun GlassMenuHeader(
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null,
-                    onClick = { performHaptic(view, "light"); onBack() },
+                    onClick = { performHaptic(view, Haptic.Light); onBack() },
                 ),
             contentAlignment = Alignment.Center,
         ) {

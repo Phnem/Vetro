@@ -70,7 +70,7 @@ import com.example.myapplication.data.models.Anime
 import com.example.myapplication.data.models.MediaType
 import com.example.myapplication.manga.ui.MangaChaptersPage
 import com.example.myapplication.manga.ui.rememberMangaContinueReading
-import com.example.myapplication.isAppInDarkTheme
+import com.example.myapplication.ui.shared.theme.isAppInDarkTheme
 import com.example.myapplication.network.AppLanguage
 import com.example.myapplication.ui.shared.GlassPreset
 import com.example.myapplication.ui.shared.adaptiveGlassBackdrop
@@ -79,6 +79,7 @@ import com.example.myapplication.ui.shared.theme.MotionTokens
 import com.example.myapplication.ui.shared.components.GrabberHandle
 import com.example.myapplication.ui.shared.theme.BrandOrangeBright
 import com.example.myapplication.ui.shared.theme.SnProFamily
+import com.example.myapplication.utils.Haptic
 import com.example.myapplication.utils.performHaptic
 import com.kyant.backdrop.Backdrop
 import com.kyant.backdrop.backdrops.layerBackdrop
@@ -187,19 +188,19 @@ fun DetailsScreen(
                         webLinks = webLinks,
                         seasons = seasons,
                         onWatch = {
-                            performHaptic(view, "light")
+                            performHaptic(view, Haptic.Light)
                             openEpisodes()
                         },
                         onDownload = {
-                            performHaptic(view, "light")
+                            performHaptic(view, Haptic.Light)
                             openEpisodes()
                         },
                         onToggleFavorite = {
-                            performHaptic(view, if (current.isFavorite) "light" else "success")
+                            performHaptic(view, if (current.isFavorite) Haptic.Light else Haptic.Success)
                             viewModel.toggleFavorite()
                         },
                         onOpenSeason = {
-                            performHaptic(view, "light")
+                            performHaptic(view, Haptic.Light)
                             openEpisodes()
                         },
                         onHeroUnderStatusBar = { heroUnderStatusBar = it },
@@ -250,7 +251,7 @@ fun DetailsScreen(
             isManga = isManga,
             activePage = pagerState.targetPage,
             onSelect = { page ->
-                performHaptic(view, "light")
+                performHaptic(view, Haptic.Light)
                 scope.launch {
                     pagerState.animateScrollToPage(page, animationSpec = MotionTokens.sheetPresent())
                 }
@@ -283,7 +284,7 @@ fun DetailsScreen(
                     DetailsGlassStartButton(
                         backdrop = backdrop,
                         onClick = {
-                            performHaptic(view, "light")
+                            performHaptic(view, Haptic.Light)
                             continueReading()
                         },
                         modifier = startButtonModifier,
@@ -293,7 +294,7 @@ fun DetailsScreen(
                 DetailsGlassStartButton(
                     backdrop = backdrop,
                     onClick = {
-                        performHaptic(view, "light")
+                        performHaptic(view, Haptic.Light)
                         episodeMenuViewModel?.startWatching()
                     },
                     modifier = startButtonModifier,

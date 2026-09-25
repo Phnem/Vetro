@@ -59,11 +59,12 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
 import com.example.myapplication.data.models.AppUpdateStatus
-import com.example.myapplication.isAppInDarkTheme
+import com.example.myapplication.ui.shared.theme.isAppInDarkTheme
 import com.phnem.vetro.R
 import com.example.myapplication.network.AppLanguage
 import com.example.myapplication.utils.formatApkSizeLabel
 import com.example.myapplication.utils.getStrings
+import com.example.myapplication.utils.Haptic
 import com.example.myapplication.utils.performHaptic
 import com.example.myapplication.ui.shared.AuthProviderIcon
 import com.example.myapplication.ui.shared.theme.IosDesign
@@ -653,7 +654,7 @@ fun ContactSheet(
                 iconId = R.drawable.ic_github,
                 title = "GitHub",
                 onClick = {
-                    performHaptic(view, "light")
+                    performHaptic(view, Haptic.Light)
                     context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/Phnem/Vetro-Collection")))
                     onDismiss()
                 },
@@ -663,7 +664,7 @@ fun ContactSheet(
                 iconId = R.drawable.tg,
                 title = "Telegram",
                 onClick = {
-                    performHaptic(view, "light")
+                    performHaptic(view, Haptic.Light)
                     context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://t.me/Vetro_chat")))
                     onDismiss()
                 },
@@ -764,7 +765,7 @@ fun UpdateChangelogSheet(
         Box(modifier = Modifier.fillMaxWidth()) {
             IconButton(
                 onClick = {
-                    performHaptic(view, "light")
+                    performHaptic(view, Haptic.Light)
                     onDismiss()
                 },
                 modifier = Modifier.align(Alignment.TopEnd)
@@ -921,7 +922,7 @@ fun UpdateChangelogSheet(
                         interactionSource = whatsNewInteractionSource,
                         indication = ripple(bounded = true),
                         onClick = {
-                            performHaptic(view, "light")
+                            performHaptic(view, Haptic.Light)
                             whatsNewExpanded = !whatsNewExpanded
                         },
                     ),
@@ -1019,7 +1020,7 @@ fun UpdateChangelogSheet(
                     ) {
                         OutlinedButton(
                             onClick = {
-                                performHaptic(view, "light")
+                                performHaptic(view, Haptic.Light)
                                 onDismiss()
                             },
                             modifier = Modifier.weight(1f),
@@ -1029,7 +1030,7 @@ fun UpdateChangelogSheet(
                         }
                         Button(
                             onClick = {
-                                performHaptic(view, "light")
+                                performHaptic(view, Haptic.Light)
                                 viewModel.startApkDownload(context)
                             },
                             modifier = Modifier.weight(1f),
@@ -1055,7 +1056,7 @@ fun UpdateChangelogSheet(
                     ) {
                         OutlinedButton(
                             onClick = {
-                                performHaptic(view, "light")
+                                performHaptic(view, Haptic.Light)
                                 viewModel.loadUpdateChangelog(context)
                             },
                             modifier = Modifier.weight(1f),
@@ -1065,7 +1066,7 @@ fun UpdateChangelogSheet(
                         }
                         OutlinedButton(
                             onClick = {
-                                performHaptic(view, "light")
+                                performHaptic(view, Haptic.Light)
                                 onDismiss()
                             },
                             modifier = Modifier.weight(1f),
@@ -1078,7 +1079,7 @@ fun UpdateChangelogSheet(
                 else -> {
                     OutlinedButton(
                         onClick = {
-                            performHaptic(view, "light")
+                            performHaptic(view, Haptic.Light)
                             onDismiss()
                         },
                         modifier = Modifier.fillMaxWidth(),
@@ -1094,7 +1095,7 @@ fun UpdateChangelogSheet(
             Spacer(Modifier.height(12.dp))
             OutlinedButton(
                 onClick = {
-                    performHaptic(view, "light")
+                    performHaptic(view, Haptic.Light)
                     installPermissionLauncher.launch(viewModel.manageUnknownAppSourcesIntent(context))
                 },
                 modifier = Modifier.fillMaxWidth(),

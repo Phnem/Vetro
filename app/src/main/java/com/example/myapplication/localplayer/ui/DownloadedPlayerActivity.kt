@@ -35,7 +35,7 @@ import com.example.myapplication.media.ui.finishIfStoppedOutsidePip
 import com.example.myapplication.media.ui.PipActionsController
 import com.example.myapplication.media.ui.PipHostActivity
 import com.example.myapplication.media.ui.PipPlaybackCommands
-import com.example.myapplication.ui.shared.theme.OneUiTheme
+import com.example.myapplication.ui.shared.theme.AppThemed
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -100,7 +100,7 @@ class DownloadedPlayerActivity : ComponentActivity(), PipHostActivity {
         }
 
         setContent {
-            OneUiTheme {
+            AppThemed(settings) {
                 val playerSettingsState = rememberPlayerSettings(settings)
                 CompositionLocalProvider(LocalPlayerLanguage provides playerSettingsState.value.language) {
                     val playerSettings by playerSettingsState

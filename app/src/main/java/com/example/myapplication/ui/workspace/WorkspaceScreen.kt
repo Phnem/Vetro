@@ -60,6 +60,7 @@ import com.example.myapplication.ui.shared.DONATION_URL
 import com.example.myapplication.ui.shared.LocalBackdropPinned
 import com.example.myapplication.ui.shared.theme.MotionTokens
 import com.example.myapplication.utils.getStrings
+import com.example.myapplication.utils.Haptic
 import com.example.myapplication.utils.performHaptic
 import com.kyant.backdrop.backdrops.layerBackdrop
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
@@ -138,7 +139,7 @@ fun WorkspaceScreen(
     BackHandler(enabled = menuOpen) { menuOpen = false }
     BackHandler(enabled = !menuOpen && backTarget != null) {
         backTarget?.let { target ->
-            performHaptic(view, "light")
+            performHaptic(view, Haptic.Light)
             goTo(target)
         }
     }
@@ -230,7 +231,7 @@ fun WorkspaceScreen(
                     onDismiss = { showSyncPanel = false },
                     onLogout = { navController.navigateToWelcome() },
                     onCheckUpdates = {
-                        performHaptic(view, "light")
+                        performHaptic(view, Haptic.Light)
                         homeViewModel.checkForUpdates(force = true)
                     },
                 )
@@ -279,7 +280,7 @@ fun WorkspaceScreen(
             hidden = dockHidden,
             menuOpen = menuOpen,
             onOpenMenu = {
-                performHaptic(view, "light")
+                performHaptic(view, Haptic.Light)
                 menuOpen = true
             },
             onMenuBounds = { menuOrigin = it },
@@ -297,7 +298,7 @@ fun WorkspaceScreen(
             language = language,
             dimmed = cardSelectionActive,
             onSelect = { page ->
-                performHaptic(view, "light")
+                performHaptic(view, Haptic.Light)
                 goTo(page)
             },
             modifier = Modifier

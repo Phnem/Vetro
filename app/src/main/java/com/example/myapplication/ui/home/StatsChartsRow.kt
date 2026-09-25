@@ -47,7 +47,7 @@ import com.example.myapplication.domain.stats.DonutChartData
 import com.example.myapplication.domain.stats.TagFrequencySlice
 import com.example.myapplication.domain.stats.buildBarChartData
 import com.example.myapplication.domain.stats.buildDonutChartData
-import com.example.myapplication.isAppInDarkTheme
+import com.example.myapplication.ui.shared.theme.isAppInDarkTheme
 import com.example.myapplication.network.AppLanguage
 import com.example.myapplication.ui.shared.theme.OverlayThemeTokens
 import com.example.myapplication.ui.shared.theme.SnProFamily

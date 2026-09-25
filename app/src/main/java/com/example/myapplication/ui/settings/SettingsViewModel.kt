@@ -2,6 +2,7 @@ package com.example.myapplication.ui.settings
 
 import com.example.myapplication.localplayer.ui.PlayerSettingsKeys
 import com.example.myapplication.data.local.AppLanguagePrefs
+import com.example.myapplication.data.local.AppThemePrefs
 import android.app.Application
 import android.app.DownloadManager
 import android.content.BroadcastReceiver
@@ -58,7 +59,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 
-private val KEY_THEME = stringPreferencesKey("theme")
 private val KEY_CONTENT_TYPE = stringPreferencesKey("contentType")
 private val KEY_DEV_MIRROR_DB = booleanPreferencesKey("dev_mirror_db_to_documents")
 private val KEY_DEV_HIDE_SHARE = booleanPreferencesKey("dev_hide_share_button")
@@ -105,7 +105,7 @@ private fun mergeSettingsUi(
 
     return SettingsUiState(
         language = AppLanguagePrefs.from(prefs),
-        theme = runCatching { AppTheme.valueOf(prefs[KEY_THEME] ?: "SYSTEM") }.getOrElse { AppTheme.SYSTEM },
+        theme = AppThemePrefs.from(prefs),
         contentType = runCatching { AppContentType.valueOf(prefs[KEY_CONTENT_TYPE] ?: "ANIME") }.getOrElse { AppContentType.ANIME },
         devMirrorDbToDocuments = prefs[KEY_DEV_MIRROR_DB] ?: false,
         devHideShareButton = prefs[KEY_DEV_HIDE_SHARE] ?: false,
@@ -279,7 +279,7 @@ class SettingsViewModel(
 
     fun setTheme(theme: AppTheme) {
         viewModelScope.launch {
-            settingsDataStore.edit { it[KEY_THEME] = theme.name }
+            settingsDataStore.edit { it[AppThemePrefs.KEY] = theme.name }
         }
     }
 

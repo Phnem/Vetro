@@ -45,7 +45,7 @@ import coil3.request.crossfade
 import coil3.size.Size
 import com.example.myapplication.data.models.RatingScale
 import com.example.myapplication.domain.search.apiRatingTo10
-import com.example.myapplication.isAppInDarkTheme
+import com.example.myapplication.ui.shared.theme.isAppInDarkTheme
 import com.example.myapplication.network.ApiSearchResult
 import com.example.myapplication.ui.shared.fluidClickable
 import com.example.myapplication.ui.shared.icons.HeroCheck

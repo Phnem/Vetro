@@ -70,7 +70,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
-import com.example.myapplication.isAppInDarkTheme
+import com.example.myapplication.ui.shared.theme.isAppInDarkTheme
 import com.example.myapplication.manga.data.DownloadProgress
 import com.example.myapplication.manga.domain.MangaChapter
 import com.example.myapplication.manga.domain.MangaItem
@@ -82,6 +82,7 @@ import com.example.myapplication.ui.shared.theme.SnProFamily
 import com.example.myapplication.ui.shared.theme.IosDesign
 import com.example.myapplication.ui.shared.theme.SquircleCornerShape
 import com.example.myapplication.ui.shared.theme.SquircleShape
+import com.example.myapplication.utils.Haptic
 import com.example.myapplication.utils.performHaptic
 import java.time.Instant
 import java.time.ZoneId
@@ -942,7 +943,7 @@ private fun VolumeHeader(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null,
                 ) {
-                    performHaptic(view, "light")
+                    performHaptic(view, Haptic.Light)
                     onDownloadAll()
                 },
             contentAlignment = Alignment.Center,

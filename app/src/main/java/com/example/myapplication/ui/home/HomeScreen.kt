@@ -110,6 +110,7 @@ import com.example.myapplication.sync.supabase.CollectionImageRestoreCoordinator
 import com.example.myapplication.sync.supabase.SupabaseSyncCoordinator
 import com.example.myapplication.utils.getCloudSyncPillStrings
 import com.example.myapplication.utils.getStrings
+import com.example.myapplication.utils.Haptic
 import com.example.myapplication.utils.performHaptic
 import com.example.myapplication.ui.home.recommendations.DiscoveryCard
 import com.example.myapplication.ui.home.recommendations.RecommendationsSheet
@@ -309,7 +310,7 @@ fun HomeScreen(
     val finalDockVisible = dockAutoHide.visible || isSearchVisible
 
     BackHandler(enabled = isSearchVisible || uiState.searchQuery.isNotEmpty()) {
-        performHaptic(view, "light")
+        performHaptic(view, Haptic.Light)
         isSearchVisible = false
         viewModel.updateSearchQuery("")
         focusManager.clearFocus()
@@ -378,7 +379,7 @@ fun HomeScreen(
     )
 
     val openWorkspaceSort: () -> Unit = {
-        performHaptic(view, "light")
+        performHaptic(view, Haptic.Light)
         dismissCloudSyncPill()
         showSortOverlay = !showSortOverlay
         if (showSortOverlay) {
@@ -388,7 +389,7 @@ fun HomeScreen(
         }
     }
     val openWorkspaceNotifications: () -> Unit = {
-        performHaptic(view, "light")
+        performHaptic(view, Haptic.Light)
         dismissCloudSyncPill()
         showNotificationsOverlay = !showNotificationsOverlay
         if (showNotificationsOverlay) {
@@ -399,13 +400,13 @@ fun HomeScreen(
     }
     val notificationStrings = remember(currentLanguage) { notificationStrings(currentLanguage) }
     val openNotificationCenter: () -> Unit = {
-        performHaptic(view, "light")
+        performHaptic(view, Haptic.Light)
         dismissCloudSyncPill()
         notificationTray.collapse()
         notificationCenterOpen = !notificationCenterOpen
     }
     val openMediaTypeFilter: () -> Unit = {
-        performHaptic(view, "light")
+        performHaptic(view, Haptic.Light)
         dismissCloudSyncPill()
         showMediaTypeFilterOverlay = !showMediaTypeFilterOverlay
         if (showMediaTypeFilterOverlay) {
@@ -464,9 +465,10 @@ fun HomeScreen(
             false
         }
         CompositionLocalProvider(LocalAdaptiveGlassScrollInProgress provides glassScrollInProgress) {
+        // Отдельной заливки под контентом нет: под главной уже фон того же цвета (корень
+        // MainActivity, бэкдроп рабочей области), а колонка ниже непрозрачна — это была
+        // лишняя полноэкранная заливка на каждый кадр.
         Box(modifier = Modifier.fillMaxSize().padding(paddingValues)) {
-            Box(modifier = Modifier.fillMaxSize().background(bgColor))
-
             if (notifVisibleState.currentState || notifVisibleState.targetState) {
                 Box(modifier = Modifier.zIndex(5f).fillMaxSize()) {
                     NotificationSyncOverlay(
@@ -483,7 +485,7 @@ fun HomeScreen(
                             navController.navigateToWelcome()
                         },
                         onCheckUpdates = {
-                            performHaptic(view, "light")
+                            performHaptic(view, Haptic.Light)
                             viewModel.checkForUpdates(force = true)
                         },
                         onBlockingChildDialogChange = { notificationsBlockingChildDialog = it }
@@ -501,11 +503,11 @@ fun HomeScreen(
                         filterSelectedTags = uiState.filterTags,
                         onDismiss = { showSortOverlay = false },
                         onApplySort = { option, isAscending ->
-                            performHaptic(view, "light")
+                            performHaptic(view, Haptic.Light)
                             viewModel.applySort(option, isAscending)
                         },
                         onApplyOpenGenreFilter = {
-                            performHaptic(view, "light")
+                            performHaptic(view, Haptic.Light)
                             viewModel.toggleGenreFilter()
                         }
                     )
@@ -564,7 +566,7 @@ fun HomeScreen(
                         total = listSyncUi.total,
                         strings = strings,
                         onDismiss = {
-                            performHaptic(view, "light")
+                            performHaptic(view, Haptic.Light)
                             listSyncCoordinator.cancelListSync()
                         }
                     )
@@ -657,7 +659,7 @@ fun HomeScreen(
                                             state = recsReady,
                                             strings = recsStrings,
                                             onClick = {
-                                                performHaptic(view, "light")
+                                                performHaptic(view, Haptic.Light)
                                                 dismissCloudSyncPill()
                                                 showRecsSheet = true
                                             },
@@ -773,12 +775,12 @@ fun HomeScreen(
 
                                         // Тап по карточке — полноэкранные детали; кнопка справа-внизу — редактирование.
                                         val openDetails: () -> Unit = {
-                                            performHaptic(view, "light")
+                                            performHaptic(view, Haptic.Light)
                                             collapseUpdatesToBell()
                                             navController.navigateToDetails(anime.id)
                                         }
                                         val openEdit: () -> Unit = {
-                                            performHaptic(view, "light")
+                                            performHaptic(view, Haptic.Light)
                                             navController.navigateToAddEdit(anime.id)
                                         }
                                         val rowModifier = Modifier.padding(horizontal = 16.dp)
@@ -798,7 +800,7 @@ fun HomeScreen(
                                                         onEditClick = openEdit,
                                                         onLongClick = {
                                                             val bounds = coords?.boundsInRoot() ?: return@OneUiAnimeCard
-                                                            performHaptic(view, "light")
+                                                            performHaptic(view, Haptic.Light)
                                                             cardMenuTarget = CardMenuTarget(
                                                                 state = cardState,
                                                                 isFavorite = anime.isFavorite,
@@ -816,12 +818,12 @@ fun HomeScreen(
                                             LaunchedEffect(dismissState.currentValue) {
                                                 when (dismissState.currentValue) {
                                                     SwipeToDismissBoxValue.StartToEnd -> {
-                                                        performHaptic(view, "success")
+                                                        performHaptic(view, Haptic.Success)
                                                         animeToFavorite = anime
                                                         pendingSwipeReset = { dismissState.reset() }
                                                     }
                                                     SwipeToDismissBoxValue.EndToStart -> {
-                                                        performHaptic(view, "warning")
+                                                        performHaptic(view, Haptic.Warning)
                                                         animeToDelete = anime
                                                         pendingSwipeReset = { dismissState.reset() }
                                                     }
@@ -918,12 +920,12 @@ fun HomeScreen(
                             },
                             onShowNotifs = {},
                             onInspectClick = {
-                                performHaptic(view, "light")
+                                performHaptic(view, Haptic.Light)
                                 dismissCloudSyncPill()
                                 navController.navigateToInspect()
                             },
                             onSearchClick = {
-                                performHaptic(view, "light")
+                                performHaptic(view, Haptic.Light)
                                 dismissCloudSyncPill()
                                 isSearchVisible = !isSearchVisible
                                 if (!isSearchVisible) {
@@ -1005,7 +1007,7 @@ fun HomeScreen(
                             value = uiState.searchQuery,
                             onValueChange = {
                                 viewModel.updateSearchQuery(it)
-                                if (it.isNotEmpty()) performHaptic(view, "light")
+                                if (it.isNotEmpty()) performHaptic(view, Haptic.Light)
                             },
                             modifier = Modifier.fillMaxSize().focusRequester(searchFocusRequester).padding(horizontal = 20.dp),
                             singleLine = true,
@@ -1116,7 +1118,7 @@ fun HomeScreen(
                     .zIndex(1f)
             ) {
                 val onScrollToTop = {
-                    performHaptic(view, "light")
+                    performHaptic(view, Haptic.Light)
                     scope.launch { listState.animateScrollToItem(0) }
                     Unit
                 }
@@ -1196,7 +1198,7 @@ fun HomeScreen(
                                 TopDockMiddleAction.SYNC_PANEL
                             },
                             onOpenStats = {
-                                performHaptic(view, "light")
+                                performHaptic(view, Haptic.Light)
                                 dismissCloudSyncPill()
                                 showCSheet = true
                             },
@@ -1225,7 +1227,7 @@ fun HomeScreen(
                             TopDockMiddleAction.SYNC_PANEL
                         },
                         onOpenStats = {
-                            performHaptic(view, "light")
+                            performHaptic(view, Haptic.Light)
                             dismissCloudSyncPill()
                             showCSheet = true
                         },
@@ -1259,12 +1261,12 @@ fun HomeScreen(
                         viewModel.getImgPath(viewModel.getAnimeById(animeId)?.imageFileName)
                     },
                     onOpen = { update ->
-                        performHaptic(view, "light")
+                        performHaptic(view, Haptic.Light)
                         collapseUpdatesToBell()
                         navController.navigateToDetails(update.animeId)
                     },
                     onDismiss = { update ->
-                        performHaptic(view, "light")
+                        performHaptic(view, Haptic.Light)
                         viewModel.dismissUpdate(update, ctx)
                     },
                     backdrop = backdrop,
@@ -1290,16 +1292,16 @@ fun HomeScreen(
                     backdrop = backdrop,
                     strings = notificationStrings,
                     onOpenUpdate = { update ->
-                        performHaptic(view, "light")
+                        performHaptic(view, Haptic.Light)
                         notificationCenterOpen = false
                         navController.navigateToDetails(update.animeId)
                     },
                     onDismissUpdate = { update ->
-                        performHaptic(view, "light")
+                        performHaptic(view, Haptic.Light)
                         viewModel.dismissUpdate(update, ctx)
                     },
                     onClearAll = {
-                        performHaptic(view, "success")
+                        performHaptic(view, Haptic.Success)
                         viewModel.markAllUpdatesRead(uiState.updates, ctx)
                         notificationCenterOpen = false
                     },
@@ -1323,22 +1325,22 @@ fun HomeScreen(
                     onDismiss = { cardMenuVisible = false },
                     onClosed = { cardMenuTarget = null },
                     onToggleFavorite = {
-                        performHaptic(view, "light")
+                        performHaptic(view, Haptic.Light)
                         animeToFavorite = list.firstOrNull { it.id == target.state.id }
                         cardMenuVisible = false
                     },
                     onDelete = {
-                        performHaptic(view, "warning")
+                        performHaptic(view, Haptic.Warning)
                         animeToDelete = list.firstOrNull { it.id == target.state.id }
                         cardMenuVisible = false
                     },
                     onEdit = {
-                        performHaptic(view, "light")
+                        performHaptic(view, Haptic.Light)
                         cardMenuVisible = false
                         navController.navigateToAddEdit(target.state.id)
                     },
                     onDetails = {
-                        performHaptic(view, "light")
+                        performHaptic(view, Haptic.Light)
                         cardMenuVisible = false
                         navController.navigateToDetails(target.state.id)
                     },
@@ -1501,7 +1503,7 @@ private fun LazyListScope.apiSearchResultsSection(
             isAdded = uiModel.isAdded,
             isLoading = isLoading,
             onAddClick = {
-                performHaptic(view, "light")
+                performHaptic(view, Haptic.Light)
                 viewModel.addFromApi(result)
             },
             modifier = Modifier.padding(horizontal = 16.dp),

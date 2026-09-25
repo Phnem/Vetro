@@ -91,6 +91,7 @@ import com.example.myapplication.ui.shared.loading.BubbleClusterLoader
 import com.example.myapplication.ui.shared.theme.IosDesign
 import com.example.myapplication.ui.shared.theme.MotionTokens
 import com.example.myapplication.ui.shared.theme.SnProFamily
+import com.example.myapplication.utils.Haptic
 import com.example.myapplication.utils.performHaptic
 import kotlinx.coroutines.flow.collectLatest
 
@@ -983,7 +984,7 @@ private fun FindMoreSeasonsButton(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null,
                     onClick = {
-                        performHaptic(view, "light")
+                        performHaptic(view, Haptic.Light)
                         onClick()
                     },
                 )

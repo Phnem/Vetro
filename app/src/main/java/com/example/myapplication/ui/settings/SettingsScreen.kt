@@ -107,7 +107,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
-import com.example.myapplication.isAppInDarkTheme
+import com.example.myapplication.ui.shared.theme.isAppInDarkTheme
 import com.phnem.vetro.R
 import com.example.myapplication.data.models.AppTheme
 import com.example.myapplication.data.models.AppUpdateStatus
@@ -144,6 +144,7 @@ import com.example.myapplication.utils.getCollectionEnrichmentStrings
 import com.example.myapplication.utils.getPlayerSettingsStrings
 import com.example.myapplication.utils.getGithubUpdateStrings
 import com.example.myapplication.utils.getStrings
+import com.example.myapplication.utils.Haptic
 import com.example.myapplication.utils.performHaptic
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import com.kyant.backdrop.backdrops.layerBackdrop
@@ -290,27 +291,27 @@ fun SettingsScreen(
     if (uiState.showRepairDbLogDialog) {
         RepairDbLogDialog(
             devRepairStrings = devRepairStrings,
-            onCreateLog = { performHaptic(view, "light"); viewModel.exportRepairDbLog(context) },
-            onDismiss = { performHaptic(view, "light"); viewModel.discardRepairDbLog() },
+            onCreateLog = { performHaptic(view, Haptic.Light); viewModel.exportRepairDbLog(context) },
+            onDismiss = { performHaptic(view, Haptic.Light); viewModel.discardRepairDbLog() },
         )
     }
     if (uiState.showTitleDubbingNoAiDialog) {
         TitleDubbingNoAiDialog(
             strings = titleDubbingStrings,
             onConnect = {
-                performHaptic(view, "light")
+                performHaptic(view, Haptic.Light)
                 viewModel.dismissTitleDubbingNoAiDialog()
                 activeSheet = SettingsOverlaySheet.AiConnect
             },
-            onDismiss = { performHaptic(view, "light"); viewModel.dismissTitleDubbingNoAiDialog() },
+            onDismiss = { performHaptic(view, Haptic.Light); viewModel.dismissTitleDubbingNoAiDialog() },
         )
     }
     if (showFdroidUpdateDialog) {
         FdroidUpdateWarningDialog(
             strings = githubUpdateStrings,
-            onDismiss = { performHaptic(view, "light"); showFdroidUpdateDialog = false },
+            onDismiss = { performHaptic(view, Haptic.Light); showFdroidUpdateDialog = false },
             onContinue = {
-                performHaptic(view, "light"); showFdroidUpdateDialog = false
+                performHaptic(view, Haptic.Light); showFdroidUpdateDialog = false
                 viewModel.openFdroidUpdateWebsite(context)
             },
         )
@@ -318,9 +319,9 @@ fun SettingsScreen(
     if (showGithubUpdatesEnableDialog) {
         FdroidUpdateWarningDialog(
             strings = githubUpdateStrings,
-            onDismiss = { performHaptic(view, "light"); showGithubUpdatesEnableDialog = false },
+            onDismiss = { performHaptic(view, Haptic.Light); showGithubUpdatesEnableDialog = false },
             onContinue = {
-                performHaptic(view, "light"); showGithubUpdatesEnableDialog = false
+                performHaptic(view, Haptic.Light); showGithubUpdatesEnableDialog = false
                 showDeveloperSection = false
                 viewModel.setDevGithubUpdatesEnabled(true)
             },
@@ -418,7 +419,7 @@ fun SettingsScreen(
                                         icon = Icons.Filled.PlayCircle,
                                         iconWell = false,
                                         showChevron = true,
-                                        onClick = { performHaptic(view, "light"); activeSheet = SettingsOverlaySheet.PlaybackSources },
+                                        onClick = { performHaptic(view, Haptic.Light); activeSheet = SettingsOverlaySheet.PlaybackSources },
                                     )
                                 },
                                 {
@@ -429,7 +430,7 @@ fun SettingsScreen(
                                         iconWell = false,
                                         value = if (uiState.language == AppLanguage.RU) "Русский" else "English",
                                         showChevron = true,
-                                        onClick = { performHaptic(view, "light"); activeSheet = SettingsOverlaySheet.Picker("lang") },
+                                        onClick = { performHaptic(view, Haptic.Light); activeSheet = SettingsOverlaySheet.Picker("lang") },
                                     )
                                 },
                                 {
@@ -444,7 +445,7 @@ fun SettingsScreen(
                                             AppTheme.SYSTEM -> strings.themeSystem
                                         },
                                         showChevron = true,
-                                        onClick = { performHaptic(view, "light"); activeSheet = SettingsOverlaySheet.Picker("theme") },
+                                        onClick = { performHaptic(view, Haptic.Light); activeSheet = SettingsOverlaySheet.Picker("theme") },
                                     )
                                 },
                             ),
@@ -464,7 +465,7 @@ fun SettingsScreen(
                                         iconRes = R.drawable.hugeicon_account,
                                         iconWell = false,
                                         showChevron = true,
-                                        onClick = { performHaptic(view, "light"); activeSheet = SettingsOverlaySheet.Cloud },
+                                        onClick = { performHaptic(view, Haptic.Light); activeSheet = SettingsOverlaySheet.Cloud },
                                     )
                                 },
                                 *(if (onOpenSyncPanel != null) {
@@ -484,7 +485,7 @@ fun SettingsScreen(
                                             icon = Icons.Filled.Sync,
                                             iconWell = false,
                                             showChevron = true,
-                                            onClick = { performHaptic(view, "light"); onOpenSyncPanel() },
+                                            onClick = { performHaptic(view, Haptic.Light); onOpenSyncPanel() },
                                         )
                                     })
                                 } else emptyArray()),
@@ -496,7 +497,7 @@ fun SettingsScreen(
                                         icon = Icons.Filled.AutoFixHigh,
                                         iconWell = false,
                                         showChevron = true,
-                                        onClick = { performHaptic(view, "light"); activeSheet = SettingsOverlaySheet.Enrichment },
+                                        onClick = { performHaptic(view, Haptic.Light); activeSheet = SettingsOverlaySheet.Enrichment },
                                     )
                                 },
                                 {
@@ -507,7 +508,7 @@ fun SettingsScreen(
                                         iconRes = R.drawable.ic_ai_sparkle,
                                         iconWell = false,
                                         showChevron = true,
-                                        onClick = { performHaptic(view, "light"); activeSheet = SettingsOverlaySheet.AiConnect },
+                                        onClick = { performHaptic(view, Haptic.Light); activeSheet = SettingsOverlaySheet.AiConnect },
                                     )
                                 },
                                 {
@@ -521,7 +522,7 @@ fun SettingsScreen(
                                             IosSwitch(
                                                 checked = uiState.autoSkipSegments,
                                                 onCheckedChange = {
-                                                    performHaptic(view, "light")
+                                                    performHaptic(view, Haptic.Light)
                                                     viewModel.setAutoSkipSegments(it)
                                                 },
                                             )
@@ -539,7 +540,7 @@ fun SettingsScreen(
                                             IosSwitch(
                                                 checked = uiState.autoNextEpisode,
                                                 onCheckedChange = {
-                                                    performHaptic(view, "light")
+                                                    performHaptic(view, Haptic.Light)
                                                     viewModel.setAutoNextEpisode(it)
                                                 },
                                             )
@@ -554,7 +555,7 @@ fun SettingsScreen(
                                         iconRes = R.drawable.hugeicon_contact,
                                         iconWell = false,
                                         showChevron = true,
-                                        onClick = { performHaptic(view, "light"); activeSheet = SettingsOverlaySheet.Contact },
+                                        onClick = { performHaptic(view, Haptic.Light); activeSheet = SettingsOverlaySheet.Contact },
                                     )
                                 },
                             ),
@@ -590,7 +591,7 @@ fun SettingsScreen(
                                         valueColor = if (updateAvailable) IconUpdateReady else null,
                                         showChevron = true,
                                         onClick = {
-                                            performHaptic(view, "light")
+                                            performHaptic(view, Haptic.Light)
                                             if (uiState.devGithubUpdatesEnabled) {
                                                 activeSheet = SettingsOverlaySheet.UpdateChangelog
                                                 viewModel.notifyUpdateChangelogSheetPresentedFromSettings()
@@ -610,7 +611,7 @@ fun SettingsScreen(
                                         iconWell = false,
                                         showChevron = true,
                                         onClick = {
-                                            performHaptic(view, "light")
+                                            performHaptic(view, Haptic.Light)
                                             context.startActivity(Intent(Intent.ACTION_VIEW, DONATION_URL.toUri()))
                                         },
                                     )
@@ -623,7 +624,7 @@ fun SettingsScreen(
                                         iconWell = false,
                                         chevronExpanded = showDeveloperSection,
                                         onClick = {
-                                            performHaptic(view, "light")
+                                            performHaptic(view, Haptic.Light)
                                             showDeveloperSection = !showDeveloperSection
                                         },
                                     )
@@ -644,22 +645,22 @@ fun SettingsScreen(
                                 githubUpdateStrings = githubUpdateStrings,
                                 uiState = uiState,
                                 isDark = isDark,
-                                onMirrorDbToggle = { performHaptic(view, "light"); viewModel.setDevMirrorDb(it) },
-                                onHideShareToggle = { performHaptic(view, "light"); viewModel.setDevHideShare(it) },
-                                onFpsOverlayToggle = { performHaptic(view, "light"); viewModel.setDevFpsOverlay(it) },
-                                onAdaptiveGlassToggle = { performHaptic(view, "light"); viewModel.setDevAdaptiveGlassScroll(it) },
+                                onMirrorDbToggle = { performHaptic(view, Haptic.Light); viewModel.setDevMirrorDb(it) },
+                                onHideShareToggle = { performHaptic(view, Haptic.Light); viewModel.setDevHideShare(it) },
+                                onFpsOverlayToggle = { performHaptic(view, Haptic.Light); viewModel.setDevFpsOverlay(it) },
+                                onAdaptiveGlassToggle = { performHaptic(view, Haptic.Light); viewModel.setDevAdaptiveGlassScroll(it) },
                                 onLegacyUiToggle = { enabled ->
-                                    performHaptic(view, "light")
+                                    performHaptic(view, Haptic.Light)
                                     viewModel.setDevLegacyUi(enabled) { (context as? Activity)?.recreate() }
                                 },
                                 onGithubUpdatesToggle = { enabled ->
-                                    performHaptic(view, "light")
+                                    performHaptic(view, Haptic.Light)
                                     if (enabled) showGithubUpdatesEnableDialog = true
                                     else viewModel.setDevGithubUpdatesEnabled(false)
                                 },
-                                onExportLogs = { performHaptic(view, "light"); viewModel.exportLogs(context) },
-                                onExportPdf = { performHaptic(view, "light"); viewModel.exportCollectionPdf(context) },
-                                onImportDb = { performHaptic(view, "light"); importDbPicker.launch("*/*") },
+                                onExportLogs = { performHaptic(view, Haptic.Light); viewModel.exportLogs(context) },
+                                onExportPdf = { performHaptic(view, Haptic.Light); viewModel.exportCollectionPdf(context) },
+                                onImportDb = { performHaptic(view, Haptic.Light); importDbPicker.launch("*/*") },
                             )
                         }
                     }
@@ -734,7 +735,7 @@ fun SettingsScreen(
                             .clickable(
                                 interactionSource = remember { MutableInteractionSource() },
                                 indication = null,
-                                onClick = { performHaptic(view, "light"); viewModel.shareWithDb(context) }
+                                onClick = { performHaptic(view, Haptic.Light); viewModel.shareWithDb(context) }
                             ),
                         contentAlignment = Alignment.Center
                     ) {
@@ -769,7 +770,7 @@ fun SettingsScreen(
                         isDark = isDark,
                         cardCornerRadius = 22.dp,
                         onSelect = { i ->
-                            performHaptic(view, "light")
+                            performHaptic(view, Haptic.Light)
                             viewModel.setLanguage(if (i == 1) AppLanguage.RU else AppLanguage.EN)
                             activeSheet = null
                         },
@@ -789,7 +790,7 @@ fun SettingsScreen(
                         isDark = isDark,
                         cardCornerRadius = 22.dp,
                         onSelect = { i ->
-                            performHaptic(view, "light")
+                            performHaptic(view, Haptic.Light)
                             viewModel.setTheme(
                                 when (i) {
                                     0 -> AppTheme.LIGHT

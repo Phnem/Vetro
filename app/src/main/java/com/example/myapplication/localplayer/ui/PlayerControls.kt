@@ -99,6 +99,7 @@ import androidx.media3.exoplayer.ExoPlayer
 import com.example.myapplication.ui.shared.theme.BrandOrangeBright
 import com.example.myapplication.ui.shared.theme.MotionTokens
 import com.example.myapplication.ui.shared.theme.SnProFamily
+import com.example.myapplication.utils.Haptic
 import com.example.myapplication.utils.performHaptic
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -886,14 +887,14 @@ private fun SeekBar(
                         down.consume()
                         isScrubbing = true
                         onScrubStart()
-                        performHaptic(view, "light")
+                        performHaptic(view, Haptic.Light)
                         scrubFraction = xToFraction(down.position.x)
                         while (true) {
                             val event = awaitPointerEvent()
                             val change = event.changes.firstOrNull { it.id == down.id } ?: event.changes.first()
                             if (!change.pressed) {
                                 change.consume()
-                                performHaptic(view, "heavy")
+                                performHaptic(view, Haptic.Heavy)
                                 isScrubbing = false
                                 pendingSeek = scrubFraction
                                 onScrubEnd(scrubFraction)

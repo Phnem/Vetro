@@ -62,7 +62,7 @@ import coil3.request.crossfade
 import coil3.size.Size
 import com.example.myapplication.data.repository.GenreRepository
 import com.example.myapplication.domain.recommendations.RecommendationItem
-import com.example.myapplication.isAppInDarkTheme
+import com.example.myapplication.ui.shared.theme.isAppInDarkTheme
 import com.example.myapplication.network.AppLanguage
 import com.example.myapplication.ui.shared.components.GrabberHandle
 import com.example.myapplication.ui.shared.components.SwipeableCardDeck
@@ -75,6 +75,7 @@ import com.example.myapplication.ui.shared.theme.OverlayThemeTokens
 import com.example.myapplication.ui.shared.theme.SnProFamily
 import com.example.myapplication.ui.shared.theme.SquircleCornerShape
 import com.example.myapplication.ui.shared.theme.iosSheetContainer
+import com.example.myapplication.utils.Haptic
 import com.example.myapplication.utils.performHaptic
 import kotlinx.coroutines.launch
 
@@ -276,7 +277,7 @@ private fun CardDeck(
             genreRepository = genreRepository,
             isTop = isTop,
             onAdd = {
-                performHaptic(view, "success")
+                performHaptic(view, Haptic.Success)
                 onAdd(card)
             },
         )

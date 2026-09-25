@@ -64,6 +64,7 @@ import com.example.myapplication.data.models.UiStrings
 import com.example.myapplication.sync.ExternalListService
 import com.example.myapplication.ui.shared.theme.MotionTokens
 import com.example.myapplication.ui.shared.theme.SnProFamily
+import com.example.myapplication.utils.Haptic
 import com.example.myapplication.utils.performHaptic
 import com.phnem.vetro.R
 import androidx.compose.ui.draw.drawWithContent
@@ -389,7 +390,7 @@ private fun SyncServiceCardStack(
     fun commitTo(steps: Int) {
         if (isFlyingOut || deck.size <= 1) return
         scope.launch {
-            performHaptic(view, "light")
+            performHaptic(view, Haptic.Light)
             isFlyingOut = true
             offsetY.animateTo(-flyDistancePx, animationSpec = tween(280))
             deck = deck.drop(steps) + deck.take(steps)
@@ -400,7 +401,7 @@ private fun SyncServiceCardStack(
 
     fun commitPrev() {
         scope.launch {
-            performHaptic(view, "light")
+            performHaptic(view, Haptic.Light)
             // последняя карта возвращается на фронт и «прилетает» сверху
             offsetY.snapTo(-flyDistancePx)
             deck = listOf(deck.last()) + deck.dropLast(1)
@@ -558,7 +559,7 @@ private fun SyncServiceCard(
                         .clip(CircleShape)
                         .background(model.iconHolderBg)
                         .clickable(enabled = interactive) {
-                            performHaptic(view, "light")
+                            performHaptic(view, Haptic.Light)
                             uriHandler.openUri(model.siteUrl)
                         },
                     contentAlignment = Alignment.Center,
@@ -608,7 +609,7 @@ private fun SyncActionRow(
             .clip(rowShape)
             .background(model.rowBg)
             .clickable(enabled = interactive) {
-                performHaptic(view, "light")
+                performHaptic(view, Haptic.Light)
                 onClick()
             }
             .padding(horizontal = 12.dp, vertical = 12.dp),

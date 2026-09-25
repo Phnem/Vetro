@@ -52,6 +52,7 @@ import com.example.myapplication.manga.domain.MangaChapter
 import com.example.myapplication.ui.shared.components.GrabberReservedTop
 import com.example.myapplication.ui.shared.theme.BrandOrange
 import com.example.myapplication.ui.shared.theme.SquircleShape
+import com.example.myapplication.utils.Haptic
 import com.example.myapplication.utils.performHaptic
 import com.kyant.backdrop.Backdrop
 import com.kyant.backdrop.drawBackdrop
@@ -147,7 +148,7 @@ private fun DockButton(
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
-                onClick = { performHaptic(view, "light"); onClick() },
+                onClick = { performHaptic(view, Haptic.Light); onClick() },
             ),
         contentAlignment = Alignment.Center,
     ) {

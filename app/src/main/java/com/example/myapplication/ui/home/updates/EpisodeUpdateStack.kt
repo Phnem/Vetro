@@ -66,7 +66,7 @@ import coil3.request.ImageRequest
 import coil3.request.crossfade
 import coil3.size.Size
 import com.example.myapplication.data.models.AnimeUpdate
-import com.example.myapplication.isAppInDarkTheme
+import com.example.myapplication.ui.shared.theme.isAppInDarkTheme
 import com.example.myapplication.ui.shared.FrostedMaterial
 import com.example.myapplication.ui.shared.FrostedMaterials
 import com.example.myapplication.ui.shared.frostedGlass

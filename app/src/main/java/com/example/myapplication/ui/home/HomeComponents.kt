@@ -40,7 +40,7 @@ import coil3.compose.AsyncImage
 import com.example.myapplication.data.models.Anime
 import com.example.myapplication.data.models.UiStrings
 import com.example.myapplication.network.AppLanguage
-import com.example.myapplication.isAppInDarkTheme
+import com.example.myapplication.ui.shared.theme.isAppInDarkTheme
 import com.example.myapplication.data.models.MediaType
 import com.example.myapplication.data.models.typeManga
 import com.example.myapplication.data.models.typeSeries

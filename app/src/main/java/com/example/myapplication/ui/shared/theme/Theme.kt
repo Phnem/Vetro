@@ -9,7 +9,10 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.ReadOnlyComposable
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -24,6 +27,18 @@ val SnProFamily = FontFamily.SansSerif
 
 /** Display-шрифт для splash wordmark «Vetro». */
 val AsgrikeFamily = FontFamily(Font(R.font.asgrike, FontWeight.Normal))
+
+/** Тёмная ли тема [OneUiTheme]; null — вне темы приложения. */
+private val LocalAppDarkTheme = staticCompositionLocalOf<Boolean?> { null }
+
+/**
+ * Тёмная ли тема приложения (не системы: в настройках её можно выбрать отдельно). Вне
+ * [OneUiTheme] — по фону текущей MaterialTheme, как раньше.
+ */
+@Composable
+@ReadOnlyComposable
+fun isAppInDarkTheme(): Boolean =
+    LocalAppDarkTheme.current ?: (MaterialTheme.colorScheme.background.toArgb() == DarkBackground.toArgb())
 
 @Composable
 fun OneUiTheme(
@@ -92,7 +107,10 @@ fun OneUiTheme(
             labelSmall = MaterialTheme.typography.labelSmall.copy(fontFamily = SnProFamily)
         )
     ) {
-        CompositionLocalProvider(LocalRippleConfiguration provides rippleConfiguration) {
+        CompositionLocalProvider(
+            LocalRippleConfiguration provides rippleConfiguration,
+            LocalAppDarkTheme provides darkTheme,
+        ) {
             content()
         }
     }

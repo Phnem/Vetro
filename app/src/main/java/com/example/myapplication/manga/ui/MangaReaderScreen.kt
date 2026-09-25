@@ -101,6 +101,7 @@ import com.example.myapplication.ui.shared.components.IosSheetScaffold
 import com.example.myapplication.ui.shared.components.LiquidGlassTrack
 import com.example.myapplication.ui.shared.loading.BubbleClusterLoader
 import com.example.myapplication.ui.shared.theme.BrandOrange
+import com.example.myapplication.utils.Haptic
 import com.example.myapplication.utils.performHaptic
 import com.kyant.backdrop.Backdrop
 import com.kyant.backdrop.backdrops.layerBackdrop
@@ -1005,13 +1006,13 @@ private fun ReaderPageSlider(
             val target = (fraction * lastIndex).roundToInt().coerceIn(0, lastIndex)
             if (target != lastSnap) {
                 lastSnap = target
-                performHaptic(view, "tick")
+                performHaptic(view, Haptic.Tick)
                 onSeek(target)
             }
         },
         onScrubEnd = { fraction ->
             val target = (fraction * lastIndex).roundToInt().coerceIn(0, lastIndex)
-            performHaptic(view, "light")
+            performHaptic(view, Haptic.Light)
             onSeek(target)
         },
         thumbContent = {

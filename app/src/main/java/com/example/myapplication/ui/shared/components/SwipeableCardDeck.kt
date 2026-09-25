@@ -31,6 +31,7 @@ import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import com.example.myapplication.ui.shared.theme.MotionTokens
+import com.example.myapplication.utils.Haptic
 import com.example.myapplication.utils.performHaptic
 import androidx.compose.ui.draw.drawWithContent
 import kotlinx.coroutines.CoroutineStart
@@ -92,7 +93,7 @@ fun <T> SwipeableCardDeck(
 
     fun commitSwipe() {
         scope.launch {
-            performHaptic(view, "light")
+            performHaptic(view, Haptic.Light)
             isFlyingOut = true
             val top = deck.first()
             offsetY.animateTo(flyOutDistancePx, animationSpec = tween(280))
@@ -104,7 +105,7 @@ fun <T> SwipeableCardDeck(
 
     fun commitUndo() {
         scope.launch {
-            performHaptic(view, "light")
+            performHaptic(view, Haptic.Light)
             // Последняя карточка возвращается наверх и «прилетает» снизу.
             // Порядок важен: сначала offset за нижнюю грань, потом ротация колоды —
             // иначе кадр с новым топом при offset=0 даёт вспышку карточки на фронте.
