@@ -50,7 +50,7 @@ internal object OverlayThemeTokens {
     val TileBackgroundDark = Color(0xFF171717)
     val TileIconBgDark = Color.Black.copy(alpha = 0.35f)
 
-    /** Базовый radial glow на тёмных плитках оверлея ([tileGlow] по умолчанию совпадает). */
+    /** Базовый radial glow на тёмных плитках оверлея. */
     const val TileGlowAlphaDark = 0.15f
 
     /** В светлой теме glow отключен, читаемость обеспечивается рамкой и мягкой тенью. */

@@ -11,10 +11,8 @@ import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.MutableTransitionState
-import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
@@ -31,7 +29,6 @@ import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.defaultMinSize
@@ -53,8 +50,6 @@ import androidx.compose.material.icons.outlined.FilterList
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Tv
 import androidx.compose.material.icons.rounded.Star
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -116,9 +111,6 @@ import com.example.myapplication.ui.shared.components.MotionBottomSheet
 import com.example.myapplication.ui.shared.components.rememberIosSheetSwipe
 import com.example.myapplication.ui.shared.theme.SnProFamily
 import com.example.myapplication.ui.shared.theme.iosRowHighlight
-import com.example.myapplication.ui.shared.theme.glassEdge
-import com.example.myapplication.ui.shared.theme.glassFill
-import com.example.myapplication.ui.shared.theme.softPlateShadowForLightSheet
 import com.example.myapplication.ui.shared.inertialCollision
 import com.example.myapplication.ui.shared.rememberInertialCollisionState
 import com.example.myapplication.utils.performHaptic
@@ -1008,329 +1000,6 @@ private fun SortOptionRow(
             contentAlignment = Alignment.Center
         ) {
             if (selected) Box(Modifier.size(8.dp).clip(CircleShape).background(Color.White))
-        }
-    }
-}
-
-/**
- * Кнопка применения для SortFilterOverlay. Вынесена из тела [SortFilterOverlay],
- * чтобы декомпозировать большой composable и не превращать glass.kt в God Object.
- */
-@Composable
-private fun SortApplyButton(
-    isDark: Boolean,
-    label: String,
-    onClick: () -> Unit
-) {
-    Button(
-        onClick = onClick,
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(48.dp),
-        shape = RoundedCornerShape(OverlayThemeTokens.ApplyButtonCornerRadius),
-        colors = if (isDark) {
-            ButtonDefaults.buttonColors(
-                containerColor = OverlayThemeTokens.ApplyButtonContainerDark,
-                contentColor = OverlayThemeTokens.ApplyButtonLabelSoft
-            )
-        } else {
-            ButtonDefaults.buttonColors(
-                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.9f),
-                contentColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.82f)
-            )
-        },
-        elevation = ButtonDefaults.buttonElevation(
-            defaultElevation = 0.dp,
-            pressedElevation = 0.dp,
-            focusedElevation = 0.dp,
-            hoveredElevation = 0.dp
-        )
-    ) {
-        Text(
-            text = label,
-            fontWeight = FontWeight.SemiBold,
-            fontSize = 15.sp
-        )
-    }
-}
-
-@Composable
-private fun SortSortTile(
-    option: SortOption,
-    title: String,
-    subtitle: String,
-    icon: ImageVector,
-    accentColor: Color,
-    selection: SortGridSelection,
-    strings: UiStrings,
-    isDark: Boolean,
-    rim: Color,
-    cardBg: Color,
-    muted: Color,
-    modifier: Modifier = Modifier,
-    onSelect: (SortGridSelection) -> Unit
-) {
-    val isActive = selection is SortGridSelection.Sort && selection.option == option
-    val isAscending =
-        if (selection is SortGridSelection.Sort) selection.isAscending else true
-
-    val scheme = MaterialTheme.colorScheme
-    val mutedIconTint = scheme.onSurfaceVariant.copy(alpha = 0.42f)
-    val targetIconTint = if (isActive) accentColor else mutedIconTint
-    val animatedIconTint by animateColorAsState(
-        targetValue = targetIconTint,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioNoBouncy,
-            stiffness = Spring.StiffnessMedium
-        ),
-        label = "sortIconTint"
-    )
-    val targetBorderColor = if (isActive) accentColor else rim
-    val animatedBorderColor by animateColorAsState(
-        targetValue = targetBorderColor,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioNoBouncy,
-            stiffness = Spring.StiffnessMedium
-        ),
-        label = "sortTileBorder"
-    )
-
-    val shape = RoundedCornerShape(OverlayThemeTokens.TileCornerRadius)
-    val tileBg = if (isDark) OverlayThemeTokens.TileBackgroundDark else cardBg
-    val glowAlpha = if (isActive) {
-        if (isDark) 0.22f else OverlayThemeTokens.TileGlowAlphaLight
-    } else 0f
-    val accentGlow = accentColor.copy(alpha = glowAlpha)
-
-    Box(
-        modifier = modifier
-            .fillMaxHeight()
-            .defaultMinSize(minHeight = OverlayThemeTokens.SortTileMinHeight)
-            .then(
-                if (isDark) Modifier else Modifier.softPlateShadowForLightSheet(
-                    isDark = false,
-                    shape = shape,
-                    elevation = OverlayThemeTokens.SortOverlayGridLightShadowElevation,
-                )
-            )
-            .clip(shape)
-            .background(tileBg)
-            .background(
-                Brush.radialGradient(
-                    colors = listOf(accentGlow, Color.Transparent),
-                    center = Offset(0f, 0f),
-                    radius = 320f
-                )
-            )
-            .glassFill(isDark)
-            .glassEdge(OverlayThemeTokens.TileCornerRadius, isDark)
-            .border(1.dp, animatedBorderColor, shape)
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null
-            ) {
-                onSelect(
-                    if (isActive) {
-                        SortGridSelection.Sort(option, !isAscending)
-                    } else {
-                        SortGridSelection.Sort(option, isAscending = false)
-                    }
-                )
-            }
-            .padding(12.dp)
-    ) {
-        Column(
-            modifier = Modifier.fillMaxSize(),
-            verticalArrangement = Arrangement.SpaceBetween
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(36.dp)
-                    .clip(RoundedCornerShape(OverlayThemeTokens.IconBoxCorner))
-                    .background(
-                        if (isDark) OverlayThemeTokens.TileIconBgDark
-                        else MaterialTheme.colorScheme.surface.copy(alpha = 0.65f)
-                    ),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = null,
-                    tint = animatedIconTint,
-                    modifier = Modifier.size(18.dp)
-                )
-            }
-            Column {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    color = if (isActive) {
-                        if (isDark) Color.White else MaterialTheme.colorScheme.onSurface
-                    } else {
-                        muted
-                    },
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
-                )
-                if (isActive) {
-                    Text(
-                        text = if (isAscending) strings.sortOrderAscending else strings.sortOrderDescending,
-                        style = OverlayThemeTokens.MetricLabel,
-                        color = if (isDark) {
-                            Color.White.copy(alpha = 0.7f)
-                        } else {
-                            MaterialTheme.colorScheme.onSurface.copy(alpha = 0.62f)
-                        },
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                } else {
-                    Text(
-                        text = subtitle,
-                        style = OverlayThemeTokens.MetricLabel,
-                        color = muted,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun GenreSortTile(
-    title: String,
-    subtitle: String,
-    icon: ImageVector,
-    selection: SortGridSelection,
-    isDark: Boolean,
-    rim: Color,
-    cardBg: Color,
-    muted: Color,
-    modifier: Modifier = Modifier,
-    badgeCount: Int = 0,
-    onSelect: (SortGridSelection) -> Unit
-) {
-    val isActive = selection == SortGridSelection.Genres
-    val genreAccent = if (isDark) IconFilterColor else MaterialTheme.colorScheme.primary
-
-    val scheme = MaterialTheme.colorScheme
-    val mutedIconTint = scheme.onSurfaceVariant.copy(alpha = 0.42f)
-    val targetIconTint = if (isActive) genreAccent else mutedIconTint
-    val animatedIconTint by animateColorAsState(
-        targetValue = targetIconTint,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioNoBouncy,
-            stiffness = Spring.StiffnessMedium
-        ),
-        label = "genreIconTint"
-    )
-    val targetBorderColor = if (isActive) genreAccent else rim
-    val animatedBorderColor by animateColorAsState(
-        targetValue = targetBorderColor,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioNoBouncy,
-            stiffness = Spring.StiffnessMedium
-        ),
-        label = "genreSortTileBorder"
-    )
-
-    val shape = RoundedCornerShape(OverlayThemeTokens.TileCornerRadius)
-    val tileBg = if (isDark) OverlayThemeTokens.TileBackgroundDark else cardBg
-    val glowAlpha = if (isActive || badgeCount > 0) {
-        if (isDark) 0.22f else OverlayThemeTokens.TileGlowAlphaLight
-    } else 0f
-    val accentGlow = genreAccent.copy(alpha = glowAlpha)
-
-    Box(
-        modifier = modifier
-            .fillMaxHeight()
-            .defaultMinSize(minHeight = OverlayThemeTokens.SortTileMinHeight)
-            .then(
-                if (isDark) Modifier else Modifier.softPlateShadowForLightSheet(
-                    isDark = false,
-                    shape = shape,
-                    elevation = OverlayThemeTokens.SortOverlayGridLightShadowElevation,
-                )
-            )
-            .clip(shape)
-            .background(tileBg)
-            .background(
-                Brush.radialGradient(
-                    colors = listOf(accentGlow, Color.Transparent),
-                    center = Offset(0f, 0f),
-                    radius = 320f
-                )
-            )
-            .glassFill(isDark)
-            .glassEdge(OverlayThemeTokens.TileCornerRadius, isDark)
-            .border(1.dp, animatedBorderColor, shape)
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null
-            ) { onSelect(SortGridSelection.Genres) }
-            .padding(12.dp)
-    ) {
-        Column(
-            modifier = Modifier.fillMaxSize(),
-            verticalArrangement = Arrangement.SpaceBetween
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(36.dp)
-                    .clip(RoundedCornerShape(OverlayThemeTokens.IconBoxCorner))
-                    .background(
-                        if (isDark) OverlayThemeTokens.TileIconBgDark
-                        else MaterialTheme.colorScheme.surface.copy(alpha = 0.65f)
-                    ),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = null,
-                    tint = animatedIconTint,
-                    modifier = Modifier.size(18.dp)
-                )
-            }
-            Column {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    color = if (isActive) {
-                        if (isDark) Color.White else MaterialTheme.colorScheme.onSurface
-                    } else {
-                        muted
-                    },
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Text(
-                    text = subtitle,
-                    style = OverlayThemeTokens.MetricLabel,
-                    color = muted,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
-                )
-                if (badgeCount > 0) {
-                    Spacer(Modifier.height(6.dp))
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(genreAccent.copy(alpha = 0.35f))
-                            .padding(horizontal = 6.dp, vertical = 2.dp)
-                    ) {
-                        Text(
-                            text = badgeCount.toString(),
-                            style = MaterialTheme.typography.labelSmall,
-                            fontWeight = FontWeight.Bold,
-                            color = Color.White
-                        )
-                    }
-                }
-            }
         }
     }
 }
