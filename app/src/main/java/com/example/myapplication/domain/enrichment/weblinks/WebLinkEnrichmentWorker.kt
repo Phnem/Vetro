@@ -37,20 +37,19 @@ class WebLinkEnrichmentWorker(
         if (coordinator.isWebLinkEnrichmentPaused) return Result.success()
         return try {
             val all = localDataSource.getAllAnimeList()
-            Log.i(TAG, "doWork START collection=${all.size} languages=${AppLanguage.entries}")
+            // Только язык приложения: UI показывает ссылки одного языка, а резолв второго удваивал
+            // запросы к сайтам. Сменит пользователь язык — следующий заход догонит его сторону.
+            val language = readLanguage()
+            Log.i(TAG, "doWork START collection=${all.size} language=$language")
             if (all.isEmpty()) return Result.success()
 
-            var processed = 0
-            for (language in AppLanguage.entries) {
-                if (isStopped || coordinator.isWebLinkEnrichmentPaused) break
-                processed += useCase.enrichBatch(
-                    allAnime = all,
-                    language = language,
-                    limit = CHUNK_PER_LANGUAGE,
-                    shouldStop = { isStopped || coordinator.isWebLinkEnrichmentPaused },
-                )
-            }
-            val remaining = AppLanguage.entries.sumOf { useCase.countStale(all, it) }
+            val processed = useCase.enrichBatch(
+                allAnime = all,
+                language = language,
+                limit = CHUNK_PER_LANGUAGE,
+                shouldStop = { isStopped || coordinator.isWebLinkEnrichmentPaused },
+            )
+            val remaining = useCase.countStale(all, language)
             Log.i(TAG, "doWork END processed=$processed remaining=$remaining stopped=$isStopped")
 
             if (!isStopped && !coordinator.isWebLinkEnrichmentPaused && remaining > 0) {

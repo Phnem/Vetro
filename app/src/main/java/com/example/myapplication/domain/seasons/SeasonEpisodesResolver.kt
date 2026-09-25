@@ -44,21 +44,34 @@ class SeasonEpisodesResolver(
      * Фоновый проход: перерезолвить протухшие записи коллекции (бюджет [budget] тайтлов
      * за проход, чтобы не душить API). Заодно чистит записи удалённых тайтлов.
      */
+    /** Когда резолв тайтла последний раз сорвался (в пределах процесса) — см. refreshStale. */
+    private val recentFailures = java.util.concurrent.ConcurrentHashMap<String, Long>()
+
     suspend fun refreshStale(budget: Int = DEFAULT_BUDGET) {
         store.ensureLoaded()
         val animeOnly = localDataSource.getAllAnimeList().filter { it.mediaType == MediaType.ANIME }
         runCatching { store.retainOnly(animeOnly.map { it.id }.toSet()) }
 
-        var resolved = 0
+        // Бюджет — это ПОПЫТКИ, а не успехи. Раньше неудачный резолв бюджет не тратил: тайтл,
+        // которого нет в каталогах, стоил полный каскад запросов на каждом прогоне, и прогон мог
+        // пройти по сети всю коллекцию. Недавно сорвавшиеся тайтлы пропускаются, чтобы бюджет
+        // доставался остальным.
+        val now = System.currentTimeMillis()
+        var attempts = 0
         for (anime in animeOnly) {
-            if (resolved >= budget) break
+            if (attempts >= budget) break
             if (store.isFresh(anime.id)) continue
+            val failedAt = recentFailures[anime.id]
+            if (failedAt != null && now - failedAt < FAILURE_COOLDOWN_MILLIS) continue
+            attempts++
             val entry = runCatching { resolve(anime) }
                 .onFailure { Log.w(TAG, "resolve failed for \"${anime.title}\": ${it.message}") }
                 .getOrNull()
-            if (entry != null) {
+            if (entry == null) {
+                recentFailures[anime.id] = now
+            } else {
+                recentFailures.remove(anime.id)
                 store.put(entry)
-                resolved++
                 // Провенанс строки виден в логе: источник и наличие сезонного названия решают,
                 // сможет ли SourceEngine сузить поиск до сезона.
                 val rows = entry.seasons.map {
@@ -524,6 +537,8 @@ class SeasonEpisodesResolver(
         const val TAG = "SeasonEpisodes"
         const val DEFAULT_BUDGET = 8
         const val ITEM_DELAY_MS = 350L
+        /** Сорвавшийся тайтл не пробуем снова раньше — его место в бюджете получают другие. */
+        const val FAILURE_COOLDOWN_MILLIS = 6L * 60 * 60 * 1000
         const val MATCH_SCORE = 0.91
         const val MAX_ATTEMPTS = 3
         const val RETRY_BASE_DELAY_MS = 800L

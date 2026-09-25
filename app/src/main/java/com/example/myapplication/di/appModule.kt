@@ -118,7 +118,7 @@ val appModule = module {
             aiRouter = get(),
         )
     }
-    single { com.example.myapplication.localplayer.domain.FranchiseEpisodeMapper(get()) }
+    single { com.example.myapplication.localplayer.domain.FranchiseEpisodeMapper(get(), get()) }
     single {
         com.example.myapplication.localplayer.domain.AniSkipSegmentProvider(
             httpClient = get<io.ktor.client.HttpClient>(),

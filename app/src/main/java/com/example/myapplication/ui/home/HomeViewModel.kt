@@ -449,7 +449,7 @@ class HomeViewModel(
         viewModelScope.launch {
             runCatching {
                 val language = readLanguageFromSettings()
-                episodeUpdateCheckCoordinator.detectAndStore(language)
+                episodeUpdateCheckCoordinator.detectAndStore(language, force = force)
                 _uiState.update { it.copy(isCheckingUpdates = false) }
                 // Приложение открыто → системные пуши не показываем: обновления живут
                 // in-app стопкой сверху. Убираем из шторки всё, что мог оставить

@@ -28,6 +28,8 @@ class WebLinksStore(context: Context) {
     private val json = Json { ignoreUnknownKeys = true }
     private val mutex = Mutex()
     @Volatile private var loaded = false
+    /** В памяти есть результаты, ещё не записанные на диск (см. [putLinksInMemory]). */
+    private var dirty = false
 
     private val _flow = MutableStateFlow<Map<String, WebLinksEntry>>(emptyMap())
     val flow: StateFlow<Map<String, WebLinksEntry>> = _flow.asStateFlow()
@@ -65,28 +67,68 @@ class WebLinksStore(context: Context) {
         val e = _flow.value[animeId] ?: return false
         val at = if (language == AppLanguage.RU) e.ruResolvedAt else e.enResolvedAt
         val links = if (language == AppLanguage.RU) e.ruLinks else e.enLinks
+        val streak = if (language == AppLanguage.RU) e.ruEmptyStreak else e.enEmptyStreak
         val ttl = when {
-            links.isEmpty() -> EMPTY_RESULT_TTL_MILLIS
+            links.isEmpty() -> emptyResultTtl(streak)
             links.size < HEALTHY_RESULT_SIZE -> PARTIAL_RESULT_TTL_MILLIS
             else -> TTL_MILLIS
         }
         return at > 0 && nowMillis - at <= ttl
     }
 
+    /**
+     * Записать результат резолва в память — UI видит иконки сразу. На диск — [flush], один раз
+     * на пачку: раньше каждый тайтл заново кодировал и переписывал весь файл кэша.
+     */
+    suspend fun putLinksInMemory(animeId: String, language: AppLanguage, links: List<ResolvedWebLink>) {
+        ensureLoaded()
+        mutex.withLock {
+            val map = _flow.value.toMutableMap()
+            map[animeId] = updatedEntry(map[animeId] ?: WebLinksEntry(animeId = animeId), language, links)
+            _flow.value = map
+            dirty = true
+        }
+    }
+
+    /** Сохранить накопленное на диск, если есть что. */
+    suspend fun flush() {
+        mutex.withLock {
+            if (!dirty) return
+            persist(_flow.value)
+            dirty = false
+        }
+    }
+
+    private fun updatedEntry(
+        prev: WebLinksEntry,
+        language: AppLanguage,
+        links: List<ResolvedWebLink>,
+    ): WebLinksEntry {
+        val now = System.currentTimeMillis()
+        return if (language == AppLanguage.RU) {
+            prev.copy(
+                ruLinks = links,
+                ruResolvedAt = now,
+                ruEmptyStreak = if (links.isEmpty()) prev.ruEmptyStreak + 1 else 0,
+            )
+        } else {
+            prev.copy(
+                enLinks = links,
+                enResolvedAt = now,
+                enEmptyStreak = if (links.isEmpty()) prev.enEmptyStreak + 1 else 0,
+            )
+        }
+    }
+
     /** Записать результат резолва для одного языка (пустой список тоже сохраняем — метка «проверено»). */
     suspend fun putLinks(animeId: String, language: AppLanguage, links: List<ResolvedWebLink>) {
         ensureLoaded()
         mutex.withLock {
-            val now = System.currentTimeMillis()
-            val prev = _flow.value[animeId] ?: WebLinksEntry(animeId = animeId)
-            val updated = if (language == AppLanguage.RU) {
-                prev.copy(ruLinks = links, ruResolvedAt = now)
-            } else {
-                prev.copy(enLinks = links, enResolvedAt = now)
-            }
-            val map = _flow.value.toMutableMap().apply { put(animeId, updated) }
+            val map = _flow.value.toMutableMap()
+            map[animeId] = updatedEntry(map[animeId] ?: WebLinksEntry(animeId = animeId), language, links)
             _flow.value = map
             persist(map)
+            dirty = false
         }
     }
 
@@ -129,6 +171,20 @@ class WebLinksStore(context: Context) {
         const val TTL_MILLIS = 14L * 24 * 60 * 60 * 1000
         private const val HEALTHY_RESULT_SIZE = 2
         private const val PARTIAL_RESULT_TTL_MILLIS = 2L * 60 * 60 * 1000
-        private const val EMPTY_RESULT_TTL_MILLIS = 30L * 60 * 1000
+        private const val MINUTE = 60L * 1000
+        private const val HOUR = 60 * MINUTE
+        private const val DAY = 24 * HOUR
+
+        /**
+         * Пустой результат — не «навсегда», но и не каждые 30 минут: тайтла может просто не быть
+         * на этих сайтах. 1-я пустая попытка → повтор через 30 мин, 2-я → 6 ч, 3-я → сутки,
+         * дальше — неделя. Любая найденная ссылка сбрасывает счётчик.
+         */
+        internal fun emptyResultTtl(streak: Int): Long = when {
+            streak <= 1 -> 30 * MINUTE
+            streak == 2 -> 6 * HOUR
+            streak == 3 -> DAY
+            else -> 7 * DAY
+        }
     }
 }

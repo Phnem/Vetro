@@ -42,14 +42,16 @@ class SupabaseSyncCoordinator(
     private var realtimeChannelJob: kotlinx.coroutines.Job? = null
 
     init {
-        schedulePeriodicSync()
-
         scope.launch {
             authRepository.isUserSignedIn.collect { signedIn ->
                 if (signedIn && !authRepository.isGuest) {
+                    schedulePeriodicSync()
                     syncNow(includeCloudImageRestore = true)
                     ensureRealtimeSubscription()
                 } else {
+                    // Гостю синхронизировать нечего: раньше периодика всё равно будила воркер
+                    // каждые 15 минут, и тот выходил с «не вошёл».
+                    workManager.cancelUniqueWork(PERIODIC_SYNC_WORK)
                     realtimeChannelJob?.cancel()
                     realtimeChannelJob = null
                 }
@@ -93,13 +95,16 @@ class SupabaseSyncCoordinator(
             .setRequiredNetworkType(NetworkType.CONNECTED)
             .build()
 
-        val syncRequest = PeriodicWorkRequestBuilder<SyncWorker>(15, TimeUnit.MINUTES)
+        // Час, а не 15 минут: изменения с других устройств и так приходят через Realtime, пока
+        // приложение открыто; периодика — страховка для фона. UPDATE переводит на новый период
+        // и уже поставленную работу (KEEP оставил бы у всех старые 15 минут).
+        val syncRequest = PeriodicWorkRequestBuilder<SyncWorker>(1, TimeUnit.HOURS)
             .setConstraints(constraints)
             .build()
 
         workManager.enqueueUniquePeriodicWork(
-            "SupabasePeriodicSync",
-            ExistingPeriodicWorkPolicy.KEEP,
+            PERIODIC_SYNC_WORK,
+            ExistingPeriodicWorkPolicy.UPDATE,
             syncRequest
         )
     }
@@ -154,5 +159,6 @@ class SupabaseSyncCoordinator(
 
     private companion object {
         const val TAG = "SupabaseSync"
+        const val PERIODIC_SYNC_WORK = "SupabasePeriodicSync"
     }
 }

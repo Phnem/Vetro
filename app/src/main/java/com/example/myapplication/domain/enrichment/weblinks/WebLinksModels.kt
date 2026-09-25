@@ -19,6 +19,9 @@ data class WebLinksEntry(
     val enLinks: List<ResolvedWebLink> = emptyList(),
     val ruResolvedAt: Long = 0,
     val enResolvedAt: Long = 0,
+    /** Сколько резолвов подряд вернули пусто — от этого растёт пауза до следующей попытки. */
+    val ruEmptyStreak: Int = 0,
+    val enEmptyStreak: Int = 0,
 )
 
 /**

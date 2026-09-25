@@ -57,9 +57,10 @@ class WebLinkEnrichmentUseCase(
             if (linksBySite.size >= DESIRED_SITE_COUNT) break
         }
         val links = linksBySite.values.toList()
-        // Сохраняем ВНЕ отмены — иначе остановка воркера теряет уже найденное.
+        // В память — ВНЕ отмены, чтобы остановка воркера не теряла найденное; на диск пачка уходит
+        // одним файлом в конце enrichBatch (тоже вне отмены).
         withContext(NonCancellable) {
-            store.putLinks(anime.id, language, links)
+            store.putLinksInMemory(anime.id, language, links)
         }
         Log.i(TAG, "enrichOne STORED id=${anime.id} links=${links.size} sites=${links.map { it.siteKey }}")
         return links.isNotEmpty()
@@ -81,20 +82,24 @@ class WebLinkEnrichmentUseCase(
         val target = if (limit != null) stale.take(limit) else stale
         Log.i(TAG, "enrichBatch START total=${allAnime.size} stale=${stale.size} target=${target.size} lang=$language limit=$limit")
         var done = 0
-        for (anime in target) {
-            if (shouldStop()) {
-                Log.i(TAG, "enrichBatch STOP requested after $done")
-                break
+        try {
+            for (anime in target) {
+                if (shouldStop()) {
+                    Log.i(TAG, "enrichBatch STOP requested after $done")
+                    break
+                }
+                try {
+                    enrichOne(anime, language, shouldStop)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    Log.w(TAG, "enrichOne threw for '${anime.title}': ${e.message}")
+                }
+                done++
+                delay(ITEM_DELAY_MS)
             }
-            try {
-                enrichOne(anime, language, shouldStop)
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                Log.w(TAG, "enrichOne threw for '${anime.title}': ${e.message}")
-            }
-            done++
-            delay(ITEM_DELAY_MS)
+        } finally {
+            withContext(NonCancellable) { store.flush() }
         }
         Log.i(TAG, "enrichBatch DONE processed=$done remainingStale=${countStale(allAnime, language)}")
         return done
