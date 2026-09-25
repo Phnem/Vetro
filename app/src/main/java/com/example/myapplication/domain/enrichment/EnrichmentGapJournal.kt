@@ -38,6 +38,13 @@ class EnrichmentGapJournal(
     )
     private val mutex = Mutex()
 
+    /**
+     * Журнал в памяти — под [mutex]. Все записи идут через этот класс, поэтому копия всегда
+     * актуальна: раньше каждый вопрос «есть ли пробелы у тайтла» заново читал и разбирал весь
+     * файл, то есть скан коллекции читал его по разу на тайтл.
+     */
+    private var cache: Map<String, Map<String, Long>>? = null
+
     /** Активные (не протухшие) полевые пробелы записи, помеченные как неразрешимые. */
     suspend fun activeFieldGaps(animeId: String, now: Long = System.currentTimeMillis()): Set<GapKind> =
         withContext(Dispatchers.IO) {
@@ -85,15 +92,16 @@ class EnrichmentGapJournal(
         }
     }
 
-    private fun readLocked(): Map<String, Map<String, Long>> = runCatching {
+    private fun readLocked(): Map<String, Map<String, Long>> = cache ?: runCatching {
         if (!file.exists()) return@runCatching emptyMap()
         json.decodeFromString(serializer, file.readText())
     }.getOrElse {
         Log.w(TAG, "Failed to read enrichment journal", it)
         emptyMap()
-    }
+    }.also { cache = it }
 
     private fun writeLocked(data: Map<String, Map<String, Long>>) {
+        cache = data
         runCatching {
             val tmp = File(file.parentFile, "$JOURNAL_FILE.tmp")
             tmp.writeText(json.encodeToString(serializer, data))
