@@ -1,5 +1,6 @@
 package com.example.myapplication.domain.enrichment
 
+import com.example.myapplication.domain.BackgroundSchedule
 import com.example.myapplication.AppScope
 import android.content.Context
 import androidx.datastore.core.DataStore
@@ -181,7 +182,10 @@ class CollectionEnrichmentCoordinator(
         val constraints = Constraints.Builder()
             .setRequiredNetworkType(NetworkType.CONNECTED)
             .build()
-        val request = PeriodicWorkRequestBuilder<LiveMaintenanceWorker>(6, TimeUnit.HOURS)
+        val request = PeriodicWorkRequestBuilder<LiveMaintenanceWorker>(
+            BackgroundSchedule.COLLECTION_MAINTENANCE_HOURS,
+            TimeUnit.HOURS,
+        )
             .setConstraints(constraints)
             .build()
         WorkManager.getInstance(context).enqueueUniquePeriodicWork(

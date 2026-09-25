@@ -1,5 +1,6 @@
 package com.example.myapplication.ui.home
 
+import com.example.myapplication.domain.BackgroundSchedule
 import kotlinx.coroutines.flow.collectLatest
 import com.example.myapplication.data.local.AppLanguagePrefs
 import android.app.NotificationManager
@@ -255,7 +256,7 @@ class HomeViewModel(
             .setRequiredNetworkType(NetworkType.CONNECTED)
             .build()
         val updateRequest = PeriodicWorkRequestBuilder<AnimeUpdateWorker>(
-            6, TimeUnit.HOURS
+            BackgroundSchedule.EPISODE_CHECK_HOURS, TimeUnit.HOURS
         )
             .setConstraints(constraints)
             .build()

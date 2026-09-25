@@ -1,5 +1,6 @@
 package com.example.myapplication.updates
 
+import com.example.myapplication.domain.BackgroundSchedule
 import android.os.SystemClock
 import com.example.myapplication.data.models.AnimeUpdate
 import com.example.myapplication.network.AppLanguage
@@ -49,6 +50,6 @@ class EpisodeCheckThrottle(
     }
 
     companion object {
-        const val DEFAULT_INTERVAL_MS = 30 * 60 * 1000L
+        const val DEFAULT_INTERVAL_MS = BackgroundSchedule.EPISODE_CHECK_MIN_INTERVAL_MS
     }
 }

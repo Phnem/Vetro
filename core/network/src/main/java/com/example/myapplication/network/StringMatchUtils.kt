@@ -1,5 +1,16 @@
 package com.example.myapplication.network
 
+private val NON_ALNUM_RUN = Regex("[^\\p{L}\\p{N}]+")
+
+/**
+ * Название как слова: нижний регистр, всё, кроме букв и цифр, заменено одиночными пробелами,
+ * края обрезаны. Для сравнения по токенам.
+ */
+fun normalizeTitleWords(value: String): String = value.lowercase().replace(NON_ALNUM_RUN, " ").trim()
+
+/** Название как ключ: нижний регистр, только буквы и цифры. Для дедупликации и «содержит». */
+fun titleKey(value: String): String = value.lowercase().replace(NON_ALNUM_RUN, "")
+
 /**
  * Расстояние Левенштейна — одна реализация на всё приложение (раньше их было три, одна строила
  * полную матрицу n×m на каждое сравнение названий). Две строки таблицы, O(min) памяти.

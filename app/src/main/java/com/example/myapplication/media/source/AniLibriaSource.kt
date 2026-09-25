@@ -1,5 +1,6 @@
 package com.example.myapplication.media.source
 
+import com.example.myapplication.network.titleKey
 import com.example.myapplication.network.AppJson
 import android.util.Log
 import com.example.myapplication.data.models.Anime
@@ -298,8 +299,7 @@ private fun isAniLibriaFranchiseCandidate(
     }
 }
 
-private fun normalizeAniLibriaTitle(value: String): String =
-    value.lowercase().replace(Regex("""[^\p{L}\p{N}]"""), "")
+private fun normalizeAniLibriaTitle(value: String): String = titleKey(value)
 
 /**
  * Опознание сезона по релизу — лестница, а не одиночная проверка.

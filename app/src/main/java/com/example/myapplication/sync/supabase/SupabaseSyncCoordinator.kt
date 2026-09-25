@@ -1,5 +1,6 @@
 package com.example.myapplication.sync.supabase
 
+import com.example.myapplication.domain.BackgroundSchedule
 import com.example.myapplication.AppScope
 import android.content.Context
 import androidx.work.Constraints
@@ -98,7 +99,7 @@ class SupabaseSyncCoordinator(
         // Час, а не 15 минут: изменения с других устройств и так приходят через Realtime, пока
         // приложение открыто; периодика — страховка для фона. UPDATE переводит на новый период
         // и уже поставленную работу (KEEP оставил бы у всех старые 15 минут).
-        val syncRequest = PeriodicWorkRequestBuilder<SyncWorker>(1, TimeUnit.HOURS)
+        val syncRequest = PeriodicWorkRequestBuilder<SyncWorker>(BackgroundSchedule.CLOUD_SYNC_HOURS, TimeUnit.HOURS)
             .setConstraints(constraints)
             .build()
 

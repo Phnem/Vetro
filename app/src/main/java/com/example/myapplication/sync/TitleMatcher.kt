@@ -1,5 +1,6 @@
 package com.example.myapplication.sync
 
+import com.example.myapplication.network.normalizeTitleWords
 import com.example.myapplication.network.levenshteinSimilarity
 import kotlin.math.max
 
@@ -65,11 +66,7 @@ object TitleMatcher {
         return max(jaccard, lev)
     }
 
-    private fun normalize(input: String): String =
-        input.lowercase()
-            .replace(Regex("[^\\p{L}\\p{N}]+"), " ")
-            .trim()
-            .replace(Regex("\\s+"), " ")
+    private fun normalize(input: String): String = normalizeTitleWords(input)
 
     private fun tokenize(input: String): Set<String> =
         input.split(' ')

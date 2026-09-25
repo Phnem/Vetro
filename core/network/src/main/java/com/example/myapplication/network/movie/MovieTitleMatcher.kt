@@ -1,5 +1,6 @@
 package com.example.myapplication.network.movie
 
+import com.example.myapplication.network.normalizeTitleWords
 import com.example.myapplication.network.levenshteinSimilarity
 import kotlin.math.max
 
@@ -43,8 +44,5 @@ internal object MovieTitleMatcher {
         return max(jaccard, levenshteinSimilarity(a, b))
     }
 
-    private fun normalize(value: String): String = value.lowercase()
-        .replace(Regex("[^\\p{L}\\p{N}]+"), " ")
-        .trim()
-        .replace(Regex("\\s+"), " ")
+    private fun normalize(value: String): String = normalizeTitleWords(value)
 }

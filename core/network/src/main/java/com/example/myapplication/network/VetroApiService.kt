@@ -369,8 +369,7 @@ class VetroApiService(
 
     private enum class SearchMatch { EXACT, PARTIAL, FUZZY, NONE }
 
-    private fun normalizeForSearch(s: String): String =
-        s.lowercase().replace(Regex("[^\\p{L}\\p{N}]"), "")
+    private fun normalizeForSearch(s: String): String = titleKey(s)
 
     private fun resultDedupKey(r: ApiSearchResult): String {
         val titleKey = normalizeForSearch(r.title)

@@ -315,7 +315,7 @@ class KtorWebLinkResolver(
         }
     }
 
-    private fun normalize(s: String): String = s.lowercase().replace(Regex("[^\\p{L}\\p{N}]"), "")
+    private fun normalize(s: String): String = titleKey(s)
 
     companion object {
         private const val TAG = "WebLinkResolver"
