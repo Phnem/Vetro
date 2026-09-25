@@ -6,49 +6,14 @@ import androidx.compose.animation.core.SpringSpec
 import androidx.compose.animation.core.spring
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Stable
-import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.geometry.Rect
-import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.ui.layout.boundsInRoot
-import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import kotlin.math.PI
 import kotlin.math.abs
-
-/**
- * Откуда раскрывается панель — прямоугольник кнопки в координатах корня.
- *
- * Состояние общее, потому что кнопка и панель живут в разных ветках дерева: кнопка сидит в доке,
- * панель — в оверлейном слое поверх всего экрана. Тянуть прямоугольник параметрами через их общего
- * предка значит протащить временный флаг через десяток сигнатур.
- */
-@Stable
-class StagedMorphOriginState {
-    var rect: Rect? by mutableStateOf(null)
-        internal set
-
-    internal fun report(value: Rect) {
-        rect = value
-    }
-}
-
-val LocalStagedMorphOrigin = compositionLocalOf { StagedMorphOriginState() }
-
-/**
- * Запомнить свои границы как точку, из которой раскроется панель.
- *
- * Границы пишутся при каждом изменении раскладки, а не по клику: к моменту клика кнопка уже может
- * уезжать (док прячется), и снимок «в момент нажатия» дал бы точку, из которой ничего не выходило.
- */
-@Composable
-fun Modifier.stagedMorphOrigin(): Modifier {
-    val state = LocalStagedMorphOrigin.current
-    return this.onGloballyPositioned { state.report(it.boundsInRoot()) }
-}
 
 /**
  * Каким путём объект идёт от кнопки к своей конечной форме.

@@ -24,18 +24,16 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.layout.boundsInRoot
-import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import com.example.myapplication.ui.shared.theme.isAppInDarkTheme
 import com.example.myapplication.ui.shared.FrostedMaterials
 import com.example.myapplication.ui.shared.frostedGlass
-import com.example.myapplication.ui.shared.stagedMorphOrigin
+import com.example.myapplication.ui.shared.PlacedCoordinates
+import com.example.myapplication.ui.shared.trackPlacement
 import com.example.myapplication.ui.shared.theme.BrandOrange
 import com.example.myapplication.ui.shared.theme.MotionTokens
 import com.kyant.backdrop.Backdrop
@@ -54,19 +52,10 @@ data class CapsuleDockItem(
     val contentDescription: String,
     val onClick: () -> Unit,
     /**
-     * Пункт открывает панель, которая раскрывается ИЗ него (см. `StagedSheetMotion.kt`).
-     *
-     * Границы такого гнезда публикуются наружу — панели нужно знать, откуда выходить.
+     * Координаты гнезда для того, что из него растёт (меню ТТМ). Границы считаются по нажатию, а
+     * не пишутся на каждом кадре, пока док едет.
      */
-    val isMorphOrigin: Boolean = false,
-    /**
-     * Куда сообщать границы гнезда, если из него растёт что-то своё.
-     *
-     * Отдельно от [isMorphOrigin]: та точка одна на приложение и принадлежит панелям, а меню дока
-     * растёт из СВОЕГО гнезда и делить с ними общее состояние не может — иначе последний
-     * измеренный элемент затирал бы чужую точку выхода.
-     */
-    val reportBounds: ((Rect) -> Unit)? = null,
+    val anchor: PlacedCoordinates? = null,
     /** @param tint цвет содержимого: акцентный у подсвеченного пункта, приглушённый у остальных. */
     val icon: @Composable (tint: Color) -> Unit,
 )
@@ -276,12 +265,7 @@ private fun DockSlot(
         modifier = Modifier
             .width(width)
             .height(SLOT_SIZE)
-            .then(if (item.isMorphOrigin) Modifier.stagedMorphOrigin() else Modifier)
-            .then(
-                item.reportBounds?.let { report ->
-                    Modifier.onGloballyPositioned { report(it.boundsInRoot()) }
-                } ?: Modifier,
-            )
+            .then(item.anchor?.let { Modifier.trackPlacement(it) } ?: Modifier)
             .clickable(
                 interactionSource = interactionSource,
                 indication = null,

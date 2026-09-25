@@ -50,6 +50,8 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
+import com.example.myapplication.ui.shared.PlacedCoordinates
+import com.example.myapplication.ui.shared.trackPlacement
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
@@ -139,17 +141,23 @@ fun WebLinkChipStack(
         val stackWidth = chipSize + step * (slots - 1).coerceAtLeast(0)
 
         val menuState = remember { MutableTransitionState(false) }
+        // Границы стопки снимаются по нажатию: карточки со стопкой едут при каждом скролле, и
+        // считать их на каждом кадре незачем.
         var anchorBounds by remember { mutableStateOf<Rect?>(null) }
+        val anchor = remember { PlacedCoordinates() }
 
         Box(
             modifier = Modifier
                 .width(stackWidth)
                 .height(chipSize)
-                .onGloballyPositioned { anchorBounds = it.boundsInWindow() }
+                .trackPlacement(anchor)
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null,
-                ) { menuState.targetState = true },
+                ) {
+                    anchorBounds = anchor.boundsInWindow() ?: return@clickable
+                    menuState.targetState = true
+                },
         ) {
             visible.forEachIndexed { index, res ->
                 Image(

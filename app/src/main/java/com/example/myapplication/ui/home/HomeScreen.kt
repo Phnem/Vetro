@@ -72,9 +72,9 @@ import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.asComposeRenderEffect
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.nestedscroll.nestedScroll
-import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.boundsInRoot
-import androidx.compose.ui.layout.onGloballyPositioned
+import com.example.myapplication.ui.shared.PlacedCoordinates
+import com.example.myapplication.ui.shared.trackPlacement
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
@@ -788,9 +788,9 @@ fun HomeScreen(
 
                                         if (hostedInWorkspace) {
                                             // Горизонтальная ось отдана навигации: действия — по удержанию.
-                                            var coords by remember { mutableStateOf<LayoutCoordinates?>(null) }
+                                            val placement = remember { PlacedCoordinates() }
                                             Box(
-                                                modifier = rowModifier.onGloballyPositioned { coords = it },
+                                                modifier = rowModifier.trackPlacement(placement),
                                             ) {
                                                 with(sharedTransitionScope) {
                                                     OneUiAnimeCard(
@@ -799,7 +799,7 @@ fun HomeScreen(
                                                         onClick = openDetails,
                                                         onEditClick = openEdit,
                                                         onLongClick = {
-                                                            val bounds = coords?.boundsInRoot() ?: return@OneUiAnimeCard
+                                                            val bounds = placement.boundsInRoot() ?: return@OneUiAnimeCard
                                                             performHaptic(view, Haptic.Light)
                                                             cardMenuTarget = CardMenuTarget(
                                                                 state = cardState,

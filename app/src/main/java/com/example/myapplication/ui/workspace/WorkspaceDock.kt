@@ -1,5 +1,6 @@
 package com.example.myapplication.ui.workspace
 
+import com.example.myapplication.ui.shared.PlacedCoordinates
 import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
@@ -57,8 +58,8 @@ fun WorkspaceDock(
     /** Раскрыто ли меню последнего гнезда — подсветка обязана стоять на нём, пока оно открыто. */
     menuOpen: Boolean = false,
     onOpenMenu: () -> Unit = {},
-    /** Границы гнезда ТТМ: из них вырастает меню (см. [TtmMenu]). */
-    onMenuBounds: (androidx.compose.ui.geometry.Rect) -> Unit = {},
+    /** Координаты гнезда ТТМ: из него вырастает меню (см. [TtmMenu]). */
+    menuAnchor: PlacedCoordinates? = null,
     /** Окно, открытое пунктом меню, вырастает из гнезда ТТМ и в него же схлопывается. */
     menuWindowMorph: MenuWindowMorph? = null,
 ) {
@@ -94,11 +95,7 @@ fun WorkspaceDock(
             // Свайпом сюда не попасть, поэтому в WorkspacePage его и нет.
             contentDescription = menuLabel,
             onClick = { if (!dimmed && !hidden) onOpenMenu() },
-            // Панели (статистика, синхронизация) открываются пунктами ЭТОГО меню, значит и
-            // расти обязаны отсюда. Без этого точка выхода оставалась там, где её записал
-            // верхний док, — панель выезжала из верха экрана в нижнюю шторку.
-            isMorphOrigin = true,
-            reportBounds = onMenuBounds,
+            anchor = menuAnchor,
         ) { tint ->
             MenuSlotIcon(morph = menuWindowMorph, tint = tint, contentDescription = menuLabel)
         },

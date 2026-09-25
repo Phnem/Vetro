@@ -55,10 +55,8 @@ import com.example.myapplication.ui.settings.UpdateChangelogSheet
 import com.example.myapplication.ui.debug.FpsOverlay
 import com.example.myapplication.ui.shared.LocalAdaptiveGlassEnabled
 import com.example.myapplication.ui.shared.LocalModernUi
-import com.example.myapplication.ui.shared.LocalStagedMorphOrigin
 import com.example.myapplication.ui.shared.LocalWorkspaceSearch
 import com.example.myapplication.ui.shared.WorkspaceSearchState
-import com.example.myapplication.ui.shared.StagedMorphOriginState
 import com.example.myapplication.ui.shared.theme.OneUiTheme
 import com.example.myapplication.ui.settings.SettingsOverlayMotion
 import com.example.myapplication.ui.settings.SettingsViewModel
@@ -163,13 +161,11 @@ class MainActivity : ComponentActivity() {
 
                 val overlayVisible = showStartupUpdateOverlay
 
-                val stagedMorphOrigin = remember { StagedMorphOriginState() }
                 val workspaceSearch = remember { WorkspaceSearchState() }
                 val overscrollFactory = remember { iosOverscrollFactory(this@MainActivity) }
                 CompositionLocalProvider(
                     LocalAdaptiveGlassEnabled provides settingsState.devAdaptiveGlassScroll,
                     LocalModernUi provides settingsState.modernUi,
-                    LocalStagedMorphOrigin provides stagedMorphOrigin,
                     LocalWorkspaceSearch provides workspaceSearch,
                     // iOS-«резинка» на краю всех списков и скроллов приложения (IosScroll.kt).
                     LocalOverscrollFactory provides overscrollFactory,

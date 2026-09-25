@@ -1,5 +1,6 @@
 package com.example.myapplication.ui.workspace
 
+import com.example.myapplication.ui.shared.PlacedCoordinates
 import com.example.myapplication.ui.shared.theme.IosScroll
 import kotlinx.coroutines.flow.first
 import androidx.compose.runtime.snapshotFlow
@@ -105,7 +106,10 @@ fun WorkspaceScreen(
     // Меню последнего гнезда дока раскрывается поверх страницы, поэтому его состояние живёт
     // рядом с доком, а не внутри какой-либо страницы.
     var menuOpen by remember { mutableStateOf(false) }
+    // Точка, из которой растёт меню: снимается по нажатию на гнездо, а не пишется на каждом
+    // кадре, пока док едет (раньше это пересобирало всю рабочую область на кадр).
     var menuOrigin by remember { mutableStateOf<Rect?>(null) }
+    val menuAnchor = remember { PlacedCoordinates() }
     // Статистика переехала из верхнего дока в меню, поэтому и рисуется теперь здесь: страница
     // коллекции к ней больше отношения не имеет.
     var showStats by remember { mutableStateOf(false) }
@@ -281,9 +285,10 @@ fun WorkspaceScreen(
             menuOpen = menuOpen,
             onOpenMenu = {
                 performHaptic(view, Haptic.Light)
+                menuOrigin = menuAnchor.boundsInRoot()
                 menuOpen = true
             },
-            onMenuBounds = { menuOrigin = it },
+            menuAnchor = menuAnchor,
             menuWindowMorph = remember(menuWindowKey, sharedTransitionScope, animatedVisibilityScope) {
                 MenuWindowMorph(
                     sharedTransitionScope = sharedTransitionScope,
