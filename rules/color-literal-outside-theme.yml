@@ -1,0 +1,12 @@
+id: color-literal-outside-theme
+language: kotlin
+severity: warning
+message: Raw Color(0x…) outside the theme — use a palette colour (ui/shared/theme/Colors.kt) or a semantic token.
+note: Brand colours and StatusSuccess live in Colors.kt; overlay/glass tokens in OverlayThemeTokens.
+ignores:
+  - "**/ui/shared/theme/**"
+rule:
+  pattern: Color($HEX)
+constraints:
+  HEX:
+    regex: ^0[xX]

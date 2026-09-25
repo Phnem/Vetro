@@ -1,0 +1,10 @@
+id: raw-motion-spec
+language: kotlin
+severity: warning
+message: Raw spring()/tween() — take motion from MotionTokens (UNIVERSAL_MOTION_SPEC) so timing stays consistent.
+ignores:
+  - "**/ui/shared/theme/**"
+rule:
+  any:
+    - pattern: spring($$$A)
+    - pattern: tween($$$A)

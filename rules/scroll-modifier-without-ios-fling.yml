@@ -1,0 +1,15 @@
+id: scroll-modifier-without-ios-fling
+language: kotlin
+severity: error
+message: verticalScroll/horizontalScroll without flingBehavior — pass flingBehavior = IosScroll.flingBehavior().
+rule:
+  any:
+    - pattern: $M.verticalScroll($$$ARGS)
+    - pattern: $M.horizontalScroll($$$ARGS)
+  not:
+    has:
+      kind: value_argument
+      stopBy: end
+      has:
+        kind: simple_identifier
+        regex: ^flingBehavior$
