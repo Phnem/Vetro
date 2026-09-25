@@ -1,5 +1,8 @@
 package com.example.myapplication
 
+import com.example.myapplication.ui.shared.theme.BrandOrangeBright
+import com.example.myapplication.ui.shared.theme.BrandLightGray
+import com.example.myapplication.ui.shared.theme.BrandDarkGray
 import com.example.myapplication.ui.shared.theme.IosScroll
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -56,12 +59,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.myapplication.utils.WelcomeStrings
 import com.example.myapplication.ui.shared.AuthProviderIcon
-import com.example.myapplication.ui.shared.theme.BrandBlue
+import com.example.myapplication.ui.shared.theme.BrandOrange
 import com.example.myapplication.ui.shared.theme.SnProFamily
 import com.phnem.vetro.R
 import kotlinx.coroutines.launch
 
-private val SupabaseGreen = Color(0xFFF16001)
+private val SupabaseGreen = BrandOrangeBright
 
 @Composable
 fun WelcomeScreen(
@@ -78,7 +81,7 @@ fun WelcomeScreen(
     val bgColor = Color(0xFF0A0A0A)
     val inputBgColor = Color(0xFF0A0A0A)
     val textColor = Color.White
-    val subtitleColor = Color(0xFFA7A7A7)
+    val subtitleColor = BrandLightGray
 
     val context = androidx.compose.ui.platform.LocalContext.current
     val scrollState = rememberScrollState()
@@ -214,7 +217,7 @@ fun WelcomeScreen(
                     .fillMaxWidth()
                     .height(52.dp),
                 shape = RoundedCornerShape(12.dp),
-                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF333333)),
+                border = androidx.compose.foundation.BorderStroke(1.dp, BrandDarkGray),
                 colors = ButtonDefaults.outlinedButtonColors(
                     containerColor = Color(0xFF262626),
                     contentColor = textColor,
@@ -293,7 +296,7 @@ fun WelcomeScreen(
 
             Text(
                 text = strings.forgotPassword,
-                color = BrandBlue,
+                color = BrandOrange,
                 fontSize = 13.sp,
                 modifier = Modifier
                     .align(Alignment.End)
@@ -331,8 +334,8 @@ fun WelcomeScreen(
                     .height(52.dp),
                 shape = RoundedCornerShape(12.dp),
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = BrandBlue,
-                    disabledContainerColor = Color(0xFF333333),
+                    containerColor = BrandOrange,
+                    disabledContainerColor = BrandDarkGray,
                     contentColor = Color.White,
                     disabledContentColor = subtitleColor
                 )
@@ -382,8 +385,8 @@ fun WelcomeScreen(
 @Composable
 private fun outlinedFieldColors(inputBgColor: Color, textColor: Color, subtitleColor: Color) =
     OutlinedTextFieldDefaults.colors(
-        focusedBorderColor = BrandBlue,
-        unfocusedBorderColor = Color(0xFF333333),
+        focusedBorderColor = BrandOrange,
+        unfocusedBorderColor = BrandDarkGray,
         focusedContainerColor = inputBgColor,
         unfocusedContainerColor = inputBgColor,
         focusedTextColor = textColor,

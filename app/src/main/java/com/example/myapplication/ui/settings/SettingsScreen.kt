@@ -127,9 +127,9 @@ import com.example.myapplication.ui.shared.components.IosRow
 import com.example.myapplication.ui.shared.components.IosSegmentedControl
 import com.example.myapplication.ui.shared.DONATION_URL
 import com.example.myapplication.ui.shared.components.IosSwitch
-import com.example.myapplication.ui.shared.theme.BrandBlue
-import com.example.myapplication.ui.shared.theme.BrandBlueSoft
-import com.example.myapplication.ui.shared.theme.BrandRed
+import com.example.myapplication.ui.shared.theme.BrandOrange
+import com.example.myapplication.ui.shared.theme.BrandOrangeBright
+import com.example.myapplication.ui.shared.theme.BrandDeepRed
 import com.example.myapplication.ui.shared.theme.IosDesign
 import com.example.myapplication.ui.shared.theme.SnProFamily
 import com.example.myapplication.ui.shared.theme.SquircleShape
@@ -1042,7 +1042,7 @@ private fun DevActionRow(
         iconBackground = iconBg,
         showChevron = !isLoading,
         trailing = if (isLoading) {
-            { CircularProgressIndicator(modifier = Modifier.size(18.dp), color = BrandBlue, strokeWidth = 2.dp) }
+            { CircularProgressIndicator(modifier = Modifier.size(18.dp), color = BrandOrange, strokeWidth = 2.dp) }
         } else null,
         onClick = if (isLoading) null else onClick,
     )
@@ -1055,7 +1055,7 @@ private fun TitleDubbingNoAiDialog(
     onDismiss: () -> Unit,
 ) {
     val isDark = isAppInDarkTheme()
-    val accent = if (isDark) BrandBlueSoft else BrandRed
+    val accent = if (isDark) BrandOrangeBright else BrandDeepRed
     val surface = IosDesign.rowBackground(isDark)
     val onSurface = MaterialTheme.colorScheme.onSurface
     val muted = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f)
@@ -1093,7 +1093,7 @@ private fun FdroidUpdateWarningDialog(
     onContinue: () -> Unit,
 ) {
     val isDark = isAppInDarkTheme()
-    val accent = if (isDark) BrandBlueSoft else BrandRed
+    val accent = if (isDark) BrandOrangeBright else BrandDeepRed
     val surface = IosDesign.rowBackground(isDark)
     val onSurface = MaterialTheme.colorScheme.onSurface
     val muted = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f)
@@ -1131,7 +1131,7 @@ private fun RepairDbLogDialog(
     onDismiss: () -> Unit,
 ) {
     val isDark = isAppInDarkTheme()
-    val accent = if (isDark) BrandBlueSoft else BrandRed
+    val accent = if (isDark) BrandOrangeBright else BrandDeepRed
     val surface = IosDesign.rowBackground(isDark)
     val onSurface = MaterialTheme.colorScheme.onSurface
     val muted = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f)

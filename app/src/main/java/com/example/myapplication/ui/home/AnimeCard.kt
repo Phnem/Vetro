@@ -1,5 +1,6 @@
 package com.example.myapplication.ui.home
 
+import com.example.myapplication.ui.shared.theme.BrandLightGray
 import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
@@ -290,7 +291,7 @@ fun AnimeCardBody(
     val borderWidth = 1.dp
     val cardBg = if (isDark) Color(0xFF1C1C1C) else MaterialTheme.colorScheme.surface
     val cardShadowColor = if (isDark) Color.Black.copy(alpha = 0.5f) else Color.Black.copy(alpha = 0.08f)
-    val subtitleColor = if (isDark) Color(0xFFA7A7A7) else Color(0xFF8E8E93)
+    val subtitleColor = if (isDark) BrandLightGray else Color(0xFF8E8E93)
     val chipBg = if (isDark) Color.Black.copy(alpha = 0.35f) else Color.Black.copy(alpha = 0.08f)
 
     Box(
@@ -427,7 +428,7 @@ fun AnimeCardBody(
                             modifier = Modifier
                                 .clip(CircleShape)
                                 .background(
-                                    if (isDark) Color(0xFF000000)
+                                    if (isDark) Color.Black
                                     else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.65f)
                                 )
                         ) {

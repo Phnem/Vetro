@@ -68,7 +68,7 @@ import com.example.myapplication.ui.shared.components.GrabberHandle
 import com.example.myapplication.ui.shared.components.SwipeableCardDeck
 import com.example.myapplication.ui.shared.components.rememberIosSheetSwipe
 import com.example.myapplication.ui.shared.fluidClickable
-import com.example.myapplication.ui.shared.theme.BrandBlue
+import com.example.myapplication.ui.shared.theme.BrandOrange
 import com.example.myapplication.ui.shared.theme.IosDesign
 import com.example.myapplication.ui.shared.theme.MotionTokens
 import com.example.myapplication.ui.shared.theme.OverlayThemeTokens
@@ -175,7 +175,7 @@ fun RecommendationsSheet(
                             modifier = Modifier.fillMaxWidth().height(360.dp),
                             contentAlignment = Alignment.Center
                         ) {
-                            CircularProgressIndicator(color = BrandBlue)
+                            CircularProgressIndicator(color = BrandOrange)
                         }
                         is RecommendationsUiState.Unavailable -> Box(
                             modifier = Modifier.fillMaxWidth().height(280.dp).padding(horizontal = 32.dp),
@@ -214,7 +214,7 @@ private fun SheetContent(
                 fontWeight = FontWeight.Bold,
                 fontSize = 10.sp,
                 letterSpacing = 1.2.sp,
-                color = BrandBlue,
+                color = BrandOrange,
             )
             Text(
                 text = strings.sheetTitle,
@@ -346,7 +346,7 @@ private fun BoxScope.SwipeCardContent(
                 Icon(
                     imageVector = Icons.Rounded.Star,
                     contentDescription = null,
-                    tint = Color(0xFFE85002),
+                    tint = BrandOrange,
                     modifier = Modifier.size(14.dp)
                 )
                 Spacer(Modifier.width(4.dp))
@@ -377,7 +377,7 @@ private fun BoxScope.SwipeCardContent(
                         fontFamily = SnProFamily,
                         fontWeight = FontWeight.SemiBold,
                         fontSize = 11.sp,
-                        color = BrandBlue.copy(alpha = 0.95f),
+                        color = BrandOrange.copy(alpha = 0.95f),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
@@ -407,7 +407,7 @@ private fun BoxScope.SwipeCardContent(
                 Row(
                     modifier = Modifier
                         .clip(CircleShape)
-                        .background(if (isAdded) Color.White.copy(alpha = 0.22f) else BrandBlue)
+                        .background(if (isAdded) Color.White.copy(alpha = 0.22f) else BrandOrange)
                         .then(if (isAdded) Modifier else Modifier.fluidClickable { onAdd() })
                         .padding(horizontal = 18.dp, vertical = 10.dp),
                     verticalAlignment = Alignment.CenterVertically

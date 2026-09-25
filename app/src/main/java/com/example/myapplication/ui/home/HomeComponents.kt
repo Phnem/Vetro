@@ -1,5 +1,9 @@
 package com.example.myapplication.ui.home
 
+import com.example.myapplication.ui.shared.theme.BrandSand
+import com.example.myapplication.ui.shared.theme.BrandOrangeBright
+import com.example.myapplication.ui.shared.theme.BrandOrange
+import com.example.myapplication.ui.shared.theme.BrandLightGray
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
@@ -84,9 +88,9 @@ fun LibraryMediaTypeFilterRow(
     )
 
     val tiles = listOf(
-        FilterTile(null, allLabel, Icons.Outlined.GridView, Color(0xFFA7A7A7)),
-        FilterTile(MediaType.ANIME, strings.typeAnime, Icons.Outlined.AutoAwesome, Color(0xFFE85002)),
-        FilterTile(MediaType.MANGA, strings.typeManga, Icons.AutoMirrored.Outlined.MenuBook, Color(0xFFD9C3AB)),
+        FilterTile(null, allLabel, Icons.Outlined.GridView, BrandLightGray),
+        FilterTile(MediaType.ANIME, strings.typeAnime, Icons.Outlined.AutoAwesome, BrandOrange),
+        FilterTile(MediaType.MANGA, strings.typeManga, Icons.AutoMirrored.Outlined.MenuBook, BrandSand),
         // Одна плитка на MOVIE+SERIES (был единый TV_SERIES) — комбинированное сопоставление
         // живёт в AnimeRepository.observeAnimeList, не здесь.
         FilterTile(MediaType.SERIES, strings.typeSeries, Icons.Outlined.Tv, Color(0xFFFFB067)),
@@ -148,9 +152,9 @@ fun MediaTypeFilterOverlay(
     data class TypeOption(val filter: MediaType?, val label: String, val icon: ImageVector, val accent: Color, val subtitle: String)
     val allLabel = if (ru) "Все" else "All"
     val options = listOf(
-        TypeOption(null, allLabel, Icons.Outlined.GridView, Color(0xFFA7A7A7), if (ru) "Вся коллекция" else "Whole collection"),
-        TypeOption(MediaType.ANIME, strings.typeAnime, Icons.Outlined.AutoAwesome, Color(0xFFE85002), if (ru) "Только аниме" else "Anime only"),
-        TypeOption(MediaType.MANGA, strings.typeManga, Icons.AutoMirrored.Outlined.MenuBook, Color(0xFFD9C3AB), if (ru) "Только манга" else "Manga only"),
+        TypeOption(null, allLabel, Icons.Outlined.GridView, BrandLightGray, if (ru) "Вся коллекция" else "Whole collection"),
+        TypeOption(MediaType.ANIME, strings.typeAnime, Icons.Outlined.AutoAwesome, BrandOrange, if (ru) "Только аниме" else "Anime only"),
+        TypeOption(MediaType.MANGA, strings.typeManga, Icons.AutoMirrored.Outlined.MenuBook, BrandSand, if (ru) "Только манга" else "Manga only"),
         // MOVIE+SERIES под одной опцией (см. HomeComponents.tiles выше) — комбинированное
         // сопоставление в AnimeRepository.observeAnimeList.
         TypeOption(MediaType.SERIES, strings.typeSeries, Icons.Outlined.Tv, Color(0xFFFFB067), if (ru) "Фильмы и сериалы" else "Movies & series"),
@@ -593,7 +597,7 @@ fun CloudSyncPill(
             MaterialTheme.colorScheme.surface.copy(alpha = 0.95f)
         }
         val borderColor = if (isDark) {
-            BrandBlueSoft.copy(alpha = 0.35f)
+            BrandOrangeBright.copy(alpha = 0.35f)
         } else {
             MaterialTheme.colorScheme.onSurface.copy(alpha = 0.10f)
         }
@@ -612,7 +616,7 @@ fun CloudSyncPill(
                 CircularProgressIndicator(
                     modifier = Modifier.size(16.dp),
                     strokeWidth = 2.dp,
-                    color = if (isDark) BrandBlueSoft else BrandBlue,
+                    color = if (isDark) BrandOrangeBright else BrandOrange,
                 )
                 Text(
                     text = label,

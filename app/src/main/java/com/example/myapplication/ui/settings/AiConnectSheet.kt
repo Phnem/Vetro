@@ -74,7 +74,7 @@ fun AiConnectSheet(
     val uriHandler = LocalUriHandler.current
 
     val sheetSurface = if (isDark) {
-        Color(0xFF000000).copy(alpha = 0.8f)
+        Color.Black.copy(alpha = 0.8f)
     } else {
         MaterialTheme.colorScheme.surface.copy(alpha = 0.95f)
     }

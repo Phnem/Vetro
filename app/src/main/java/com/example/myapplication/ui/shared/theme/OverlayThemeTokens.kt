@@ -27,13 +27,13 @@ internal object OverlayThemeTokens {
     val CardElevation = 16.dp
 
     val RimDark = Color.White.copy(alpha = 0.09f)
-    val LabelMutedDark = Color(0xFFA7A7A7)
+    val LabelMutedDark = BrandLightGray
     /** Главный акцент оверлеев — яркий брендовый оранжевый (#F16001). Имя легаси. */
-    val IconSyncBlue = Color(0xFFF16001)
+    val IconSyncBlue = BrandOrangeBright
     /** Алиас акцента синх-панели (не путать с мягкими токенами кнопки сортировки). */
     val AccentSyncBlue: Color get() = IconSyncBlue
     /** Статус/статистика — тёплый песочный из брендового градиента. Имя легаси. */
-    val IconSignalGreen = Color(0xFFE85002)
+    val IconSignalGreen = BrandOrange
     /** Аккаунт — светлый персиковый оттенок бренд-оранжевого. Имя легаси. */
     val IconAccountYellow = Color(0xFFFFB067)
     val OnSyncBlueButton = Color.White
@@ -79,7 +79,7 @@ internal object OverlayThemeTokens {
 
     /** Кнопка «Применить»: тёмная подложка + приглушённый текст без «кислотных» акцентов. */
     val ApplyButtonContainerDark = Color(0xFF262626)
-    val ApplyButtonLabelSoft = Color(0xFFA7A7A7)
+    val ApplyButtonLabelSoft = BrandLightGray
 
     // ============================================================
     // Glass edge / fill — параметры стеклянных панелей
@@ -116,13 +116,13 @@ internal object OverlayThemeTokens {
     /** Персиковый (рейтинги, аккаунт). */
     val AccentNeonYellow: Color = IconAccountYellow
     /** Фирменный оранжевый (контент, акценты) — #E85002. */
-    val AccentNeonOrange = Color(0xFFE85002)
+    val AccentNeonOrange = BrandOrange
     /** Нейтральный светло-серый (метрики/декор) — #A7A7A7. */
-    val AccentNeonPurple = Color(0xFFA7A7A7)
+    val AccentNeonPurple = BrandLightGray
     /** Тёплый коралловый тинт бренд-оранжевого (favorites, ошибки в инфо-плитках). */
     val AccentNeonPink = Color(0xFFEF7B54)
     /** Кнопка подтверждения «В избранное» в шите списка — брендовый песочный. */
-    val FavoriteConfirmGold = Color(0xFFE85002)
+    val FavoriteConfirmGold = BrandOrange
     val OnFavoriteConfirmGold = Color(0xFF2B2014)
 
     /**
@@ -184,7 +184,7 @@ internal object OverlayThemeTokens {
      * ([FavoriteGold] = #FFD600). Роли разные, но в одном экране они соседствуют — если это
      * начнёт путать, разводить надо один из двух, а не оба.
      */
-    val AccentOrange = Color(0xFFE85002)
+    val AccentOrange = BrandOrange
     val AccentBlue = Color(0xFF0A84FF)
     val AccentYellow = Color(0xFFFFD60A)
     val AccentPurple = Color(0xFFBF5AF2)

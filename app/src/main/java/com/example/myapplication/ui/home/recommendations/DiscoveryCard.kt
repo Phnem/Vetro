@@ -36,7 +36,7 @@ import coil3.size.Size
 import com.example.myapplication.isAppInDarkTheme
 import com.example.myapplication.network.AppLanguage
 import com.example.myapplication.ui.shared.fluidClickable
-import com.example.myapplication.ui.shared.theme.BrandBlue
+import com.example.myapplication.ui.shared.theme.BrandOrange
 import com.example.myapplication.ui.shared.theme.SnProFamily
 
 /** Строки фичи рекомендаций (локально, чтобы не раздувать UiStrings). */
@@ -161,7 +161,7 @@ fun DiscoveryCard(
                     fontWeight = FontWeight.Bold,
                     fontSize = 10.sp,
                     letterSpacing = 1.2.sp,
-                    color = BrandBlue,
+                    color = BrandOrange,
                 )
                 Text(
                     text = strings.title,

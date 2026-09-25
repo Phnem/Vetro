@@ -1,5 +1,6 @@
 package com.example.myapplication.ui.home
 
+import com.example.myapplication.ui.shared.theme.BrandOrange
 import androidx.activity.compose.ReportDrawnWhen
 import com.example.myapplication.ui.shared.theme.IosScroll
 import com.example.myapplication.ui.home.updates.notificationStrings
@@ -1009,10 +1010,10 @@ fun HomeScreen(
                             modifier = Modifier.fillMaxSize().focusRequester(searchFocusRequester).padding(horizontal = 20.dp),
                             singleLine = true,
                             textStyle = TextStyle(fontSize = 16.sp, color = MaterialTheme.colorScheme.onSurface, fontFamily = SnProFamily),
-                            cursorBrush = SolidColor(BrandBlue),
+                            cursorBrush = SolidColor(BrandOrange),
                             decorationBox = { innerTextField ->
                                 Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Icon(imageVector = Icons.Default.Search, contentDescription = null, tint = BrandBlue)
+                                    Icon(imageVector = Icons.Default.Search, contentDescription = null, tint = BrandOrange)
                                     Spacer(Modifier.width(12.dp))
                                     Box {
                                         if (uiState.searchQuery.isEmpty()) {

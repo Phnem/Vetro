@@ -1,5 +1,9 @@
 package com.example.myapplication
 
+import com.example.myapplication.ui.shared.theme.BrandOrangeBright
+import com.example.myapplication.ui.shared.theme.BrandLightGray
+import com.example.myapplication.ui.shared.theme.BrandGray
+import com.example.myapplication.ui.shared.theme.BrandDeepRed
 import androidx.annotation.DrawableRes
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
@@ -66,7 +70,7 @@ import androidx.compose.ui.draw.drawWithContent
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.launch
 
-private val ConnectedGreen = Color(0xFFF16001)
+private val ConnectedGreen = BrandOrangeBright
 private val LogoutRed = Color(0xFFE5382B)
 private val AutoAmber = Color(0xFFD08A4A)
 
@@ -112,7 +116,7 @@ internal fun NottifSyncServiceGrid(
                 modifier = Modifier
                     .size(30.dp)
                     .clip(CircleShape)
-                    .background(Brush.linearGradient(listOf(Color(0xFFC10801), Color(0xFFF16001)))),
+                    .background(Brush.linearGradient(listOf(BrandDeepRed, BrandOrangeBright))),
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(Icons.Filled.Person, null, tint = Color.White, modifier = Modifier.size(18.dp))
@@ -304,11 +308,11 @@ private fun rememberSyncServiceModels(strings: UiStrings): List<SyncServiceCardM
             iconRes = R.drawable.ic_shikimori,
             brandTint = Color(0xFF111111),
             bg = Color(0xFFEDEDED),
-            rowBg = Color(0xFFFFFFFF),
-            iconHolderBg = Color(0xFFFFFFFF),
+            rowBg = Color.White,
+            iconHolderBg = Color.White,
             onCard = Color(0xFF111111),
-            onCardMuted = Color(0xFF646464),
-            chevron = Color(0xFFA7A7A7),
+            onCardMuted = BrandGray,
+            chevron = BrandLightGray,
             siteUrl = "https://shikimori.io/",
         ),
         // AniList — почти чёрная карта (темнее фона листа, чтобы не сливалась),
@@ -319,8 +323,8 @@ private fun rememberSyncServiceModels(strings: UiStrings): List<SyncServiceCardM
             iconRes = R.drawable.ic_anilist,
             brandTint = null,
             bg = Color(0xFF0A0A0A),
-            rowBg = Color(0xFFFFFFFF).copy(alpha = 0.08f),
-            iconHolderBg = Color(0xFFFFFFFF).copy(alpha = 0.12f),
+            rowBg = Color.White.copy(alpha = 0.08f),
+            iconHolderBg = Color.White.copy(alpha = 0.12f),
             onCard = Color.White,
             onCardMuted = Color.White.copy(alpha = 0.55f),
             chevron = Color.White.copy(alpha = 0.4f),
@@ -333,8 +337,8 @@ private fun rememberSyncServiceModels(strings: UiStrings): List<SyncServiceCardM
             iconRes = R.drawable.ic_myanimelist,
             brandTint = Color.White,
             bg = Color(0xFFB84102),
-            rowBg = Color(0xFFFFFFFF).copy(alpha = 0.12f),
-            iconHolderBg = Color(0xFFFFFFFF).copy(alpha = 0.16f),
+            rowBg = Color.White.copy(alpha = 0.12f),
+            iconHolderBg = Color.White.copy(alpha = 0.16f),
             onCard = Color.White,
             onCardMuted = Color.White.copy(alpha = 0.7f),
             chevron = Color.White.copy(alpha = 0.55f),

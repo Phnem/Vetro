@@ -38,7 +38,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -100,7 +99,7 @@ import com.example.myapplication.ui.shared.rememberAdaptiveGlassEffects
 import com.example.myapplication.ui.shared.components.GenreFilterPillSelection
 import com.example.myapplication.ui.shared.components.GlassIconButton
 import com.example.myapplication.ui.shared.fluidClickable
-import com.example.myapplication.ui.shared.theme.BrandBlue
+import com.example.myapplication.ui.shared.theme.BrandOrange
 import com.example.myapplication.ui.shared.theme.DarkBackground
 import com.example.myapplication.ui.shared.theme.OverlayThemeTokens
 import com.example.myapplication.ui.shared.theme.MotionTokens
@@ -552,7 +551,7 @@ fun GlassBottomNavigation(
             backdrop = backdrop,
             backgroundColor = Color.Transparent,
             contentDescription = "Search",
-            tint = if (isSearchActive) BrandBlue else dockIconTint
+            tint = if (isSearchActive) BrandOrange else dockIconTint
         )
     }
 }
@@ -731,7 +730,7 @@ val HeroiconsRectangleStack: ImageVector
 // ==========================================
 // ЦВЕТА И РАСШИРЕНИЯ ДЛЯ СТАРОГО ДИЗАЙНА
 // ==========================================
-private val IconFilterColor = Color(0xFFE85002)
+private val IconFilterColor = BrandOrange
 
 private sealed interface SortGridSelection {
     data class Sort(val option: SortOption, val isAscending: Boolean) : SortGridSelection
@@ -1081,7 +1080,7 @@ fun GenreFilterOverlay(
                             .height(52.dp)
                             .inertialCollision(state = collisionState, index = 2, baseMultiplier = 2.5f)
                             .clip(SquircleShape(26.dp))
-                            .background(BrandBlue)
+                            .background(BrandOrange)
                             .clickable(
                                 interactionSource = remember { MutableInteractionSource() },
                                 indication = null

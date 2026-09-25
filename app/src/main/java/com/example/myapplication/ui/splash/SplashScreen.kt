@@ -51,7 +51,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.myapplication.isAppInDarkTheme
-import com.example.myapplication.ui.shared.theme.BrandBlue
+import com.example.myapplication.ui.shared.theme.BrandOrange
 import com.example.myapplication.ui.shared.theme.DarkSurface
 import com.example.myapplication.ui.shared.theme.LightSurface
 import com.example.myapplication.ui.shared.theme.MotionTokens
@@ -240,7 +240,7 @@ private fun SplashInfoCard(
                 SplashAccentIconBubble {
                     CircularProgressIndicator(
                         modifier = Modifier.size(24.dp),
-                        color = BrandBlue,
+                        color = BrandOrange,
                         strokeWidth = 2.5.dp,
                         strokeCap = StrokeCap.Round,
                     )
@@ -280,7 +280,7 @@ private fun SplashFolderCard(
                     Icon(
                         imageVector = Icons.Outlined.FolderOpen,
                         contentDescription = null,
-                        tint = BrandBlue,
+                        tint = BrandOrange,
                         modifier = Modifier.size(24.dp),
                     )
                 }
@@ -297,7 +297,7 @@ private fun SplashFolderCard(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(100),
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = BrandBlue,
+                    containerColor = BrandOrange,
                     contentColor = Color.White,
                 ),
             ) {
@@ -330,7 +330,7 @@ private fun SplashAccentIconBubble(content: @Composable () -> Unit) {
         modifier = Modifier
             .size(48.dp)
             .clip(CircleShape)
-            .background(BrandBlue.copy(alpha = 0.15f)),
+            .background(BrandOrange.copy(alpha = 0.15f)),
         contentAlignment = Alignment.Center,
     ) {
         content()

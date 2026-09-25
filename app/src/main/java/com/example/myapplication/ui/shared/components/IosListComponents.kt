@@ -1,5 +1,6 @@
 package com.example.myapplication.ui.shared.components
 
+import com.example.myapplication.ui.shared.theme.BrandOrange
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateFloatAsState
@@ -511,7 +512,7 @@ fun IosPickerSheet(
                         Icon(
                             imageVector = Icons.Filled.Check,
                             contentDescription = null,
-                            tint = Color(0xFFE85002),
+                            tint = BrandOrange,
                             modifier = Modifier.size(20.dp),
                         )
                     }
@@ -570,7 +571,7 @@ fun IosSelectionSheet(
             )
         }
         if (doneLabel != null && onDone != null) {
-            val doneAccent = options.getOrNull(selectedIndex)?.accent ?: Color(0xFFE85002)
+            val doneAccent = options.getOrNull(selectedIndex)?.accent ?: BrandOrange
             Spacer(Modifier.height(6.dp))
             Box(
                 modifier = Modifier
@@ -760,7 +761,7 @@ private fun IosRadioDot(progress: Float, accent: Color, isDark: Boolean) {
 fun IosSwitch(
     checked: Boolean,
     modifier: Modifier = Modifier,
-    onColor: Color = Color(0xFFE85002),
+    onColor: Color = BrandOrange,
     onCheckedChange: ((Boolean) -> Unit)? = null,
 ) {
     // Единый прогресс 0 (off) → 1 (on): лёгкий overshoot придаёт «резину» движению.

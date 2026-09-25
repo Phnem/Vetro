@@ -1,5 +1,6 @@
 package com.example.myapplication.ui.settings
 
+import com.example.myapplication.ui.shared.theme.BrandDeepRed
 import com.example.myapplication.ui.shared.theme.IosScroll
 import android.content.Context
 import android.content.Intent
@@ -100,7 +101,7 @@ fun CloudSettingsSheet(
 
     val sheetInDarkTheme = isAppInDarkTheme()
     val sheetSurface = if (sheetInDarkTheme) {
-        Color(0xFF000000).copy(alpha = 0.8f)
+        Color.Black.copy(alpha = 0.8f)
     } else {
         MaterialTheme.colorScheme.surface.copy(alpha = 0.95f)
     }
@@ -480,7 +481,7 @@ private fun SetEmailPasswordSection(
     val bodyColor = if (isDark) OverlayThemeTokens.LabelMutedDark else MaterialTheme.colorScheme.onSurfaceVariant
     val fieldShape = RoundedCornerShape(12.dp)
     val syncBrush = Brush.horizontalGradient(
-        colors = listOf(OverlayThemeTokens.AccentSyncBlue, Color(0xFFC10801)),
+        colors = listOf(OverlayThemeTokens.AccentSyncBlue, BrandDeepRed),
     )
 
     Column(
@@ -693,7 +694,7 @@ fun UpdateChangelogSheet(
     val sheetInDarkTheme = isAppInDarkTheme()
 
     val sheetSurface = if (sheetInDarkTheme) {
-        Color(0xFF000000).copy(alpha = 0.8f)
+        Color.Black.copy(alpha = 0.8f)
     } else {
         MaterialTheme.colorScheme.surface.copy(alpha = 0.95f)
     }

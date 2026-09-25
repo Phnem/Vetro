@@ -1,5 +1,6 @@
 package com.example.myapplication
 
+import com.example.myapplication.ui.shared.theme.BrandDeepRed
 import com.example.myapplication.ui.shared.theme.IosScroll
 import android.app.Activity
 import android.content.Context
@@ -375,7 +376,7 @@ fun NotificationSyncOverlay(
                             showLogoutDialog = false
                             onLogout()
                         },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFC10801))
+                        colors = ButtonDefaults.buttonColors(containerColor = BrandDeepRed)
                     ) { Text(strings.deleteConfirm) }
                 },
                 dismissButton = {

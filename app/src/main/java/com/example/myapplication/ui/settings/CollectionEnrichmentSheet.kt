@@ -198,7 +198,7 @@ fun FullEnrichmentPromptDialog(
             modifier = Modifier
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(28.dp))
-                .background(if (sheetInDark) OverlayThemeTokens.TileBackgroundDark else Color(0xFFFFFFFF))
+                .background(if (sheetInDark) OverlayThemeTokens.TileBackgroundDark else Color.White)
                 .padding(24.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {

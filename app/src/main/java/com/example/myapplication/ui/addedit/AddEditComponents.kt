@@ -51,7 +51,7 @@ import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 import coil3.request.crossfade
 import com.example.myapplication.isAppInDarkTheme
-import com.example.myapplication.ui.shared.theme.BrandBlue
+import com.example.myapplication.ui.shared.theme.BrandOrange
 import com.example.myapplication.ui.shared.theme.SnProFamily
 
 @Composable
@@ -295,7 +295,7 @@ fun PillTextField(
     var isFocused by remember { mutableStateOf(false) }
     val bgColor = if (isDark) AddEditColors.PillBackground else AddEditColors.PillBackgroundLight
     val borderColor by animateColorAsState(
-        targetValue = if (isFocused) BrandBlue.copy(alpha = 0.5f) else Color.Transparent,
+        targetValue = if (isFocused) BrandOrange.copy(alpha = 0.5f) else Color.Transparent,
         label = "pillBorder"
     )
 
@@ -312,7 +312,7 @@ fun PillTextField(
             fontFamily = SnProFamily,
             color = MaterialTheme.colorScheme.onSurface
         ),
-        cursorBrush = SolidColor(BrandBlue),
+        cursorBrush = SolidColor(BrandOrange),
         keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
         decorationBox = { innerTextField ->
             Row(

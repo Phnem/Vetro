@@ -1,5 +1,6 @@
 package com.example.myapplication.ui.settings
 
+import com.example.myapplication.ui.shared.theme.BrandDeepRed
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -71,14 +72,14 @@ fun CloudSettingsSection(
         Brush.horizontalGradient(
             colors = listOf(
                 OverlayThemeTokens.AccentSyncBlue,
-                Color(0xFFC10801)
+                BrandDeepRed
             )
         )
     } else {
         Brush.horizontalGradient(
             colors = listOf(
                 OverlayThemeTokens.AccentSyncBlue.copy(alpha = 0.92f),
-                Color(0xFFC10801)
+                BrandDeepRed
             )
         )
     }

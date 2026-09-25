@@ -1,5 +1,6 @@
 package com.example.myapplication.ui.home.updates
 
+import com.example.myapplication.ui.shared.theme.BrandOrange
 import androidx.compose.ui.util.lerp
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.layout.boundsInRoot
@@ -131,7 +132,7 @@ fun EpisodeUpdateStack(
 
     // iOS-палитра: брендовый оранжевый акцент, текст под цвет темы.
     val onCard = if (isDark) Color.White else Color(0xFF1C1C1E)
-    val accent = Color(0xFFE85002)
+    val accent = BrandOrange
     val topMaterial = FrostedMaterials.notification()
     val stackedMaterial = FrostedMaterials.stackedNotification()
     val noBackdrop = remember { emptyBackdrop() }
