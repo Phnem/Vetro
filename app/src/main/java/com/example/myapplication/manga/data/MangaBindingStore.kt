@@ -1,20 +1,11 @@
 package com.example.myapplication.manga.data
 
-import com.example.myapplication.network.AppJson
 import android.content.Context
-import android.util.Log
+import com.example.myapplication.data.local.JsonMapFileStore
 import com.example.myapplication.manga.domain.MangaItem
 import com.example.myapplication.manga.domain.MangaSourceId
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
-import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.builtins.MapSerializer
-import kotlinx.serialization.builtins.serializer
 import java.io.File
 
 /**
@@ -44,56 +35,24 @@ data class MangaBinding(
     )
 }
 
-/** Файловый стор привязок (filesDir, atomic rename) — по образцу `SeasonEpisodesStore`. */
+/** Файловый стор привязок (filesDir, [JsonMapFileStore]). */
 class MangaBindingStore(context: Context) {
 
-    private val file = File(context.filesDir, CACHE_FILE)
-    private val json = AppJson
-    private val mutex = Mutex()
-    @Volatile private var loaded = false
+    private val store = JsonMapFileStore(File(context.filesDir, CACHE_FILE), MangaBinding.serializer(), TAG)
 
-    private val _flow = MutableStateFlow<Map<String, MangaBinding>>(emptyMap())
-    val flow: StateFlow<Map<String, MangaBinding>> = _flow.asStateFlow()
+    val flow: StateFlow<Map<String, MangaBinding>> = store.flow
 
-    private val serializer = MapSerializer(String.serializer(), MangaBinding.serializer())
+    suspend fun ensureLoaded() = store.ensureLoaded()
 
-    suspend fun ensureLoaded() {
-        if (loaded) return
-        mutex.withLock {
-            if (loaded) return
-            val map = withContext(Dispatchers.IO) {
-                runCatching {
-                    if (!file.exists()) emptyMap() else json.decodeFromString(serializer, file.readText())
-                }.getOrElse {
-                    Log.w(TAG, "Failed to read manga bindings", it)
-                    emptyMap()
-                }
-            }
-            _flow.value = map
-            loaded = true
-        }
-    }
-
-    fun bindingFor(animeId: String): MangaBinding? = _flow.value[animeId]
+    fun bindingFor(animeId: String): MangaBinding? = store[animeId]
 
     suspend fun put(binding: MangaBinding) {
-        ensureLoaded()
-        mutex.withLock {
-            val map = _flow.value.toMutableMap().apply { put(binding.animeId, binding) }
-            _flow.value = map
-            persist(map)
-        }
+        store.update { it + (binding.animeId to binding) }
     }
 
     /** Пользователь ошибся источником — привязку надо уметь снять, а не только переписать. */
     suspend fun remove(animeId: String) {
-        ensureLoaded()
-        mutex.withLock {
-            if (!_flow.value.containsKey(animeId)) return
-            val map = _flow.value - animeId
-            _flow.value = map
-            persist(map)
-        }
+        store.update { it - animeId }
     }
 
     suspend fun setPreferredLanguage(animeId: String, language: String?) {
@@ -103,25 +62,7 @@ class MangaBindingStore(context: Context) {
 
     /** Убрать привязки тайтлов, которых больше нет в коллекции. */
     suspend fun retainOnly(existingIds: Set<String>) {
-        ensureLoaded()
-        mutex.withLock {
-            val map = _flow.value.filterKeys { it in existingIds }
-            if (map.size != _flow.value.size) {
-                _flow.value = map
-                persist(map)
-            }
-        }
-    }
-
-    private suspend fun persist(map: Map<String, MangaBinding>) = withContext(Dispatchers.IO) {
-        runCatching {
-            val tmp = File(file.parentFile, "$CACHE_FILE.tmp")
-            tmp.writeText(json.encodeToString(serializer, map))
-            if (!tmp.renameTo(file)) {
-                file.delete()
-                tmp.renameTo(file)
-            }
-        }.onFailure { Log.w(TAG, "Failed to write manga bindings", it) }
+        store.update { map -> map.filterKeys { it in existingIds } }
     }
 
     private companion object {

@@ -1,18 +1,8 @@
 package com.example.myapplication.data.local
 
-import com.example.myapplication.network.AppJson
 import android.content.Context
-import android.util.Log
 import com.example.myapplication.domain.seasons.SeasonEpisodesEntry
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
-import kotlinx.coroutines.withContext
-import kotlinx.serialization.builtins.MapSerializer
-import kotlinx.serialization.builtins.serializer
 import java.io.File
 
 /**
@@ -25,39 +15,21 @@ import java.io.File
  */
 class SeasonEpisodesStore(context: Context) {
 
-    private val file = File(context.filesDir, CACHE_FILE)
-    private val json = AppJson
-    private val mutex = Mutex()
-    @Volatile private var loaded = false
+    private val store = JsonMapFileStore(
+        File(context.filesDir, CACHE_FILE),
+        SeasonEpisodesEntry.serializer(),
+        TAG,
+    )
 
-    private val _flow = MutableStateFlow<Map<String, SeasonEpisodesEntry>>(emptyMap())
-    val flow: StateFlow<Map<String, SeasonEpisodesEntry>> = _flow.asStateFlow()
+    val flow: StateFlow<Map<String, SeasonEpisodesEntry>> = store.flow
 
-    private val serializer = MapSerializer(String.serializer(), SeasonEpisodesEntry.serializer())
+    suspend fun ensureLoaded() = store.ensureLoaded()
 
-    suspend fun ensureLoaded() {
-        if (loaded) return
-        mutex.withLock {
-            if (loaded) return
-            val map = withContext(Dispatchers.IO) {
-                runCatching {
-                    if (!file.exists()) emptyMap()
-                    else json.decodeFromString(serializer, file.readText())
-                }.getOrElse {
-                    Log.w(TAG, "Failed to read season-episodes cache", it)
-                    emptyMap()
-                }
-            }
-            _flow.value = map
-            loaded = true
-        }
-    }
-
-    fun entryFor(animeId: String): SeasonEpisodesEntry? = _flow.value[animeId]
+    fun entryFor(animeId: String): SeasonEpisodesEntry? = store[animeId]
 
     /** Свежа ли запись с учётом двухуровневого TTL (см. kdoc класса). */
     fun isFresh(animeId: String, nowMillis: Long = System.currentTimeMillis()): Boolean {
-        val e = _flow.value[animeId] ?: return false
+        val e = store[animeId] ?: return false
         if (e.resolvedAt <= 0) return false
         // Запись, собранная прежней версией резолвера, показывает неверный расклад — перерезолвить
         // сразу, не дожидаясь месячного TTL «полных» записей.
@@ -67,52 +39,27 @@ class SeasonEpisodesStore(context: Context) {
     }
 
     suspend fun put(entry: SeasonEpisodesEntry) {
-        ensureLoaded()
-        mutex.withLock {
+        store.update { map ->
             // Отметка о догоне принадлежит тайтлу, а не конкретному резолву: резолвер и
             // discovery собирают запись с нуля и о ней не знают, а затереть её нулём значит
             // снять паузу и пустить каскад по кругу.
-            val kept = _flow.value[entry.animeId]?.lastCatchUpAt ?: 0L
+            val kept = map[entry.animeId]?.lastCatchUpAt ?: 0L
             val merged = if (entry.lastCatchUpAt == 0L) entry.copy(lastCatchUpAt = kept) else entry
-            val map = _flow.value.toMutableMap().apply { put(entry.animeId, merged) }
-            _flow.value = map
-            persist(map)
+            map + (entry.animeId to merged)
         }
     }
 
     /** Отметить, что догон расклада по тайтлу только что запускался (см. [SeasonEpisodesEntry.lastCatchUpAt]). */
     suspend fun markCatchUp(animeId: String, atMillis: Long = System.currentTimeMillis()) {
-        ensureLoaded()
-        mutex.withLock {
-            val entry = _flow.value[animeId] ?: return
-            val map = _flow.value.toMutableMap()
-                .apply { put(animeId, entry.copy(lastCatchUpAt = atMillis)) }
-            _flow.value = map
-            persist(map)
+        store.update { map ->
+            val entry = map[animeId] ?: return@update map
+            map + (animeId to entry.copy(lastCatchUpAt = atMillis))
         }
     }
 
     /** Убрать записи тайтлов, которых больше нет в коллекции. */
     suspend fun retainOnly(existingIds: Set<String>) {
-        ensureLoaded()
-        mutex.withLock {
-            val map = _flow.value.filterKeys { it in existingIds }
-            if (map.size != _flow.value.size) {
-                _flow.value = map
-                persist(map)
-            }
-        }
-    }
-
-    private suspend fun persist(map: Map<String, SeasonEpisodesEntry>) = withContext(Dispatchers.IO) {
-        runCatching {
-            val tmp = File(file.parentFile, "$CACHE_FILE.tmp")
-            tmp.writeText(json.encodeToString(serializer, map))
-            if (!tmp.renameTo(file)) {
-                file.delete()
-                tmp.renameTo(file)
-            }
-        }.onFailure { Log.w(TAG, "Failed to write season-episodes cache", it) }
+        store.update { map -> map.filterKeys { it in existingIds } }
     }
 
     companion object {

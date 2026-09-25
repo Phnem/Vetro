@@ -1,70 +1,48 @@
 package com.example.myapplication.data.local
 
-import com.example.myapplication.network.AppJson
 import android.content.Context
-import android.util.Log
 import com.example.myapplication.domain.enrichment.weblinks.ResolvedWebLink
 import com.example.myapplication.domain.enrichment.weblinks.WebLinksEntry
 import com.example.myapplication.network.AppLanguage
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
-import kotlinx.serialization.builtins.MapSerializer
-import kotlinx.serialization.builtins.serializer
 import java.io.File
 
 /**
- * Файловый кэш прямых ссылок на страницы тайтла по одобренным сайтам (filesDir, atomic rename),
- * по образцу [RecommendationCacheStore] — без миграции схемы SQLDelight. Ключ — animeId.
+ * Файловый кэш прямых ссылок на страницы тайтла по одобренным сайтам ([JsonMapFileStore]) — без
+ * миграции схемы SQLDelight. Ключ — animeId.
  * В памяти держим Map в [flow], чтобы UI реактивно показывал найденные иконки.
  */
 class WebLinksStore(context: Context) {
 
-    private val file = File(context.filesDir, CACHE_FILE)
-    private val json = AppJson
-    private val mutex = Mutex()
-    @Volatile private var loaded = false
-    /** В памяти есть результаты, ещё не записанные на диск (см. [putLinksInMemory]). */
-    private var dirty = false
+    private val filesDir = context.filesDir
+    private val store = JsonMapFileStore(File(filesDir, CACHE_FILE), WebLinksEntry.serializer(), TAG)
 
-    private val _flow = MutableStateFlow<Map<String, WebLinksEntry>>(emptyMap())
-    val flow: StateFlow<Map<String, WebLinksEntry>> = _flow.asStateFlow()
+    @Volatile private var oldCachesCleared = false
 
-    private val serializer = MapSerializer(String.serializer(), WebLinksEntry.serializer())
+    val flow: StateFlow<Map<String, WebLinksEntry>> = store.flow
 
     suspend fun ensureLoaded() {
-        if (loaded) return
-        mutex.withLock {
-            if (loaded) return
-            val map = withContext(Dispatchers.IO) {
-                // Чистим кэши прежних версий формата ссылок (иначе старые/неверные ссылки живут TTL).
-                runCatching { OLD_CACHE_FILES.forEach { File(file.parentFile, it).delete() } }
-                runCatching {
-                    if (!file.exists()) emptyMap()
-                    else json.decodeFromString(serializer, file.readText())
-                }.getOrElse {
-                    Log.w(TAG, "Failed to read web-links cache", it)
-                    emptyMap()
-                }
+        if (!oldCachesCleared) {
+            // Чистим кэши прежних версий формата ссылок (иначе старые/неверные ссылки живут TTL).
+            withContext(Dispatchers.IO) {
+                runCatching { OLD_CACHE_FILES.forEach { File(filesDir, it).delete() } }
             }
-            _flow.value = map
-            loaded = true
+            oldCachesCleared = true
         }
+        store.ensureLoaded()
     }
 
     /** Ссылки для выбранного языка (то, что показывает UI). */
     fun linksFor(animeId: String, language: AppLanguage): List<ResolvedWebLink> {
-        val e = _flow.value[animeId] ?: return emptyList()
+        val e = store[animeId] ?: return emptyList()
         return if (language == AppLanguage.RU) e.ruLinks else e.enLinks
     }
 
     /** Свежесть по языку: резолвили и не истёк TTL. */
     fun isFresh(animeId: String, language: AppLanguage, nowMillis: Long = System.currentTimeMillis()): Boolean {
-        val e = _flow.value[animeId] ?: return false
+        val e = store[animeId] ?: return false
         val at = if (language == AppLanguage.RU) e.ruResolvedAt else e.enResolvedAt
         val links = if (language == AppLanguage.RU) e.ruLinks else e.enLinks
         val streak = if (language == AppLanguage.RU) e.ruEmptyStreak else e.enEmptyStreak
@@ -82,22 +60,11 @@ class WebLinksStore(context: Context) {
      */
     suspend fun putLinksInMemory(animeId: String, language: AppLanguage, links: List<ResolvedWebLink>) {
         ensureLoaded()
-        mutex.withLock {
-            val map = _flow.value.toMutableMap()
-            map[animeId] = updatedEntry(map[animeId] ?: WebLinksEntry(animeId = animeId), language, links)
-            _flow.value = map
-            dirty = true
-        }
+        store.updateInMemory { map -> map + (animeId to updatedEntry(map[animeId] ?: WebLinksEntry(animeId = animeId), language, links)) }
     }
 
     /** Сохранить накопленное на диск, если есть что. */
-    suspend fun flush() {
-        mutex.withLock {
-            if (!dirty) return
-            persist(_flow.value)
-            dirty = false
-        }
-    }
+    suspend fun flush() = store.flush()
 
     private fun updatedEntry(
         prev: WebLinksEntry,
@@ -123,36 +90,13 @@ class WebLinksStore(context: Context) {
     /** Записать результат резолва для одного языка (пустой список тоже сохраняем — метка «проверено»). */
     suspend fun putLinks(animeId: String, language: AppLanguage, links: List<ResolvedWebLink>) {
         ensureLoaded()
-        mutex.withLock {
-            val map = _flow.value.toMutableMap()
-            map[animeId] = updatedEntry(map[animeId] ?: WebLinksEntry(animeId = animeId), language, links)
-            _flow.value = map
-            persist(map)
-            dirty = false
-        }
+        store.update { map -> map + (animeId to updatedEntry(map[animeId] ?: WebLinksEntry(animeId = animeId), language, links)) }
     }
 
     /** Убрать записи для тайтлов, которых больше нет в коллекции. */
     suspend fun retainOnly(existingIds: Set<String>) {
         ensureLoaded()
-        mutex.withLock {
-            val map = _flow.value.filterKeys { it in existingIds }
-            if (map.size != _flow.value.size) {
-                _flow.value = map
-                persist(map)
-            }
-        }
-    }
-
-    private suspend fun persist(map: Map<String, WebLinksEntry>) = withContext(Dispatchers.IO) {
-        runCatching {
-            val tmp = File(file.parentFile, "$CACHE_FILE.tmp")
-            tmp.writeText(json.encodeToString(serializer, map))
-            if (!tmp.renameTo(file)) {
-                file.delete()
-                tmp.renameTo(file)
-            }
-        }.onFailure { Log.w(TAG, "Failed to write web-links cache", it) }
+        store.update { map -> map.filterKeys { it in existingIds } }
     }
 
     companion object {
