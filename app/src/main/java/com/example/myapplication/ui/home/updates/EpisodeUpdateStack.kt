@@ -406,7 +406,8 @@ internal fun EpisodeUpdateCard(
                 Text(
                     text = String.format(
                         Locale.getDefault(),
-                        "%dep. — %dEp.",
+                        // Без единиц: регистр «ep./Ep.» гулял, а язык строке не передаётся.
+                        "%d → %d",
                         update.currentEpisodes,
                         update.newEpisodes
                     ),

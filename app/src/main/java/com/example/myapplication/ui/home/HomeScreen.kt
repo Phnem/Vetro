@@ -351,7 +351,10 @@ fun HomeScreen(
     val shouldBlur = (isSearchVisible && uiState.searchQuery.isBlank()) ||
             showCSheet || animeToDelete != null || animeToFavorite != null ||
             uiState.isGenreFilterVisible || showNotificationsOverlay || showSortOverlay ||
-            showMediaTypeFilterOverlay || listSyncUi.isRunning || cardMenuTarget != null
+            showMediaTypeFilterOverlay || listSyncUi.isRunning || cardMenuTarget != null ||
+            // Заголовок центра уведомлений лежит поверх шапки главной: без размытия текст
+            // «Коллекция» читался сквозь «Уведомления».
+            notificationCenterOpen
     // Анимированные значения держим как State и читаем в лямбдах слоя/раскладки: чтение в
     // композиции пересобирало всю главную на каждом кадре открытия и закрытия оверлея.
     val blurAmount = animateDpAsState(
