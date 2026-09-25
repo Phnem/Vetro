@@ -1,5 +1,6 @@
 package com.example.myapplication.data.local
 
+import app.cash.sqldelight.db.QueryResult
 import android.content.Context
 import android.database.sqlite.SQLiteDatabase
 import android.util.Log
@@ -127,22 +128,24 @@ class SQLDelightDatabaseFactory(private val context: Context) {
     suspend fun checkpoint() {
         withContext(Dispatchers.IO) {
             try {
-                getDriver().let { driver ->
-                    if (driver is AndroidSqliteDriver) {
-                        // Get SQLiteDatabase through reflection
-                        val aClass = Class.forName("app.cash.sqldelight.driver.android.AndroidSqliteDriver")
-                        val method = aClass.getDeclaredMethod("getDatabase")
-                        method.isAccessible = true
-                        val database = method.invoke(driver) as? SQLiteDatabase
-                        database?.rawQuery("PRAGMA wal_checkpoint(FULL);", null)?.use { cursor ->
-                            if (cursor.moveToFirst()) {
-                                val busy = cursor.getInt(0)
-                                val log = cursor.getInt(1)
-                                val checkpointed = cursor.getInt(2)
-                                Log.d("SQLDelight", "WAL checkpoint: busy=$busy, log=$log, checkpointed=$checkpointed")
-                            }
-                        }
-                    }
+                // Публичный API драйвера, а не рефлексия в его поле SQLiteDatabase: рефлексию
+                // ломала бы обфускация, и ради неё SQLDelight держался в релизе целиком (-keep).
+                val result = getDriver().executeQuery(
+                    identifier = null,
+                    sql = "PRAGMA wal_checkpoint(FULL)",
+                    mapper = { cursor ->
+                        QueryResult.Value(
+                            if (cursor.next().value) {
+                                Triple(cursor.getLong(0), cursor.getLong(1), cursor.getLong(2))
+                            } else {
+                                null
+                            },
+                        )
+                    },
+                    parameters = 0,
+                ).value
+                result?.let { (busy, log, checkpointed) ->
+                    Log.d("SQLDelight", "WAL checkpoint: busy=$busy, log=$log, checkpointed=$checkpointed")
                 }
             } catch (e: Exception) {
                 // Checkpoint is not critical, log and continue

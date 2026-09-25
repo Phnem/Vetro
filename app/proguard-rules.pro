@@ -23,29 +23,25 @@
 -keepattributes SourceFile,LineNumberTable
 -keepattributes Signature,*Annotation*,InnerClasses,EnclosingMethod
 
--keep class kotlin.Metadata { *; }
 -dontwarn org.jetbrains.annotations.**
 
--keepclassmembers class **$$serializer { *; }
--keepclassmembers class kotlinx.serialization.json.** { *; }
+# kotlinx.serialization ships its own R8 rules; keep only what the plugin generates for our
+# classes (lookup by name happens for companion serializer() and $$serializer objects).
 -keep,includedescriptorclasses class com.example.myapplication.**$$serializer { *; }
+-keepclassmembers class com.example.myapplication.** {
+    *** Companion;
+}
+-keepclasseswithmembers class com.example.myapplication.** {
+    kotlinx.serialization.KSerializer serializer(...);
+}
 
--keep class org.koin.** { *; }
--keep class * extends org.koin.core.module.Module { *; }
-
--keepnames class androidx.compose.** { *; }
--keep class app.cash.sqldelight.** { *; }
--keep class com.example.myapplication.data.local.** { *; }
-
--keep class io.ktor.** { *; }
--keep class okhttp3.** { *; }
--keep interface okhttp3.** { *; }
+# Koin, Compose, SQLDelight, Ktor, OkHttp, Apollo, Media3, Coil and WorkManager bring consumer
+# rules with the AAR. The blanket -keep of their whole packages (and of our data.local) that
+# used to sit here only disabled shrinking and obfuscation for code nobody reflects on.
 -dontwarn okhttp3.internal.platform.**
 
 -dontwarn java.lang.management.ManagementFactory
 -dontwarn java.lang.management.RuntimeMXBean
-
--keepnames class com.apollographql.apollo.** { *; }
 
 # Release: вырезать Log.d/Log.v — это отладочный шум: работа на каждом вызове и утечка
 # URL/параметров в logcat. Log.i/w/e остаются: по ним разбираются отчёты с устройств.
