@@ -7,7 +7,6 @@ import io.ktor.client.request.url
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.URLProtocol
 import io.ktor.http.appendPathSegments
-import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.booleanOrNull
@@ -32,7 +31,7 @@ class VetroApiService(
     private val burstRate: TokenBucketRateLimiter
 ) : ApiService {
 
-    private val json = Json { ignoreUnknownKeys = true }
+    private val json = AppJson
 
     override suspend fun fetchDetails(request: DetailsLookupRequest): Result<AnimeDetails?> {
         return runCatching {

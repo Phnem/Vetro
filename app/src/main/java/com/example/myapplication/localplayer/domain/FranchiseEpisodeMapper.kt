@@ -1,5 +1,7 @@
 package com.example.myapplication.localplayer.domain
 
+import com.example.myapplication.network.seasonNeighbors
+import com.example.myapplication.network.orderByRelations
 import android.util.Log
 import com.example.myapplication.data.local.SeasonEpisodesStore
 import com.example.myapplication.domain.seasons.SeasonInfo
@@ -152,37 +154,7 @@ class FranchiseEpisodeMapper(
         return result
     }
 
-    /** Восстанавливаем порядок сезонов по рёбрам PREQUEL/SEQUEL внутри собранного множества. */
-    private fun orderByRelations(nodes: Map<Int, EpisodeCheckMedia>): List<EpisodeCheckMedia> {
-        val next = HashMap<Int, Int>()
-        val prev = HashMap<Int, Int>()
-        for (m in nodes.values) {
-            for (r in m.relations) {
-                if (r.anilistId !in nodes) continue
-                when (r.relationType) {
-                    "SEQUEL" -> { next[m.anilistId] = r.anilistId; prev[r.anilistId] = m.anilistId }
-                    "PREQUEL" -> { prev[m.anilistId] = r.anilistId; next[r.anilistId] = m.anilistId }
-                }
-            }
-        }
-        val root = nodes.keys.firstOrNull { it !in prev } ?: nodes.keys.first()
-        val ordered = ArrayList<EpisodeCheckMedia>()
-        val seen = HashSet<Int>()
-        var cur: Int? = root
-        while (cur != null && cur !in seen) {
-            seen += cur
-            nodes[cur]?.let { ordered += it }
-            cur = next[cur]
-        }
-        // На всякий случай добавим не попавшие в цепочку (ветвления) — в конец, по anilistId.
-        nodes.values.filter { it.anilistId !in seen }.sortedBy { it.anilistId }.forEach { ordered += it }
-        return ordered
-    }
 
-    private fun EpisodeCheckMedia.seasonNeighbors(): Set<Int> =
-        relations.filter { it.relationType == "PREQUEL" || it.relationType == "SEQUEL" }
-            .map { it.anilistId }
-            .toSet()
 
     private fun EpisodeCheckMedia.isSeasonFormat(): Boolean =
         format == null || format in SEASON_FORMATS

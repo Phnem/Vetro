@@ -59,7 +59,7 @@ class KtorWebLinkResolver(
     private val client: HttpClient,
 ) : WebLinkResolver {
 
-    private val json = Json { ignoreUnknownKeys = true }
+    private val json = AppJson
 
     override suspend fun resolveRu(query: String): List<WebLinkResolution> = coroutineScope {
         val q = query.trim()

@@ -1,5 +1,6 @@
 package com.example.myapplication.media.cookies
 
+import com.example.myapplication.network.AppStoreJson
 import android.content.Context
 import android.util.Log
 import kotlinx.coroutines.Dispatchers
@@ -9,7 +10,6 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.MapSerializer
 import kotlinx.serialization.builtins.serializer
-import kotlinx.serialization.json.Json
 import java.io.File
 
 @Serializable
@@ -23,7 +23,7 @@ data class MediaCookieProfile(
 /** Phase 5: cookie/UA persistence for gated sources. */
 class MediaCookieStore(context: Context) {
     private val file = File(context.filesDir, "media_cookies.json")
-    private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
+    private val json = AppStoreJson
     private val mutex = Mutex()
     private val serializer = MapSerializer(String.serializer(), MediaCookieProfile.serializer())
 

@@ -1,5 +1,6 @@
 package com.example.myapplication.media.source.movieseries
 
+import com.example.myapplication.network.AppJson
 import android.content.Context
 import android.util.Log
 import kotlinx.coroutines.Dispatchers
@@ -8,7 +9,6 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.builtins.MapSerializer
 import kotlinx.serialization.builtins.serializer
-import kotlinx.serialization.json.Json
 import java.io.File
 
 /** Read/record provider health. Split out so the cascade can be tested without Android. */
@@ -39,7 +39,7 @@ class ProviderHealthStore(
 ) : ProviderHealthRegistry {
 
     private val file = File(context.filesDir, CACHE_FILE)
-    private val json = Json { ignoreUnknownKeys = true }
+    private val json = AppJson
     private val mutex = Mutex()
     private val serializer = MapSerializer(String.serializer(), ProviderHealth.serializer())
 

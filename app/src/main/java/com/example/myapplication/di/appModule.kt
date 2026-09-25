@@ -358,6 +358,7 @@ val appModule = module {
         CollectionEnrichmentCoordinator(
             context = androidContext(),
             settingsDataStore = get(named("settings")),
+            appScope = get(),
         )
     }
     single { CollectionPdfGenerator(androidContext()) }
@@ -382,6 +383,7 @@ val appModule = module {
             credentialsStore = get(),
             cacheStore = get(),
             settingsDataStore = get(named("settings")),
+            appScope = get<com.example.myapplication.AppScope>(),
         )
     }
     single {

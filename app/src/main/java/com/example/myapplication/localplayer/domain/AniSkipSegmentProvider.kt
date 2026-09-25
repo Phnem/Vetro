@@ -1,5 +1,6 @@
 package com.example.myapplication.localplayer.domain
 
+import com.example.myapplication.network.AppJson
 import android.util.Log
 import io.ktor.client.HttpClient
 import io.ktor.client.request.get
@@ -10,7 +11,6 @@ import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
-import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.doubleOrNull
 import kotlinx.serialization.json.intOrNull
@@ -73,7 +73,7 @@ internal class AniSkipSegmentProvider internal constructor(
         },
     )
 
-    private val json = Json { ignoreUnknownKeys = true }
+    private val json = AppJson
     private val cacheMutex = Mutex()
     private val processCache = HashMap<EpisodeKey, List<AniSkipRecord>>()
     private val inFlight = HashMap<EpisodeKey, CompletableDeferred<List<AniSkipRecord>?>>()

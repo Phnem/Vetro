@@ -1,5 +1,6 @@
 package com.example.myapplication.media.source
 
+import com.example.myapplication.network.AppJson
 import android.util.Log
 import com.example.myapplication.data.models.Anime
 import com.example.myapplication.domain.seasons.SeasonInfo
@@ -9,7 +10,6 @@ import io.ktor.client.HttpClient
 import io.ktor.client.request.get
 import io.ktor.client.request.parameter
 import io.ktor.client.statement.bodyAsText
-import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.booleanOrNull
@@ -33,7 +33,7 @@ class AniLibriaSource(
     override val name: String = "AniLiberty"
     override val baseUrl: String = API_ORIGIN
 
-    private val json = Json { ignoreUnknownKeys = true }
+    private val json = AppJson
 
     suspend fun resolveEpisode(
         anime: Anime,

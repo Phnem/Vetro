@@ -10,9 +10,7 @@ import com.example.myapplication.data.local.StatsExplanationCacheStore
 import com.example.myapplication.data.models.Anime
 import com.example.myapplication.network.AppLanguage
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.FlowPreview
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -53,7 +51,8 @@ class StatsExplanationCoordinator(
     private val credentialsStore: AiCredentialsStore,
     private val cacheStore: StatsExplanationCacheStore,
     private val settingsDataStore: DataStore<Preferences>,
-    private val appScope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
+    /** Общая область процесса (AppScope); объяснения — это сетевые вызовы ИИ, так что IO. */
+    private val appScope: CoroutineScope,
 ) {
     private val _state = MutableStateFlow<Map<StatsCardKind, StatsCardExplanationState>>(emptyMap())
     val state: StateFlow<Map<StatsCardKind, StatsCardExplanationState>> = _state.asStateFlow()

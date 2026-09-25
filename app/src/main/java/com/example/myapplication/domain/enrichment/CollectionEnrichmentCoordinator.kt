@@ -1,5 +1,6 @@
 package com.example.myapplication.domain.enrichment
 
+import com.example.myapplication.AppScope
 import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
@@ -17,7 +18,6 @@ import com.example.myapplication.domain.enrichment.weblinks.WebLinkEnrichmentWor
 import com.example.myapplication.network.AppContentType
 import com.example.myapplication.network.AppLanguage
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -39,8 +39,10 @@ data class FullEnrichmentPrompt(val gapCount: Int)
 class CollectionEnrichmentCoordinator(
     private val context: Context,
     private val settingsDataStore: DataStore<Preferences>,
+    appScope: AppScope,
 ) {
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    // Общая область процесса (AppScope) вместо своей CoroutineScope(SupervisorJob() + IO).
+    private val scope: CoroutineScope = appScope
     private val interactivePauseLock = Any()
     @Volatile
     private var webLinkEnrichmentPaused = false

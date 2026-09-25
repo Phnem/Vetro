@@ -1,5 +1,6 @@
 package com.example.myapplication.manga.data
 
+import com.example.myapplication.network.AppJson
 import android.content.Context
 import android.util.Log
 import com.example.myapplication.manga.domain.MangaChapter
@@ -13,7 +14,6 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.MapSerializer
 import kotlinx.serialization.builtins.serializer
-import kotlinx.serialization.json.Json
 import java.io.File
 
 @Serializable
@@ -37,7 +37,7 @@ data class CachedChapters(
 class MangaChapterCacheStore(context: Context) {
 
     private val file = File(context.filesDir, CACHE_FILE)
-    private val json = Json { ignoreUnknownKeys = true }
+    private val json = AppJson
     private val mutex = Mutex()
     @Volatile private var loaded = false
 

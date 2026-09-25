@@ -1,10 +1,10 @@
 package com.example.myapplication.media.download
 
+import com.example.myapplication.network.AppStoreJson
 import android.util.Log
 import com.example.myapplication.media.source.VetroSkipReference
 import com.example.myapplication.media.source.VetroTimestamp
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.Json
 import java.io.File
 
 /**
@@ -38,7 +38,7 @@ object DownloadedSkipStore {
 
     private const val TAG = "DownloadedSkip"
     private const val SUFFIX = ".skip.json"
-    private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
+    private val json = AppStoreJson
 
     fun sidecarFor(episodeFile: File): File =
         File(episodeFile.parentFile, episodeFile.nameWithoutExtension + SUFFIX)

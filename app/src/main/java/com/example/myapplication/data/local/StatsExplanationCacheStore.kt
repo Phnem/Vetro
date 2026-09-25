@@ -1,5 +1,6 @@
 package com.example.myapplication.data.local
 
+import com.example.myapplication.network.AppJson
 import android.content.Context
 import android.util.Log
 import com.example.myapplication.domain.stats.StatsCardKind
@@ -11,7 +12,6 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.MapSerializer
 import kotlinx.serialization.builtins.serializer
-import kotlinx.serialization.json.Json
 import java.io.File
 
 private const val TAG = "StatsExplainCache"
@@ -34,7 +34,7 @@ data class CachedStatsExplanation(
 class StatsExplanationCacheStore(context: Context) {
 
     private val file = File(context.filesDir, CACHE_FILE)
-    private val json = Json { ignoreUnknownKeys = true }
+    private val json = AppJson
     private val serializer = MapSerializer(String.serializer(), CachedStatsExplanation.serializer())
     private val mutex = Mutex()
 

@@ -1,5 +1,6 @@
 package com.example.myapplication.domain.enrichment
 
+import com.example.myapplication.network.AppJson
 import android.content.Context
 import android.util.Log
 import kotlinx.coroutines.Dispatchers
@@ -8,7 +9,6 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.builtins.MapSerializer
 import kotlinx.serialization.builtins.serializer
-import kotlinx.serialization.json.Json
 import java.io.File
 
 private const val TAG = "EnrichmentJournal"
@@ -29,7 +29,7 @@ class EnrichmentGapJournal(
     private val retryTtlMs: Long = DEFAULT_RETRY_TTL_MS,
 ) {
     private val file = File(context.filesDir, JOURNAL_FILE)
-    private val json = Json { ignoreUnknownKeys = true }
+    private val json = AppJson
 
     // Внешняя карта: animeId -> (gapKind.name -> failedAtMillis).
     private val serializer = MapSerializer(

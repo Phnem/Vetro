@@ -1,5 +1,6 @@
 package com.example.myapplication.network.movie
 
+import com.example.myapplication.network.levenshteinSimilarity
 import kotlin.math.max
 
 /** Единая консервативная policy для слабой title-based ступени дедупа и id-резолва. */
@@ -46,20 +47,4 @@ internal object MovieTitleMatcher {
         .replace(Regex("[^\\p{L}\\p{N}]+"), " ")
         .trim()
         .replace(Regex("\\s+"), " ")
-
-    private fun levenshteinSimilarity(a: String, b: String): Double {
-        val maxLength = max(a.length, b.length)
-        if (maxLength == 0) return 1.0
-        val previous = IntArray(b.length + 1) { it }
-        for (i in a.indices) {
-            var diagonal = previous[0]
-            previous[0] = i + 1
-            for (j in b.indices) {
-                val above = previous[j + 1]
-                previous[j + 1] = if (a[i] == b[j]) diagonal else 1 + minOf(diagonal, above, previous[j])
-                diagonal = above
-            }
-        }
-        return 1.0 - previous[b.length].toDouble() / maxLength
-    }
 }

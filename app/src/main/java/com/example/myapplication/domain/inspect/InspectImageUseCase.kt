@@ -1,5 +1,6 @@
 package com.example.myapplication.domain.inspect
 
+import com.example.myapplication.network.AppJson
 import com.example.myapplication.data.ai.AiCredentialsStore
 import com.example.myapplication.data.ai.AiLlmEndpoint
 import com.example.myapplication.data.ai.AiProvider
@@ -11,7 +12,6 @@ import com.example.myapplication.network.TraceMoeRemoteDataSource
 import io.ktor.http.ContentType
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import java.util.Base64
@@ -34,7 +34,7 @@ class InspectImageUseCase(
     private val aiEndpoint: AiLlmEndpoint,
     private val credentialsStore: AiCredentialsStore,
 ) {
-    private val json = Json { ignoreUnknownKeys = true }
+    private val json = AppJson
 
     /** Есть ли vision-capable подключённый провайдер — для UI-состояния экрана. */
     fun hasVisionProvider(): Boolean =

@@ -1,5 +1,6 @@
 package com.example.myapplication.data.remote
 
+import com.example.myapplication.network.AppJson
 import com.example.myapplication.network.AppContentType
 import io.ktor.client.HttpClient
 import io.ktor.client.request.header
@@ -41,7 +42,7 @@ class GeminiStructuredClient(
         check(parsed.ok) { "Gemini key check failed" }
     }
 
-    private val json = Json { ignoreUnknownKeys = true }
+    private val json = AppJson
 
     private val modelId = "gemini-3.1-flash-lite"
 

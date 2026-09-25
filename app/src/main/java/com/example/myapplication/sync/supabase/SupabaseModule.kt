@@ -53,6 +53,7 @@ val supabaseModule = org.koin.dsl.module {
             collectionImageRestoreCoordinator = get(),
             apiKeySyncRepository = get(),
             progressSyncRepository = get(),
+            appScope = get(),
         )
     }
 

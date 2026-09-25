@@ -1,5 +1,6 @@
 package com.example.myapplication.media.ui
 
+import com.example.myapplication.network.AppStoreJson
 import com.example.myapplication.media.progress.runPlaybackProgressSaver
 import androidx.compose.runtime.CompositionLocalProvider
 import com.example.myapplication.localplayer.ui.LocalPlayerLanguage
@@ -116,7 +117,7 @@ class StreamPlayerActivity : ComponentActivity(), PipHostActivity {
     private val playbackStore: EpisodePlaybackStore by inject()
     private val enrichmentCoordinator: CollectionEnrichmentCoordinator by inject()
     private val settings: DataStore<Preferences> by inject(named("settings"))
-    private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
+    private val json = AppStoreJson
 
     private var activePlayer: Player? = null
     private var activeAnimeId: String = ""

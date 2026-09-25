@@ -1,5 +1,6 @@
 package com.example.myapplication.updates
 
+import com.example.myapplication.network.retryOn429
 import android.util.Log
 import com.example.myapplication.data.local.AnimeLocalDataSource
 import com.example.myapplication.data.models.AiringProgress
@@ -213,7 +214,7 @@ class BatchEpisodeCheckUseCase(
 
             val query = anime.titleRu?.takeIf { it.isNotBlank() } ?: anime.title
             lookups++
-            val results = retry429 { repository.searchAnimeAnilibriaOnly(query, 5) }.getOrNull().orEmpty()
+            val results = retryOn429(MAX_ATTEMPTS, RETRY_BASE_DELAY_MS) { repository.searchAnimeAnilibriaOnly(query, 5) }.getOrNull().orEmpty()
             val match = pickMatchedResult(anime, results)?.result
             if (match == null) {
                 delay(FALLBACK_ITEM_DELAY_MS)
@@ -327,7 +328,7 @@ class BatchEpisodeCheckUseCase(
             when (language) {
                 AppLanguage.RU -> {
                     val id = anime.shikimoriId ?: anime.malId ?: continue
-                    val remote = retry429 { repository.shikimoriById(id, AppLanguage.RU) }
+                    val remote = retryOn429(MAX_ATTEMPTS, RETRY_BASE_DELAY_MS) { repository.shikimoriById(id, AppLanguage.RU) }
                         .getOrNull() ?: continue
                     if (remote.episodes <= 0) continue
                     if (!isTitleMatch(anime, remote)) continue
@@ -343,7 +344,7 @@ class BatchEpisodeCheckUseCase(
                 }
                 AppLanguage.EN -> {
                     val id = anime.malId ?: continue
-                    val remote = retry429 { repository.malById(id, AppLanguage.EN) }
+                    val remote = retryOn429(MAX_ATTEMPTS, RETRY_BASE_DELAY_MS) { repository.malById(id, AppLanguage.EN) }
                         .getOrNull() ?: continue
                     if (remote.episodes <= 0) continue
                     if (!isTitleMatch(anime, remote)) continue
@@ -393,7 +394,7 @@ class BatchEpisodeCheckUseCase(
                     // Кириллический запрос имеет смысл только на Shikimori.
                     if (source != SearchSource.SHIKIMORI && !query.hasLatin()) continue
                     searched = true
-                    val result = retry429 { search(source, query) }
+                    val result = retryOn429(MAX_ATTEMPTS, RETRY_BASE_DELAY_MS) { search(source, query) }
                     if (result.isFailure) {
                         if (isTransientFailure(result.exceptionOrNull())) sawTransientFailure = true
                         continue
@@ -675,26 +676,6 @@ class BatchEpisodeCheckUseCase(
     // Сетевые мелочи
     // ==========================================================
 
-    private suspend fun <T> retry429(
-        maxAttempts: Int = MAX_ATTEMPTS,
-        block: suspend () -> Result<T>
-    ): Result<T> {
-        var delayMs = RETRY_BASE_DELAY_MS
-        var attempt = 1
-        var last: Result<T> = Result.failure(IllegalStateException("No attempts executed"))
-        while (attempt <= maxAttempts) {
-            last = block()
-            if (last.isSuccess) return last
-            val is429 = last.exceptionOrNull()
-                ?.message
-                ?.contains("429", ignoreCase = true) == true
-            if (!is429 || attempt == maxAttempts) return last
-            delay(delayMs)
-            delayMs *= 2
-            attempt++
-        }
-        return last
-    }
 
     private fun shouldRetryNotFound(notFoundAt: Long?): Boolean {
         val ts = notFoundAt ?: return true

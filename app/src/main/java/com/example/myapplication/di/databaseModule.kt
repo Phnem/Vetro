@@ -36,7 +36,7 @@ val databaseModule = module {
     single { SQLDelightDatabaseFactory(androidContext()) }
     single { get<SQLDelightDatabaseFactory>().getDatabase() }
     single { VetroPublicDbExporter(androidContext(), get(), get()) }
-    single { DeveloperMirrorCoordinator(settingsDataStore = get(named("settings")), exporter = get()) }
+    single { DeveloperMirrorCoordinator(settingsDataStore = get(named("settings")), exporter = get(), appScope = get()) }
     single { AnimeLocalDataSource(get(), get(), get()) }
     single<ImageStorageRepository> {
         ImageStorageRepositoryImpl(
@@ -110,6 +110,7 @@ val databaseModule = module {
             shikiRateLimiter = get(named("api_rate_burst")),
             aniListRemoteDataSource = get(),
             rootHttpClient = get(),
+            appScope = get(),
         )
     }
 }

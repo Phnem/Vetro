@@ -1,5 +1,8 @@
 package com.example.myapplication.domain.seasons
 
+import com.example.myapplication.network.seasonNeighbors
+import com.example.myapplication.network.orderByRelations
+import com.example.myapplication.network.retryOn429
 import android.util.Log
 import com.example.myapplication.data.local.AnimeLocalDataSource
 import com.example.myapplication.data.local.SeasonEpisodesStore
@@ -251,11 +254,11 @@ class SeasonEpisodesResolver(
 
     private suspend fun findSeedNode(anime: Anime): EpisodeCheckMedia? {
         anime.anilistId?.let { id ->
-            retry429 { repository.episodeCheckByAnilistIds(listOf(id)) }
+            retryOn429(MAX_ATTEMPTS, RETRY_BASE_DELAY_MS) { repository.episodeCheckByAnilistIds(listOf(id)) }
                 .getOrNull()?.firstOrNull()?.let { return it }
         }
         (anime.malId ?: anime.shikimoriId)?.let { mal ->
-            retry429 { repository.episodeCheckByMalIds(listOf(mal)) }
+            retryOn429(MAX_ATTEMPTS, RETRY_BASE_DELAY_MS) { repository.episodeCheckByMalIds(listOf(mal)) }
                 .getOrNull()?.firstOrNull()?.let {
                     persistIds(anime, it)
                     return it
@@ -275,20 +278,20 @@ class SeasonEpisodesResolver(
 
         // AniList: латиница.
         for (q in queries.filter { it.hasLatin() }) {
-            val found = retry429 { repository.searchAnimeAniListOnly(q, AppLanguage.EN, limit = 5) }
+            val found = retryOn429(MAX_ATTEMPTS, RETRY_BASE_DELAY_MS) { repository.searchAnimeAniListOnly(q, AppLanguage.EN, limit = 5) }
                 .getOrNull()?.let { pickMatch(anime, it) } ?: continue
             val anilistId = found.externalId?.toIntOrNull() ?: continue
             delay(ITEM_DELAY_MS)
-            return retry429 { repository.episodeCheckByAnilistIds(listOf(anilistId)) }
+            return retryOn429(MAX_ATTEMPTS, RETRY_BASE_DELAY_MS) { repository.episodeCheckByAnilistIds(listOf(anilistId)) }
                 .getOrNull()?.firstOrNull()?.also { persistIds(anime, it) }
         }
         // Shikimori: понимает кириллицу; отдаёт malId.
         for (q in queries) {
-            val found = retry429 { repository.searchAnimeShikimoriOnly(q, AppLanguage.RU, allowZeroEpisodes = true) }
+            val found = retryOn429(MAX_ATTEMPTS, RETRY_BASE_DELAY_MS) { repository.searchAnimeShikimoriOnly(q, AppLanguage.RU, allowZeroEpisodes = true) }
                 .getOrNull()?.let { pickMatch(anime, it) } ?: continue
             val mal = found.malId ?: found.externalId?.toIntOrNull() ?: continue
             delay(ITEM_DELAY_MS)
-            retry429 { repository.episodeCheckByMalIds(listOf(mal)) }
+            retryOn429(MAX_ATTEMPTS, RETRY_BASE_DELAY_MS) { repository.episodeCheckByMalIds(listOf(mal)) }
                 .getOrNull()?.firstOrNull()?.let {
                     persistIds(anime, it)
                     return it
@@ -296,11 +299,11 @@ class SeasonEpisodesResolver(
         }
         // MAL (Jikan): латиница.
         for (q in queries.filter { it.hasLatin() }) {
-            val found = retry429 { repository.searchAnimeMalOnly(q, AppLanguage.EN, limit = 5) }
+            val found = retryOn429(MAX_ATTEMPTS, RETRY_BASE_DELAY_MS) { repository.searchAnimeMalOnly(q, AppLanguage.EN, limit = 5) }
                 .getOrNull()?.let { pickMatch(anime, it) } ?: continue
             val mal = found.externalId?.toIntOrNull() ?: continue
             delay(ITEM_DELAY_MS)
-            retry429 { repository.episodeCheckByMalIds(listOf(mal)) }
+            retryOn429(MAX_ATTEMPTS, RETRY_BASE_DELAY_MS) { repository.episodeCheckByMalIds(listOf(mal)) }
                 .getOrNull()?.firstOrNull()?.let {
                     persistIds(anime, it)
                     return it
@@ -332,7 +335,7 @@ class SeasonEpisodesResolver(
             anime.titleEn?.takeIf { it.isNotBlank() },
         ).distinctBy { it.lowercase() }
         for (q in queries) {
-            val found = retry429 { repository.searchAnimeShikimoriOnly(q, AppLanguage.RU, allowZeroEpisodes = true) }
+            val found = retryOn429(MAX_ATTEMPTS, RETRY_BASE_DELAY_MS) { repository.searchAnimeShikimoriOnly(q, AppLanguage.RU, allowZeroEpisodes = true) }
                 .getOrNull()?.let { pickMatch(anime, it) } ?: continue
             val ongoing = found.isOngoing == true
             val total = found.totalEpisodes?.takeIf { it > 0 }
@@ -379,11 +382,11 @@ class SeasonEpisodesResolver(
 
     private suspend fun fillFromShikimoriOrMal(malId: Int): EpisodeCounts? {
         delay(ITEM_DELAY_MS)
-        retry429 { repository.shikimoriById(malId, AppLanguage.RU) }.getOrNull()?.let { r ->
+        retryOn429(MAX_ATTEMPTS, RETRY_BASE_DELAY_MS) { repository.shikimoriById(malId, AppLanguage.RU) }.getOrNull()?.let { r ->
             counts(r.airedEpisodes, r.totalEpisodes ?: r.episodes, "Shikimori")?.let { return it }
         }
         delay(ITEM_DELAY_MS)
-        retry429 { repository.malById(malId, AppLanguage.EN) }.getOrNull()?.let { r ->
+        retryOn429(MAX_ATTEMPTS, RETRY_BASE_DELAY_MS) { repository.malById(malId, AppLanguage.EN) }.getOrNull()?.let { r ->
             counts(r.airedEpisodes, r.totalEpisodes ?: r.episodes, "MAL")?.let { return it }
         }
         return null
@@ -427,7 +430,7 @@ class SeasonEpisodesResolver(
                 break
             }
             level++
-            val fetched = retry429 { repository.episodeCheckByAnilistIds(frontier.toList()) }
+            val fetched = retryOn429(MAX_ATTEMPTS, RETRY_BASE_DELAY_MS) { repository.episodeCheckByAnilistIds(frontier.toList()) }
                 .getOrNull()
             if (fetched == null) {
                 Log.w(TAG, "franchise batch failed (${frontier.size} ids) — entry stays incomplete")
@@ -444,36 +447,7 @@ class SeasonEpisodesResolver(
         return FranchiseGraph(result, complete)
     }
 
-    private fun orderByRelations(nodes: Map<Int, EpisodeCheckMedia>): List<EpisodeCheckMedia> {
-        if (nodes.isEmpty()) return emptyList()
-        val next = HashMap<Int, Int>()
-        val prev = HashMap<Int, Int>()
-        for (m in nodes.values) {
-            for (r in m.relations) {
-                if (r.anilistId !in nodes) continue
-                when (r.relationType) {
-                    "SEQUEL" -> { next[m.anilistId] = r.anilistId; prev[r.anilistId] = m.anilistId }
-                    "PREQUEL" -> { prev[m.anilistId] = r.anilistId; next[r.anilistId] = m.anilistId }
-                }
-            }
-        }
-        val root = nodes.keys.firstOrNull { it !in prev } ?: nodes.keys.first()
-        val ordered = ArrayList<EpisodeCheckMedia>()
-        val seen = HashSet<Int>()
-        var cur: Int? = root
-        while (cur != null && cur !in seen) {
-            seen += cur
-            nodes[cur]?.let { ordered += it }
-            cur = next[cur]
-        }
-        nodes.values.filter { it.anilistId !in seen }.sortedBy { it.anilistId }.forEach { ordered += it }
-        return ordered
-    }
 
-    private fun EpisodeCheckMedia.seasonNeighbors(): Set<Int> =
-        relations.filter { it.relationType == "PREQUEL" || it.relationType == "SEQUEL" }
-            .map { it.anilistId }
-            .toSet()
 
     private fun EpisodeCheckMedia.isSeasonFormat(): Boolean =
         format == null || format in SEASON_FORMATS
@@ -512,24 +486,6 @@ class SeasonEpisodesResolver(
         }
     }
 
-    private suspend fun <T> retry429(
-        maxAttempts: Int = MAX_ATTEMPTS,
-        block: suspend () -> Result<T>,
-    ): Result<T> {
-        var delayMs = RETRY_BASE_DELAY_MS
-        var attempt = 1
-        var last: Result<T> = Result.failure(IllegalStateException("No attempts executed"))
-        while (attempt <= maxAttempts) {
-            last = block()
-            if (last.isSuccess) return last
-            val is429 = last.exceptionOrNull()?.message?.contains("429", ignoreCase = true) == true
-            if (!is429 || attempt == maxAttempts) return last
-            delay(delayMs)
-            delayMs *= 2
-            attempt++
-        }
-        return last
-    }
 
     private fun String.hasLatin(): Boolean = any { it in 'a'..'z' || it in 'A'..'Z' }
 

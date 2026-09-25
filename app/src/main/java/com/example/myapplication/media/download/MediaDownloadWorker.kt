@@ -1,5 +1,6 @@
 package com.example.myapplication.media.download
 
+import com.example.myapplication.network.AppJson
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Context
@@ -20,7 +21,6 @@ import com.example.myapplication.media.source.rehydratePersonalServerCredentials
 import com.example.myapplication.media.source.forPlaybackCandidate
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import kotlinx.serialization.json.Json
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.koin.core.component.KoinComponent
@@ -44,7 +44,7 @@ class MediaDownloadWorker(
 
     private val okHttpClient: OkHttpClient by inject()
     private val playbackCredentials: PlaybackSourceCredentialsStore by inject()
-    private val json = Json { ignoreUnknownKeys = true }
+    private val json = AppJson
 
     /**
      * The shared client is tuned for short API calls; an episode is a multi-minute transfer over

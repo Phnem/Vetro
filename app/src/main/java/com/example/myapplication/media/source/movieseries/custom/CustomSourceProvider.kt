@@ -1,5 +1,6 @@
 package com.example.myapplication.media.source.movieseries.custom
 
+import com.example.myapplication.network.AppJson
 import com.example.myapplication.data.models.MediaType
 import com.example.myapplication.media.source.PlaybackRequest
 import com.example.myapplication.media.source.VetroHoster
@@ -19,7 +20,6 @@ import io.ktor.client.request.request
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.HttpMethod
 import kotlinx.coroutines.delay
-import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
@@ -66,7 +66,7 @@ class CustomSourceProvider(
     override val displayName: String = manifest.name
     override val capabilities: Set<ProviderCapability> = manifest.capabilities
 
-    private val json = Json { ignoreUnknownKeys = true }
+    private val json = AppJson
 
     override suspend fun resolve(request: PlaybackRequest): ProviderResolution =
         resolveTyped(displayName) { resolveFromManifest(request) }

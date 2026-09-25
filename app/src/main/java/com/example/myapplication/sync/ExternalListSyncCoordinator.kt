@@ -1,5 +1,7 @@
 package com.example.myapplication.sync
 
+import com.example.myapplication.AppScope
+import com.example.myapplication.network.AppJson
 import android.app.Activity
 import android.content.Context
 import android.content.Intent
@@ -33,7 +35,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -65,10 +66,12 @@ class ExternalListSyncCoordinator(
     private val shikiRateLimiter: TokenBucketRateLimiter,
     private val aniListRemoteDataSource: AniListRemoteDataSource,
     rootHttpClient: OkHttpClient,
+    appScope: AppScope,
 ) {
     private val appContext = context.applicationContext
     private val prefs = appContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    // Общая область процесса (AppScope) вместо своей CoroutineScope(SupervisorJob() + IO).
+    private val scope: CoroutineScope = appScope
     /** Активный импорт/экспорт/синк списка (отмена с оверлея). */
     private var listSyncJob: Job? = null
     // Общий пул соединений с остальной сетью, свои таймауты.
@@ -77,7 +80,7 @@ class ExternalListSyncCoordinator(
         .readTimeout(30, TimeUnit.SECONDS)
         .writeTimeout(30, TimeUnit.SECONDS)
         .build()
-    private val json = Json { ignoreUnknownKeys = true }
+    private val json = AppJson
 
     data class ExternalListSyncUiState(
         val isRunning: Boolean = false,

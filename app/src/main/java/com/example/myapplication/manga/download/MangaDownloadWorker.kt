@@ -1,5 +1,6 @@
 package com.example.myapplication.manga.download
 
+import com.example.myapplication.network.AppStoreJson
 import android.content.Context
 import android.util.Log
 import androidx.work.CoroutineWorker
@@ -10,7 +11,6 @@ import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import com.example.myapplication.manga.domain.MangaChapter
 import com.example.myapplication.manga.source.MangaSourceEngine
-import kotlinx.serialization.json.Json
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
 
@@ -44,7 +44,7 @@ class MangaDownloadWorker(
     companion object {
         private const val TAG = "MangaDownloadWorker"
         private const val KEY_CHAPTER = "chapter"
-        private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
+        private val json = AppStoreJson
 
         /**
          * Уникальная работа на главу с политикой KEEP: повторный тап по «скачать» не плодит

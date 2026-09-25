@@ -1,5 +1,6 @@
 package com.example.myapplication.localplayer.ui
 
+import com.example.myapplication.network.AppStoreJson
 import com.example.myapplication.media.progress.runPlaybackProgressSaver
 import androidx.compose.runtime.CompositionLocalProvider
 import android.content.Context
@@ -40,7 +41,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.serialization.builtins.ListSerializer
-import kotlinx.serialization.json.Json
 import org.koin.android.ext.android.inject
 import org.koin.core.qualifier.named
 
@@ -219,7 +219,7 @@ class DownloadedPlayerActivity : ComponentActivity(), PipHostActivity {
         private const val EXTRA_ANILIST_ID = "anilist_id"
         private const val EXTRA_EPISODES_JSON = "episodes_json"
         private const val EXTRA_START_INDEX = "start_index"
-        private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
+        private val json = AppStoreJson
 
         fun intent(
             context: Context,

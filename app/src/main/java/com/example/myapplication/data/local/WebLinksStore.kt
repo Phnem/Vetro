@@ -1,5 +1,6 @@
 package com.example.myapplication.data.local
 
+import com.example.myapplication.network.AppJson
 import android.content.Context
 import android.util.Log
 import com.example.myapplication.domain.enrichment.weblinks.ResolvedWebLink
@@ -14,7 +15,6 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.builtins.MapSerializer
 import kotlinx.serialization.builtins.serializer
-import kotlinx.serialization.json.Json
 import java.io.File
 
 /**
@@ -25,7 +25,7 @@ import java.io.File
 class WebLinksStore(context: Context) {
 
     private val file = File(context.filesDir, CACHE_FILE)
-    private val json = Json { ignoreUnknownKeys = true }
+    private val json = AppJson
     private val mutex = Mutex()
     @Volatile private var loaded = false
     /** В памяти есть результаты, ещё не записанные на диск (см. [putLinksInMemory]). */

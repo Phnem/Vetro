@@ -1,5 +1,6 @@
 package com.example.myapplication.media.progress
 
+import com.example.myapplication.network.AppStoreJson
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.Dispatchers
 import androidx.datastore.core.DataStore
@@ -14,7 +15,6 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.Json
 import java.security.MessageDigest
 
 @Serializable
@@ -61,7 +61,7 @@ private data class PlaybackProgressSnapshot(
 class EpisodePlaybackStore(
     private val dataStore: DataStore<Preferences>,
 ) {
-    private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
+    private val json = AppStoreJson
     private val writeMutex = Mutex()
 
     fun progressFlow(animeId: String): Flow<Map<PlaybackEpisodeKey, EpisodePlaybackProgress>> {

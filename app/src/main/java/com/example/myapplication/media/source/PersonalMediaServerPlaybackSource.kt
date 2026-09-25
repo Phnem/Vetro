@@ -1,5 +1,6 @@
 package com.example.myapplication.media.source
 
+import com.example.myapplication.network.AppJson
 import com.example.myapplication.data.models.MediaType
 import com.example.myapplication.media.source.movieseries.MediaIdentity
 import com.example.myapplication.media.source.movieseries.MediaIdentityMatcher
@@ -15,14 +16,12 @@ import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.client.request.parameter
 import io.ktor.client.statement.bodyAsText
-import io.ktor.http.isSuccess
 import java.net.URI
 import java.nio.charset.StandardCharsets
 import java.net.URLEncoder
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.Json
 
 private val SAFE_SERVER_ID = Regex("[A-Za-z0-9_-]+")
 
@@ -64,7 +63,7 @@ class PersonalMediaServerPlaybackSource(
     override val id: ProviderId = ProviderId(provider.credentialPrefix)
     override val displayName: String = provider.displayName
     private val sourceName: String get() = displayName
-    private val json = Json { ignoreUnknownKeys = true }
+    private val json = AppJson
 
     /** Matches by provider ids first, so it declares every id capability it searches on. */
     override val capabilities: Set<ProviderCapability> = setOf(

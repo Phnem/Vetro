@@ -1,5 +1,6 @@
 package com.example.myapplication.media.source.movieseries.custom
 
+import com.example.myapplication.network.AppJson
 import com.example.myapplication.media.source.movieseries.MovieSeriesStreamingProvider
 import io.ktor.client.HttpClient
 import kotlinx.serialization.json.Json
@@ -17,7 +18,7 @@ sealed interface SourceInstallResult {
  * point the user can still see why, rather than failing silently during playback later.
  */
 class CustomSourceInstaller(
-    private val json: Json = Json { ignoreUnknownKeys = true },
+    private val json: Json = AppJson,
 ) {
     /** [sourceUrl] is where the definition was fetched from, used to refresh it later. */
     fun fromManifestJson(text: String, sourceUrl: String? = null): SourceInstallResult {

@@ -1,16 +1,14 @@
 package com.example.myapplication.sync.supabase
 
+import com.example.myapplication.AppScope
 import android.content.Context
 import androidx.work.Constraints
 import androidx.work.ExistingPeriodicWorkPolicy
-import androidx.work.ExistingWorkPolicy
 import androidx.work.NetworkType
-import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -29,6 +27,7 @@ class SupabaseSyncCoordinator(
     private val collectionImageRestoreCoordinator: CollectionImageRestoreCoordinator,
     private val apiKeySyncRepository: ApiKeySyncRepository,
     private val progressSyncRepository: ProgressSyncRepository,
+    appScope: AppScope,
 ) {
     private val workManager = WorkManager.getInstance(context)
     private val _isSyncing = MutableStateFlow(false)
@@ -37,7 +36,8 @@ class SupabaseSyncCoordinator(
     val lastSyncMessage: StateFlow<String?> get() = _lastSyncMessage
     // SupervisorJob: без него первое необработанное исключение в любом из launch'ей отменяло
     // весь scope, и подписка на вход/выход пользователя молча умирала до перезапуска процесса.
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    // Общая область процесса (AppScope) вместо своей CoroutineScope(SupervisorJob() + IO).
+    private val scope: CoroutineScope = appScope
     private var realtimeSyncJob: kotlinx.coroutines.Job? = null
     private var realtimeChannelJob: kotlinx.coroutines.Job? = null
 
