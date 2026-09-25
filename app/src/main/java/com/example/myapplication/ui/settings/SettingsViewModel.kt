@@ -25,7 +25,6 @@ import androidx.lifecycle.viewModelScope
 import com.example.myapplication.network.AppContentType
 import com.example.myapplication.network.AppLanguage
 import com.example.myapplication.data.models.AppTheme
-import com.example.myapplication.localplayer.ui.LocalPlayerViewModel
 import com.example.myapplication.data.models.AppUpdateSnapshot
 import com.example.myapplication.data.models.AppUpdateStatus
 import com.example.myapplication.data.models.toUiStatus
@@ -305,10 +304,9 @@ class SettingsViewModel(
     /**
      * Единственный писатель [PlayerSettingsKeys.AUTO_SKIP].
      *
-     * Ключ берётся напрямую из `LocalPlayerViewModel`, а не объявляется здесь второй строкой:
-     * у него три читателя (`LocalPlayerViewModel`, `StreamPlayerActivity`,
-     * `DownloadedPlayerActivity`), и разъехавшееся имя оставило бы автопропуск таким же
-     * недостижимым, как до этой правки, — только с переключателем, который внешне работает.
+     * Ключ берётся из [PlayerSettingsKeys], а не объявляется здесь второй строкой: его читают
+     * оба плеера (`StreamPlayerActivity`, `DownloadedPlayerActivity`), и разъехавшееся имя
+     * оставило бы автопропуск недостижимым — с переключателем, который внешне работает.
      */
     fun setAutoSkipSegments(enabled: Boolean) {
         viewModelScope.launch {

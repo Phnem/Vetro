@@ -109,15 +109,6 @@ val appModule = module {
             discovery = get(),
         )
     }
-    // Local player (isolated feature — remove these lines to unwire it).
-    single { com.example.myapplication.localplayer.data.LocalSourceStore(androidContext()) }
-    single {
-        com.example.myapplication.localplayer.domain.LocalLibraryUseCase(
-            context = androidContext(),
-            store = get(),
-            aiRouter = get(),
-        )
-    }
     single { com.example.myapplication.localplayer.domain.FranchiseEpisodeMapper(get(), get()) }
     single {
         com.example.myapplication.localplayer.domain.AniSkipSegmentProvider(

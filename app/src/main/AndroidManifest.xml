@@ -57,15 +57,6 @@
         </intent-filter>
     </activity>
 
-        <!-- Local player (isolated feature: com.example.myapplication.localplayer).
-             To remove the feature entirely, delete this activity + the localplayer package. -->
-        <activity
-            android:name="com.example.myapplication.localplayer.ui.LocalPlayerActivity"
-            android:exported="false"
-            android:configChanges="orientation|screenSize|smallestScreenSize|keyboardHidden|screenLayout"
-            android:supportsPictureInPicture="true"
-            android:theme="@style/Theme.MyApplication" />
-
         <activity
             android:name="com.example.myapplication.localplayer.ui.DownloadedPlayerActivity"
             android:exported="false"
