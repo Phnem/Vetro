@@ -52,8 +52,8 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -199,8 +199,8 @@ fun HomeScreen(
     val ctx = LocalContext.current
     var showCSheet by remember { mutableStateOf(false) }
     var showRecsSheet by remember { mutableStateOf(false) }
-    /** Инкремент перемонтирует LazyColumn+layerBackdrop после закрытия оверлеев (см. GlassBackdropRecovery). */
-    var layerBackdropResetKey by remember { mutableIntStateOf(0) }
+    /** Инкремент перезаписывает layerBackdrop списка после закрытия оверлеев (см. GlassBackdropRecovery). */
+    val backdropRedraw = remember { mutableIntStateOf(0) }
     val recommendationsViewModel: RecommendationsViewModel = koinViewModel()
     val recsState by recommendationsViewModel.uiState.collectAsStateWithLifecycle()
     val recsStrings = getRecommendationsStrings(currentLanguage)
@@ -636,7 +636,6 @@ fun HomeScreen(
                             indicator = {},
                             modifier = Modifier.fillMaxSize()
                         ) {
-                            key(layerBackdropResetKey) {
                             LazyColumn(
                                 flingBehavior = IosScroll.flingBehavior(),
                                 state = listState,
@@ -644,6 +643,10 @@ fun HomeScreen(
                                 verticalArrangement = Arrangement.spacedBy(16.dp),
                                 modifier = Modifier
                                     .fillMaxSize()
+                                    // Чтение в фазе отрисовки: инкремент перерисовывает этот узел,
+                                    // и layerBackdrop перезаписывает свою запись — без
+                                    // перемонтирования списка (см. GlassBackdropRecovery).
+                                    .drawBehind { backdropRedraw.intValue }
                                     .layerBackdrop(backdrop)
                             ) {
                                 item {
@@ -877,7 +880,6 @@ fun HomeScreen(
                                     Spacer(Modifier.height(220.dp))
                                 }
                             }
-                            } // key(layerBackdropResetKey)
                         }
                     }
                     CloudSyncPill(
@@ -1369,8 +1371,7 @@ fun HomeScreen(
             // Обе анимации живут на ПРЕДКАХ layerBackdrop (homeScrollBlur и graphicsLayer со
             // «вдавливанием»), поэтому перезаписывать стекло раньше их конца бессмысленно.
             effectsSettled = effectsSettled,
-            listState = listState,
-            onRemount = { layerBackdropResetKey++ },
+            onRedraw = { backdropRedraw.intValue++ },
         )
 
         if (showCSheet) {
