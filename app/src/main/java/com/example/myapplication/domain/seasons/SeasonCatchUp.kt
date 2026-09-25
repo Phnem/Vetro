@@ -116,7 +116,9 @@ class SeasonCatchUp(
         store.ensureLoaded()
         val anime = localDataSource.getAnimeById(animeId) ?: return@withContext false
         val airing = runCatching { localDataSource.getAiringProgressSnapshot()[animeId] }.getOrNull()
-        catchUpInternal(anime, airing)
+        // Открыл пользователь: ждать шесть часов после неудачной фоновой попытки нельзя — именно
+        // так список и оставался коротким до ручного «Найти ещё».
+        catchUpInternal(anime, airing, knownAiredEpisodes(), USER_COOLDOWN_MILLIS)
     }
 
     /**
@@ -133,28 +135,50 @@ class SeasonCatchUp(
         store.ensureLoaded()
         val airing = runCatching { localDataSource.getAiringProgressSnapshot() }
             .getOrElse { emptyMap() }
+        val aired = knownAiredEpisodes()
         var used = 0
         for (id in animeIds) {
             if (used >= budget) break
             val anime = localDataSource.getAnimeById(id) ?: continue
-            if (catchUpInternal(anime, airing[id])) used++
+            if (catchUpInternal(anime, airing[id], aired, COOLDOWN_MILLIS)) used++
         }
     }
 
-    private suspend fun catchUpInternal(anime: Anime, airing: AiringProgress?): Boolean {
+    /**
+     * Сколько серий уже вышло по данным проверки серий: непрочитанное уведомление и отклонённое
+     * (прочитанное) — оба в той же шкале, что счётчик записи. Счётчик записи сам не растёт, пока
+     * пользователь не отметил серии, поэтому без этого уведомление «191 → 192» и расклад на 191
+     * противоречием не считались.
+     */
+    private fun knownAiredEpisodes(): Map<String, Int> {
+        val pending = runCatching { localDataSource.getUpdates() }.getOrElse { emptyList() }
+            .associate { it.animeId to it.newEpisodes }
+        val acknowledged = runCatching { localDataSource.getIgnoredMap() }.getOrElse { emptyMap() }
+        return (pending.keys + acknowledged.keys).associateWith { id ->
+            maxOf(pending[id] ?: 0, acknowledged[id] ?: 0)
+        }
+    }
+
+    private suspend fun catchUpInternal(
+        anime: Anime,
+        airing: AiringProgress?,
+        aired: Map<String, Int>,
+        cooldownMillis: Long,
+    ): Boolean {
         if (anime.mediaType != MediaType.ANIME) return false
         val now = System.currentTimeMillis()
         // Пауза по записи: догон уже прогоняли недавно, и второй заход за тем же ответом только
         // выжжет лимиты источников. Переживает перезапуск процесса — в отличие от карты ниже.
         val lastRun = store.entryFor(anime.id)?.lastCatchUpAt ?: 0L
-        if (lastRun > 0L && now - lastRun < COOLDOWN_MILLIS) return false
+        if (lastRun > 0L && now - lastRun < cooldownMillis) return false
 
-        val gap = gapFor(anime, airing) ?: return false
+        val franchiseEpisodes = maxOf(anime.episodes, aired[anime.id] ?: 0)
+        val gap = gapFor(anime, airing, franchiseEpisodes) ?: return false
         // Карта — от двух ОДНОВРЕМЕННЫХ каскадов по одному тайтлу: воркер и открытые Details
         // успевают пройти проверку выше оба, пока первый из них ещё ходит по сети и ничего не
         // записал. Ставим отметку до каскада: сорвавшийся на середине не должен уйти в цикл.
         val previous = lastAttempt.put(anime.id, now)
-        if (previous != null && now - previous < COOLDOWN_MILLIS) return false
+        if (previous != null && now - previous < cooldownMillis) return false
         store.markCatchUp(anime.id, now)
         Log.i(TAG, "\"${anime.title}\": season layout is behind — $gap")
 
@@ -164,7 +188,7 @@ class SeasonCatchUp(
             .onFailure { Log.w(TAG, "catch-up resolve failed for \"${anime.title}\": ${it.message}") }
             .getOrNull()
             ?.let { store.put(it) }
-        if (gapFor(anime, airing) == null) {
+        if (gapFor(anime, airing, franchiseEpisodes) == null) {
             Log.i(TAG, "\"${anime.title}\": closed by the catalogue")
             return true
         }
@@ -174,19 +198,20 @@ class SeasonCatchUp(
         val outcome = runCatching { discovery.discover(anime.id, forceRefresh = true) }
             .onFailure { Log.w(TAG, "catch-up discovery failed for \"${anime.title}\": ${it.message}") }
             .getOrNull()
-        val closed = gapFor(anime, airing) == null
+        val closed = gapFor(anime, airing, franchiseEpisodes) == null
         Log.i(TAG, "\"${anime.title}\": discovery=$outcome closed=$closed")
         return closed ||
             outcome is StreamingSeasonDiscovery.Outcome.Updated ||
             outcome is StreamingSeasonDiscovery.Outcome.Refreshed
     }
 
-    private fun gapFor(anime: Anime, airing: AiringProgress?): SeasonCoverageGap? = seasonCoverageGap(
-        seasons = store.entryFor(anime.id)?.seasons.orEmpty(),
-        airingSeason = airing?.seasonNumber,
-        airedEpisodes = airing?.airedEpisodes,
-        franchiseEpisodes = anime.episodes,
-    )
+    private fun gapFor(anime: Anime, airing: AiringProgress?, franchiseEpisodes: Int): SeasonCoverageGap? =
+        seasonCoverageGap(
+            seasons = store.entryFor(anime.id)?.seasons.orEmpty(),
+            airingSeason = airing?.seasonNumber,
+            airedEpisodes = airing?.airedEpisodes,
+            franchiseEpisodes = franchiseEpisodes,
+        )
 
     private companion object {
         const val TAG = "SeasonCatchUp"
@@ -201,5 +226,8 @@ class SeasonCatchUp(
          * перестраивать снова бессмысленно.
          */
         const val COOLDOWN_MILLIS = 6L * 60 * 60 * 1000
+
+        /** Пауза, когда тайтл открыл пользователь: он видит расхождение прямо сейчас. */
+        const val USER_COOLDOWN_MILLIS = 30L * 60 * 1000
     }
 }

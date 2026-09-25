@@ -62,7 +62,14 @@ val appModule = module {
     single { AddFromApiUseCase(get(), get(), get(), get(), get()) }
     single { BatchEpisodeCheckUseCase(repository = get(), localDataSource = get()) }
     single { SeriesEpisodeCheckUseCase(repository = get(), localDataSource = get()) }
-    single { EpisodeUpdateCheckCoordinator(animeCheck = get(), seriesCheck = get()) }
+    single {
+        EpisodeUpdateCheckCoordinator(
+            animeCheck = get(),
+            seriesCheck = get(),
+            seasonCatchUp = get(),
+            appScope = get<com.example.myapplication.AppScope>(),
+        )
+    }
     single { TitleEnrichmentUseCase(repository = get(), localDataSource = get()) }
     single { RussianTitleEnrichmentUseCase(repository = get(), localDataSource = get()) }
     single { AiTitleTranslationUseCase(router = get(), localDataSource = get()) }

@@ -36,7 +36,7 @@ class AnimeUpdateWorker(
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
         try {
             val language = AppLanguagePrefs.current(settingsDataStore)
-            val newlyDetected = episodeUpdateCheckCoordinator.detectAndStore(language)
+            val newlyDetected = episodeUpdateCheckCoordinator.detectAndStore(language, catchUpSeasons = false)
             // Догоняем расклад сезонов ДО уведомления: пуш «вышла 10-я серия 4-го сезона»,
             // открывающий тайтл с одним сезоном, — это ровно та ручная работа («Найти ещё»),
             // которую пользователь делал после каждого пуша. Ошибки здесь не отменяют пуш:
