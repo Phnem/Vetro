@@ -10,11 +10,8 @@ import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.OutOfQuotaPolicy
 import androidx.work.WorkManager
 import androidx.work.workDataOf
-import com.example.myapplication.data.local.DevPreferencesKeys
 import com.example.myapplication.data.models.Anime
 import com.example.myapplication.domain.seasons.SeasonInfo
-import com.example.myapplication.download.FileIpcManager
-import com.example.myapplication.download.InputTask
 import com.example.myapplication.media.download.MediaDownloadWorker
 import com.example.myapplication.media.download.MediaJobBus
 import com.example.myapplication.media.source.SourceEngine
@@ -36,7 +33,6 @@ import java.util.UUID
 class MediaGatewayImpl(
     private val context: Context,
     private val sourceEngine: SourceEngine,
-    private val fileIpcManager: FileIpcManager,
     private val settingsDataStore: DataStore<Preferences>,
 ) : MediaGateway {
 
@@ -47,18 +43,14 @@ class MediaGatewayImpl(
         episodeNumber: Int,
         seasonInfo: SeasonInfo?,
     ): PlaybackResolution {
-        return if (useNativeEngine()) {
-            val language = currentLanguage()
-            try {
-                sourceEngine.resolve(PlaybackRequest(anime, episodeNumber, seasonInfo, language))
-            } catch (error: CancellationException) {
-                throw error
-            } catch (error: Exception) {
-                Log.w(TAG, "native resolve failed: ${error.message}")
-                PlaybackResolution.Failure
-            }
-        } else {
-            PlaybackResolution.NotConfigured(anime.mediaType)
+        val language = currentLanguage()
+        return try {
+            sourceEngine.resolve(PlaybackRequest(anime, episodeNumber, seasonInfo, language))
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: Exception) {
+            Log.w(TAG, "native resolve failed: ${error.message}")
+            PlaybackResolution.Failure
         }
     }
 
@@ -110,15 +102,7 @@ class MediaGatewayImpl(
         return JobId(jobId)
     }
 
-    /** Legacy multi-episode Python path used by DownloadWizard. */
-    suspend fun enqueueLegacyPythonDownload(task: InputTask) {
-        fileIpcManager.submitTask(task)
-    }
 
-    private suspend fun useNativeEngine(): Boolean =
-        settingsDataStore.data.map { prefs ->
-            prefs[DevPreferencesKeys.USE_NATIVE_MEDIA_ENGINE] ?: true
-        }.first()
 
     private suspend fun currentLanguage(): AppLanguage =
         settingsDataStore.data.map { prefs ->

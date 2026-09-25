@@ -27,8 +27,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "vetro-collection"
 include(":app")
-include(":core:designsystem")
-include(":core:database")
 include(":core:network")
-include(":feature:animelist")
-include(":feature:statistics")

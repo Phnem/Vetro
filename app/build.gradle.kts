@@ -132,10 +132,10 @@ android {
 
     packaging {
         jniLibs {
-            // Переехало сюда из android:extractNativeLibs="true" в манифесте: AGP считает
-            // атрибут устаревшим и ругался на каждой сборке. Значение то же самое — .so
-            // по-прежнему распаковываются при установке, поведение не изменилось.
-            useLegacyPackaging = true
+            // Распаковка .so при установке была нужна только бинарнику ffmpeg (его запускали как
+            // исполняемый файл). Без него библиотеки грузятся прямо из APK: меньше места после
+            // установки, выравнивание под 16 КБ страницы AGP делает сам.
+            useLegacyPackaging = false
         }
     }
 }
@@ -180,7 +180,6 @@ dependencies {
     // 3. Coil 3
     implementation(libs.coil.compose)
     implementation(libs.coil.network.okhttp)
-    implementation(libs.lottie.compose)
 
     // 3b. Local player (isolated feature: com.example.myapplication.localplayer)
     implementation(libs.media3.exoplayer)

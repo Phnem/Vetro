@@ -75,10 +75,6 @@ val appModule = module {
     single { CollectionGapDetector(localDataSource = get(), repairUseCase = get(), journal = get()) }
     single { WebLinksStore(androidContext()) }
     single { WebLinkEnrichmentUseCase(resolver = get(), store = get()) }
-    // File-based IPC мост к внешнему воркеру скачивания (Vetro_Queue: input.json/output.json).
-    single<com.example.myapplication.download.FileIpcManager> {
-        com.example.myapplication.download.FileIpcManagerImpl(context = androidContext())
-    }
     // Серии по сезонам: файловый стор + фоновый резолвер (AniList → Shikimori → MAL).
     single { com.example.myapplication.data.local.SeasonEpisodesStore(androidContext()) }
     single {
@@ -338,7 +334,6 @@ val appModule = module {
         com.example.myapplication.media.MediaGatewayImpl(
             context = androidContext(),
             sourceEngine = get(),
-            fileIpcManager = get(),
             settingsDataStore = get(named("settings")),
         )
     }

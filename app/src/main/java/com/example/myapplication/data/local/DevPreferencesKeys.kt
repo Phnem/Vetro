@@ -9,9 +9,6 @@ object DevPreferencesKeys {
     /** When false (default), GitHub release checks and in-app APK updates are disabled (F-Droid mode). */
     val GITHUB_UPDATES_ENABLED = booleanPreferencesKey("dev_github_updates_enabled")
 
-    /** Once the user has ever run «Дубляж названий», new titles are auto-enriched in the background. */
-    val TITLE_DUBBING_EVER_ENABLED = booleanPreferencesKey("title_dubbing_ever_enabled")
-
     /**
      * Live Maintenance (фоновое обновление обогащения коллекции). Отсутствие ключа трактуется как ВКЛ —
      * фича включена по умолчанию. См. [com.example.myapplication.domain.enrichment.CollectionEnrichmentCoordinator].
@@ -22,12 +19,6 @@ object DevPreferencesKeys {
     val PENDING_FULL_ENRICHMENT_PROMPT = booleanPreferencesKey("pending_full_enrichment_prompt")
     val PENDING_FULL_ENRICHMENT_GAP_COUNT = intPreferencesKey("pending_full_enrichment_gap_count")
 
-    /**
-     * Native Media Engine (AniLibria/AnimeGo Kotlin sources + ffmpeg remux).
-     * Absence = ON (default). When false, resolveHosters returns empty and UI falls back
-     * to legacy Python download wizard only.
-     */
-    val USE_NATIVE_MEDIA_ENGINE = booleanPreferencesKey("use_native_media_engine")
     /**
      * Зеркало домена jut.su: основной домен периодически блокируют, и тогда весь источник нужно
      * переключить на альтернативный хост без пересборки. Пусто/отсутствие ключа = дефолтный

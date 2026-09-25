@@ -758,7 +758,6 @@ class SettingsViewModel(
     fun runTitleDubbing() {
         if (_transient.value.isTitleDubbing) return
         viewModelScope.launch {
-            settingsDataStore.edit { it[DevPreferencesKeys.TITLE_DUBBING_EVER_ENABLED] = true }
             val hasAi = aiCredentialsStore.getAllConnectedProviders().isNotEmpty()
             if (!hasAi) {
                 _transient.update { it.copy(showTitleDubbingNoAiDialog = true) }

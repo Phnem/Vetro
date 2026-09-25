@@ -19,10 +19,4 @@ class SanitizeHeadersTest {
         assertTrue(out.keys.none { it.contains('\n') })
     }
 
-    @Test
-    fun ffmpegHeaderStringUsesCrlf() {
-        val s = SanitizeHeaders.toFfmpegHeaderString(mapOf("Referer" to "https://a/", "Origin" to "https://a"))
-        assertTrue(s.contains("\r\n"))
-        assertTrue(s.startsWith("Referer: https://a/\r\n") || s.contains("Referer: https://a/\r\n"))
-    }
 }
