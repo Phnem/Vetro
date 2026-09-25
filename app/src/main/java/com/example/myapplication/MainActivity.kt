@@ -44,7 +44,7 @@ import com.example.myapplication.data.models.AppTheme
 import com.example.myapplication.sync.ExternalListSyncCoordinator
 import com.example.myapplication.ui.navigation.AppNavGraph
 import com.example.myapplication.ui.navigation.isDeepLinkReady
-import com.example.myapplication.ui.navigation.isSplashDestination
+import com.example.myapplication.ui.navigation.rememberStartupSplashState
 import com.example.myapplication.ui.navigation.navigateToDetails
 import com.example.myapplication.notifications.ACTION_OPEN_ANIME
 import com.example.myapplication.notifications.EXTRA_OPEN_ANIME_ID
@@ -127,23 +127,24 @@ class MainActivity : ComponentActivity() {
                 }
                 val navController = rememberNavController()
                 val navEntry by navController.currentBackStackEntryAsState()
-                val splashDestId = navEntry?.destination?.id
+                val destinationId = navEntry?.destination?.id
+                val startupSplash = rememberStartupSplashState()
+                val splashVisible = startupSplash.visible
 
-                // Тап по пушу «вышла новая серия» → Details тайтла. Ждём, пока граф
-                // уйдёт со сплэша/логина: раньше push'ить Details некуда.
+                // Тап по пушу «вышла новая серия» → Details тайтла. Ждём, пока уйдёт сплэш
+                // и граф будет не на логине: раньше push'ить Details некуда.
                 val openAnimeId by pendingAnimeId.collectAsStateWithLifecycle()
-                LaunchedEffect(openAnimeId, splashDestId) {
+                LaunchedEffect(openAnimeId, destinationId, splashVisible) {
                     val animeId = openAnimeId ?: return@LaunchedEffect
                     val destination = navEntry?.destination
-                    if (!destination.isDeepLinkReady()) return@LaunchedEffect
+                    if (splashVisible || !destination.isDeepLinkReady()) return@LaunchedEffect
                     pendingAnimeId.value = null
                     navController.navigateToDetails(animeId)
                 }
 
                 var showStartupUpdateOverlay by remember { mutableStateOf(false) }
-                LaunchedEffect(startupOverlayEligible, splashDestId) {
-                    val onSplashScreen = navEntry?.destination.isSplashDestination()
-                    val shouldOffer = startupOverlayEligible && !onSplashScreen
+                LaunchedEffect(startupOverlayEligible, splashVisible) {
+                    val shouldOffer = startupOverlayEligible && !splashVisible
                     if (!startupOverlayEligible) {
                         showStartupUpdateOverlay = false
                     } else if (shouldOffer) {
@@ -181,6 +182,7 @@ class MainActivity : ComponentActivity() {
                     AppNavGraph(
                         navController = navController,
                         settingsViewModel = settingsViewModel,
+                        startupSplash = startupSplash,
                     )
 
                     AnimatedVisibility(

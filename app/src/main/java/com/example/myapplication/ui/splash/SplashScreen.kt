@@ -1,5 +1,6 @@
 package com.example.myapplication.ui.splash
 
+import android.os.SystemClock
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -39,6 +40,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -46,6 +49,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -57,11 +61,15 @@ import com.example.myapplication.ui.shared.theme.LightSurface
 import com.example.myapplication.ui.shared.theme.MotionTokens
 import com.example.myapplication.ui.shared.theme.SnProFamily
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withTimeoutOrNull
 
 private const val HoldBlackMs = 250L
 private const val WaveInMs = 1400
 private const val HoldMinMs = 500L
 private const val WaveOutMs = 700
+/** Дольше экран под сплэшем не ждём: коллекция догрузится уже на виду. */
+private const val ContentReadyTimeoutMs = 1500L
 
 @Composable
 fun VetroSplashScreen(
@@ -78,11 +86,14 @@ fun VetroSplashScreen(
     cloudRestoreSubtitle: String,
     onPickLegacyFolder: () -> Unit,
     onSkipLegacyFolder: () -> Unit,
-    onSplashComplete: (String) -> Unit,
+    onBuildContent: (String) -> Unit,
+    contentReady: () -> Boolean,
+    onSplashComplete: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val waveProgress = remember { Animatable(0f) }
     val exitProgress = remember { Animatable(0f) }
-    var introDone by remember { mutableStateOf(false) }
+    var waveInDone by remember { mutableStateOf(false) }
     var outroStarted by remember { mutableStateOf(false) }
 
     // Intro: black hold → wave in
@@ -92,20 +103,31 @@ fun VetroSplashScreen(
             targetValue = 1f,
             animationSpec = tween(WaveInMs, easing = FastOutSlowInEasing),
         )
-        delay(HoldMinMs)
-        introDone = true
+        waveInDone = true
     }
 
-    // Outro только после intro и Completed (не во время AwaitingLegacyFolder)
-    LaunchedEffect(uiState, introDone) {
+    // Экран под сплэшем строится в неподвижной паузе после волны (первая композиция главной —
+    // сотни мс на телефоне, секунды на слабых устройствах; во время волны она дала бы рывок).
+    // Outro — не раньше HoldMinMs и готовности экрана, и открывает его, а не чёрный фон.
+    // Только после Completed (не во время AwaitingLegacyFolder).
+    LaunchedEffect(uiState, waveInDone) {
         val completed = uiState as? SplashState.Completed ?: return@LaunchedEffect
-        if (!introDone || outroStarted) return@LaunchedEffect
+        if (!waveInDone || outroStarted) return@LaunchedEffect
         outroStarted = true
+        val holdStart = SystemClock.uptimeMillis()
+        onBuildContent(completed.nextRoute)
+        // Два кадра: экран скомпонован и отрисован под сплэшем.
+        withFrameNanos { }
+        withFrameNanos { }
+        withTimeoutOrNull(ContentReadyTimeoutMs) {
+            snapshotFlow { contentReady() }.first { it }
+        }
+        delay((HoldMinMs - (SystemClock.uptimeMillis() - holdStart)).coerceAtLeast(0L))
         exitProgress.animateTo(
             targetValue = 1f,
             animationSpec = tween(WaveOutMs, easing = FastOutSlowInEasing),
         )
-        onSplashComplete(completed.nextRoute)
+        onSplashComplete()
     }
 
     val showMigrationCard = uiState is SplashState.MigratingStorage ||
@@ -133,7 +155,10 @@ fun VetroSplashScreen(
 
 
     Box(
-        modifier = Modifier.fillMaxSize(),
+        modifier = modifier
+            .fillMaxSize()
+            // Пока сплэш на экране, касания не доходят до экрана под ним.
+            .pointerInput(Unit) { awaitPointerEventScope { while (true) awaitPointerEvent() } },
         contentAlignment = Alignment.Center,
     ) {
         SplashWaveBackground(

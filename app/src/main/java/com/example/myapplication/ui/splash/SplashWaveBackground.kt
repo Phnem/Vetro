@@ -1,11 +1,11 @@
 package com.example.myapplication.ui.splash
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.BlendMode
@@ -29,7 +29,7 @@ private val GradientNearBlack = Color(0xFF1A0505)
  * заново на каждом кадре, как раньше.
  *
  * @param progress intro wipe 0→1 (TL→BR reveal)
- * @param exitProgress outro 0→1 (волна уходит дальше + fade в чёрный)
+ * @param exitProgress outro 0→1 (волна уходит дальше и гаснет вместе с подложкой)
  */
 @Composable
 fun SplashWaveBackground(
@@ -40,7 +40,12 @@ fun SplashWaveBackground(
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(Color.Black),
+            // Чёрная подложка гаснет вслед за волной (квадрат — чуть позже градиента): outro
+            // открывает уже построенный экран под сплэшем, а не чёрный кадр.
+            .drawBehind {
+                val exit = exitProgress().coerceIn(0f, 1f)
+                drawRect(Color.Black, alpha = 1f - exit * exit)
+            },
     ) {
         Spacer(
             modifier = Modifier
