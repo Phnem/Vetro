@@ -2,6 +2,9 @@ package com.example.myapplication.network.di
 
 import android.util.Log
 import com.apollographql.apollo.ApolloClient
+import com.apollographql.apollo.network.okHttpClient
+import java.util.concurrent.TimeUnit
+import okhttp3.OkHttpClient
 import com.phnem.vetro.network.BuildConfig
 import com.example.myapplication.network.AniListRemoteDataSource
 import com.example.myapplication.network.AnilibriaRemoteDataSource
@@ -38,7 +41,21 @@ private val rateSearch = named("api_rate_search")
 private val rateBurst = named("api_rate_burst")
 private val rateAnilistGraphql = named("anilist_graphql")
 
+/** Ktor-клиент для ИИ-запросов: ответы с большим промптом идут минутами. */
+val AI_HTTP_CLIENT = named("ai")
+
 val coreNetworkModule = module {
+    /**
+     * Корневой OkHttp — один пул соединений и один диспетчер на всё приложение.
+     *
+     * Раньше каждый клиент (Ktor каталога, Ktor ссылок, Apollo, медиа-движок, синк списков, Coil)
+     * создавал свой OkHttp: свой пул, свои потоки, и запрос к хосту, с которым только что говорил
+     * соседний клиент, заново делал TLS-рукопожатие. Остальные клиенты берут этот через
+     * `newBuilder()` — общий пул и диспетчер, свои таймауты. Таймауты здесь — умолчания OkHttp,
+     * с которыми и жил медиа-движок.
+     */
+    single<OkHttpClient> { OkHttpClient.Builder().build() }
+
     single(rateHeavy) { TokenBucketRateLimiter(maxTokens = 1.0, refillTokensPerSecond = 1.0 / 1.2) }
     single(rateSearch) { TokenBucketRateLimiter(maxTokens = 1.0, refillTokensPerSecond = 1.0 / 0.4) }
     single(rateBurst) { TokenBucketRateLimiter(maxTokens = 1.0, refillTokensPerSecond = 1.0 / 0.3) }
@@ -47,6 +64,7 @@ val coreNetworkModule = module {
 
     single {
         HttpClient(OkHttp) {
+            engine { preconfigured = get<OkHttpClient>() }
             install(HttpCookies) {
                 storage = AcceptAllCookiesStorage()
             }
@@ -56,7 +74,7 @@ val coreNetworkModule = module {
                 })
             }
             install(UserAgent) {
-                agent = "VetroApp/1.0 (https://github.com/2004i/Vetro)"
+                agent = VETRO_USER_AGENT
             }
             // Только в отладочной сборке: в релизе лог каждого запроса — это и работа на каждом
             // вызове, и утечка URL с параметрами в logcat.
@@ -70,6 +88,26 @@ val coreNetworkModule = module {
                     }
                 }
             }
+            // Каталоги и источники отвечают за секунды; раньше здесь стояли 5 минут ради Gemini, и
+            // зависший запрос к каталогу держал экран и воркер столько же. ИИ — в своём клиенте ниже.
+            install(HttpTimeout) {
+                requestTimeoutMillis = 60_000
+                connectTimeoutMillis = 15_000
+                socketTimeoutMillis = 30_000
+            }
+        }
+    }
+    single(AI_HTTP_CLIENT) {
+        HttpClient(OkHttp) {
+            engine { preconfigured = get<OkHttpClient>() }
+            install(ContentNegotiation) {
+                json(Json {
+                    ignoreUnknownKeys = true
+                })
+            }
+            install(UserAgent) {
+                agent = VETRO_USER_AGENT
+            }
             install(HttpTimeout) {
                 // Gemini с большим промптом (блэклист) + structured output — ответ часто >10s; иначе OkHttp: Socket timeout.
                 requestTimeoutMillis = 300_000
@@ -81,12 +119,18 @@ val coreNetworkModule = module {
     single {
         ApolloClient.Builder()
             .serverUrl("https://graphql.anilist.co")
+            .okHttpClient(
+                get<OkHttpClient>().newBuilder()
+                    .connectTimeout(15, TimeUnit.SECONDS)
+                    .readTimeout(30, TimeUnit.SECONDS)
+                    .build(),
+            )
             .addHttpHeader("Accept", "application/json")
             .addHttpHeader("Content-Type", "application/json")
             .build()
     }
     single { ShikimoriRemoteDataSource(get<HttpClient>(), get(rateBurst)) }
-    single { TraceMoeRemoteDataSource(get<HttpClient>()) }
+    single { TraceMoeRemoteDataSource(get<HttpClient>(AI_HTTP_CLIENT)) }
     single { AniListRemoteDataSource(get<ApolloClient>(), get(rateAnilistGraphql)) }
     single { KitsuRemoteDataSource(get<HttpClient>(), get(rateBurst)) }
     single { AnilibriaRemoteDataSource(get<HttpClient>(), get(rateBurst)) }
@@ -102,6 +146,7 @@ val coreNetworkModule = module {
      */
     single(named("weblink")) {
         HttpClient(OkHttp) {
+            engine { preconfigured = get<OkHttpClient>() }
             install(HttpTimeout) {
                 requestTimeoutMillis = 12_000
                 connectTimeoutMillis = 8_000
@@ -137,3 +182,6 @@ val coreNetworkModule = module {
         )
     }
 }
+
+/** Один User-Agent приложения для API-запросов (скрап сайтов и плееров шлёт свои, браузерные). */
+const val VETRO_USER_AGENT = "VetroApp/1.0 (https://github.com/2004i/Vetro)"

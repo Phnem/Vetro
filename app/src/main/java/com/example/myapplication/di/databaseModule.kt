@@ -108,7 +108,8 @@ val databaseModule = module {
             animeRepository = get(),
             addFromApiUseCase = get(),
             shikiRateLimiter = get(named("api_rate_burst")),
-            aniListRemoteDataSource = get()
+            aniListRemoteDataSource = get(),
+            rootHttpClient = get(),
         )
     }
 }

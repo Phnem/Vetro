@@ -63,14 +63,16 @@ class ExternalListSyncCoordinator(
     private val animeRepository: AnimeRepository,
     private val addFromApiUseCase: AddFromApiUseCase,
     private val shikiRateLimiter: TokenBucketRateLimiter,
-    private val aniListRemoteDataSource: AniListRemoteDataSource
+    private val aniListRemoteDataSource: AniListRemoteDataSource,
+    rootHttpClient: OkHttpClient,
 ) {
     private val appContext = context.applicationContext
     private val prefs = appContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     /** Активный импорт/экспорт/синк списка (отмена с оверлея). */
     private var listSyncJob: Job? = null
-    private val http = OkHttpClient.Builder()
+    // Общий пул соединений с остальной сетью, свои таймауты.
+    private val http = rootHttpClient.newBuilder()
         .connectTimeout(30, TimeUnit.SECONDS)
         .readTimeout(30, TimeUnit.SECONDS)
         .writeTimeout(30, TimeUnit.SECONDS)

@@ -1,5 +1,6 @@
 package com.example.myapplication
 
+import coil3.network.okhttp.OkHttpNetworkFetcherFactory
 import android.app.Application
 import coil3.ImageLoader
 import coil3.PlatformContext
@@ -56,6 +57,15 @@ class VetroApplication : Application(), SingletonImageLoader.Factory {
         // Страницы манги идут через свой загрузчик — со своим дисковым кэшем и регион-декодером
         // (см. MangaImageLoader), чтобы глава не вытесняла обложки коллекции.
         return ImageLoader.Builder(context)
+            // Картинки — через корневой OkHttp (общий пул соединений с остальной сетью), а не через
+            // отдельный клиент, который Coil создаёт сам.
+            .components {
+                add(
+                    OkHttpNetworkFetcherFactory(
+                        callFactory = { org.koin.core.context.GlobalContext.get().get<okhttp3.OkHttpClient>() },
+                    ),
+                )
+            }
             .memoryCache {
                 MemoryCache.Builder()
                     .maxSizePercent(context, 0.25)

@@ -54,8 +54,8 @@ val appModule = module {
     single { com.example.myapplication.ui.home.updates.EpisodeNotificationTray() }
     // Одна область корутин уровня процесса (см. AppScope).
     single { com.example.myapplication.AppScope() }
-    single { GeminiStructuredClient(get()) }
-    single { AiLlmEndpoint(get()) }
+    single { GeminiStructuredClient(get(com.example.myapplication.network.di.AI_HTTP_CLIENT)) }
+    single { AiLlmEndpoint(get(com.example.myapplication.network.di.AI_HTTP_CLIENT)) }
     single { AiProviderLatencyProber(get(), get()) }
     single { AiLlmFallbackRouter(get(), get(), get()) }
     single { InspectImageUseCase(get(), get(), get(), get()) }
@@ -199,7 +199,7 @@ val appModule = module {
     }
 
     // Media engine (stream + download)
-    single { okhttp3.OkHttpClient.Builder().build() }
+    // OkHttp медиа-движка — корневой из coreNetworkModule (общий пул соединений).
     single { com.example.myapplication.media.source.AniLibriaSource(client = get()) }
     single { com.example.myapplication.media.source.AnimeGoSource(client = get()) }
     single {
@@ -247,11 +247,13 @@ val appModule = module {
     }
     single(named("webdav")) {
         io.ktor.client.HttpClient(io.ktor.client.engine.okhttp.OkHttp) {
+            engine { preconfigured = get<okhttp3.OkHttpClient>() }
             followRedirects = false
         }
     }
     single(named("personal-media")) {
         io.ktor.client.HttpClient(io.ktor.client.engine.okhttp.OkHttp) {
+            engine { preconfigured = get<okhttp3.OkHttpClient>() }
             followRedirects = false
         }
     }
