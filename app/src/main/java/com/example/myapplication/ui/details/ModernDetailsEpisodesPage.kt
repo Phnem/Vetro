@@ -1,5 +1,6 @@
 package com.example.myapplication.ui.details
 
+import com.example.myapplication.ui.shared.theme.StatusSuccess
 import com.example.myapplication.ui.shared.theme.IosScroll
 import android.widget.Toast
 import androidx.compose.animation.AnimatedContent
@@ -613,7 +614,7 @@ private fun EpisodeRow(
     val watched = progress?.watched == true
     val hasProgress = (progress?.positionMs ?: 0L) > 0L
     val statusColor = when {
-        watched -> Color(0xFF20C997)
+        watched -> StatusSuccess
         hasProgress -> MaterialTheme.colorScheme.primary
         else -> MaterialTheme.colorScheme.onSurfaceVariant
     }
@@ -623,7 +624,7 @@ private fun EpisodeRow(
         else -> if (ru) "Не начато" else "Unwatched"
     }
     val rowShape = RoundedCornerShape(16.dp)
-    val watchedColor = Color(0xFF20C997)
+    val watchedColor = StatusSuccess
     val rowColor = when {
         watched && isDark -> watchedColor.copy(alpha = 0.10f)
         watched -> watchedColor.copy(alpha = 0.07f)
@@ -839,7 +840,7 @@ private fun DownloadAction(
 ) {
     val active = state !is EpisodeActionState.Resolving && state !is EpisodeActionState.Downloading
     val tint = when (state) {
-        is EpisodeActionState.Completed -> Color(0xFF20C997)
+        is EpisodeActionState.Completed -> StatusSuccess
         is EpisodeActionState.Downloaded -> MaterialTheme.colorScheme.error
         is EpisodeActionState.Failed -> MaterialTheme.colorScheme.error
         else -> MaterialTheme.colorScheme.primary

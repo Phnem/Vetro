@@ -180,8 +180,6 @@ fun HomeScreen(
     // Старт «полностью отрисован», когда коллекция на экране: система пишет это время в лог
     // (Fully drawn), и по нему считается холодный старт, а не по первому кадру сплэша.
     ReportDrawnWhen { uiState.isListLoaded }
-    val playerPromoDismissed by viewModel.playerPromoDismissed.collectAsStateWithLifecycle()
-    val playerPromoDeferred by viewModel.playerPromoDeferredThisSession.collectAsStateWithLifecycle()
     val webLinksMap by viewModel.webLinks.collectAsStateWithLifecycle()
     val airingMap by viewModel.airingProgress.collectAsStateWithLifecycle()
     val watchedMap by viewModel.watchedEpisodes.collectAsStateWithLifecycle()
@@ -243,32 +241,6 @@ fun HomeScreen(
         if (list.none { it.id == id }) cardMenuTarget = null
     }
     val scope = rememberCoroutineScope()
-    val playerPromoTarget = remember(list) {
-        val playable = list.filter { it.mediaType == MediaType.ANIME && it.episodes > 0 }
-        (playable.ifEmpty { list.filter { it.episodes > 0 } })
-            .maxWithOrNull(compareBy<Anime> { it.rating }.thenBy { it.episodes })
-    }
-    if (
-        uiState.isListLoaded &&
-        playerPromoTarget != null &&
-        !playerPromoDismissed &&
-        !playerPromoDeferred
-    ) {
-        PlayerPowerPromoDialog(
-            language = currentLanguage,
-            onTry = {
-                val target = playerPromoTarget ?: return@PlayerPowerPromoDialog
-                performHaptic(view, "light")
-                viewModel.dismissPlayerPromoPermanently()
-                navController.navigateToDetails(target.id, openEpisodes = true)
-            },
-            onLater = {
-                performHaptic(view, "light")
-                viewModel.deferPlayerPromoForSession()
-            },
-        )
-    }
-
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
     ) { }

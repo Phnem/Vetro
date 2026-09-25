@@ -7,8 +7,6 @@ import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.stringPreferencesKey
-import androidx.datastore.preferences.core.edit
-import com.example.myapplication.data.local.DevPreferencesKeys
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.myapplication.data.local.AnimeLocalDataSource
@@ -36,7 +34,6 @@ import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
@@ -182,13 +179,6 @@ class HomeViewModel(
             AppLanguagePrefs.from(prefs)
         }
         .stateIn(viewModelScope, SharingStarted.Eagerly, AppLanguage.EN)
-    /** TEMP V3.3.3 promo state. Remove with PlayerPowerPromoDialog after the campaign. */
-    val playerPromoDismissed: StateFlow<Boolean> = settingsDataStore.data
-        .map { prefs -> prefs[DevPreferencesKeys.TEMP_PLAYER_PROMO_V333_DISMISSED] ?: false }
-        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
-    private val _playerPromoDeferredThisSession = MutableStateFlow(false)
-    val playerPromoDeferredThisSession: StateFlow<Boolean> =
-        _playerPromoDeferredThisSession.asStateFlow()
 
     val syncReport = MutableStateFlow(com.example.myapplication.SyncReport())
 
@@ -503,18 +493,6 @@ class HomeViewModel(
         nm.cancel(animeUpdateNotificationId(animeId))
     }
 
-    /** Hides the temporary promo until this app process/session is recreated. */
-    fun deferPlayerPromoForSession() {
-        _playerPromoDeferredThisSession.value = true
-    }
-    /** Permanently dismisses only the temporary V3.3.3 player promo. */
-    fun dismissPlayerPromoPermanently() {
-        viewModelScope.launch {
-            settingsDataStore.edit { prefs ->
-                prefs[DevPreferencesKeys.TEMP_PLAYER_PROMO_V333_DISMISSED] = true
-            }
-        }
-    }
     fun getAnimeById(id: String): Anime? {
         return localDataSource.getAnimeById(id)
     }

@@ -479,8 +479,9 @@ fun GlassBottomNavigation(
                                 imageVector = HeroiconsPlus,
                                 contentDescription = "Add",
                                 tint = dockIconTint,
+                                // 34 dp, как у соседей: плюс был крупнее остальных иконок дока.
                                 modifier = Modifier
-                                    .size(36.dp)
+                                    .size(34.dp)
                                     .sharedElement(
                                         rememberSharedContentState(key = "fab_icon"),
                                         animatedVisibilityScope = animatedVisibilityScope

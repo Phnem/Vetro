@@ -27,9 +27,6 @@ object DevPreferencesKeys {
      */
     val JUTSU_MIRROR_DOMAIN = stringPreferencesKey("jutsu_mirror_domain")
 
-    /** TEMP V3.3.3 promo. Delete this key together with PlayerPowerPromoDialog. */
-    val TEMP_PLAYER_PROMO_V333_DISMISSED = booleanPreferencesKey("temp_player_promo_v333_dismissed")
-
     /**
      * Классический интерфейс: прежний док с жидким стеклом и окна вместо страниц. Отсутствие
      * ключа = ВЫКЛ, то есть по умолчанию работает новый интерфейс — рабочая область со свайпом
@@ -40,10 +37,14 @@ object DevPreferencesKeys {
      */
     val LEGACY_UI = booleanPreferencesKey("dev_legacy_ui")
 
-    /** Ключи трёх прежних флагов — удаляются из настроек один раз, см. [LEGACY_UI]. */
+    /** Ключи удалённых настроек — стираются из файла настроек при старте (см. [LEGACY_UI]). */
     val RETIRED_UI_FLAGS = listOf(
         booleanPreferencesKey("dev_select_dock_navigation"),
         booleanPreferencesKey("dev_glass_capsule_dock"),
         booleanPreferencesKey("dev_staged_sheet_motion"),
+        // v3.3.5: промо V3.3.3, флаг старого медиа-движка и метка дубляжа — код, читавший их, удалён.
+        booleanPreferencesKey("temp_player_promo_v333_dismissed"),
+        booleanPreferencesKey("use_native_media_engine"),
+        booleanPreferencesKey("title_dubbing_ever_enabled"),
     )
 }

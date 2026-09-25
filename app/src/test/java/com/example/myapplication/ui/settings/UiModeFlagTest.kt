@@ -21,6 +21,8 @@ class UiModeFlagTest {
     @Test
     fun retired_keys_never_collide_with_the_new_flag() {
         assertFalse(DevPreferencesKeys.LEGACY_UI in DevPreferencesKeys.RETIRED_UI_FLAGS)
-        assertTrue(DevPreferencesKeys.RETIRED_UI_FLAGS.map { it.name }.toSet().size == 3)
+        // Без повторов: каждый удалённый ключ в списке один раз.
+        val names = DevPreferencesKeys.RETIRED_UI_FLAGS.map { it.name }
+        assertTrue(names.toSet().size == names.size)
     }
 }

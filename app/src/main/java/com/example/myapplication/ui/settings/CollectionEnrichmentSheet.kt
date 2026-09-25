@@ -1,5 +1,7 @@
 package com.example.myapplication.ui.settings
 
+import com.example.myapplication.ui.shared.theme.StatusSuccess
+import com.example.myapplication.ui.shared.theme.BrandOrange
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -53,8 +55,6 @@ import com.example.myapplication.ui.shared.theme.SnProFamily
 import com.example.myapplication.utils.getCollectionEnrichmentStrings
 import kotlinx.coroutines.delay
 
-private val BrandOrange = Color(0xFFE85002)
-private val ConfirmGreen = Color(0xFF34C759)
 
 /**
  * «Обогащение коллекции» — модуль 1 (кнопка «Полное обогащение») и модуль 2 (тумблер
@@ -113,7 +113,7 @@ fun CollectionEnrichmentSheet(
 
         // Модуль 2: фоновое обновление (тумблер).
         EnrichmentModuleRow(
-            icon = { IosIconWell(icon = Icons.Filled.Autorenew, background = ConfirmGreen) },
+            icon = { IosIconWell(icon = Icons.Filled.Autorenew, background = StatusSuccess) },
             title = strings.liveTitle,
             subtitle = strings.liveSubtitle,
             onClick = null,
@@ -225,7 +225,7 @@ fun FullEnrichmentPromptDialog(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(14.dp))
-                            .background(ConfirmGreen)
+                            .background(StatusSuccess)
                             .padding(vertical = 12.dp),
                         horizontalArrangement = Arrangement.Center,
                         verticalAlignment = Alignment.CenterVertically,
