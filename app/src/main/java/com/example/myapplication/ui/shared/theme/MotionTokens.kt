@@ -3,6 +3,7 @@ package com.example.myapplication.ui.shared.theme
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.Easing
 import androidx.compose.animation.core.FiniteAnimationSpec
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.SpringSpec
 import androidx.compose.animation.core.spring
@@ -148,6 +149,22 @@ object MotionTokens {
     const val DurationFastMillis: Int = 160
     const val DurationStandardMillis: Int = 220
     const val DurationEmphasizedMillis: Int = 300
+
+    /** Прозрачность и цвет — короткие кривые (см. длительности выше). */
+    fun <T> tweenFast(): FiniteAnimationSpec<T> = tween(DurationFastMillis)
+    fun <T> tweenStandard(delayMillis: Int = 0): FiniteAnimationSpec<T> =
+        tween(DurationStandardMillis, delayMillis = delayMillis)
+    fun <T> tweenEmphasized(): FiniteAnimationSpec<T> = tween(DurationEmphasizedMillis)
+
+    /** Появление/уход с кривыми спеки [EaseEnter] / [EaseExit]. */
+    fun <T> easeEnter(durationMillis: Int = EaseEnterMillis, delayMillis: Int = 0): FiniteAnimationSpec<T> =
+        tween(durationMillis, delayMillis = delayMillis, easing = EaseEnter)
+    fun <T> easeExit(durationMillis: Int = EaseExitMillis): FiniteAnimationSpec<T> =
+        tween(durationMillis, easing = EaseExit)
+
+    /** Переход, который ведёт палец (свайп «назад»): кривая должна быть линейной. */
+    fun <T> gestureLinear(durationMillis: Int): FiniteAnimationSpec<T> =
+        tween(durationMillis, easing = LinearEasing)
 
     // ---- Типизированные удобные алиасы (частые случаи) -----------------------
 

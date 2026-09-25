@@ -423,7 +423,7 @@ fun IosSegmentedControl(
 
 /**
  * Входная физика попап-диалога (гайдбук §10): «усадка сверху» scale 1.15→1.0 на [MotionTokens.dialogPop],
- * alpha 0→1 tween(200). Оборачивай контент нативного [androidx.compose.ui.window.Dialog].
+ * alpha 0→1 (MotionTokens.tweenStandard). Оборачивай контент нативного [androidx.compose.ui.window.Dialog].
  */
 @Composable
 fun IosDialogAnimatedContent(content: @Composable () -> Unit) {
@@ -431,7 +431,7 @@ fun IosDialogAnimatedContent(content: @Composable () -> Unit) {
     val alpha = remember { Animatable(0f) }
     LaunchedEffect(Unit) {
         launch { scale.animateTo(1f, MotionTokens.dialogPop()) }
-        launch { alpha.animateTo(1f, tween(200)) }
+        launch { alpha.animateTo(1f, MotionTokens.tweenStandard()) }
     }
     Box(
         modifier = Modifier.graphicsLayer {
@@ -638,23 +638,23 @@ private fun IosSelectionCard(
     val selectedBg = option.accent.copy(alpha = if (isDark) 0.22f else 0.14f)
     val cardBg by animateColorAsState(
         targetValue = if (selected) selectedBg else normalBg,
-        animationSpec = if (selected) tween(durationMillis = 220, delayMillis = 50) else tween(160),
+        animationSpec = if (selected) MotionTokens.tweenStandard(delayMillis = 50) else MotionTokens.tweenFast(),
         label = "selectionCardBg",
     )
     val contentColor by animateColorAsState(
         targetValue = if (selected) option.accent else MaterialTheme.colorScheme.onSurface,
-        animationSpec = if (selected) tween(durationMillis = 220, delayMillis = 50) else tween(160),
+        animationSpec = if (selected) MotionTokens.tweenStandard(delayMillis = 50) else MotionTokens.tweenFast(),
         label = "selectionCardContent",
     )
     val subtitleColor by animateColorAsState(
         targetValue = if (selected) option.accent.copy(alpha = 0.85f)
             else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
-        animationSpec = if (selected) tween(durationMillis = 220, delayMillis = 50) else tween(160),
+        animationSpec = if (selected) MotionTokens.tweenStandard(delayMillis = 50) else MotionTokens.tweenFast(),
         label = "selectionCardSubtitle",
     )
     val fill by animateFloatAsState(
         targetValue = if (selected) 1f else 0f,
-        animationSpec = if (selected) tween(durationMillis = 220, delayMillis = 50) else tween(160),
+        animationSpec = if (selected) MotionTokens.tweenStandard(delayMillis = 50) else MotionTokens.tweenFast(),
         label = "selectionRadioFill",
     )
 

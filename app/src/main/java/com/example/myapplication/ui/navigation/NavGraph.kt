@@ -1,6 +1,5 @@
 package com.example.myapplication.ui.navigation
 
-import androidx.compose.animation.core.LinearEasing
 import com.example.myapplication.ui.details.SwipeBackGesture
 import androidx.compose.animation.EnterExitState
 import androidx.compose.animation.ExperimentalSharedTransitionApi
@@ -8,7 +7,6 @@ import androidx.compose.animation.SharedTransitionLayout
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.animation.core.animateDp
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -64,43 +62,39 @@ import org.koin.compose.koinInject
  */
 private fun workspaceModalEnter() =
     fadeIn(
-        animationSpec = tween(
-            durationMillis = MotionTokens.EaseEnterMillis,
-            delayMillis = MotionTokens.WindowContentRevealDelayMillis,
-            easing = MotionTokens.EaseEnter,
-        ),
+        animationSpec = MotionTokens.easeEnter(delayMillis = MotionTokens.WindowContentRevealDelayMillis),
     )
 
 private fun workspaceModalExit() =
-    fadeOut(animationSpec = tween(MotionTokens.EaseExitMillis, easing = MotionTokens.EaseExit))
+    fadeOut(animationSpec = MotionTokens.easeExit())
 
 /**
  * Главная под окном из меню только притухает, без «вдавливания»: гнездо, в которое окно
  * схлопнется, лежит на ней, и масштаб главной сдвинул бы цель посреди полёта.
  */
 private fun homeDimExit() =
-    fadeOut(animationSpec = tween(300, easing = MotionTokens.EaseExit), targetAlpha = 0.55f)
+    fadeOut(animationSpec = MotionTokens.easeExit(MotionTokens.DurationEmphasizedMillis), targetAlpha = 0.55f)
 
 private fun homeDimPopEnter() =
-    fadeIn(animationSpec = tween(220, easing = MotionTokens.EaseEnter), initialAlpha = 0.55f)
+    fadeIn(animationSpec = MotionTokens.easeEnter(MotionTokens.DurationStandardMillis), initialAlpha = 0.55f)
 
 /** «Вдавливание» главной под экраном поверх неё (физика IosSheetScaffold). */
 private fun homeDepressExit() =
     scaleOut(
         targetScale = 0.92f,
         animationSpec = MotionTokens.sheetPresent(),
-    ) + fadeOut(animationSpec = tween(300), targetAlpha = 0.55f)
+    ) + fadeOut(animationSpec = MotionTokens.tweenEmphasized(), targetAlpha = 0.55f)
 
 private fun homeDepressPopEnter() =
     if (SwipeBackGesture.active) {
         // Свайп «назад» по экрану деталей ведёт переход за пальцем — нужна линейная кривая.
-        scaleIn(initialScale = 0.92f, animationSpec = tween(SWIPE_BACK_LINEAR_MS, easing = LinearEasing)) +
-            fadeIn(animationSpec = tween(SWIPE_BACK_LINEAR_MS, easing = LinearEasing), initialAlpha = 0.55f)
+        scaleIn(initialScale = 0.92f, animationSpec = MotionTokens.gestureLinear(SWIPE_BACK_LINEAR_MS)) +
+            fadeIn(animationSpec = MotionTokens.gestureLinear(SWIPE_BACK_LINEAR_MS), initialAlpha = 0.55f)
     } else {
         scaleIn(
             initialScale = 0.92f,
             animationSpec = MotionTokens.sheetDismissForced(),
-        ) + fadeIn(animationSpec = tween(220), initialAlpha = 0.55f)
+        ) + fadeIn(animationSpec = MotionTokens.tweenStandard(), initialAlpha = 0.55f)
     }
 
 /**
@@ -144,7 +138,7 @@ fun AppNavGraph(
             startDestination = if (nextRoute == StartupSplashState.HOME) HomeRoute else WelcomeRoute,
         ) {
             composable<WelcomeRoute>(
-                enterTransition = { fadeIn(animationSpec = tween(300)) },
+                enterTransition = { fadeIn(animationSpec = MotionTokens.tweenEmphasized()) },
             ) {
                 val context = LocalContext.current
                 val scope = rememberCoroutineScope()
@@ -224,7 +218,7 @@ fun AppNavGraph(
             }
 
             composable<HomeRoute>(
-                enterTransition = { fadeIn(animationSpec = tween(300)) },
+                enterTransition = { fadeIn(animationSpec = MotionTokens.tweenEmphasized()) },
                 // «Вдавливание» под деталями (физика IosSheetScaffold): фон уезжает назад
                 // и слегка гаснет, при закрытии деталей — физично возвращается. Predictive
                 // back сикает popEnter — возврат следует за пальцем.
@@ -241,7 +235,7 @@ fun AppNavGraph(
                     } else if (workspaceModal(initialState)) {
                         homeDimPopEnter()
                     } else {
-                        fadeIn(animationSpec = tween(300))
+                        fadeIn(animationSpec = MotionTokens.tweenEmphasized())
                     }
                 },
             ) {
@@ -273,20 +267,20 @@ fun AppNavGraph(
                     slideInHorizontally(
                         initialOffsetX = { it },
                         animationSpec = MotionTokens.sheetOffset,
-                    ) + fadeIn(animationSpec = tween(220))
+                    ) + fadeIn(animationSpec = MotionTokens.tweenStandard())
                 },
                 popExitTransition = {
                     if (SwipeBackGesture.active) {
                         // Окно идёт за пальцем 1:1 — линейно; см. SwipeBackGesture.
                         slideOutHorizontally(
                             targetOffsetX = { it },
-                            animationSpec = tween(SWIPE_BACK_LINEAR_MS, easing = LinearEasing),
-                        ) + fadeOut(animationSpec = tween(SWIPE_BACK_LINEAR_MS, easing = LinearEasing))
+                            animationSpec = MotionTokens.gestureLinear(SWIPE_BACK_LINEAR_MS),
+                        ) + fadeOut(animationSpec = MotionTokens.gestureLinear(SWIPE_BACK_LINEAR_MS))
                     } else {
                         slideOutHorizontally(
                             targetOffsetX = { it },
                             animationSpec = MotionTokens.dismissOffset,
-                        ) + fadeOut(animationSpec = tween(220))
+                        ) + fadeOut(animationSpec = MotionTokens.tweenStandard())
                     }
                 },
             ) { backStackEntry ->
