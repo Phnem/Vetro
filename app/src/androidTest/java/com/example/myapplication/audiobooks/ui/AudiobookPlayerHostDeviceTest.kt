@@ -72,6 +72,7 @@ class AudiobookPlayerHostDeviceTest {
                 throw AssertionError("Missing mini; foreground=${instrumentation.uiAutomation.rootInActiveWindow?.packageName}, " +
                     "controllerItem=${onMain { controller.currentMediaItem?.mediaId }}, ui=${dumpUi()}", error)
             }
+            assertTrue("Hidden full player exposed controls", findNode("Свернуть") == null)
             clickNode("AB10 Sample")
             await(5_000) { findNode("Свернуть") != null }
             clickNode("Пауза")
@@ -101,6 +102,7 @@ class AudiobookPlayerHostDeviceTest {
             await(5_000) { findNode("Свернуть") != null }
             clickNode("Свернуть")
             await(5_000) { findNode("AB10 Sample") != null }
+            assertTrue("Collapsed player exposed full controls", findNode("Свернуть") == null)
             assertTrue(onMain { controller.currentPosition >= 0L })
         } finally {
             onMain { controller.pause() }

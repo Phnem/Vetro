@@ -62,6 +62,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -184,37 +185,36 @@ fun AudiobookPlayerHost(language: AppLanguage = AppLanguage.RU, modifier: Modifi
         val right = (widthPx - cardPx - marginPx).coerceAtLeast(marginPx)
         val bottom = (heightPx - cardPx - dockPx).coerceAtLeast(marginPx)
         val miniOffset = remember(widthPx, heightPx) { Animatable(Offset(right, bottom), Offset.VectorConverter) }
-        if (expansion.value > 0.01f) {
-            FullAudiobookPlayer(
-                book = book,
-                timeline = timeline,
-                position = position,
-                strings = strings,
-                controller = controller!!,
-                onCollapse = { scope.launch { expansion.animateTo(0f, MotionTokens.largeSurfaceExit()) } },
-                onShowChapters = { sheet = PlayerSheet.CHAPTERS },
-                onShowSpeed = { sheet = PlayerSheet.SPEED },
-                onShowTimer = { sheet = PlayerSheet.TIMER },
-                sleepRemainingMs = sleepRemaining.longValue,
-                modifier = Modifier.fillMaxSize().graphicsLayer {
-                    val progress = expansion.value.coerceIn(0f, 1f)
-                    val miniLeft = miniOffset.value.x
-                    val miniTop = miniOffset.value.y
-                    val miniWidth = cardPx
-                    val miniHeight = cardPx
-                    val shellWidth = miniWidth + (size.width - miniWidth) * progress
-                    val shellHeight = miniHeight + (size.height - miniHeight) * progress
-                    transformOrigin = TransformOrigin(0f, 0f)
-                    scaleX = shellWidth / size.width
-                    scaleY = shellHeight / size.height
-                    translationX = miniLeft * (1f - progress)
-                    translationY = miniTop * (1f - progress)
-                    clip = true
-                    shape = RoundedCornerShape((28f * (1f - progress)).dp)
-                    alpha = (progress / 0.32f).coerceIn(0f, 1f)
-                },
-            )
-        }
+        FullAudiobookPlayer(
+            book = book,
+            timeline = timeline,
+            position = position,
+            strings = strings,
+            controller = controller!!,
+            interactive = isFull,
+            onCollapse = { scope.launch { expansion.animateTo(0f, MotionTokens.largeSurfaceExit()) } },
+            onShowChapters = { sheet = PlayerSheet.CHAPTERS },
+            onShowSpeed = { sheet = PlayerSheet.SPEED },
+            onShowTimer = { sheet = PlayerSheet.TIMER },
+            sleepRemainingMs = sleepRemaining.longValue,
+            modifier = Modifier.fillMaxSize().graphicsLayer {
+                val progress = expansion.value.coerceIn(0f, 1f)
+                val miniLeft = miniOffset.value.x
+                val miniTop = miniOffset.value.y
+                val miniWidth = cardPx
+                val miniHeight = cardPx
+                val shellWidth = miniWidth + (size.width - miniWidth) * progress
+                val shellHeight = miniHeight + (size.height - miniHeight) * progress
+                transformOrigin = TransformOrigin(0f, 0f)
+                scaleX = shellWidth / size.width
+                scaleY = shellHeight / size.height
+                translationX = miniLeft * (1f - progress)
+                translationY = miniTop * (1f - progress)
+                clip = true
+                shape = RoundedCornerShape((28f * (1f - progress)).dp)
+                alpha = (progress / 0.32f).coerceIn(0f, 1f)
+            },
+        )
         if (expansion.value < 0.99f) {
             MiniAudiobookPlayer(
                 book = book,
@@ -352,12 +352,14 @@ private fun MiniAudiobookPlayer(
 }
 
 @Composable
+@OptIn(ExperimentalMaterial3Api::class)
 private fun FullAudiobookPlayer(
     book: PlayingBook,
     timeline: BookTimeline?,
     position: State<Long>,
     strings: AudiobookStrings,
     controller: MediaController,
+    interactive: Boolean,
     onCollapse: () -> Unit,
     onShowChapters: () -> Unit,
     onShowSpeed: () -> Unit,
@@ -374,17 +376,23 @@ private fun FullAudiobookPlayer(
     val chapterPosition = if (chapter != null && global != null) (global - chapter.startMs).coerceAtLeast(0L) else positionMs
     var pendingSeek by remember(book.mediaId, chapter?.index) { mutableStateOf<Float?>(null) }
     val progress = pendingSeek ?: if (chapterDuration != null && chapterDuration > 0) (chapterPosition.toFloat() / chapterDuration).coerceIn(0f, 1f) else 0f
+    val sliderColors = SliderDefaults.colors(
+        thumbColor = Color(0xFFFF641F),
+        activeTrackColor = Color(0xFFFF641F),
+        inactiveTrackColor = Color(0xFF4B4E50),
+    )
 
     Box(
         modifier = modifier
             .background(Color(0xFF11141A))
-            .pointerInput(Unit) {
+            .then(if (interactive) Modifier else Modifier.clearAndSetSemantics {})
+            .then(if (interactive) Modifier.pointerInput(Unit) {
                 var dragged = 0f
                 detectVerticalDragGestures(
                     onVerticalDrag = { change, amount -> dragged += amount; change.consume() },
                     onDragEnd = { if (dragged > 110.dp.toPx()) onCollapse(); dragged = 0f },
                 )
-            },
+            } else Modifier),
     ) {
         BookArtwork(book.artworkUri, Modifier.fillMaxSize())
         Box(Modifier.fillMaxSize().background(Brush.verticalGradient(
@@ -395,24 +403,28 @@ private fun FullAudiobookPlayer(
         )))
         Row(Modifier.align(Alignment.TopCenter).fillMaxWidth().padding(horizontal = 22.dp, vertical = 24.dp),
             horizontalArrangement = Arrangement.SpaceBetween) {
-            PlayerButton("←", strings.collapse, onCollapse, 54)
-            PlayerButton("⋮", strings.chapters, onShowChapters, 54)
+            PlayerButton("←", strings.collapse, onCollapse, 54, enabled = interactive)
+            PlayerButton("⋮", strings.chapters, onShowChapters, 54, enabled = interactive)
         }
         Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(horizontal = 26.dp).padding(bottom = 24.dp),
-            verticalArrangement = Arrangement.spacedBy(13.dp)) {
+            verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(book.title, color = Color.White, fontSize = 32.sp, lineHeight = 35.sp,
                 fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
             Text(book.author.ifBlank { book.narrator }, color = Color.White.copy(alpha = 0.72f),
                 fontSize = 20.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(chapter?.title ?: book.chapterTitle, color = Color.White.copy(alpha = 0.74f),
-                fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Slider(
                 value = progress,
-                colors = SliderDefaults.colors(
-                    thumbColor = Color(0xFFFF641F),
-                    activeTrackColor = Color(0xFFFF641F),
-                    inactiveTrackColor = Color(0xFF4B4E50),
-                ),
+                enabled = interactive,
+                colors = sliderColors,
+                thumb = { Box(Modifier.size(16.dp).background(Color(0xFFFF641F), CircleShape)) },
+                track = { state ->
+                    SliderDefaults.Track(
+                        sliderState = state,
+                        colors = sliderColors,
+                        drawStopIndicator = null,
+                        thumbTrackGapSize = 0.dp,
+                    )
+                },
                 onValueChange = { pendingSeek = it },
                 onValueChangeFinished = {
                     val target = (chapterDuration ?: book.durationMs)?.let { duration ->
@@ -431,20 +443,29 @@ private fun FullAudiobookPlayer(
                 Text(chapterDuration?.let(::formatTime) ?: "—",
                     color = Color.White.copy(alpha = 0.76f), fontSize = 13.sp)
             }
-            Text(global?.let { timeline?.progress(it) }?.let { "${(it * 100).toInt()}% ${strings.bookProgress}" }.orEmpty(),
-                color = Color.White.copy(alpha = 0.52f), fontSize = 11.sp)
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Text(chapter?.title ?: book.chapterTitle,
+                    modifier = Modifier.weight(1f),
+                    color = Color.White.copy(alpha = 0.74f), fontSize = 12.sp,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis)
+                val bookProgress = global?.let { timeline?.progress(it) }
+                if (bookProgress != null) {
+                    Text("${(bookProgress * 100).toInt()}% ${strings.bookProgress}",
+                        color = Color.White.copy(alpha = 0.52f), fontSize = 11.sp)
+                }
+            }
             Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), horizontalArrangement = Arrangement.SpaceEvenly,
                 verticalAlignment = Alignment.CenterVertically) {
-                PlayerButton("↶\n15", "−15", { controller.seekBack() }, 72)
+                PlayerButton("↶\n15", "−15", { controller.seekBack() }, 72, enabled = interactive)
                 PlayerButton(if (book.isPlaying) "Ⅱ" else "▶", if (book.isPlaying) strings.pause else strings.play,
-                    { if (book.isPlaying) controller.pause() else controller.play() }, 90)
-                PlayerButton("↷\n30", "+30", { controller.seekForward() }, 72)
+                    { if (book.isPlaying) controller.pause() else controller.play() }, 90, enabled = interactive)
+                PlayerButton("↷\n30", "+30", { controller.seekForward() }, 72, enabled = interactive)
             }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-                PlayerTile("${book.speed}×", strings.playbackSpeed, Modifier.weight(1f), onShowSpeed)
-                PlayerTile("≡", strings.chapters, Modifier.weight(1f), onShowChapters)
+                PlayerTile("${book.speed}×", strings.playbackSpeed, Modifier.weight(1f), onShowSpeed, enabled = interactive)
+                PlayerTile("≡", strings.chapters, Modifier.weight(1f), onShowChapters, enabled = interactive)
                 PlayerTile("◴", if (sleepRemainingMs >= 0) formatTime(sleepRemainingMs) else strings.sleepTimerShort,
-                    Modifier.weight(1f), onShowTimer)
+                    Modifier.weight(1f), onShowTimer, enabled = interactive)
                 PlayerTile("♫", "Озвучка", Modifier.weight(1f))
             }
         }
@@ -461,10 +482,11 @@ private fun BookArtwork(uri: String?, modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun PlayerTile(symbol: String, label: String, modifier: Modifier = Modifier, onClick: (() -> Unit)? = null) {
+private fun PlayerTile(symbol: String, label: String, modifier: Modifier = Modifier, onClick: (() -> Unit)? = null,
+    enabled: Boolean = true) {
     Column(modifier.height(76.dp).clip(RoundedCornerShape(22.dp))
         .background(Color(0xFF25282C).copy(alpha = if (onClick == null) 0.56f else 0.82f))
-        .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
+        .then(if (onClick != null) Modifier.clickable(enabled = enabled, onClick = onClick) else Modifier)
         .padding(vertical = 8.dp), horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.SpaceBetween) {
         Text(symbol, color = if (label == "Скорость") Color(0xFFFF641F) else Color.White,
@@ -474,10 +496,11 @@ private fun PlayerTile(symbol: String, label: String, modifier: Modifier = Modif
 }
 
 @Composable
-private fun PlayerButton(label: String, description: String, onClick: () -> Unit, size: Int = 48) {
+private fun PlayerButton(label: String, description: String, onClick: () -> Unit, size: Int = 48,
+    enabled: Boolean = true) {
     Box(
         Modifier.size(size.dp).clip(CircleShape).background(Color(0xD623272B))
-            .clickable(onClick = onClick).semantics { contentDescription = description },
+            .clickable(enabled = enabled, onClick = onClick).semantics { contentDescription = description },
         contentAlignment = Alignment.Center,
     ) {
         Text(label, color = Color.White, fontWeight = FontWeight.SemiBold)

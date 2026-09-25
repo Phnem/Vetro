@@ -6,7 +6,7 @@ Current workflow state: IMPLEMENTING_TICKET
 Current ticket: AB-10
 Last completed ticket: AB-09 (DONE_WITH_DEVIATIONS: SAF catalog and Xiaomi playback pass)
 Next eligible ticket: AB-10
-Last updated: 2026-09-24 (AB-09 Local Folder verified; player UI next)
+Last updated: 2026-09-25 (AB-10 visual revision and Xiaomi frame profiling; frame gate still open)
 
 ## Цель
 
