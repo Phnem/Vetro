@@ -327,6 +327,7 @@ class AnimeHeavenSource(
                         "Accept" to "video/webm,video/mp4,video/*;q=0.9,*/*;q=0.8",
                     ),
                     isPreferred = index == 0,
+                    downloadAllowed = true,
                 )
             }
     }.onFailure { Log.w(TAG, "gate.php: ${it.message}") }.getOrElse { emptyList() }

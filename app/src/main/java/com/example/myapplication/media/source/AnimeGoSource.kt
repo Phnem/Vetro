@@ -115,6 +115,7 @@ class AnimeGoSource(
                 "User-Agent" to DEFAULT_UA,
             ),
             isPreferred = true,
+            downloadAllowed = true,
         )
         listOf(
             VetroHoster(

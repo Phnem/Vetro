@@ -147,6 +147,7 @@ class CvhResolver(
             )
         ),
         isPreferred = preferred,
+        downloadAllowed = true,
     )
 
     companion object {
