@@ -35,6 +35,10 @@ data class AudiobookStrings(
     val sourceUnavailable: String,
     val restrictedByRightsHolder: String,
     val chooseNarration: String,
+    val moveMiniTopLeft: String,
+    val moveMiniTopRight: String,
+    val moveMiniBottomLeft: String,
+    val moveMiniBottomRight: String,
 )
 
 private val russianAudiobookStrings = AudiobookStrings(
@@ -69,6 +73,10 @@ private val russianAudiobookStrings = AudiobookStrings(
     sourceUnavailable = "Источник недоступен",
     restrictedByRightsHolder = "Недоступно по просьбе правообладателя",
     chooseNarration = "Выбрать озвучку",
+    moveMiniTopLeft = "Переместить плеер в левый верхний угол",
+    moveMiniTopRight = "Переместить плеер в правый верхний угол",
+    moveMiniBottomLeft = "Переместить плеер в левый нижний угол",
+    moveMiniBottomRight = "Переместить плеер в правый нижний угол",
 )
 
 private val englishAudiobookStrings = AudiobookStrings(
@@ -103,6 +111,10 @@ private val englishAudiobookStrings = AudiobookStrings(
     sourceUnavailable = "Source unavailable",
     restrictedByRightsHolder = "Unavailable at the rights holder’s request",
     chooseNarration = "Choose narration",
+    moveMiniTopLeft = "Move player to top left",
+    moveMiniTopRight = "Move player to top right",
+    moveMiniBottomLeft = "Move player to bottom left",
+    moveMiniBottomRight = "Move player to bottom right",
 )
 
 fun getAudiobookStrings(language: AppLanguage): AudiobookStrings = when (language) {

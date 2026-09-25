@@ -63,6 +63,8 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -185,6 +187,10 @@ fun AudiobookPlayerHost(language: AppLanguage = AppLanguage.RU, modifier: Modifi
         val right = (widthPx - cardPx - marginPx).coerceAtLeast(marginPx)
         val bottom = (heightPx - cardPx - dockPx).coerceAtLeast(marginPx)
         val miniOffset = remember(widthPx, heightPx) { Animatable(Offset(right, bottom), Offset.VectorConverter) }
+        fun snapMiniToCorner(leftSide: Boolean, topSide: Boolean) {
+            val target = Offset(if (leftSide) marginPx else right, if (topSide) top else bottom)
+            scope.launch { miniOffset.animateTo(target, MotionTokens.largeSurfaceEnter()) }
+        }
         FullAudiobookPlayer(
             book = book,
             timeline = timeline,
@@ -234,12 +240,12 @@ fun AudiobookPlayerHost(language: AppLanguage = AppLanguage.RU, modifier: Modifi
                     }
                 },
                 onDragEnd = {
-                    val target = Offset(
-                        if (miniOffset.value.x + cardPx / 2 < widthPx / 2) marginPx else right,
-                        if (miniOffset.value.y + cardPx / 2 < heightPx / 2) top else bottom,
+                    snapMiniToCorner(
+                        leftSide = miniOffset.value.x + cardPx / 2 < widthPx / 2,
+                        topSide = miniOffset.value.y + cardPx / 2 < heightPx / 2,
                     )
-                    scope.launch { miniOffset.animateTo(target, MotionTokens.largeSurfaceEnter()) }
                 },
+                onMoveToCorner = ::snapMiniToCorner,
                 modifier = Modifier
                     .offset { IntOffset(miniOffset.value.x.toInt(), miniOffset.value.y.toInt()) }
                     .graphicsLayer { alpha = (1f - expansion.value / 0.7f).coerceIn(0f, 1f) },
@@ -306,6 +312,7 @@ private fun MiniAudiobookPlayer(
     onForward: () -> Unit,
     onDrag: (Offset) -> Unit,
     onDragEnd: () -> Unit,
+    onMoveToCorner: (Boolean, Boolean) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val ref = TrackUriCodec.decode(book.uri)
@@ -325,6 +332,14 @@ private fun MiniAudiobookPlayer(
                 detectDragGestures(
                     onDragEnd = onDragEnd,
                     onDrag = { change, amount -> change.consume(); onDrag(amount) },
+                )
+            }
+            .semantics {
+                customActions = listOf(
+                    CustomAccessibilityAction(strings.moveMiniTopLeft) { onMoveToCorner(true, true); true },
+                    CustomAccessibilityAction(strings.moveMiniTopRight) { onMoveToCorner(false, true); true },
+                    CustomAccessibilityAction(strings.moveMiniBottomLeft) { onMoveToCorner(true, false); true },
+                    CustomAccessibilityAction(strings.moveMiniBottomRight) { onMoveToCorner(false, false); true },
                 )
             },
     ) {

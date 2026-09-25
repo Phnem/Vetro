@@ -3,6 +3,7 @@ package com.example.myapplication.audiobooks.ui
 import android.content.ComponentName
 import android.content.Intent
 import android.graphics.Bitmap
+import android.graphics.Rect
 import android.net.Uri
 import android.os.SystemClock
 import android.view.accessibility.AccessibilityNodeInfo
@@ -73,6 +74,10 @@ class AudiobookPlayerHostDeviceTest {
                     "controllerItem=${onMain { controller.currentMediaItem?.mediaId }}, ui=${dumpUi()}", error)
             }
             assertTrue("Hidden full player exposed controls", findNode("Свернуть") == null)
+            moveMini("левый верхний угол")
+            await(5_000) { miniBounds()?.let { it.left < 100 && it.top < 300 } == true }
+            moveMini("правый нижний угол")
+            await(5_000) { miniBounds()?.let { it.left > 500 && it.top > 1_500 } == true }
             clickNode("AB10 Sample")
             await(5_000) { findNode("Свернуть") != null }
             clickNode("Пауза")
@@ -134,6 +139,18 @@ class AudiobookPlayerHostDeviceTest {
         while (clickable != null && !clickable.isClickable) clickable = clickable.parent
         assertTrue("Could not click $label", clickable?.performAction(AccessibilityNodeInfo.ACTION_CLICK) == true)
     }
+
+    private fun moveMini(label: String) {
+        val node = generateSequence(findNode("AB10 Sample")) { it.parent }
+            .firstOrNull { parent -> parent.actionList.any { it.label?.contains(label) == true } }
+            ?: throw AssertionError("Mini player accessibility action missing: $label")
+        val action = node.actionList.first { it.label?.contains(label) == true }
+        assertTrue("Could not move mini player: $label", node.performAction(action.id))
+    }
+
+    private fun miniBounds(): Rect? = generateSequence(findNode("AB10 Sample")) { it.parent }
+        .firstOrNull { parent -> parent.actionList.any { it.label?.contains("угол") == true } }
+        ?.let { node -> Rect().also(node::getBoundsInScreen) }
 
     private fun findNode(label: String): AccessibilityNodeInfo? {
         fun visit(node: AccessibilityNodeInfo?): AccessibilityNodeInfo? {
