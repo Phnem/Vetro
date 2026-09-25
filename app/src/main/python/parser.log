@@ -1,4 +1,0 @@
-2026-07-23 18:20:48,880 [INFO] __main__: Started processing task test-123 for anime bleach-1
-2026-07-23 18:20:48,880 [INFO] extractors.base: [AnilibriaMock] Attempting to extract data...
-2026-07-23 18:20:48,880 [INFO] extractors.base: [AnilibriaMock] Extraction successful. Found 3 episodes.
-2026-07-23 18:20:48,882 [INFO] __main__: Successfully wrote output to output.json
