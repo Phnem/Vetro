@@ -4,12 +4,16 @@ import com.example.myapplication.network.AppStoreJson
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.Dispatchers
 import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.MutablePreferences
 import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.emitAll
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.sync.Mutex
@@ -52,21 +56,70 @@ private data class PlaybackProgressSnapshot(
 )
 
 /**
- * Per-title playback preferences backed by the existing settings DataStore.
+ * Per-title playback preferences in their own DataStore (`playback_prefs`).
  *
  * Progress is stored as one compact JSON snapshot per title so the episode menu can observe every
  * row with a single Flow. Preferred resolution is a separate integer preference and is also scoped
  * to the title.
+ *
+ * Раньше всё это лежало в общем `settings_prefs`: каждое сохранение позиции переписывало файл со
+ * всеми настройками и будило всех подписчиков настроек. Ключи переезжают из [legacySettings] один
+ * раз, при первом обращении (см. [ensureMigrated]).
  */
 class EpisodePlaybackStore(
-    private val dataStore: DataStore<Preferences>,
+    private val store: DataStore<Preferences>,
+    private val legacySettings: DataStore<Preferences>? = null,
 ) {
     private val json = AppStoreJson
     private val writeMutex = Mutex()
+    private val migrationMutex = Mutex()
+
+    @Volatile
+    private var migrated = legacySettings == null
+
+    /** Данные хранилища — после переезда ключей из настроек. */
+    private val data: Flow<Preferences> = flow {
+        ensureMigrated()
+        emitAll(store.data)
+    }
+
+    private suspend fun edit(transform: suspend (MutablePreferences) -> Unit) {
+        ensureMigrated()
+        store.edit(transform)
+    }
+
+    /**
+     * Переносит `episode_progress_*` и `episode_quality_*` из настроек. Сначала запись в новое
+     * хранилище вместе с отметкой, потом удаление из старого: обрыв между шагами оставит в
+     * настройках только мусор, но не потеряет прогресс.
+     */
+    private suspend fun ensureMigrated() {
+        if (migrated) return
+        migrationMutex.withLock {
+            if (migrated) return
+            val legacy = legacySettings ?: return
+            if (store.data.first()[MIGRATED_KEY] != true) {
+                val moved = legacy.data.first().asMap().filterKeys { key ->
+                    key.name.startsWith(PROGRESS_PREFIX) || key.name.startsWith(QUALITY_PREFIX)
+                }
+                store.edit { preferences ->
+                    for ((key, value) in moved) {
+                        @Suppress("UNCHECKED_CAST")
+                        preferences[key as Preferences.Key<Any>] = value
+                    }
+                    preferences[MIGRATED_KEY] = true
+                }
+                if (moved.isNotEmpty()) {
+                    legacy.edit { preferences -> moved.keys.forEach { preferences.remove(it) } }
+                }
+            }
+            migrated = true
+        }
+    }
 
     fun progressFlow(animeId: String): Flow<Map<PlaybackEpisodeKey, EpisodePlaybackProgress>> {
         val key = progressKey(animeId)
-        return dataStore.data.map { preferences ->
+        return data.map { preferences ->
             decode(preferences[key])
         }.distinctUntilChanged()
             // Разбор JSON — не на главном потоке: подписчики сидят в композиции и VM.
@@ -100,7 +153,7 @@ class EpisodePlaybackStore(
         )
         val preferenceKey = progressKey(animeId)
         writeMutex.withLock {
-            dataStore.edit { preferences ->
+            edit { preferences ->
                 val current = decode(preferences[preferenceKey]).toMutableMap()
                 current[target] = normalized
                 preferences[preferenceKey] = encode(current)
@@ -122,7 +175,7 @@ class EpisodePlaybackStore(
      */
     fun furthestEpisodeFlow(animeIds: List<String>): Flow<Map<String, PlaybackEpisodeKey>> {
         val keys = animeIds.associateWith { progressKey(it) }
-        return dataStore.data.map { preferences ->
+        return data.map { preferences ->
             buildMap {
                 for ((animeId, key) in keys) {
                     val furthest = decode(preferences[key])
@@ -146,7 +199,7 @@ class EpisodePlaybackStore(
      */
     suspend fun snapshotAll(animeIds: List<String>): Map<String, Map<PlaybackEpisodeKey, EpisodePlaybackProgress>> {
         if (animeIds.isEmpty()) return emptyMap()
-        val preferences = dataStore.data.first()
+        val preferences = data.first()
         return buildMap {
             for (animeId in animeIds) {
                 val progress = decode(preferences[progressKey(animeId)])
@@ -165,7 +218,7 @@ class EpisodePlaybackStore(
         if (remote.isEmpty()) return 0
         var applied = 0
         writeMutex.withLock {
-            dataStore.edit { preferences ->
+            edit { preferences ->
                 for ((animeId, incoming) in remote) {
                     val preferenceKey = progressKey(animeId)
                     val current = decode(preferences[preferenceKey]).toMutableMap()
@@ -186,14 +239,14 @@ class EpisodePlaybackStore(
 
     fun preferredQualityFlow(animeId: String): Flow<Int?> {
         val key = qualityKey(animeId)
-        return dataStore.data
+        return data
             .map { it[key]?.takeIf { value -> value > 0 } }
             .distinctUntilChanged()
     }
 
     suspend fun savePreferredQuality(animeId: String, resolution: Int) {
         if (resolution <= 0) return
-        dataStore.edit { it[qualityKey(animeId)] = resolution }
+        edit { it[qualityKey(animeId)] = resolution }
     }
 
     private fun decode(raw: String?): Map<PlaybackEpisodeKey, EpisodePlaybackProgress> {
@@ -217,13 +270,16 @@ class EpisodePlaybackStore(
     private companion object {
         /** Меньше минуты в серии — это не просмотр, а проба источника. */
         const val MEANINGFUL_WATCH_MS = 60_000L
+        const val PROGRESS_PREFIX = "episode_progress_"
+        const val QUALITY_PREFIX = "episode_quality_"
+        val MIGRATED_KEY = booleanPreferencesKey("migrated_from_settings_v1")
     }
 
     private fun progressKey(animeId: String) =
-        stringPreferencesKey("episode_progress_${stableSuffix(animeId)}")
+        stringPreferencesKey("$PROGRESS_PREFIX${stableSuffix(animeId)}")
 
     private fun qualityKey(animeId: String) =
-        intPreferencesKey("episode_quality_${stableSuffix(animeId)}")
+        intPreferencesKey("$QUALITY_PREFIX${stableSuffix(animeId)}")
 
     private fun stableSuffix(value: String): String =
         MessageDigest.getInstance("SHA-256")

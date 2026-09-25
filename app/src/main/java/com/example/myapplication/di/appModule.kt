@@ -339,7 +339,12 @@ val appModule = module {
     }
     single { com.example.myapplication.media.download.SeasonBatchDownloader(get()) }
     single { com.example.myapplication.media.metadata.EpisodeArtworkRepository(get()) }
-    single { com.example.myapplication.media.progress.EpisodePlaybackStore(get(named("settings"))) }
+    single {
+        com.example.myapplication.media.progress.EpisodePlaybackStore(
+            store = get(named("playback")),
+            legacySettings = get(named("settings")),
+        )
+    }
     single {
         CollectionEnrichmentCoordinator(
             context = androidContext(),

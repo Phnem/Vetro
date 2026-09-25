@@ -30,6 +30,8 @@ import org.koin.dsl.module
 
 private val Context.migrationDataStore: DataStore<Preferences> by preferencesDataStore(name = "migration_prefs")
 private val Context.settingsDataStore: DataStore<Preferences> by preferencesDataStore(name = "settings_prefs")
+/** Прогресс и качество серий — отдельно от настроек (см. EpisodePlaybackStore). */
+private val Context.playbackDataStore: DataStore<Preferences> by preferencesDataStore(name = "playback_prefs")
 
 val databaseModule = module {
     single { VetroStoragePaths(androidContext()) }
@@ -59,6 +61,9 @@ val databaseModule = module {
     }
     single<DataStore<Preferences>>(named("settings")) {
         androidContext().settingsDataStore
+    }
+    single<DataStore<Preferences>>(named("playback")) {
+        androidContext().playbackDataStore
     }
     single {
         LegacyStorageMigrator(
