@@ -39,6 +39,16 @@ import org.koin.dsl.module
 private val rateHeavy = named("api_rate_heavy")
 private val rateSearch = named("api_rate_search")
 private val rateBurst = named("api_rate_burst")
+private val rateKitsu = named("rate_kitsu")
+private val rateAnilibria = named("rate_anilibria")
+
+/**
+ * Лимитер на хост, а не на всех сразу: раньше Shikimori, Kitsu, Anilibria и MangaDex делили один
+ * `api_rate_burst` и тормозили друг друга, а у Shikimori и MangaDex были ещё вторые лимитеры
+ * (синк списков, главы манги) — вместе они превышали лимит хоста.
+ */
+val RATE_SHIKIMORI = named("rate_shikimori")
+val RATE_MANGADEX = named("rate_mangadex")
 private val rateAnilistGraphql = named("anilist_graphql")
 
 /** Ktor-клиент для ИИ-запросов: ответы с большим промптом идут минутами. */
@@ -60,6 +70,12 @@ val coreNetworkModule = module {
     single(rateSearch) { TokenBucketRateLimiter(maxTokens = 1.0, refillTokensPerSecond = 1.0 / 0.4) }
     single(rateBurst) { TokenBucketRateLimiter(maxTokens = 1.0, refillTokensPerSecond = 1.0 / 0.3) }
     /** AniList GraphQL: ~90 запросов в минуту (усреднённо). */
+    // Shikimori: 5 запросов/с и 90/мин — всплеск до 5, в среднем 1,5/с.
+    single(RATE_SHIKIMORI) { TokenBucketRateLimiter(maxTokens = 5.0, refillTokensPerSecond = 1.5) }
+    // MangaDex: 5 запросов/с на IP — каталог и главы вместе держим ниже потолка.
+    single(RATE_MANGADEX) { TokenBucketRateLimiter(maxTokens = 4.0, refillTokensPerSecond = 4.0) }
+    single(rateKitsu) { TokenBucketRateLimiter(maxTokens = 1.0, refillTokensPerSecond = 1.0 / 0.3) }
+    single(rateAnilibria) { TokenBucketRateLimiter(maxTokens = 1.0, refillTokensPerSecond = 1.0 / 0.3) }
     single(rateAnilistGraphql) { TokenBucketRateLimiter(maxTokens = 90.0, refillTokensPerSecond = 90.0 / 60.0) }
 
     single {
@@ -129,13 +145,13 @@ val coreNetworkModule = module {
             .addHttpHeader("Content-Type", "application/json")
             .build()
     }
-    single { ShikimoriRemoteDataSource(get<HttpClient>(), get(rateBurst)) }
+    single { ShikimoriRemoteDataSource(get<HttpClient>(), get(RATE_SHIKIMORI)) }
     single { TraceMoeRemoteDataSource(get<HttpClient>(AI_HTTP_CLIENT)) }
     single { AniListRemoteDataSource(get<ApolloClient>(), get(rateAnilistGraphql)) }
-    single { KitsuRemoteDataSource(get<HttpClient>(), get(rateBurst)) }
-    single { AnilibriaRemoteDataSource(get<HttpClient>(), get(rateBurst)) }
+    single { KitsuRemoteDataSource(get<HttpClient>(), get(rateKitsu)) }
+    single { AnilibriaRemoteDataSource(get<HttpClient>(), get(rateAnilibria)) }
     single { RemangaRemoteDataSource(get<HttpClient>()) }
-    single { MangaDexRemoteDataSource(get<HttpClient>(), get(rateBurst)) }
+    single { MangaDexRemoteDataSource(get<HttpClient>(), get(RATE_MANGADEX)) }
     single { TmdbRemoteDataSource(get<HttpClient>()) }
     single { KinopoiskRemoteDataSource(get<HttpClient>()) }
     single { MovieSeriesRepository(get<TmdbRemoteDataSource>(), get<KinopoiskRemoteDataSource>()) }

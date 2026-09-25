@@ -141,13 +141,6 @@ val appModule = module {
             pageResolver = get(),
         )
     }
-    single(named("manga_rate")) {
-        // MangaDex: 5 req/s на IP; держимся вдвое ниже потолка — главы всё равно грузим пачками.
-        com.example.myapplication.network.TokenBucketRateLimiter(
-            maxTokens = 2.0,
-            refillTokensPerSecond = 2.0,
-        )
-    }
     single(named("remanga_rate")) {
         // Remanga лимиты не публикует: оглавление грузится страницами по 100, идём спокойно.
         com.example.myapplication.network.TokenBucketRateLimiter(
@@ -158,7 +151,8 @@ val appModule = module {
     single {
         com.example.myapplication.manga.source.MangaDexSource(
             client = get(),
-            rateLimiter = get(named("manga_rate")),
+            // Тот же лимитер, что у каталога MangaDex в core: хост один.
+            rateLimiter = get(com.example.myapplication.network.di.RATE_MANGADEX),
         )
     }
     single {
