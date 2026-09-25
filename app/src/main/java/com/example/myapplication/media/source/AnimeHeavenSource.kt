@@ -28,12 +28,18 @@ import java.net.URLEncoder
  */
 class AnimeHeavenSource(
     client: HttpClient,
+    /**
+     * Названия ВСЕХ сезонов тайтла из расклада (animeId → названия). Нужны, чтобы короткое
+     * название первого сезона («Food Wars!») не забрало запись продолжения («Food Wars! The Third
+     * Plate»): по словам оно её подмножество, но точнее её описывает название 3-го сезона.
+     */
+    private val seasonTitles: suspend (animeId: String) -> List<String> = { emptyList() },
 ) : VetroHttpSource(client) {
 
     override val name: String = "AnimeHeaven"
     override val baseUrl: String = "https://animeheaven.me"
 
-    private data class Entry(val id: String, val title: String)
+    internal data class Entry(val id: String, val title: String)
 
     private data class Candidate(
         val entry: Entry,
@@ -70,9 +76,16 @@ class AnimeHeavenSource(
             return emptyList()
         }
 
+        val seasonTitle = seasonInfo?.title?.takeIf { it.isNotBlank() && it.hasLatin() }
+        val siblings = if (seasonTitle == null) {
+            emptyList()
+        } else {
+            runCatching { seasonTitles(anime.id) }.getOrElse { emptyList() }
+                .filter { it.isNotBlank() && !it.equals(seasonTitle, ignoreCase = true) }
+        }
         val cacheKey = "${titles.joinToString("|") { it.lowercase() }}#$targetSeason"
         val entry = entryCache.fresh(cacheKey)
-            ?: findEntry(titles, targetSeason)?.also { entryCache[cacheKey] = Cached(it) }
+            ?: findEntry(titles, targetSeason, seasonTitle, siblings)?.also { entryCache[cacheKey] = Cached(it) }
             ?: return emptyList()
 
         val episodes = episodeCache.fresh(entry.id)
@@ -130,7 +143,52 @@ class AnimeHeavenSource(
     // Search → title entry of the requested season
     // ==========================================================
 
-    private suspend fun findEntry(titles: List<String>, targetSeason: Int): Entry? {
+    /**
+     * Запись сайта, названная так же, как сезон в каталоге. Сначала точность с маркером сезона
+     * (raw): «X: Stardust Crusaders» против «X: Stardust Crusaders – Battle in Egypt» различаются
+     * именно ею, а по базовому названию TitleMatcher считает продолжение тем же тайтлом.
+     */
+    internal fun pickForSeasonTitle(
+        seasonTitle: String,
+        entries: List<Entry>,
+        siblingTitles: List<String> = emptyList(),
+    ): Entry? {
+        // Маркер части/сезона обязан совпасть: «STONE OCEAN» (1-я часть) и «Stone Ocean – Part
+        // III» по словам — подмножество, но серии у них разные.
+        val wantedSeason = seasonOf(seasonTitle)
+        return entries.map { entry ->
+            Candidate(
+                entry = entry,
+                score = TitleMatcher.bestScore(baseTitle(seasonTitle), listOf(baseTitle(entry.title))),
+                rawScore = TitleMatcher.bestScore(seasonTitle, listOf(entry.title)),
+                season = seasonOf(entry.title),
+            )
+        }
+            .filter { it.score >= TITLE_MATCH_THRESHOLD && it.season == wantedSeason }
+            // Запись, которую точнее описывает название ДРУГОГО сезона, принадлежит ему.
+            .filter { candidate ->
+                siblingTitles.none { sibling ->
+                    TitleMatcher.bestScore(sibling, listOf(candidate.entry.title)) > candidate.rawScore
+                }
+            }
+            .maxWithOrNull(
+                compareBy<Candidate>(
+                    { it.rawScore },
+                    { it.score },
+                    // Подмножество слов TitleMatcher оценивает ровно 0.92 — при равенстве ближе
+                    // та запись, чья длина ближе к названию сезона.
+                    { -kotlin.math.abs(it.entry.title.length - seasonTitle.length) },
+                ),
+            )
+            ?.entry
+    }
+
+    private suspend fun findEntry(
+        titles: List<String>,
+        targetSeason: Int,
+        seasonTitle: String? = null,
+        siblingTitles: List<String> = emptyList(),
+    ): Entry? {
         // Searching the season-less title returns the whole franchise in one page, which is what the
         // season picking below needs; the raw title is a fallback for entries named only by season.
         val queries = titles.flatMap { listOf(baseTitle(it), it) }
@@ -145,6 +203,19 @@ class AnimeHeavenSource(
         }
         if (found.isEmpty()) {
             Log.i(TAG, "search miss for ${queries.firstOrNull()}")
+            return null
+        }
+
+        // Каталог дал сезону собственное название — ищем запись сайта по нему одному. Название
+        // записи коллекции (titleEn) описывает запись целиком и может называть ДРУГОЙ сезон:
+        // у «Джо-Джо» это STONE OCEAN, и первый сезон резолвился в «Stone Ocean – Part III».
+        if (seasonTitle != null) {
+            val picked = pickForSeasonTitle(seasonTitle, found.values.toList(), siblingTitles)
+            if (picked != null) {
+                Log.i(TAG, "matched \"${picked.title}\" by season title \"$seasonTitle\"")
+                return picked
+            }
+            Log.w(TAG, "no entry named like season \"$seasonTitle\"")
             return null
         }
 

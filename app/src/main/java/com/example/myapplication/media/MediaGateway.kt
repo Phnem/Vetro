@@ -54,6 +54,9 @@ interface MediaGateway {
     ): JobId
 }
 
+/** Можно ли отдать поток фоновой загрузке: источник разрешает и в URL нет секретов. */
+internal fun VetroVideo.isDownloadable(): Boolean = downloadAllowed && isSafeForBackgroundPersistence()
+
 internal fun downloadableCandidates(
     video: VetroVideo,
     fallbackVideos: List<VetroVideo>,
@@ -63,6 +66,6 @@ internal fun downloadableCandidates(
         "Секретный URL нельзя передать фоновой загрузке / Sensitive stream cannot be persisted"
     }
     return (listOf(video) + fallbackVideos)
-        .filter { it.downloadAllowed && it.isSafeForBackgroundPersistence() }
+        .filter { it.isDownloadable() }
         .distinctBy(VetroVideo::url)
 }

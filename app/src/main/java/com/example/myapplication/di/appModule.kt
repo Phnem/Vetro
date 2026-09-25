@@ -218,8 +218,13 @@ val appModule = module {
     }
     // Browser-UA client without the cookie plugin: gate.php is selected by a per-request `key` cookie.
     single {
+        val seasonStore = get<com.example.myapplication.data.local.SeasonEpisodesStore>()
         com.example.myapplication.media.source.AnimeHeavenSource(
             client = get(org.koin.core.qualifier.named("weblink")),
+            seasonTitles = { animeId ->
+                seasonStore.ensureLoaded()
+                seasonStore.entryFor(animeId)?.seasons.orEmpty().mapNotNull { it.title }
+            },
         )
     }
     single { com.example.myapplication.media.source.UrlSource(context = androidContext()) }

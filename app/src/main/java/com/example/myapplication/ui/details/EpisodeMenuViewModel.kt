@@ -23,6 +23,7 @@ import com.example.myapplication.media.source.PlaybackResolution
 import com.example.myapplication.media.source.movieseries.MovieSeriesSourceOptions
 import com.example.myapplication.media.source.movieseries.SourceOption
 import com.example.myapplication.media.source.PlaybackIdentity
+import com.example.myapplication.media.isDownloadable
 import com.example.myapplication.media.source.rankVideosForResolution
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -549,9 +550,17 @@ class EpisodeMenuViewModel(
                         }
                         flattenVideosWithSource(hosters)
                     }
-                    val candidates = rankVideosForResolution(videos, preferredResolution)
-                    val video = candidates.firstOrNull()
-                        ?: error("No downloadable stream")
+                    // Ранжируем только то, что можно скачать: раньше первым мог встать поток
+                    // «только для просмотра», и загрузка падала на нём, хотя рядом был годный.
+                    val downloadable = videos.filter { it.isDownloadable() }
+                    val candidates = rankVideosForResolution(downloadable, preferredResolution)
+                    val video = candidates.firstOrNull() ?: error(
+                        if (videos.isNotEmpty()) {
+                            "Источники этой серии разрешают только просмотр / These sources are stream-only"
+                        } else {
+                            "Поток для загрузки не найден / No downloadable stream"
+                        }
+                    )
                     val jobId = mediaGateway.enqueueDownload(
                         video = video,
                         fallbackVideos = candidates.drop(1),
@@ -592,10 +601,10 @@ class EpisodeMenuViewModel(
                         )
                     }
                 }.onFailure {
-                    setAction(
-                        key,
-                        EpisodeActionState.Failed(it.message ?: "Download failed"),
-                    )
+                    val message = it.message ?: "Download failed"
+                    setAction(key, EpisodeActionState.Failed(message))
+                    // Раньше кнопка просто краснела без объяснений.
+                    _events.emit(EpisodeMenuEvent.Message(message))
                 }
             }
             episodeJobs.remove(key)
