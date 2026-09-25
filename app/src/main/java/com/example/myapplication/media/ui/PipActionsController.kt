@@ -9,7 +9,6 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.graphics.drawable.Icon
-import android.os.Build
 import android.util.Rational
 import androidx.activity.ComponentActivity
 import androidx.core.content.ContextCompat
@@ -77,7 +76,7 @@ fun ComponentActivity.finishIfPipWindowClosed(isInPictureInPictureMode: Boolean)
  */
 fun ComponentActivity.finishIfStoppedOutsidePip(wasInPip: Boolean) {
     if (!wasInPip || isFinishing || isChangingConfigurations) return
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && isInPictureInPictureMode) return
+    if (isInPictureInPictureMode) return
     finish()
 }
 

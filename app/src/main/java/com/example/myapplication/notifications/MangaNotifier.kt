@@ -5,7 +5,6 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
-import android.os.Build
 import androidx.core.app.NotificationCompat
 import com.example.myapplication.MainActivity
 import com.example.myapplication.manga.updates.MangaUpdate
@@ -48,15 +47,13 @@ class MangaNotifierImpl(
     }
 
     private fun createChannel() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val strings = getNotificationStrings(AppLanguage.EN)
-            val channel = NotificationChannel(
-                channelId,
-                strings.notifMangaChannelName,
-                NotificationManager.IMPORTANCE_DEFAULT,
-            ).apply { description = strings.notifMangaChannelDesc }
-            manager.createNotificationChannel(channel)
-        }
+        val strings = getNotificationStrings(AppLanguage.EN)
+        val channel = NotificationChannel(
+            channelId,
+            strings.notifMangaChannelName,
+            NotificationManager.IMPORTANCE_DEFAULT,
+        ).apply { description = strings.notifMangaChannelDesc }
+        manager.createNotificationChannel(channel)
     }
 
     override fun showChapterNotifications(updates: List<MangaUpdate>, language: AppLanguage) {

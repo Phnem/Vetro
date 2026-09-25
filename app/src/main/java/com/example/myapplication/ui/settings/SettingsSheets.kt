@@ -2,10 +2,8 @@ package com.example.myapplication.ui.settings
 
 import com.example.myapplication.ui.shared.theme.BrandDeepRed
 import com.example.myapplication.ui.shared.theme.IosScroll
-import android.content.Context
 import android.content.Intent
 import android.net.Uri
-import android.os.Build
 import android.widget.Toast
 import androidx.activity.result.ActivityResultLauncher
 import androidx.annotation.DrawableRes
@@ -63,7 +61,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.myapplication.data.models.AppUpdateStatus
 import com.example.myapplication.isAppInDarkTheme
 import com.phnem.vetro.R
-import com.example.myapplication.SyncState
 import com.example.myapplication.network.AppLanguage
 import com.example.myapplication.utils.formatApkSizeLabel
 import com.example.myapplication.utils.getStrings
@@ -740,8 +737,7 @@ fun UpdateChangelogSheet(
         list = MaterialTheme.typography.bodySmall,
     )
 
-    val needsInstallPermission = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
-        !context.packageManager.canRequestPackageInstalls()
+    val needsInstallPermission = !context.packageManager.canRequestPackageInstalls()
     val showInstallPermissionAction =
         uiState.updateStatus == AppUpdateStatus.UPDATE_AVAILABLE &&
             needsInstallPermission &&

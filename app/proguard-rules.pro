@@ -46,3 +46,10 @@
 -dontwarn java.lang.management.RuntimeMXBean
 
 -keepnames class com.apollographql.apollo.** { *; }
+
+# Release: вырезать Log.d/Log.v — это отладочный шум: работа на каждом вызове и утечка
+# URL/параметров в logcat. Log.i/w/e остаются: по ним разбираются отчёты с устройств.
+-assumenosideeffects class android.util.Log {
+    public static int d(...);
+    public static int v(...);
+}

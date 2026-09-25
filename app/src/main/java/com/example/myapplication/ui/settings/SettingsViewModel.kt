@@ -445,12 +445,8 @@ class SettingsViewModel(
     }
 
     fun manageUnknownAppSourcesIntent(context: Context): Intent =
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES)
-                .setData(Uri.parse("package:${context.packageName}"))
-        } else {
-            Intent(Settings.ACTION_SECURITY_SETTINGS)
-        }
+        Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES)
+            .setData(Uri.parse("package:${context.packageName}"))
 
     fun onReturnedFromInstallSettings(context: Context) {
         val path = _transient.value.pendingApkPathForInstall ?: return
@@ -459,9 +455,7 @@ class SettingsViewModel(
             _transient.update { it.copy(pendingApkPathForInstall = null) }
             return
         }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
-            !context.packageManager.canRequestPackageInstalls()
-        ) {
+        if (!context.packageManager.canRequestPackageInstalls()) {
             return
         }
         if (launchPackageInstaller(context, file)) {
@@ -550,9 +544,7 @@ class SettingsViewModel(
     }
 
     private fun launchPackageInstaller(context: Context, file: File): Boolean {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
-            !context.packageManager.canRequestPackageInstalls()
-        ) {
+        if (!context.packageManager.canRequestPackageInstalls()) {
             _transient.update { it.copy(pendingApkPathForInstall = file.absolutePath) }
             return false
         }
