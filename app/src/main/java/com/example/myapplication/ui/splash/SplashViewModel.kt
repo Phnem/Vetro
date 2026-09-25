@@ -151,7 +151,7 @@ class SplashViewModel(
             runCatching { appUpdateRepository.refreshAppUpdate(force = false) }
         }
 
-        val route = if (authRepository.hasToken() || authRepository.isGuest) "home" else "welcome"
+        val route = if (authRepository.isGuest || authRepository.awaitSessionRestored()) "home" else "welcome"
         _uiState.update { SplashState.Completed(route) }
     }
 }
