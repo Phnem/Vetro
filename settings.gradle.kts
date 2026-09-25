@@ -28,3 +28,4 @@ dependencyResolutionManagement {
 rootProject.name = "vetro-collection"
 include(":app")
 include(":core:network")
+include(":baselineprofile")

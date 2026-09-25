@@ -7,6 +7,7 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.sqldelight)
     alias(libs.plugins.apollo)
+    alias(libs.plugins.baselineprofile)
 }
 
 val localProperties = Properties().apply {
@@ -199,6 +200,10 @@ dependencies {
     implementation(libs.navigation.compose)
     implementation(libs.activity.compose)
     implementation(libs.datastore.preferences)
+    // Ставит baseline profile (src/release/generated/baselineProfiles) при установке и первом
+    // запуске: горячие пути старта и прокрутки компилируются заранее, а не интерпретируются.
+    implementation(libs.androidx.profileinstaller)
+    baselineProfile(project(":baselineprofile"))
     // Только ради версии нативной библиотеки (16 КБ страницы) — см. комментарий в каталоге.
     implementation(libs.androidx.graphics.path)
     implementation(libs.androidx.security.crypto)
