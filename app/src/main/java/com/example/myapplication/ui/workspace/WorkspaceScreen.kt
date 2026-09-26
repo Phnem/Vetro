@@ -174,6 +174,8 @@ fun WorkspaceScreen(
         CompositionLocalProvider(LocalBackdropPinned provides pinnedDuringSwipe) {
         HorizontalPager(
             flingBehavior = IosScroll.pagerFlingBehavior(pagerState),
+            // Резинка на краях у «наезда» страниц читается как дёрганье (см. IosScroll.pagerFlingBehavior).
+            overscrollEffect = null,
             state = pagerState,
             modifier = Modifier.fillMaxSize(),
             // Соседняя страница обязана быть готова заранее: иначе переход показывает пустой кадр.

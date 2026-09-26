@@ -172,6 +172,8 @@ fun DetailsScreen(
         Box(modifier = Modifier.fillMaxSize().layerBackdrop(backdrop)) {
             HorizontalPager(
                 flingBehavior = IosScroll.pagerFlingBehavior(pagerState),
+                // Резинка на краях у страниц читается как дёрганье (см. IosScroll.pagerFlingBehavior).
+                overscrollEffect = null,
                 state = pagerState,
                 // Свайп вправо со страницы «Детали» — назад на главную (как в iOS, от любой точки).
                 modifier = Modifier.fillMaxSize().detailsSwipeBack(pagerState, enabled = true),

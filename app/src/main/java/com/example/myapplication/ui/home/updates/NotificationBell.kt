@@ -12,12 +12,14 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -29,7 +31,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -108,19 +112,31 @@ fun NotificationBellButton(
                 .align(Alignment.TopEnd)
                 .offset(x = (-6).dp, y = 6.dp),
         ) {
+            val label = if (count > 99) "99+" else count.toString()
+            // Высота задана жёстко: иначе строка текста (lineHeight темы 24sp) растягивала плашку
+            // в вертикальный овал. Одна цифра — ровный круг, больше — капсула с радиусом H/2.
             Box(
                 modifier = Modifier
-                    .defaultMinSize(minWidth = 18.dp, minHeight = 18.dp)
+                    .height(BADGE_SIZE)
+                    .widthIn(min = BADGE_SIZE)
                     .background(BrandOrange, CircleShape)
-                    .padding(horizontal = 5.dp),
+                    .padding(horizontal = if (label.length > 1) 5.dp else 0.dp),
                 contentAlignment = Alignment.Center,
             ) {
                 Text(
-                    text = if (count > 99) "99+" else count.toString(),
+                    text = label,
                     color = Color.White,
                     fontSize = 11.sp,
+                    lineHeight = 11.sp,
                     fontWeight = FontWeight.Bold,
                     maxLines = 1,
+                    style = LocalTextStyle.current.copy(
+                        platformStyle = PlatformTextStyle(includeFontPadding = false),
+                        lineHeightStyle = LineHeightStyle(
+                            alignment = LineHeightStyle.Alignment.Center,
+                            trim = LineHeightStyle.Trim.Both,
+                        ),
+                    ),
                 )
             }
         }
@@ -129,3 +145,6 @@ fun NotificationBellButton(
 
 /** Капля по высоте капсулы плавающего дока: кнопки 44 dp + 6 dp воздуха сверху и снизу. */
 val BELL_DROP_SIZE: Dp = 56.dp
+
+/** Счётчик на колокольчике: одна цифра — ровный круг этого диаметра. */
+private val BADGE_SIZE: Dp = 18.dp

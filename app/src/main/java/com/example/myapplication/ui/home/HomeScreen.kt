@@ -9,6 +9,7 @@ import com.example.myapplication.ui.home.updates.NotificationBellButton
 import com.example.myapplication.ui.home.updates.NotificationBellAnchor
 import com.example.myapplication.ui.home.updates.EpisodeNotificationTray
 import androidx.compose.runtime.snapshotFlow
+import kotlinx.coroutines.flow.collectLatest
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.animation.core.tween
 import com.example.myapplication.ui.shared.frostedGlass
@@ -307,7 +308,10 @@ fun HomeScreen(
         }
     }
 
-    val finalDockVisible = dockAutoHide.visible || isSearchVisible
+    // Флаги скролла — derivedStateOf и читаются только в узких областях (эффекты, лямбды
+    // раскладки, [RecomposeIsolation]): их переключение в начале жеста иначе пересобирало всю
+    // главную в одном кадре, и прокрутка спотыкалась.
+    val finalDockVisible by remember { derivedStateOf { dockAutoHide.visible || isSearchVisible } }
 
     BackHandler(enabled = isSearchVisible || uiState.searchQuery.isNotEmpty()) {
         performHaptic(view, Haptic.Light)
@@ -357,29 +361,34 @@ fun HomeScreen(
             notificationCenterOpen
     // Анимированные значения держим как State и читаем в лямбдах слоя/раскладки: чтение в
     // композиции пересобирало всю главную на каждом кадре открытия и закрытия оверлея.
+    val blurTarget = when {
+        notificationsBlockingChildDialog -> 20.dp
+        shouldBlur -> 10.dp
+        else -> 0.dp
+    }
+    // Размытие — свет (закон 2): та же мягкая кривая, что у скрима, а не пружина по умолчанию,
+    // которая включала и выключала блюр за ~0,1 с — рывком на фоне плавно едущей панели.
     val blurAmount = animateDpAsState(
-        targetValue = when {
-            notificationsBlockingChildDialog -> 20.dp
-            shouldBlur -> 10.dp
-            else -> 0.dp
-        },
+        targetValue = blurTarget,
+        animationSpec = if (blurTarget > 0.dp) MotionTokens.backdropEnter() else MotionTokens.backdropExit(),
         label = "blur"
     )
 
     // Кнопка «вверх» опускается к низу, когда док скрыт (как кнопка поиска), и поднимается вместе с доком.
     // При видимом доке держим её выше плавающей кнопки поиска (её верх ≈162dp над нав-панелью),
     // чтобы кнопки не слипались.
-    val scrollToTopLift = animateDpAsState(
-        targetValue = when {
-            !finalDockVisible -> 88.dp
-            // В рабочей области своего нижнего дока у главной нет, а чужой ниже и тоньше:
-            // 180dp держали пустоту под несуществующей кнопкой поиска.
-            hostedInWorkspace -> 112.dp
-            else -> 180.dp
-        },
-        animationSpec = MotionTokens.standard(),
-        label = "scrollToTopBottom"
-    )
+    val scrollToTopLift = remember { Animatable(if (hostedInWorkspace) 112f else 180f) }
+    LaunchedEffect(Unit) {
+        snapshotFlow {
+            when {
+                !finalDockVisible -> 88f
+                // В рабочей области своего нижнего дока у главной нет, а чужой ниже и тоньше:
+                // 180dp держали пустоту под несуществующей кнопкой поиска.
+                hostedInWorkspace -> 112f
+                else -> 180f
+            }
+        }.collectLatest { scrollToTopLift.animateTo(it, MotionTokens.standard()) }
+    }
 
     val openWorkspaceSort: () -> Unit = {
         performHaptic(view, Haptic.Light)
@@ -442,7 +451,8 @@ fun HomeScreen(
         onOverlayVisibleChange(anyOverlayVisible)
         if (anyOverlayVisible) collapseUpdatesToBell()
     }
-    LaunchedEffect(finalDockVisible) { onDockVisibleChange(finalDockVisible) }
+    val currentOnDockVisibleChange by rememberUpdatedState(onDockVisibleChange)
+    LaunchedEffect(Unit) { snapshotFlow { finalDockVisible }.collect { currentOnDockVisibleChange(it) } }
     // Уход со страницы посреди скролла не должен оставить чужой док спрятанным или его стекло
     // в экономном режиме навсегда.
     DisposableEffect(Unit) {
@@ -899,6 +909,7 @@ fun HomeScreen(
 
             if (!hostedInWorkspace && !isSearchVisible && animeToDelete == null && animeToFavorite == null && !showCSheet) {
                 Box(modifier = Modifier.align(Alignment.BottomCenter).zIndex(3f).navigationBarsPadding()) {
+                    RecomposeIsolation {
                     AnimatedVisibility(
                         // !showRecsSheet — внутри visible, НЕ в структурном if выше: иначе
                         // размонтирование ветки инвалидирует layerBackdrop без перезаписи,
@@ -946,6 +957,7 @@ fun HomeScreen(
                             isSearchActive = isSearchVisible,
                             modifier = Modifier,
                         )
+                    }
                     }
                 }
             }
@@ -1107,6 +1119,7 @@ fun HomeScreen(
 
             // Появление и уход по спеке движения: оболочка — пружиной из 0.92 (точка исхода — сама
             // кнопка), свет — короткими кривыми; уход быстрее входа и без отскока.
+            RecomposeIsolation {
             AnimatedVisibility(
                 visible = showScrollToTop && !isSearchVisible && animeToDelete == null && animeToFavorite == null,
                 enter = fadeIn(tween(MotionTokens.EaseEnterMillis, easing = MotionTokens.EaseEnter)) +
@@ -1119,7 +1132,7 @@ fun HomeScreen(
                     .padding(end = 24.dp)
                     // Подъём вслед за доком — сдвигом в раскладке, а не отступом: отступ читался
                     // в композиции и пересобирал главную на каждом кадре анимации дока.
-                    .offset { IntOffset(0, -scrollToTopLift.value.roundToPx()) }
+                    .offset { IntOffset(0, -scrollToTopLift.value.dp.roundToPx()) }
                     .zIndex(1f)
             ) {
                 val onScrollToTop = {
@@ -1158,9 +1171,11 @@ fun HomeScreen(
                     }
                 }
             }
+            }
 
             // Поверх scrim/blur оверлеев: TopBar-кнопки и Glass dock остаются чёткими
             Box(modifier = Modifier.fillMaxSize().zIndex(30f)) {
+                RecomposeIsolation {
                 if (!isHeaderFloating) {
                     Box(
                         modifier = Modifier
@@ -1253,6 +1268,7 @@ fun HomeScreen(
                             null
                         },
                     )
+                }
                 }
             }
 
@@ -1575,3 +1591,11 @@ private fun rememberCardProgress(
         else -> null
     }
 }
+
+/**
+ * Отдельная область перекомпоновки. `Box`/`Column` инлайновые и своей области не создают:
+ * состояние, прочитанное в их содержимом, пересобирает весь [HomeScreen]. Составная лямбда,
+ * переданная в не-инлайновую функцию, перезапускается сама по себе.
+ */
+@Composable
+private fun RecomposeIsolation(content: @Composable () -> Unit) = content()
