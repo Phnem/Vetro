@@ -7,7 +7,9 @@ import com.example.myapplication.audiobooks.data.AudiobookRepository
 import com.example.myapplication.audiobooks.data.AudiobookRepository.Companion.normalize
 import com.example.myapplication.audiobooks.data.OpenedBook
 import com.example.myapplication.audiobooks.data.SavedProgress
+import com.example.myapplication.audiobooks.domain.source.AudiobookSearch
 import com.example.myapplication.audiobooks.domain.source.AudiobookSource
+import com.example.myapplication.audiobooks.domain.source.WorkMatch
 import com.example.myapplication.audiobooks.domain.source.SourceBook
 import com.example.myapplication.audiobooks.domain.source.SourceBookDetails
 import com.example.myapplication.audiobooks.domain.source.SourceBookRef
@@ -36,13 +38,15 @@ import kotlinx.coroutines.launch
 class BookDetailsViewModel(
     sourceId: String,
     key: String,
-    sources: List<AudiobookSource>,
+    /** Название из маршрута: по нему ищется та же книга на других сайтах, если этот её не отдал. */
+    private val title: String,
+    private val sources: List<AudiobookSource>,
     private val repository: AudiobookRepository,
     private val launcher: AudiobookLauncher,
+    private val search: AudiobookSearch,
 ) : ViewModel() {
 
-    private val source = sources.firstOrNull { it.id.value == sourceId }
-    private val _state = MutableStateFlow(BookDetailsState(key = key))
+    private val _state = MutableStateFlow(BookDetailsState(source = sourceId, key = key))
     val state: StateFlow<BookDetailsState> = _state.asStateFlow()
 
     val favorite: StateFlow<Boolean> = _state
@@ -53,24 +57,23 @@ class BookDetailsViewModel(
     private var loadJob: Job? = null
 
     init {
-        load(key)
+        load(sourceId, key)
     }
 
-    /** Другая озвучка: та же страница, но детали, главы и позиция — выбранного чтеца. */
+    /** Другая озвучка (в том числе с другого сайта): та же страница, но детали, главы и позиция — её. */
     fun selectNarration(book: SourceBook) {
-        if (book.ref.key != _state.value.key) load(book.ref.key)
+        val s = _state.value
+        if (book.ref.key != s.key || book.ref.source.value != s.source) load(book.ref.source.value, book.ref.key)
     }
 
-    fun retry() = load(_state.value.key)
+    fun retry() = _state.value.let { load(it.source, it.key) }
 
     fun listen(fromChapter: Int? = null) {
         val details = _state.value.details ?: return
-        val startMs = fromChapter?.let { index ->
-            details.chapterDurationsSec.take(index).sumOf { it ?: 0L } * 1000
-        }
         _state.update { it.copy(launching = true, launchFailed = false) }
         viewModelScope.launch {
-            val result = launcher.play(details.book, startGlobalMs = startMs)
+            // Глава — индексом: у части сайтов длины глав известны только после запуска.
+            val result = launcher.play(details.book, startChapter = fromChapter)
             _state.update { it.copy(launching = false, launchFailed = result != AudiobookLauncher.Result.Started) }
         }
     }
@@ -80,22 +83,31 @@ class BookDetailsViewModel(
         viewModelScope.launch { repository.setFavorite(work, !favorite.value) }
     }
 
-    private fun load(key: String) {
-        val source = source ?: run {
-            _state.update { it.copy(loading = false, error = true) }
+    private fun load(sourceId: String, key: String, allowFallback: Boolean = true) {
+        val source = sources.firstOrNull { it.id.value == sourceId } ?: run {
+            _state.update { it.copy(source = sourceId, key = key, loading = false, error = true) }
             return
         }
         loadJob?.cancel()
-        _state.update { it.copy(key = key, loading = true, error = false, launchFailed = false) }
+        _state.update {
+            it.copy(source = sourceId, sourceName = source.displayName, key = key, loading = true, error = false,
+                restricted = false, launchFailed = false)
+        }
         loadJob = viewModelScope.launch {
-            val details = when (val r = source.details(SourceBookRef(source.id, key))) {
+            val r = source.details(SourceBookRef(source.id, key))
+            val details = when (r) {
                 is SourceResult.Ok -> r.value
-                is SourceResult.Restricted -> {
-                    _state.update { it.copy(loading = false, restricted = true) }
-                    return@launch
-                }
-                is SourceResult.Failed -> {
-                    _state.update { it.copy(loading = false, error = true) }
+                is SourceResult.Restricted, is SourceResult.Failed -> {
+                    // Этот сайт книгу не отдал (фрагмент ЛитРеса, убрана, сайт лёг) — открываем ту же
+                    // книгу на другом сайте, а не страницу «недоступно».
+                    val alt = if (allowFallback) fallbackFor(source) else null
+                    if (alt != null) {
+                        load(alt.ref.source.value, alt.ref.key, allowFallback = false)
+                    } else {
+                        _state.update {
+                            it.copy(loading = false, restricted = r is SourceResult.Restricted, error = r is SourceResult.Failed)
+                        }
+                    }
                     return@launch
                 }
             }
@@ -103,7 +115,7 @@ class BookDetailsViewModel(
             val progress = repository.progress(opened.narrationId)
             _state.update { it.copy(loading = false, details = details, opened = opened, progress = progress) }
             // Остальное — после основной карточки и независимо: не нашлось — секции просто нет.
-            val narrations = async { narrationsOf(source, details) }
+            val narrations = async { narrationsOf(details) }
             val byAuthor = async {
                 details.authorShelfId?.let { id ->
                     (source.shelf(id) as? SourceResult.Ok)?.value.orEmpty()
@@ -116,15 +128,30 @@ class BookDetailsViewModel(
         }
     }
 
-    private suspend fun narrationsOf(source: AudiobookSource, details: SourceBookDetails): List<SourceBook> {
-        val title = normalize(details.book.title)
-        val authorWords = details.book.authors.flatMap { normalize(it).split(' ') }.filter { it.length > 2 }.toSet()
-        val hits = (source.search(details.book.title) as? SourceResult.Ok)?.value.orEmpty().filter { hit ->
-            normalize(hit.title) == title &&
-                hit.authors.any { a -> normalize(a).split(' ').any(authorWords::contains) }
-        }
-        // Текущая озвучка — всегда в списке и первой.
-        return (listOf(details.book) + hits.filter { it.ref.key != details.book.ref.key }).distinctBy { it.ref.key }
+    /** Та же книга на другом сайте, чьи детали открываются; сначала — по приоритету источников. */
+    private suspend fun fallbackFor(failed: AudiobookSource): SourceBook? =
+        search.sameWork(title, emptyList())
+            .filter { it.ref.source != failed.id }
+            .sortedBy { search.rank(it.ref.source) }
+            .take(3)
+            .firstOrNull { alt ->
+                sources.firstOrNull { it.id == alt.ref.source }?.details(alt.ref) is SourceResult.Ok
+            }
+
+    /**
+     * Озвучки произведения со всех сайтов. Один и тот же чтец на нескольких сайтах — одна озвучка:
+     * показываем её копию с лучшего источника (остальные — запасные для запуска). Текущая — первой.
+     */
+    private suspend fun narrationsOf(details: SourceBookDetails): List<SourceBook> {
+        val current = details.book
+        val hits = search.sameWork(current.title, current.authors)
+            .sortedBy { search.rank(it.ref.source) }
+        fun voice(b: SourceBook) = WorkMatch.words(b.narrators).sorted().joinToString(" ")
+        val currentVoice = voice(current)
+        val others = hits
+            .filter { it.ref != current.ref && it.narrators.isNotEmpty() && voice(it) != currentVoice }
+            .distinctBy(::voice)
+        return listOf(current) + others
     }
 
     private companion object {
@@ -133,7 +160,9 @@ class BookDetailsViewModel(
 }
 
 data class BookDetailsState(
+    val source: String,
     val key: String,
+    val sourceName: String = "",
     val loading: Boolean = true,
     val error: Boolean = false,
     val restricted: Boolean = false,

@@ -117,7 +117,7 @@ fun BookDetailsScreen(
     onBack: () -> Unit,
     onOpenBook: (SourceBook) -> Unit,
     modifier: Modifier = Modifier,
-    viewModel: BookDetailsViewModel = koinViewModel(key = "book_$source/$key") { parametersOf(source, key) },
+    viewModel: BookDetailsViewModel = koinViewModel(key = "book_$source/$key") { parametersOf(source, key, title) },
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val favorite by viewModel.favorite.collectAsStateWithLifecycle()
@@ -332,7 +332,7 @@ private fun InfoPage(
 
                 when {
                     details != null -> {
-                        val facts = buildFacts(details, state.narrations.size, strings)
+                        val facts = buildFacts(details, state.narrations.size, state.sourceName, strings)
                         SectionHeader(strings.information, onBg)
                         Spacer(Modifier.height(12.dp))
                         DetailFactGrid(facts, isDark)
@@ -348,7 +348,7 @@ private fun InfoPage(
                                             n.narrators.joinToString(", ").ifBlank { null },
                                             n.durationSec?.let { strings.formatDuration(it) },
                                         ).joinToString(" · "),
-                                        selected = n.ref.key == state.key,
+                                        selected = n.ref.key == state.key && n.ref.source.value == state.source,
                                         isDark = isDark,
                                     ) { onNarration(n) }
                                 }
@@ -408,7 +408,7 @@ private fun InfoPage(
 
 /** Сетка фактов: только те, что источник действительно знает — без «—» (как у аниме). */
 @Composable
-private fun buildFacts(details: SourceBookDetails, narrations: Int, s: BookDetailsStrings): List<DetailFact> {
+private fun buildFacts(details: SourceBookDetails, narrations: Int, sourceName: String, s: BookDetailsStrings): List<DetailFact> {
     val b = details.book
     val icons = mapOf(
         "rating" to ImageVector.vectorResource(R.drawable.ph_star),
@@ -433,7 +433,7 @@ private fun buildFacts(details: SourceBookDetails, narrations: Int, s: BookDetai
         b.authors.takeIf { it.isNotEmpty() }?.let { DetailFact("author", icons.getValue("author"), s.author, it.joinToString(", ")) },
         details.series?.let { DetailFact("series", icons.getValue("series"), s.series, it) },
         narrations.takeIf { it > 1 }?.let { DetailFact("narrations", icons.getValue("narrations"), s.narrationCount, s.narrationsN(it)) },
-        DetailFact("source", icons.getValue("source"), s.source, "Aknigi24").takeIf { b.ref.source.value == "aknigi24" },
+        sourceName.takeIf { it.isNotBlank() }?.let { DetailFact("source", icons.getValue("source"), s.source, it) },
     )
 }
 

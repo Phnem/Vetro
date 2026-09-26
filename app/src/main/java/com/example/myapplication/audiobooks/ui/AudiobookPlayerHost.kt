@@ -1,5 +1,8 @@
 package com.example.myapplication.audiobooks.ui
 
+import com.example.myapplication.audiobooks.data.remote.web.SiteText
+import com.example.myapplication.audiobooks.domain.source.WorkMatch
+import com.example.myapplication.audiobooks.domain.source.AudiobookSearch
 import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.text.TextStyle
@@ -140,6 +143,7 @@ fun AudiobookPlayerHost(language: AppLanguage = AppLanguage.RU, modifier: Modifi
     val launcher: AudiobookLauncher = koinInject()
     val koin = getKoin()
     val sources = remember { koin.getAll<AudiobookSource>() }
+    val search: AudiobookSearch = koinInject()
     val strings = remember(language) { playerStrings(language) }
     val scope = rememberCoroutineScope()
     val view = LocalView.current
@@ -372,7 +376,7 @@ fun AudiobookPlayerHost(language: AppLanguage = AppLanguage.RU, modifier: Modifi
                     onSheet = { which ->
                         if (which == PlayerSheet.NARRATION) {
                             narration = NarrationChoice()
-                            scope.launch { narration = findNarrations(book, sources, strings) }
+                            scope.launch { narration = findNarrations(book, sources, search) }
                         }
                         openSheet(which)
                     },
@@ -435,33 +439,34 @@ private class WindowShape(private val rect: Rect, private val radius: Float) : S
         Outline.Rounded(RoundRect(rect, CornerRadius(radius)))
 }
 
-/** Другие озвучки той же книги у источников: то же название и совпадающая фамилия автора. */
+/**
+ * Другие озвучки той же книги на всех сайтах: то же название и совпадающая фамилия автора. Один чтец
+ * на нескольких сайтах — один пункт (с лучшего источника); остальные копии — запасные при запуске.
+ */
 private suspend fun findNarrations(
     book: PlayingBook,
     sources: List<AudiobookSource>,
-    strings: PlayerStrings,
+    search: AudiobookSearch,
 ): NarrationChoice {
     val currentKey = TrackUriCodec.decode(book.uri)?.variant?.value
-    val title = normalize(book.title)
-    val authorWords = normalize(book.author).split(' ').filter { it.length > 2 }.toSet()
-    val options = sources.flatMap { source ->
-        (source.search(book.title) as? SourceResult.Ok)?.value.orEmpty()
-            .filter { hit ->
-                normalize(hit.title) == title &&
-                    (authorWords.isEmpty() || hit.authors.any { a -> normalize(a).split(' ').any(authorWords::contains) })
-            }
-            .map { hit ->
-                val key = source.variantOf(hit.ref).value
-                NarrationOption(
-                    key = key,
-                    narrators = hit.narrators.joinToString(", "),
-                    duration = hit.durationSec?.let { formatClock(it * 1000) },
-                    source = source.displayName,
-                    current = key == currentKey,
-                    book = hit,
-                )
-            }
-    }.sortedByDescending { it.current }
+    val currentVoice = WorkMatch.words(listOf(book.narrator)).sorted().joinToString(" ")
+    val options = search.sameWork(book.title, SiteText.names(book.author))
+        .sortedBy { search.rank(it.ref.source) }
+        .mapNotNull { hit ->
+            val source = sources.firstOrNull { it.id == hit.ref.source } ?: return@mapNotNull null
+            val key = source.variantOf(hit.ref).value
+            NarrationOption(
+                key = key,
+                narrators = hit.narrators.joinToString(", "),
+                duration = hit.durationSec?.let { formatClock(it * 1000) },
+                source = source.displayName,
+                current = key == currentKey,
+                book = hit,
+            )
+        }
+        .filter { it.current || it.narrators.isNotBlank() }
+        .distinctBy { o -> if (o.current) currentVoice else WorkMatch.words(listOf(o.narrators)).sorted().joinToString(" ") }
+        .sortedByDescending { it.current }
     return NarrationChoice(loading = false, options = options)
 }
 

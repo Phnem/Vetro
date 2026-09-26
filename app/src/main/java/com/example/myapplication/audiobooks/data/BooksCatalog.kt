@@ -1,7 +1,12 @@
 package com.example.myapplication.audiobooks.data
 
 import com.example.myapplication.audiobooks.data.remote.KnigavuheMetadata
+import com.example.myapplication.audiobooks.domain.source.AudiobookSearch
 import com.example.myapplication.audiobooks.domain.source.AudiobookSource
+import com.example.myapplication.audiobooks.domain.source.WorkMatch
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import com.example.myapplication.audiobooks.domain.source.SourceBook
 import com.example.myapplication.audiobooks.domain.source.SourceBookRef
 import com.example.myapplication.audiobooks.domain.source.SourceId
@@ -19,6 +24,8 @@ class BooksCatalog(
     private val store: JsonMapFileStore<CachedShelf>,
     /** Каталог только для метаданных: обложка и чтец для книг, которых нет у звуковых источников. */
     private val metadata: KnigavuheMetadata? = null,
+    /** Поиск по всем сайтам сразу; null — по [sources] последовательно (тесты). */
+    private val search: AudiobookSearch? = null,
     private val nowMs: () -> Long = System::currentTimeMillis,
 ) {
     /** Полки всех источников по порядку; ключ — `"<source>/<shelfId>"`. */
@@ -41,31 +48,33 @@ class BooksCatalog(
     }
 
     /**
-     * Витрина: каждую книгу ищем у источников по названию и фамилии автора. Выбираем точное совпадение
-     * названия, из них — самую длинную озвучку (полная версия, а не сокращённая), и запоминаем, сколько
-     * озвучек нашлось. Не найденная книга остаётся в витрине без источника — честно, без Play.
+     * Витрина: каждую книгу ищем на всех сайтах сразу по названию и фамилии автора. Из совпадений
+     * берём озвучку с самого надёжного источника (порядок источников), при равенстве — самую полную;
+     * запомненное число озвучек — по разным чтецам. Остальные копии — запасные: не запустится на
+     * выбранном сайте, запуск уйдёт к ним. Обложку берём у любого сайта, где она есть. Не найденная
+     * книга остаётся в витрине без источника — честно, без Play.
      */
-    suspend fun refreshShowcase(): CachedShelf? {
-        var anyFound = false
-        val books = SHOWCASE.map { pick ->
-            val candidates = sources.flatMap { source ->
-                (source.search(pick.title) as? SourceResult.Ok)?.value.orEmpty()
-            }.filter { pick.matches(it) }
-            if (candidates.isNotEmpty()) anyFound = true
-            val best = candidates.maxWithOrNull(compareBy({ it.durationSec ?: 0L }))
-            // Настоящая обложка нужна и книге без звука: берём её из каталога метаданных.
-            val meta = if (best?.coverUrl == null) {
-                metadata?.search(pick.title)?.firstOrNull { pick.matchesMeta(it) }
-            } else {
-                null
-            }
-            if (meta != null) anyFound = true
-            best?.let { CachedBook.of(it, narrations = candidates.size).let { b -> b.copy(coverUrl = b.coverUrl ?: meta?.coverUrl) } }
-                ?: CachedBook(source = "", key = "", title = pick.title, authors = listOf(pick.author),
-                    narrators = meta?.narrators.orEmpty(), coverUrl = meta?.coverUrl, durationSec = null, narrations = 0)
-        }
+    suspend fun refreshShowcase(): CachedShelf? = coroutineScope {
+        val books = SHOWCASE.map { pick -> async { showcaseBook(pick) } }.awaitAll()
         // Сеть легла целиком — не затираем прошлую удачную витрину пустышками.
-        return if (anyFound) save(SHOWCASE_KEY, books) else null
+        if (books.any { it.second }) save(SHOWCASE_KEY, books.map { it.first }) else null
+    }
+
+    private suspend fun showcaseBook(pick: Pick): Pair<CachedBook, Boolean> {
+        val candidates = (search?.searchAll(pick.title) ?: sources.flatMap { source ->
+            (source.search(pick.title) as? SourceResult.Ok)?.value.orEmpty()
+        }).filter { pick.matches(it) }
+        val rank: (SourceBook) -> Int = { b -> search?.rank(b.ref.source) ?: sources.indexOfFirst { it.id == b.ref.source } }
+        val best = candidates.sortedWith(compareBy(rank).thenByDescending { it.durationSec ?: 0L }).firstOrNull()
+        val voices = candidates.map { WorkMatch.words(it.narrators).sorted().joinToString(" ") }.filter { it.isNotEmpty() }
+            .distinct().size.coerceAtLeast(if (candidates.isEmpty()) 0 else 1)
+        val cover = best?.coverUrl ?: candidates.firstNotNullOfOrNull { it.coverUrl }
+        // Настоящая обложка нужна и книге без звука: берём её из каталога метаданных.
+        val meta = if (cover == null) metadata?.search(pick.title)?.firstOrNull { pick.matchesMeta(it) } else null
+        val book = best?.let { CachedBook.of(it, narrations = voices).copy(coverUrl = cover ?: meta?.coverUrl) }
+            ?: CachedBook(source = "", key = "", title = pick.title, authors = listOf(pick.author),
+                narrators = meta?.narrators.orEmpty(), coverUrl = meta?.coverUrl, durationSec = null, narrations = 0)
+        return book to (best != null || meta != null)
     }
 
     private suspend fun save(key: String, books: List<CachedBook>): CachedShelf {
@@ -81,13 +90,13 @@ class BooksCatalog(
         fun matchesMeta(hit: KnigavuheMetadata.Hit): Boolean = matches(hit.title, hit.authors)
 
         private fun matches(bookTitle: String, authors: List<String>): Boolean =
-            AudiobookRepository.normalize(bookTitle) == AudiobookRepository.normalize(title) &&
+            WorkMatch.titleKey(bookTitle) == WorkMatch.titleKey(title) &&
                 authors.any { surname in AudiobookRepository.normalize(it).split(' ') }
     }
 
     companion object {
-        // v2: обложки из каталога метаданных — старая витрина без них пересобирается сразу.
-        const val SHOWCASE_KEY = "showcase_v2"
+        // v3: витрина со всех сайтов — старая (только Aknigi24) пересобирается сразу.
+        const val SHOWCASE_KEY = "showcase_v3"
         private const val TTL_MS = 12 * 60 * 60 * 1000L
 
         /** Семь книг пользователя (issues/39), трилогия Лю Цысиня — по порядку. */
