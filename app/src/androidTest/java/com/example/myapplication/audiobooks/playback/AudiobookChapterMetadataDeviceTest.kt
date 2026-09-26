@@ -38,10 +38,10 @@ class AudiobookChapterMetadataDeviceTest {
         val variant = VariantId("ab10-chapters-${UUID.randomUUID()}")
         val manifest = MediaManifest(
             variant = variant,
-            tracks = listOf(AudioTrack(0, file.toURI().toString(), "audio/wav", 40_000L, file.length())),
+            tracks = listOf(AudioTrack(0, file.toURI().toString(), mimeType = "audio/wav", durationMs = 40_000L, sizeBytes = file.length())),
             chapters = listOf(Chapter(0, "First chapter", 0L, 20_000L),
                 Chapter(1, "Second chapter", 20_000L, 20_000L)),
-            fetchedAt = System.currentTimeMillis(),
+            resolvedAt = System.currentTimeMillis(),
             expiresAt = null,
         )
         getKoin().get<ManifestResolver>().put(manifest)
