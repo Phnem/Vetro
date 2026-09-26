@@ -199,14 +199,36 @@ private fun SourceEditor(
         fontFamily = SnProFamily,
         fontWeight = FontWeight.SemiBold,
     )
-    OutlinedTextField(
-        value = editor.baseUrl,
-        onValueChange = { value -> onUpdate { it.copy(baseUrl = value) } },
-        label = { Text("Server URL") },
-        singleLine = true,
-        modifier = Modifier.fillMaxWidth(),
-    )
-    if (editor.kind == PlaybackSourceKind.WEBDAV) {
+    val account = editor.kind.account
+    if (account == PlaybackSourceKind.OPENSUBTITLES.account) {
+        Text(
+            if (ru) {
+                "Ваш аккаунт opensubtitles.com. Субтитры скачиваются в счёт его суточного лимита; скачанные хранятся на устройстве и повторно лимит не тратят."
+            } else {
+                "Your opensubtitles.com account. Downloads count against its daily limit; downloaded files stay on the device and are not charged again."
+            },
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            fontFamily = SnProFamily,
+        )
+    }
+    if (account == null || account.needsServer) {
+        OutlinedTextField(
+            value = editor.baseUrl,
+            onValueChange = { value -> onUpdate { it.copy(baseUrl = value) } },
+            label = { Text("Server URL") },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth(),
+        )
+    }
+    if (account != null) {
+        OutlinedTextField(
+            value = editor.username,
+            onValueChange = { value -> onUpdate { it.copy(username = value) } },
+            label = { Text(if (ru) "Логин" else "Username") },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth(),
+        )
+    } else if (editor.kind == PlaybackSourceKind.WEBDAV) {
         OutlinedTextField(
             value = editor.rootPath,
             onValueChange = { value -> onUpdate { it.copy(rootPath = value) } },
@@ -235,9 +257,11 @@ private fun SourceEditor(
         onValueChange = { value -> onUpdate { it.copy(secret = value) } },
         label = {
             Text(
-                if (editor.kind == PlaybackSourceKind.WEBDAV) {
-                    if (ru) "Пароль приложения" else "App password"
-                } else "Access token"
+                when {
+                    account != null -> if (ru) "Пароль" else "Password"
+                    editor.kind == PlaybackSourceKind.WEBDAV -> if (ru) "Пароль приложения" else "App password"
+                    else -> "Access token"
+                }
             )
         },
         placeholder = {
@@ -247,16 +271,20 @@ private fun SourceEditor(
         singleLine = true,
         modifier = Modifier.fillMaxWidth(),
     )
-    ToggleRow(
-        title = if (ru) "Разрешить скачивание" else "Allow downloads",
-        checked = editor.downloadAllowed,
-        onCheckedChange = { value -> onUpdate { it.copy(downloadAllowed = value) } },
-    )
-    ToggleRow(
-        title = if (ru) "Разрешить небезопасный HTTP" else "Allow insecure HTTP",
-        checked = editor.allowInsecureHttp,
-        onCheckedChange = { value -> onUpdate { it.copy(allowInsecureHttp = value) } },
-    )
+    if (account == null) {
+        ToggleRow(
+            title = if (ru) "Разрешить скачивание" else "Allow downloads",
+            checked = editor.downloadAllowed,
+            onCheckedChange = { value -> onUpdate { it.copy(downloadAllowed = value) } },
+        )
+    }
+    if (account == null || account.needsServer) {
+        ToggleRow(
+            title = if (ru) "Разрешить небезопасный HTTP" else "Allow insecure HTTP",
+            checked = editor.allowInsecureHttp,
+            onCheckedChange = { value -> onUpdate { it.copy(allowInsecureHttp = value) } },
+        )
+    }
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -430,6 +458,7 @@ private val PlaybackSourceKind.title: String
         PlaybackSourceKind.WEBDAV -> "WebDAV / Nextcloud"
         PlaybackSourceKind.JELLYFIN -> "Jellyfin"
         PlaybackSourceKind.EMBY -> "Emby"
+        PlaybackSourceKind.OPENSUBTITLES -> "OpenSubtitles"
     }
 
 private fun PlaybackSourceSettingsMessage.text(ru: Boolean): String = when (this) {

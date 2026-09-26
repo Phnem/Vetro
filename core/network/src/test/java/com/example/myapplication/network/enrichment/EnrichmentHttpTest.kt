@@ -80,4 +80,15 @@ class EnrichmentHttpTest {
         http.text("P", "https://x/5")
         assertTrue(!http.gate.isOpen("P"))
     }
+
+    @Test
+    fun `wrong user password does not close the provider`() = runBlocking {
+        val (http, calls) = http(HttpStatusCode.Unauthorized to "{\"message\":\"invalid\"}", HttpStatusCode.OK to "token")
+        val bad = http.text("U", "https://x/login", userCredentials = true)
+        assertTrue(bad is LookupResult.Failure)
+        assertEquals(401, ((bad as LookupResult.Failure).cause as EnrichmentHttpException).status)
+        // Сразу после исправления пароля вход проходит — провайдер не выключен до завтра.
+        assertEquals(LookupResult.Found("token"), http.text("U", "https://x/login", userCredentials = true))
+        assertEquals(2, calls())
+    }
 }

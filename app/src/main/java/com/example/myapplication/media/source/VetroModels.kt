@@ -9,7 +9,17 @@ data class VetroSubtitleTrack(
     val url: String,
     val lang: String,
     val mimeType: String = "text/vtt",
-)
+    /** Id дорожки в плеере; у подгруженных пользователем — `opensubtitles:<file_id>`. */
+    val id: String? = null,
+    val label: String? = null,
+) {
+    /** Подгружена пользователем из внешней базы, а не пришла с источником видео. */
+    val isUserAdded: Boolean get() = id?.startsWith(USER_ADDED_PREFIX) == true
+
+    companion object {
+        const val USER_ADDED_PREFIX = "opensubtitles:"
+    }
+}
 
 @Serializable
 data class VetroTimestamp(

@@ -109,7 +109,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 import java.util.Locale
 import kotlin.math.roundToInt
 
-private enum class PlayerMenu { AUDIO, SPEED }
+private enum class PlayerMenu { AUDIO, SUBTITLES, SPEED }
 
 private val SPEED_OPTIONS = listOf(0.5f, 0.75f, 1f, 1.25f, 1.5f, 1.75f, 2f)
 private val Capsule = RoundedCornerShape(percent = 50)
@@ -184,6 +184,9 @@ fun PlayerControlsOverlay(
     onEnterPip: () -> Unit,
     onSelectSpeed: (Float) -> Unit,
     onSelectAudio: (AudioTrackOption) -> Unit,
+    /** Пусто — кнопки субтитров нет (выбирать не из чего). */
+    subtitleOptions: List<SubtitleOption> = emptyList(),
+    onSelectSubtitle: (SubtitleOption) -> Unit = {},
     /**
      * Положение кадра. Один вход и для кнопки в доке, и для щипка: пользователь потребовал, чтобы
      * жест работал «прям 1в1» с кнопкой, а два входа в одно состояние гарантированно разъехались
@@ -629,6 +632,15 @@ fun PlayerControlsOverlay(
                             if (audioTracks.isNotEmpty()) { menuKind = PlayerMenu.AUDIO; menuState.targetState = true }
                         },
                     )
+                    if (subtitleOptions.isNotEmpty()) {
+                        DockIconButton(
+                            icon = painterResource(R.drawable.ic_player_subtitles),
+                            contentDescription = if (playerIsRu()) "Субтитры" else "Subtitles",
+                            tint = Color.White,
+                            iconSize = TOP_DOCK_ICON,
+                            onClick = { menuKind = PlayerMenu.SUBTITLES; menuState.targetState = true },
+                        )
+                    }
                     DockIconButton(
                         icon = painterResource(R.drawable.ic_player_speed),
                         contentDescription = if (playerIsRu()) "Скорость" else "Speed",
@@ -788,9 +800,11 @@ fun PlayerControlsOverlay(
                 state = menuState,
                 menu = kind,
                 audioTracks = audioTracks,
+                subtitleOptions = subtitleOptions,
                 speed = speed,
                 onSelectSpeed = { onSelectSpeed(it); menuState.targetState = false },
                 onSelectAudio = { onSelectAudio(it); menuState.targetState = false },
+                onSelectSubtitle = { onSelectSubtitle(it); menuState.targetState = false },
                 onDismiss = { menuState.targetState = false },
             )
         }
@@ -1154,26 +1168,31 @@ private fun OptionMenu(
     state: MutableTransitionState<Boolean>,
     menu: PlayerMenu,
     audioTracks: List<AudioTrackOption>,
+    subtitleOptions: List<SubtitleOption>,
     speed: Float,
     onSelectSpeed: (Float) -> Unit,
     onSelectAudio: (AudioTrackOption) -> Unit,
+    onSelectSubtitle: (SubtitleOption) -> Unit,
     onDismiss: () -> Unit,
 ) {
     BackHandler(enabled = true) { onDismiss() }
     val origin = TransformOrigin(1f, 0f) // «вытекает» из верхнего-правого дока
     val labels = when (menu) {
         PlayerMenu.AUDIO -> audioTracks.map { it.label }
+        PlayerMenu.SUBTITLES -> subtitleOptions.map { it.label }
         PlayerMenu.SPEED -> SPEED_OPTIONS.map { s ->
             if (s == 1f) (if (playerIsRu()) "Обычная (1×)" else "Normal (1×)") else "${trimSpeed(s)}×"
         }
     }
     val selectedIndex = when (menu) {
         PlayerMenu.AUDIO -> audioTracks.indexOfFirst { it.isSelected }.coerceAtLeast(0)
+        PlayerMenu.SUBTITLES -> subtitleOptions.indexOfFirst { it.isSelected }.coerceAtLeast(0)
         PlayerMenu.SPEED -> SPEED_OPTIONS.indexOfFirst { it == speed }.coerceAtLeast(0)
     }
     fun commit(index: Int) {
         when (menu) {
             PlayerMenu.AUDIO -> audioTracks.getOrNull(index)?.let(onSelectAudio)
+            PlayerMenu.SUBTITLES -> subtitleOptions.getOrNull(index)?.let(onSelectSubtitle)
             PlayerMenu.SPEED -> SPEED_OPTIONS.getOrNull(index)?.let(onSelectSpeed)
         }
     }
@@ -1228,6 +1247,9 @@ private fun OptionMenu(
                         when (menu) {
                             PlayerMenu.AUDIO -> audioTracks.forEach { opt ->
                                 MenuPill(opt.label, opt.isSelected) { onSelectAudio(opt) }
+                            }
+                            PlayerMenu.SUBTITLES -> subtitleOptions.forEach { opt ->
+                                MenuPill(opt.label, opt.isSelected) { onSelectSubtitle(opt) }
                             }
                             PlayerMenu.SPEED -> SPEED_OPTIONS.forEach { s ->
                                 MenuPill(

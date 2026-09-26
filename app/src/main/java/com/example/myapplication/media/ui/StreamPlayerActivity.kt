@@ -90,6 +90,11 @@ import kotlinx.coroutines.flow.first
 import androidx.compose.runtime.produceState
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import android.widget.Toast
+import com.example.myapplication.media.subtitles.ExternalSubtitleService
+import com.example.myapplication.media.subtitles.SubtitleLoad
+import com.example.myapplication.media.subtitles.SubtitleOffer
+import com.example.myapplication.network.AppLanguage
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
 import okhttp3.OkHttpClient
@@ -115,6 +120,7 @@ class StreamPlayerActivity : ComponentActivity(), PipHostActivity {
     private val mediaGateway: MediaGateway by inject()
     private val okHttpClient: OkHttpClient by inject()
     private val playbackStore: EpisodePlaybackStore by inject()
+    private val externalSubtitles: ExternalSubtitleService by inject()
     private val enrichmentCoordinator: CollectionEnrichmentCoordinator by inject()
     private val settings: DataStore<Preferences> by inject(named("settings"))
     private val json = AppStoreJson
@@ -232,6 +238,20 @@ class StreamPlayerActivity : ComponentActivity(), PipHostActivity {
                     // Играет ли сейчас — только для иконки в PiP-окне; сама поверхность следит за этим
                     // отдельно и своим состоянием ни с кем не делится.
                     var pipPlaying by remember { mutableStateOf(false) }
+                    // Субтитры OpenSubtitles: поиск на серию (квоту пользователя не тратит), скачивание —
+                    // по выбору в меню. После скачивания источник пересобирается с той же позиции.
+                    var subtitleOffers by remember { mutableStateOf<List<SubtitleOffer>>(emptyList()) }
+                    var pendingSubtitleId by remember { mutableStateOf<String?>(null) }
+                    var subtitleLoading by remember { mutableStateOf(false) }
+                    val uiLanguage = playerSettingsState.value.language
+                    LaunchedEffect(season, episode, uiLanguage) {
+                        subtitleOffers = emptyList()
+                        if (!externalSubtitles.isAvailable) return@LaunchedEffect
+                        val languages = listOf(if (uiLanguage == AppLanguage.RU) "ru" else "en", "en").distinct()
+                        subtitleOffers = runCatching {
+                            externalSubtitles.offers(playbackIdentity, season, episode, languages)
+                        }.getOrDefault(emptyList())
+                    }
 
                     // Прогресс пишется под текущую серию и после переключения — тоже (onStop читает
                     // именно эти поля).
@@ -643,7 +663,11 @@ class StreamPlayerActivity : ComponentActivity(), PipHostActivity {
                                     }
                                     if (selectedIndex >= 0) currentIndex = selectedIndex
                                     playbackError = null
-                                    current = rendition.copy(resolvedAt = System.currentTimeMillis())
+                                    // Подгруженные субтитры переезжают на другую озвучку той же серии.
+                                    current = rendition.copy(
+                                        subtitles = rendition.subtitles + current.subtitles.filter { it.isUserAdded },
+                                        resolvedAt = System.currentTimeMillis(),
+                                    )
                                 }
                             },
                             title = "$animeTitle · ${if (season > 1) "S$season " else ""}E$episode",
@@ -666,7 +690,34 @@ class StreamPlayerActivity : ComponentActivity(), PipHostActivity {
                                 switchToEpisode(EpisodeRange.nextOf(episode, availableEpisodes))
                             },
                             // Ожидание рисует сама поверхность локально, вместо текстовой плашки.
-                            loading = switchingTo != null || retrying,
+                            loading = switchingTo != null || retrying || subtitleLoading,
+                            subtitleOffers = subtitleOffers,
+                            onLoadSubtitle = { offer ->
+                                if (!subtitleLoading) {
+                                    subtitleLoading = true
+                                    scope.launch {
+                                        val result = externalSubtitles.load(offer)
+                                        subtitleLoading = false
+                                        when (result) {
+                                            is SubtitleLoad.Loaded -> {
+                                                resumePosition = player.currentPosition.coerceAtLeast(0L)
+                                                pendingSubtitleId = result.track.id
+                                                current = current.copy(
+                                                    subtitles = current.subtitles + result.track,
+                                                    resolvedAt = System.currentTimeMillis(),
+                                                )
+                                            }
+                                            else -> Toast.makeText(
+                                                this@StreamPlayerActivity,
+                                                subtitleLoadMessage(result, uiLanguage == AppLanguage.RU),
+                                                Toast.LENGTH_LONG,
+                                            ).show()
+                                        }
+                                    }
+                                }
+                            },
+                            pendingSubtitleId = pendingSubtitleId,
+                            onPendingSubtitleApplied = { pendingSubtitleId = null },
                         )
 
                         val errorText = playbackError ?: switchError
@@ -861,6 +912,20 @@ class StreamPlayerActivity : ComponentActivity(), PipHostActivity {
         }
     }
 }
+private fun subtitleLoadMessage(result: SubtitleLoad, ru: Boolean): String = when (result) {
+    SubtitleLoad.AccountRejected -> if (ru) {
+        "OpenSubtitles не принял логин — проверьте аккаунт в настройках источников"
+    } else {
+        "OpenSubtitles rejected the login — check the account in source settings"
+    }
+    SubtitleLoad.QuotaExhausted -> if (ru) {
+        "Суточный лимит скачиваний OpenSubtitles исчерпан"
+    } else {
+        "OpenSubtitles daily download limit reached"
+    }
+    else -> if (ru) "Не удалось загрузить субтитры" else "Couldn't load subtitles"
+}
+
 private fun selectStudioRenditions(
     videos: List<VetroVideo>,
     current: VetroVideo,

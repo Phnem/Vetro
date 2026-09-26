@@ -53,7 +53,7 @@ class OpenSubtitlesClient(
     /** Вход пользователя: токен для скачивания и, у VIP, свой адрес API. */
     suspend fun login(username: String, password: String): LookupResult<OpenSubtitlesSession> {
         val key = apiKey().takeIf { it.isNotBlank() } ?: return disabled()
-        return http.text("OpenSubtitles", "$BASE/login", rate, HttpMethod.Post) {
+        return http.text(USER_PROVIDER, "$BASE/login", rate, HttpMethod.Post, userCredentials = true) {
             header("Api-Key", key)
             contentType(ContentType.Application.Json)
             setBody(buildJsonObject { put("username", username); put("password", password) }.toString())
@@ -63,7 +63,7 @@ class OpenSubtitlesClient(
     /** Временная ссылка на файл (UTF-8). Расход квоты считается здесь, а не при скачивании файла. */
     suspend fun downloadLink(fileId: Long, session: OpenSubtitlesSession): LookupResult<SubtitleDownload> {
         val key = apiKey().takeIf { it.isNotBlank() } ?: return disabled()
-        return http.text("OpenSubtitles", "${session.baseUrl ?: BASE}/download", rate, HttpMethod.Post) {
+        return http.text(USER_PROVIDER, "${session.baseUrl ?: BASE}/download", rate, HttpMethod.Post, userCredentials = true) {
             header("Api-Key", key)
             header("Authorization", "Bearer ${session.token}")
             contentType(ContentType.Application.Json)
@@ -73,6 +73,9 @@ class OpenSubtitlesClient(
 
     private companion object {
         const val BASE = "https://api.opensubtitles.com/api/v1"
+
+        /** Вход и скачивание — отдельный провайдер: сбой учётки пользователя не выключает поиск. */
+        const val USER_PROVIDER = "OpenSubtitles-user"
     }
 }
 

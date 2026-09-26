@@ -6,6 +6,7 @@ import android.os.SystemClock
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
+import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
@@ -34,7 +35,7 @@ object StreamingPlaybackSessionFactory {
     ): StreamingPlaybackSession {
         val transferMonitor = StreamingTransferMonitor(SystemClock::elapsedRealtime)
         val allocator = DefaultAllocator(true, C.DEFAULT_BUFFER_SEGMENT_SIZE)
-        val mediaSourceFactory = createMediaSourceFactory(client, video, transferMonitor)
+        val mediaSourceFactory = createMediaSourceFactory(context, client, video, transferMonitor)
         val adaptiveFactory = StallAwareAdaptiveTrackSelectionFactory(
             tuning = tuning,
             transferMonitor = transferMonitor,
@@ -108,6 +109,7 @@ object StreamingPlaybackSessionFactory {
     }
 
     private fun createMediaSourceFactory(
+        context: Context,
         client: OkHttpClient,
         video: VetroVideo,
         transferMonitor: StreamingTransferMonitor,
@@ -116,7 +118,9 @@ object StreamingPlaybackSessionFactory {
         val okHttpFactory = OkHttpDataSource.Factory(client.forPlaybackCandidate(video))
             .setDefaultRequestProperties(headers)
             .setTransferListener(transferMonitor)
-        return DefaultMediaSourceFactory(okHttpFactory)
+        // http(s) — через OkHttp с заголовками источника; file:// — субтитры, подгруженные
+        // пользователем в кэш приложения (OkHttp такие адреса не открывает).
+        return DefaultMediaSourceFactory(DefaultDataSource.Factory(context, okHttpFactory))
     }
 
     private fun buildTrackMediaItem(track: VetroSubtitleTrack): MediaItem {
@@ -137,12 +141,18 @@ object StreamingPlaybackSessionFactory {
             mimeType.contains("ssa", ignoreCase = true) ||
                 mimeType.contains("ass", ignoreCase = true) -> MimeTypes.TEXT_SSA
             mimeType.contains("vtt", ignoreCase = true) -> MimeTypes.TEXT_VTT
+            // SRT, разобранный как VTT, не показывается вовсе: у SRT нет заголовка WEBVTT.
+            mimeType.contains("subrip", ignoreCase = true) ||
+                mimeType.contains("srt", ignoreCase = true) -> MimeTypes.APPLICATION_SUBRIP
             else -> MimeTypes.TEXT_VTT
         }
         return MediaItem.SubtitleConfiguration.Builder(Uri.parse(url))
             .setMimeType(mime)
             .setLanguage(lang)
-            .setSelectionFlags(C.SELECTION_FLAG_DEFAULT)
+            .setId(id)
+            .setLabel(label)
+            // Подгруженные пользователем включает сам выбор в меню, а не флаг «по умолчанию».
+            .setSelectionFlags(if (isUserAdded) 0 else C.SELECTION_FLAG_DEFAULT)
             .build()
     }
 }

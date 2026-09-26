@@ -5,13 +5,21 @@ import kotlinx.coroutines.CancellationException
 enum class PlaybackSourceKind {
     WEBDAV,
     JELLYFIN,
-    EMBY;
+    EMBY,
+    OPENSUBTITLES;
 
     val personalProvider: PersonalMediaServerProvider?
         get() = when (this) {
-            WEBDAV -> null
             JELLYFIN -> PersonalMediaServerProvider.JELLYFIN
             EMBY -> PersonalMediaServerProvider.EMBY
+            else -> null
+        }
+
+    /** Учётка пользователя (логин + пароль), а не медиатека. */
+    val account: UserAccountKind?
+        get() = when (this) {
+            OPENSUBTITLES -> UserAccountKind.OPENSUBTITLES
+            else -> null
         }
 }
 
@@ -38,6 +46,7 @@ interface PlaybackSourceConnectionTester {
         provider: PersonalMediaServerProvider,
         config: PersonalMediaServerConfig,
     ): Boolean
+    suspend fun testAccount(kind: UserAccountKind, config: UserAccountConfig): Boolean = false
 }
 
 interface PlaybackSourceSettingsService {
@@ -51,8 +60,19 @@ interface PlaybackSourceSettingsService {
 class DefaultPlaybackSourceSettingsService(
     private val store: PlaybackSourceConfigStore,
     private val connectionTester: PlaybackSourceConnectionTester,
+    /**
+     * Учётки, которые сейчас можно подключить. OpenSubtitles без ключа приложения не работает —
+     * такой строки в настройках нет вовсе, а не «подключено, но не работает».
+     */
+    private val availableAccounts: () -> Set<UserAccountKind> = { emptySet() },
 ) : PlaybackSourceSettingsService {
-    override fun summaries(): List<PlaybackSourceConfigurationSummary> = listOf(
+    override fun summaries(): List<PlaybackSourceConfigurationSummary> = baseSummaries() +
+        PlaybackSourceKind.entries.mapNotNull { kind ->
+            val account = kind.account?.takeIf { it in availableAccounts() } ?: return@mapNotNull null
+            PlaybackSourceConfigurationSummary(kind, store.account(account) != null)
+        }
+
+    private fun baseSummaries(): List<PlaybackSourceConfigurationSummary> = listOf(
         PlaybackSourceConfigurationSummary(PlaybackSourceKind.WEBDAV, store.webDav() != null),
         PlaybackSourceConfigurationSummary(
             PlaybackSourceKind.JELLYFIN,
@@ -76,6 +96,15 @@ class DefaultPlaybackSourceSettingsService(
                 allowInsecureHttp = config.allowInsecureHttp,
             )
         }
+        PlaybackSourceKind.OPENSUBTITLES -> store.account(UserAccountKind.OPENSUBTITLES)?.let { config ->
+            PlaybackSourcePublicDraft(
+                kind = kind,
+                baseUrl = config.baseUrl,
+                username = config.username,
+                hasStoredSecret = true,
+                allowInsecureHttp = config.allowInsecureHttp,
+            )
+        }
         else -> kind.personalProvider?.let(store::personalServer)?.let { config ->
             PlaybackSourcePublicDraft(
                 kind = kind,
@@ -92,6 +121,10 @@ class DefaultPlaybackSourceSettingsService(
         runCatching {
             when (draft.kind) {
                 PlaybackSourceKind.WEBDAV -> store.saveWebDav(requireNotNull(webDavConfig(draft, replacementSecret)))
+                PlaybackSourceKind.OPENSUBTITLES -> {
+                    val account = requireNotNull(draft.kind.account)
+                    store.saveAccount(account, requireNotNull(accountConfig(draft, replacementSecret, account)))
+                }
                 else -> {
                     val provider = requireNotNull(draft.kind.personalProvider)
                     store.savePersonalServer(
@@ -105,6 +138,7 @@ class DefaultPlaybackSourceSettingsService(
     override fun remove(kind: PlaybackSourceKind) {
         when (kind) {
             PlaybackSourceKind.WEBDAV -> store.clearWebDav()
+            PlaybackSourceKind.OPENSUBTITLES -> store.clearAccount(requireNotNull(kind.account))
             else -> store.clearPersonalServer(requireNotNull(kind.personalProvider))
         }
     }
@@ -116,6 +150,9 @@ class DefaultPlaybackSourceSettingsService(
         when (draft.kind) {
             PlaybackSourceKind.WEBDAV -> webDavConfig(draft, replacementSecret)
                 ?.let { connectionTester.testWebDav(it) }
+            PlaybackSourceKind.OPENSUBTITLES -> draft.kind.account?.let { account ->
+                accountConfig(draft, replacementSecret, account)?.let { connectionTester.testAccount(account, it) }
+            }
             else -> draft.kind.personalProvider?.let { provider ->
                 personalConfig(draft, replacementSecret, provider)
                     ?.let { connectionTester.testPersonalServer(provider, it) }
@@ -143,6 +180,26 @@ class DefaultPlaybackSourceSettingsService(
             downloadAllowed = draft.downloadAllowed,
             allowInsecureHttp = draft.allowInsecureHttp,
         ).takeIf(WebDavConfig::isValid)
+    }
+
+    private fun accountConfig(
+        draft: PlaybackSourcePublicDraft,
+        replacementSecret: String,
+        kind: UserAccountKind,
+    ): UserAccountConfig? {
+        val saved = store.account(kind)
+        // Сохранённый пароль переиспользуется только для того же логина на том же сервере.
+        val secret = replacementSecret.ifBlank {
+            saved?.password?.takeIf {
+                saved.username == draft.username.trim() && saved.baseUrl == draft.baseUrl.trim()
+            }.orEmpty()
+        }
+        return UserAccountConfig(
+            username = draft.username.trim(),
+            password = secret,
+            baseUrl = draft.baseUrl.trim(),
+            allowInsecureHttp = draft.allowInsecureHttp,
+        ).takeIf { it.isValidFor(kind) }
     }
 
     private fun personalConfig(

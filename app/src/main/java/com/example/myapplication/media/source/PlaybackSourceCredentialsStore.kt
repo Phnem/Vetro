@@ -12,6 +12,9 @@ interface PlaybackSourceConfigStore {
     fun personalServer(provider: PersonalMediaServerProvider): PersonalMediaServerConfig?
     fun savePersonalServer(provider: PersonalMediaServerProvider, config: PersonalMediaServerConfig)
     fun clearPersonalServer(provider: PersonalMediaServerProvider)
+    fun account(kind: UserAccountKind): UserAccountConfig? = null
+    fun saveAccount(kind: UserAccountKind, config: UserAccountConfig) = Unit
+    fun clearAccount(kind: UserAccountKind) = Unit
 }
 
 /** Encrypted local implementation; UI depends only on [PlaybackSourceConfigStore]. */
@@ -98,6 +101,35 @@ class PlaybackSourceCredentialsStore(context: Context) : PlaybackSourceConfigSto
                 "${prefix}_download_allowed",
                 "${prefix}_allow_insecure_http",
             ).forEach(::remove)
+        }.apply()
+    }
+
+    override fun account(kind: UserAccountKind): UserAccountConfig? {
+        val prefix = kind.credentialPrefix
+        val username = prefs.getString("${prefix}_username", null) ?: return null
+        return UserAccountConfig(
+            username = username,
+            password = prefs.getString("${prefix}_password", "").orEmpty(),
+            baseUrl = prefs.getString("${prefix}_base_url", "").orEmpty(),
+            allowInsecureHttp = prefs.getBoolean("${prefix}_allow_insecure_http", false),
+        ).takeIf { it.isValidFor(kind) }
+    }
+
+    override fun saveAccount(kind: UserAccountKind, config: UserAccountConfig) {
+        require(config.isValidFor(kind)) { "Invalid ${kind.displayName} account" }
+        val prefix = kind.credentialPrefix
+        prefs.edit()
+            .putString("${prefix}_username", config.username.trim())
+            .putString("${prefix}_password", config.password)
+            .putString("${prefix}_base_url", config.baseUrl.trim())
+            .putBoolean("${prefix}_allow_insecure_http", config.allowInsecureHttp)
+            .apply()
+    }
+
+    override fun clearAccount(kind: UserAccountKind) {
+        val prefix = kind.credentialPrefix
+        prefs.edit().apply {
+            listOf("_username", "_password", "_base_url", "_allow_insecure_http").forEach { remove(prefix + it) }
         }.apply()
     }
 

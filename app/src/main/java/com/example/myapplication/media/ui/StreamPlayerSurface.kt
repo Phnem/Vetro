@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -31,6 +32,11 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import com.example.myapplication.localplayer.ui.AudioTrackOption
+import com.example.myapplication.localplayer.ui.SubtitleOption
+import com.example.myapplication.localplayer.ui.playerIsRu
+import com.example.myapplication.media.source.VetroSubtitleTrack
+import com.example.myapplication.media.subtitles.SubtitleOffer
+import com.example.myapplication.media.subtitles.subtitleLabel
 import com.example.myapplication.localplayer.ui.ImmersivePlayerWindow
 import com.example.myapplication.localplayer.ui.rememberMediaSkipPlayback
 import com.example.myapplication.localplayer.ui.rememberPlaybackClock
@@ -72,6 +78,12 @@ fun StreamPlayerSurface(
     onNextEpisode: () -> Unit = {},
     /** Идёт резолв ссылки или переключение серии; показывается локальный индикатор в контролах. */
     loading: Boolean = false,
+    /** Субтитры OpenSubtitles, которые можно подгрузить (ещё не скачаны). */
+    subtitleOffers: List<SubtitleOffer> = emptyList(),
+    onLoadSubtitle: (SubtitleOffer) -> Unit = {},
+    /** Id подгруженной дорожки: включить, как только она появится в плеере. */
+    pendingSubtitleId: String? = null,
+    onPendingSubtitleApplied: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     var isPlaying by remember(player) { mutableStateOf(player.isPlaying) }
@@ -85,6 +97,7 @@ fun StreamPlayerSurface(
     var embeddedAudioTracks by remember(player) {
         mutableStateOf<List<AudioTrackOption>>(emptyList())
     }
+    var tracksSnapshot by remember(player) { mutableStateOf(player.currentTracks) }
     var speed by remember(player) { mutableStateOf(1f) }
     var fit by remember(player) { mutableStateOf(VideoFit.ORIGINAL) }
     var viewportSize by remember { mutableStateOf(IntSize.Zero) }
@@ -121,6 +134,16 @@ fun StreamPlayerSurface(
     val audioTracks =
         studioTracks + embeddedAudioTracks.takeIf { it.size > 1 }.orEmpty()
 
+    val ru = playerIsRu()
+    val subtitleOptions = remember(tracksSnapshot, subtitleOffers, ru) {
+        tracksSnapshot.subtitleOptions(subtitleOffers, ru)
+    }
+    // Подгруженная дорожка появляется в плеере после пересборки источника — тогда и включаем её.
+    LaunchedEffect(player, tracksSnapshot, pendingSubtitleId) {
+        val pending = pendingSubtitleId ?: return@LaunchedEffect
+        if (player.selectTextTrackById(pending)) onPendingSubtitleApplied()
+    }
+
     val skipPlayback = rememberMediaSkipPlayback(
         player = player,
         mediaId = video.url,
@@ -153,6 +176,7 @@ fun StreamPlayerSurface(
 
             override fun onTracksChanged(tracks: Tracks) {
                 embeddedAudioTracks = tracks.streamAudioOptions()
+                tracksSnapshot = tracks
             }
 
             override fun onVideoSizeChanged(size: VideoSize) {
@@ -241,6 +265,19 @@ fun StreamPlayerSurface(
                         player.applyStreamAudioOverride(option)
                     }
                 },
+                subtitleOptions = subtitleOptions,
+                onSelectSubtitle = { option ->
+                    when {
+                        option.isOff -> player.trackSelectionParameters = player.trackSelectionParameters
+                            .buildUpon()
+                            .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
+                            .build()
+                        option.externalKey != null -> subtitleOffers
+                            .firstOrNull { it.fileId.toString() == option.externalKey }
+                            ?.let(onLoadSubtitle)
+                        else -> player.selectTextTrack(option.groupIndex, option.trackIndex)
+                    }
+                },
                 onSetFit = { fit = it },
             )
         }
@@ -279,6 +316,75 @@ private fun Tracks.streamAudioOptions(): List<AudioTrackOption> {
         }
     }
     return result
+}
+
+/**
+ * «Выкл», встроенные текстовые дорожки, затем ещё не скачанные предложения OpenSubtitles. Предложение,
+ * которое уже подгружено в это видео, второй раз не показывается. Пусто — выбирать не из чего.
+ */
+private fun Tracks.subtitleOptions(offers: List<SubtitleOffer>, ru: Boolean): List<SubtitleOption> {
+    val embedded = ArrayList<SubtitleOption>()
+    val presentIds = HashSet<String>()
+    groups.forEachIndexed { groupIndex, group ->
+        if (group.type != C.TRACK_TYPE_TEXT) return@forEachIndexed
+        for (trackIndex in 0 until group.length) {
+            if (!group.isTrackSupported(trackIndex)) continue
+            val format = group.getTrackFormat(trackIndex)
+            format.id?.let(presentIds::add)
+            val label = format.label
+                ?: format.language?.let {
+                    java.util.Locale.forLanguageTag(it).displayLanguage.ifBlank { it }
+                }
+                ?: if (ru) "Дорожка ${embedded.size + 1}" else "Track ${embedded.size + 1}"
+            embedded += SubtitleOption(
+                id = "$groupIndex:$trackIndex",
+                label = label.replaceFirstChar { it.uppercase() },
+                isSelected = group.isTrackSelected(trackIndex),
+                groupIndex = groupIndex,
+                trackIndex = trackIndex,
+            )
+        }
+    }
+    val external = offers
+        .filter { offer -> presentIds.none { it.contains("${VetroSubtitleTrack.USER_ADDED_PREFIX}${offer.fileId}") } }
+        .map { offer ->
+            SubtitleOption(
+                id = "offer:${offer.fileId}",
+                label = subtitleLabel(offer),
+                isSelected = false,
+                externalKey = offer.fileId.toString(),
+            )
+        }
+    if (embedded.isEmpty() && external.isEmpty()) return emptyList()
+    val off = SubtitleOption(
+        id = "off",
+        label = if (ru) "Выкл" else "Off",
+        isSelected = embedded.none { it.isSelected },
+        isOff = true,
+    )
+    return listOf(off) + embedded + external
+}
+
+private fun ExoPlayer.selectTextTrack(groupIndex: Int, trackIndex: Int) {
+    val group = currentTracks.groups.getOrNull(groupIndex) ?: return
+    trackSelectionParameters = trackSelectionParameters.buildUpon()
+        .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
+        .setOverrideForType(TrackSelectionOverride(group.mediaTrackGroup, listOf(trackIndex)))
+        .build()
+}
+
+/** Включить текстовую дорожку по id формата; false — её в плеере ещё нет. */
+private fun ExoPlayer.selectTextTrackById(id: String): Boolean {
+    currentTracks.groups.forEachIndexed { groupIndex, group ->
+        if (group.type != C.TRACK_TYPE_TEXT) return@forEachIndexed
+        for (trackIndex in 0 until group.length) {
+            if (group.getTrackFormat(trackIndex).id?.contains(id) == true) {
+                selectTextTrack(groupIndex, trackIndex)
+                return true
+            }
+        }
+    }
+    return false
 }
 
 private fun ExoPlayer.applyStreamAudioOverride(option: AudioTrackOption) {

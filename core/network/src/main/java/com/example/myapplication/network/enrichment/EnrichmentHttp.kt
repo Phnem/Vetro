@@ -29,6 +29,12 @@ class EnrichmentHttp(
         method: HttpMethod = HttpMethod.Get,
         notFoundById: Boolean = false,
         policy: CachePolicy? = null,
+        /**
+         * Запрос с учётными данными пользователя (вход, скачивание в счёт его квоты): 401/403 значат
+         * «неверный логин» или «его лимит», а не отозванный ключ приложения — выключатель не трогаем,
+         * иначе опечатка в пароле закрыла бы провайдер до завтра.
+         */
+        userCredentials: Boolean = false,
         configure: HttpRequestBuilder.() -> Unit = {},
     ): LookupResult<String> {
         val cached = policy?.let { cache?.get(it.key) }
@@ -55,12 +61,16 @@ class EnrichmentHttp(
                     policy?.let { cache?.put(it.key, null, it.negativeTtlMs) }
                     if (notFoundById) LookupResult.NotFoundById else LookupResult.NoMatch
                 }
+                userCredentials && status in USER_REJECTIONS -> LookupResult.Failure(
+                    EnrichmentHttpException(provider, status),
+                    retryable = false,
+                )
                 else -> {
                     // 401/403 без признаков квоты — ключ неверен или отозван: до завтра, как квота.
                     val quota = ProviderGate.isQuotaExhausted(status, body.take(QUOTA_SNIFF)) || status == 401 || status == 403
                     gate.onFailure(provider, quota)
                     cached?.toResult(notFoundById) ?: LookupResult.Failure(
-                        IllegalStateException("$provider HTTP $status"),
+                        EnrichmentHttpException(provider, status),
                         retryable = !quota && (status == 429 || status >= 500),
                     )
                 }
@@ -84,8 +94,14 @@ class EnrichmentHttp(
     private companion object {
         /** Признак квоты ищем в начале тела: ответ с ошибкой короткий, полезный ответ не сканируем. */
         const val QUOTA_SNIFF = 400
+
+        /** Отказы по учётке пользователя: неверный вход, нет прав, его суточный лимит (OpenSubtitles — 406). */
+        val USER_REJECTIONS = setOf(401, 403, 406, 429)
     }
 }
+
+/** Ответ API с кодом ошибки — по [status] вызывающий отличает «неверный вход» от «лимит». */
+class EnrichmentHttpException(val provider: String, val status: Int) : IllegalStateException("$provider HTTP $status")
 
 /** Разбор ответов обогащения: новые поля в ответах API не ломают клиент. */
 internal val EnrichmentJson = Json {

@@ -291,7 +291,9 @@ private fun PlaybackSourceEditorState.toDraft() = PlaybackSourcePublicDraft(
 )
 
 private fun PlaybackSourceEditorState.scopeChanged(other: PlaybackSourceEditorState): Boolean =
-    if (kind == PlaybackSourceKind.WEBDAV) {
+    if (kind.account != null) {
+        baseUrl != other.baseUrl || username != other.username
+    } else if (kind == PlaybackSourceKind.WEBDAV) {
         baseUrl != other.baseUrl || rootPath != other.rootPath || username != other.username
     } else {
         baseUrl != other.baseUrl || userId != other.userId

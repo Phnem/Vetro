@@ -14,7 +14,13 @@ import kotlinx.coroutines.withTimeoutOrNull
 class KtorPlaybackSourceConnectionTester(
     private val webDavClient: HttpClient,
     private val personalServerClient: HttpClient,
+    /** Проверка учёток — настоящим входом в сервис; ключ: вид учётки. */
+    private val accountTesters: Map<UserAccountKind, suspend (UserAccountConfig) -> Boolean> = emptyMap(),
 ) : PlaybackSourceConnectionTester {
+    override suspend fun testAccount(kind: UserAccountKind, config: UserAccountConfig): Boolean = safeTest {
+        config.isValidFor(kind) && accountTesters[kind]?.invoke(config) == true
+    }
+
     override suspend fun testWebDav(config: WebDavConfig): Boolean = safeTest {
         if (!config.isValid()) return@safeTest false
         val url = config.baseUrl.trim().trimEnd('/') + "/" + config.rootPath.trim().trim('/')

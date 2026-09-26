@@ -1,5 +1,7 @@
 package com.example.myapplication.di
 
+import io.ktor.client.call.body
+import io.ktor.client.request.get
 import com.example.myapplication.data.ai.AiLlmEndpoint
 import com.example.myapplication.data.ai.AiLlmFallbackRouter
 import com.example.myapplication.data.ai.AiProviderLatencyProber
@@ -258,12 +260,38 @@ val appModule = module {
         com.example.myapplication.media.source.KtorPlaybackSourceConnectionTester(
             webDavClient = get(named("webdav")),
             personalServerClient = get(named("personal-media")),
+            accountTesters = mapOf(
+                com.example.myapplication.media.source.UserAccountKind.OPENSUBTITLES to { account ->
+                    get<com.example.myapplication.network.enrichment.OpenSubtitlesClient>()
+                        .login(account.username, account.password) is com.example.myapplication.network.LookupResult.Found
+                },
+            ),
         )
     }
     single<com.example.myapplication.media.source.PlaybackSourceSettingsService> {
         com.example.myapplication.media.source.DefaultPlaybackSourceSettingsService(
             store = get(),
             connectionTester = get(),
+            availableAccounts = {
+                val openSubtitles = get<com.example.myapplication.network.enrichment.OpenSubtitlesClient>()
+                buildSet {
+                    if (openSubtitles.isConfigured) add(com.example.myapplication.media.source.UserAccountKind.OPENSUBTITLES)
+                }
+            },
+        )
+    }
+    single {
+        val http = get<io.ktor.client.HttpClient>()
+        com.example.myapplication.media.subtitles.ExternalSubtitleService(
+            client = get(),
+            accounts = get(),
+            dir = java.io.File(androidContext().cacheDir, "subtitles"),
+            fetchBytes = { url ->
+                runCatching {
+                    val response = http.get(url)
+                    if (response.status.value in 200..299) response.body<ByteArray>() else null
+                }.getOrNull()
+            },
         )
     }
     single {

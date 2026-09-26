@@ -53,6 +53,20 @@ data class AudioTrackOption(
     val renditionUrl: String? = null,
 )
 
+/**
+ * Пункт меню субтитров: выключить, встроенная дорожка ([groupIndex]/[trackIndex]) или внешняя, которую
+ * ещё надо скачать ([externalKey]).
+ */
+data class SubtitleOption(
+    val id: String,
+    val label: String,
+    val isSelected: Boolean,
+    val groupIndex: Int = -1,
+    val trackIndex: Int = -1,
+    val externalKey: String? = null,
+    val isOff: Boolean = false,
+)
+
 /** Режим кадра: как есть (letterbox, обычно 16:9) или с обрезкой краёв (заполнить экран). */
 enum class VideoFit { ORIGINAL, CROP }
 
