@@ -3,10 +3,16 @@
 ## Workflow
 
 Current workflow state: IMPLEMENTING_TICKET
-Current ticket: AB-10
-Last completed ticket: AB-09 (DONE_WITH_DEVIATIONS: SAF catalog and Xiaomi playback pass)
-Next eligible ticket: AB-10
-Last updated: 2026-09-25 (AB-10 visual revision and Xiaomi frame profiling; frame gate still open)
+Current ticket: AB-15 + AB-17 (контракт источника и Aknigi24 со стримингом)
+Last completed ticket: AB-10 (DONE_WITH_DEVIATIONS: frame gate 2/3930 принят), AB-11 частично
+Next eligible ticket: AB-12/13 (БД), затем AB-29/30 (дом «Книги» с витриной и полками)
+Last updated: 2026-09-26 (решения Q9–Q11, новый порядок вех; ветка влита с perf/v3.3.5)
+
+### Ритм работы (решение пользователя 2026-09-26)
+
+Тикет → компиляция → короткая проверка → следующий тикет. Серийные замеры кадров, бенчмарк-скрипты и
+десятки прогонов на устройстве не делать: пользователь сам собирает и тестирует. Строгий гейт «0 кадров
+> 32 мс» снят; целевой бюджет — плавность на глаз, без заметных рывков.
 
 ## Цель
 
@@ -154,7 +160,11 @@ Last updated: 2026-09-25 (AB-10 visual revision and Xiaomi frame profiling; fram
 | AB-39 | 7 | Релизная витрина: 7 указанных книг, автоматическое получение и кэш обложек RU/EN, проверенные источники и состояния доступности | AB-29, AB-31, AB-25, AB-27 | spec/08, issues/39 |
 | AB-38 | 7 | Финальный QA: smoke-матрица, производительность, release, память проекта; реальные M4B/ID3 CHAP и 16 KB page-size native libs | всё, включая AB-39 | spec/13 |
 
-Рекомендуемый порядок: AB-01 → **AB-02 как отдельный Media3 gate с compile и video smoke до любого audiobook-кода** → остальные M0 → M1 → M2 → AB-15 → AB-17 → AB-24 → AB-18 → AB-25 → AB-26 → прочие источники → M5 → M6 → M7.
+Порядок с 2026-09-26 (после решений Q9–Q11): AB-15 → AB-17 (Aknigi24, полный стриминг) → AB-12/13 (БД,
+позиция, библиотека) → AB-27 (обложки) → AB-29/30 (дом «Книги»: витрина из 7 книг + полки-вееры из
+источников, морф веер→полка по видео) → AB-31 (детали) → AB-32 (поиск) → AB-18 (Audiokniga.one) →
+AB-24/25/26 (агрегация, fallback) → Knigavuhe и EN-тройка → AB-11 остаток → M6 → M7.
+Прежний порядок (M1 → M2 → … с законными якорями впереди) отменён: см. spec/14 Q9.
 Тикеты фазы нарезаются в `issues/NN-slug.md` в начале фазы (по конвенции `docs/agents/issue-tracker.md`).
 
 ## Команды проверки

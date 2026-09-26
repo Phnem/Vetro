@@ -1,6 +1,6 @@
 # AB-10: Мини-плеер и полный плеер
 
-Status: implementing
+Status: done (DONE_WITH_DEVIATIONS 2026-09-26: frame gate 2/3930 >32 мс принят по решению пользователя; origin из Details — вместе с AB-31)
 Type: implementation
 Blocked by: AB-03, AB-08, AB-09
 

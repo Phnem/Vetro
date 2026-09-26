@@ -1,6 +1,6 @@
 # AB-11: Управление прослушиванием
 
-Status: implementing
+Status: partial (таймер и пропуск тишины готовы; «конец главы», закладки и умный откат — после AB-13, им нужна БД)
 Type: implementation
 Blocked by: AB-10 frame gate
 

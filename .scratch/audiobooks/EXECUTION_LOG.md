@@ -194,3 +194,20 @@ Outcome: IMPLEMENTING. Подробности: `issues/10-player-ui.md`.
 - Проверенный 20-цикловый замер до сохранения полного экрана в composition: 34/3816 кадров >32 мс. После: 2/3930. Нулевая приёмка не достигнута. Первый быстрый прогон без контроля foreground признан невалидным.
 - AndroidTest на Xiaomi завис в MIUI instrumentation и был прерван; runner удалён. Debug APK собран и установлен поверх единственной нашей тестовой копии. `:app:compileReleaseKotlin --offline --max-workers=1` прошёл. UI AndroidTest после последней правки ещё требуется на свободном эмуляторе.
 - Мини-плеер получил четыре RU/EN accessibility-действия перемещения в углы с той же магнитной анимацией, что после DnD. Новая проверка координат в AndroidTest скомпилировалась, но не запускалась: Xiaomi погас, эмулятор занят приложением второго агента.
+
+## 2026-09-26 — решения Q9–Q11, AB-15 + AB-17 (Aknigi24)
+
+Outcome: DONE (без device-smoke: по новому ритму проверяет пользователь).
+
+- Пользователь: источники как в tecplan (сайты со стримингом, включены по умолчанию), пустой дом —
+  витрина 7 книг + полки из источников, работа в этой ветке. `perf/v3.3.5` влита (конфликт в
+  `LocalBooksPanel.kt` — наша версия + iOS fling). AB-10 закрыт с отклонением (гейт 2/3930 принят),
+  AB-11 частично: остаток после БД.
+- `AudiobookSource` (spec/05, в урезанном виде: search, details, variantOf; `Restricted`/`Failed`
+  раздельно) — наследует `ManifestSource`, так что резолвер плеера находит онлайн-варианты по `VariantId`.
+- `Aknigi24Source` + `Aknigi24Parser`: поиск `/search?q=`, страница `/book/<slug>`, главы из JSON
+  `#player-data`, аудио `/book/<id>/chapter/<n>` (прямой MP3, Range, без подписи → `expiresAt=null`).
+  404/410 → `Restricted(REMOVED)`, страница без плеера с текстом о правообладателе → `RIGHTS_HOLDER`.
+  Лимит 2 rps (burst 3), общий root OkHttp.
+- Фикстуры живых страниц `search-soliaris.html`, `book-soliaris.html`; `Aknigi24ParserTest` 4/4.
+- Дальше: AB-12/13 — БД (work/narration/variant/progress), затем дом «Книги».
