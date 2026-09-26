@@ -2,6 +2,12 @@ package com.example.myapplication.audiobooks.ui.home
 
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
+import androidx.annotation.DrawableRes
+import androidx.compose.material3.Icon
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import com.phnem.vetro.R
 import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -130,22 +136,27 @@ fun BooksHomeScreen(
         vm.consumeLaunch()
     }
 
+    // Все полки на месте с первого кадра: пока выдачи нет, карточка — скелет с пустым веером,
+    // а не пустой экран, который «появляется» через несколько секунд.
     val shelves = remember(content, strings) {
         buildList {
-            content[BooksCatalog.SHOWCASE_KEY]?.let {
-                add(OpenShelf(BooksCatalog.SHOWCASE_KEY, strings.showcaseTitle, strings.showcaseSubtitle, it.books, it.fetchedAt))
-            }
+            val showcase = content[BooksCatalog.SHOWCASE_KEY]
+            add(OpenShelf(BooksCatalog.SHOWCASE_KEY, strings.showcaseTitle, strings.showcaseSubtitle,
+                showcase?.books.orEmpty(), showcase?.fetchedAt))
             vm.shelves.forEach { s ->
-                content[s.key]?.takeIf { it.books.isNotEmpty() }?.let {
-                    add(OpenShelf(s.key, s.title, s.subtitle, it.books, it.fetchedAt))
-                }
+                val cached = content[s.key]
+                add(OpenShelf(s.key, s.title, s.subtitle, cached?.books.orEmpty(), cached?.fetchedAt))
             }
         }
     }
 
+    // Свой фон обязателен: без него сквозь страницу просвечивала «вдавленная» соседняя страница
+    // рабочей области. Тот же тёплый градиент, что у настроек и страницы серий.
+    val background = remember(isDark) { IosDesign.screenGradient(isDark) }
     Box(
         modifier
             .fillMaxSize()
+            .background(background)
             .onPlaced { morph.root = it },
     ) {
         HomeList(
@@ -178,7 +189,7 @@ fun BooksHomeScreen(
             Box(
                 Modifier
                     .fillMaxSize()
-                    .background(MaterialTheme.colorScheme.background)
+                    .background(background)
                     .statusBarsPadding(),
             ) {
                 LocalBooksPanel(getAudiobookStrings(language), Modifier.fillMaxSize(), autoOpenPicker = false)
@@ -224,7 +235,7 @@ private fun HomeList(
             // Список под раскрытой полкой гаснет и чуть уходит вниз (видео, 2,0–2,6 с).
             .graphicsLayer {
                 val p = morph.progress.value
-                alpha = 1f - (p / 0.6f).coerceIn(0f, 1f)
+                alpha = 1f - (p / HOME_FADE_END).coerceIn(0f, 1f)
                 translationY = lift * p
             },
     ) {
@@ -233,14 +244,12 @@ private fun HomeList(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(strings.title, color = ink, fontFamily = SnProFamily, fontWeight = FontWeight.Bold, fontSize = 34.sp)
                     Spacer(Modifier.weight(1f))
-                    Box(
-                        Modifier
-                            .size(40.dp)
-                            .clip(CircleShape)
-                            .background(IosDesign.rowBackground(isDark))
-                            .clickable(onClick = onAddFolder),
-                        contentAlignment = Alignment.Center,
-                    ) { Text("+", color = ink, fontSize = 22.sp) }
+                    RoundIconButton(
+                        icon = R.drawable.ph_folder_plus,
+                        description = strings.addFolder,
+                        isDark = isDark,
+                        onClick = onAddFolder,
+                    )
                 }
                 val subtitle = when {
                     continueItems.size > 1 -> strings.inProgress(continueItems.size)
@@ -262,8 +271,8 @@ private fun HomeList(
             FanShelfCard(
                 title = shelf.title,
                 subtitle = shelf.subtitle,
-                topStart = strings.updated(strings.ago(now - shelf.fetchedAt)),
-                topEnd = topEnd,
+                topStart = shelf.fetchedAt?.let { strings.updated(strings.ago(now - it)) } ?: strings.loading,
+                topEnd = if (shelf.books.isEmpty()) "" else topEnd,
                 books = shelf.books,
                 isDark = isDark,
                 coverModifier = { index ->
@@ -276,6 +285,7 @@ private fun HomeList(
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null,
+                        enabled = shelf.books.isNotEmpty(),
                     ) { onOpenShelf(shelf) },
             )
         }
@@ -391,7 +401,8 @@ internal data class OpenShelf(
     val title: String,
     val subtitle: String,
     val books: List<CachedBook>,
-    val fetchedAt: Long,
+    /** null — выдачи ещё нет, карточка показывается скелетом. */
+    val fetchedAt: Long?,
 )
 
 /**
@@ -460,8 +471,6 @@ private fun ShelfPage(
         Modifier
             .fillMaxSize()
             .graphicsLayer { translationY = drag }
-            .background(MaterialTheme.colorScheme.background)
-            .graphicsLayer { alpha = morph.progress.value.coerceIn(0f, 1f) }
             // Пустые места страницы не пропускают касания к невидимому дому под ней.
             .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {},
     ) {
@@ -602,14 +611,40 @@ internal fun OrangeButton(text: String, modifier: Modifier = Modifier, enabled: 
 
 @Composable
 private fun CloseButton(label: String, isDark: Boolean, modifier: Modifier, onClick: () -> Unit) {
+    RoundIconButton(R.drawable.ph_x, label, isDark, modifier, onClick)
+}
+
+/** Круглая кнопка шапки: полупрозрачная над градиентом, как хабы настроек; иконка Phosphor 22 dp. */
+@Composable
+internal fun RoundIconButton(
+    @DrawableRes icon: Int,
+    description: String,
+    isDark: Boolean,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit,
+) {
     Box(
         modifier
-            .size(40.dp)
+            .size(44.dp)
             .clip(CircleShape)
-            .background(IosDesign.rowBackground(isDark))
-            .clickable(onClickLabel = label, onClick = onClick),
+            .background(IosDesign.groupRowBackground(isDark))
+            .clickable(onClickLabel = description, onClick = onClick)
+            .semantics { contentDescription = description },
         contentAlignment = Alignment.Center,
-    ) { Text("×", color = if (isDark) Color.White else Color.Black, fontSize = 22.sp) }
+    ) {
+        Icon(
+            painter = painterResource(icon),
+            contentDescription = null,
+            tint = if (isDark) Color.White else Color(0xFF111111),
+            modifier = Modifier.size(22.dp),
+        )
+    }
 }
 
 private const val TOP_ON_SHELF = 8
+
+/**
+ * Список дома гаснет раньше, чем проявляется содержимое страницы полки (с t 0,4): у страницы нет
+ * своей заливки — под обоими общий градиент раздела, и на обратном ходе не остаётся «чёрного окна».
+ */
+private const val HOME_FADE_END = 0.4f

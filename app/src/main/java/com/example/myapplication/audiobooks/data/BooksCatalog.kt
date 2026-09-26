@@ -1,5 +1,6 @@
 package com.example.myapplication.audiobooks.data
 
+import com.example.myapplication.audiobooks.data.remote.KnigavuheMetadata
 import com.example.myapplication.audiobooks.domain.source.AudiobookSource
 import com.example.myapplication.audiobooks.domain.source.SourceBook
 import com.example.myapplication.audiobooks.domain.source.SourceBookRef
@@ -16,6 +17,8 @@ import kotlinx.serialization.Serializable
 class BooksCatalog(
     private val sources: List<AudiobookSource>,
     private val store: JsonMapFileStore<CachedShelf>,
+    /** Каталог только для метаданных: обложка и чтец для книг, которых нет у звуковых источников. */
+    private val metadata: KnigavuheMetadata? = null,
     private val nowMs: () -> Long = System::currentTimeMillis,
 ) {
     /** Полки всех источников по порядку; ключ — `"<source>/<shelfId>"`. */
@@ -50,9 +53,16 @@ class BooksCatalog(
             }.filter { pick.matches(it) }
             if (candidates.isNotEmpty()) anyFound = true
             val best = candidates.maxWithOrNull(compareBy({ it.durationSec ?: 0L }))
-            best?.let { CachedBook.of(it, narrations = candidates.size) }
+            // Настоящая обложка нужна и книге без звука: берём её из каталога метаданных.
+            val meta = if (best?.coverUrl == null) {
+                metadata?.search(pick.title)?.firstOrNull { pick.matchesMeta(it) }
+            } else {
+                null
+            }
+            if (meta != null) anyFound = true
+            best?.let { CachedBook.of(it, narrations = candidates.size).let { b -> b.copy(coverUrl = b.coverUrl ?: meta?.coverUrl) } }
                 ?: CachedBook(source = "", key = "", title = pick.title, authors = listOf(pick.author),
-                    narrators = emptyList(), coverUrl = null, durationSec = null, narrations = 0)
+                    narrators = meta?.narrators.orEmpty(), coverUrl = meta?.coverUrl, durationSec = null, narrations = 0)
         }
         // Сеть легла целиком — не затираем прошлую удачную витрину пустышками.
         return if (anyFound) save(SHOWCASE_KEY, books) else null
@@ -66,13 +76,18 @@ class BooksCatalog(
 
     /** Одна из книг витрины: название на языке источника и фамилия для проверки автора. */
     private data class Pick(val title: String, val author: String, val surname: String) {
-        fun matches(book: SourceBook): Boolean =
-            AudiobookRepository.normalize(book.title) == AudiobookRepository.normalize(title) &&
-                book.authors.any { surname in AudiobookRepository.normalize(it).split(' ') }
+        fun matches(book: SourceBook): Boolean = matches(book.title, book.authors)
+
+        fun matchesMeta(hit: KnigavuheMetadata.Hit): Boolean = matches(hit.title, hit.authors)
+
+        private fun matches(bookTitle: String, authors: List<String>): Boolean =
+            AudiobookRepository.normalize(bookTitle) == AudiobookRepository.normalize(title) &&
+                authors.any { surname in AudiobookRepository.normalize(it).split(' ') }
     }
 
     companion object {
-        const val SHOWCASE_KEY = "showcase"
+        // v2: обложки из каталога метаданных — старая витрина без них пересобирается сразу.
+        const val SHOWCASE_KEY = "showcase_v2"
         private const val TTL_MS = 12 * 60 * 60 * 1000L
 
         /** Семь книг пользователя (issues/39), трилогия Лю Цысиня — по порядку. */

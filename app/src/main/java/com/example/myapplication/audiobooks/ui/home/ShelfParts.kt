@@ -1,6 +1,7 @@
 package com.example.myapplication.audiobooks.ui.home
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -58,7 +59,7 @@ internal fun BookCover(
         modifier = modifier
             .shadow(elevation, shape, clip = false, ambientColor = Color.Black, spotColor = Color.Black)
             .clip(shape)
-            .background(Color(0xFF1C1C1E)),
+            .background(Color.White.copy(alpha = 0.07f)),
         contentAlignment = Alignment.Center,
     ) {
         if (book.coverUrl != null) {
@@ -115,11 +116,13 @@ internal fun FanShelfCard(
     coverModifier: (bookIndex: Int) -> Modifier = { Modifier },
 ) {
     val ink = if (isDark) Color.White else Color(0xFF111111)
+    val shape = RoundedCornerShape(24.dp)
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(24.dp))
-            .background(IosDesign.rowBackground(isDark))
+            .clip(shape)
+            .background(IosDesign.groupRowBackground(isDark))
+            .border(Dp.Hairline, ink.copy(alpha = 0.08f), shape)
             .padding(top = 14.dp, start = 16.dp, end = 16.dp),
     ) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -150,7 +153,19 @@ internal fun FanShelfCard(
         Box(Modifier.fillMaxWidth().height(118.dp), contentAlignment = Alignment.TopCenter) {
             FanPoses.forEachIndexed { slot, pose ->
                 val bookIndex = FanBookIndex[slot]
-                val book = books.getOrNull(bookIndex) ?: return@forEachIndexed
+                val book = books.getOrNull(bookIndex)
+                if (book == null) {
+                    // Скелет: то же место и поворот, что у будущей обложки, — полка не «прыгает».
+                    Box(
+                        Modifier
+                            .offset(x = pose.dx, y = pose.dy)
+                            .size(ShelfCoverWidth * 0.86f, ShelfCoverHeight * 0.86f)
+                            .graphicsLayer { rotationZ = pose.rotation }
+                            .clip(RoundedCornerShape(CoverRadius))
+                            .background(ink.copy(alpha = 0.06f)),
+                    )
+                    return@forEachIndexed
+                }
                 BookCover(
                     book = book,
                     modifier = Modifier
