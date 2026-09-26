@@ -1,0 +1,181 @@
+-- Аудиокниги: текущая форма схемы (миграция 16.sqm создаёт то же самое на старых установках).
+-- Модель и правила — .scratch/audiobooks/spec/03-domain-and-storage.md.
+CREATE TABLE audiobook_work (
+    work_id TEXT NOT NULL PRIMARY KEY,
+    cluster_fingerprint TEXT NOT NULL,
+    collection_id TEXT,
+    title TEXT NOT NULL,
+    title_original TEXT,
+    authors_json TEXT NOT NULL,
+    series_title TEXT,
+    series_index REAL,
+    description TEXT,
+    genres_json TEXT NOT NULL DEFAULT '[]',
+    language TEXT NOT NULL,
+    year INTEGER,
+    is_collection INTEGER NOT NULL DEFAULT 0,
+    cover_url TEXT,
+    cover_palette_json TEXT,
+    cover_blurhash TEXT,
+    selected_narration_id TEXT,
+    updated_at INTEGER NOT NULL
+);
+CREATE INDEX audiobook_work_collection ON audiobook_work(collection_id);
+CREATE INDEX audiobook_work_fingerprint ON audiobook_work(cluster_fingerprint);
+
+CREATE TABLE audiobook_narration (
+    narration_id TEXT NOT NULL PRIMARY KEY,
+    work_id TEXT NOT NULL REFERENCES audiobook_work(work_id) ON DELETE CASCADE,
+    cluster_fingerprint TEXT NOT NULL,
+    narrators_json TEXT NOT NULL,
+    kind TEXT NOT NULL,
+    duration_ms INTEGER,
+    chapter_count INTEGER
+);
+CREATE INDEX audiobook_narration_work ON audiobook_narration(work_id);
+
+CREATE TABLE audiobook_variant (
+    variant_id TEXT NOT NULL PRIMARY KEY,
+    narration_id TEXT NOT NULL REFERENCES audiobook_narration(narration_id) ON DELETE CASCADE,
+    source_id TEXT NOT NULL,
+    source_url TEXT NOT NULL,
+    duration_ms INTEGER,
+    chapter_count INTEGER,
+    availability TEXT NOT NULL,
+    infrastructure TEXT,
+    last_verified_at INTEGER,
+    user_pinned INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX audiobook_variant_narration ON audiobook_variant(narration_id);
+
+CREATE TABLE audiobook_chapter (
+    variant_id TEXT NOT NULL REFERENCES audiobook_variant(variant_id) ON DELETE CASCADE,
+    idx INTEGER NOT NULL,
+    title TEXT NOT NULL,
+    start_ms INTEGER NOT NULL,
+    duration_ms INTEGER NOT NULL,
+    PRIMARY KEY (variant_id, idx)
+);
+
+CREATE TABLE audiobook_progress (
+    narration_id TEXT NOT NULL PRIMARY KEY REFERENCES audiobook_narration(narration_id) ON DELETE CASCADE,
+    work_id TEXT NOT NULL REFERENCES audiobook_work(work_id) ON DELETE CASCADE,
+    variant_id TEXT,
+    global_ms INTEGER NOT NULL,
+    chapter_idx INTEGER NOT NULL,
+    chapter_offset_ms INTEGER NOT NULL,
+    total_ms INTEGER,
+    speed REAL NOT NULL DEFAULT 1.0,
+    finished INTEGER NOT NULL DEFAULT 0,
+    updated_at INTEGER NOT NULL
+);
+CREATE INDEX audiobook_progress_recent ON audiobook_progress(updated_at DESC);
+
+CREATE TABLE audiobook_bookmark (
+    id TEXT NOT NULL PRIMARY KEY,
+    narration_id TEXT NOT NULL REFERENCES audiobook_narration(narration_id) ON DELETE CASCADE,
+    global_ms INTEGER NOT NULL,
+    chapter_idx INTEGER NOT NULL,
+    chapter_offset_ms INTEGER NOT NULL,
+    note TEXT,
+    created_at INTEGER NOT NULL
+);
+CREATE INDEX audiobook_bookmark_narration ON audiobook_bookmark(narration_id);
+
+CREATE TABLE audiobook_listen_session (
+    id TEXT NOT NULL PRIMARY KEY,
+    narration_id TEXT NOT NULL REFERENCES audiobook_narration(narration_id) ON DELETE CASCADE,
+    started_at INTEGER NOT NULL,
+    listened_ms INTEGER NOT NULL,
+    book_ms INTEGER NOT NULL,
+    device_offline INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX audiobook_listen_session_started ON audiobook_listen_session(started_at);
+
+upsertWork:
+INSERT OR REPLACE INTO audiobook_work(
+    work_id, cluster_fingerprint, collection_id, title, title_original, authors_json, series_title,
+    series_index, description, genres_json, language, year, is_collection, cover_url,
+    cover_palette_json, cover_blurhash, selected_narration_id, updated_at
+) VALUES ?;
+
+workById:
+SELECT * FROM audiobook_work WHERE work_id = ?;
+
+worksByFingerprint:
+SELECT * FROM audiobook_work WHERE cluster_fingerprint = ?;
+
+setSelectedNarration:
+UPDATE audiobook_work SET selected_narration_id = :narrationId, updated_at = :updatedAt WHERE work_id = :workId;
+
+upsertNarration:
+INSERT OR REPLACE INTO audiobook_narration(
+    narration_id, work_id, cluster_fingerprint, narrators_json, kind, duration_ms, chapter_count
+) VALUES ?;
+
+narrationsByWork:
+SELECT * FROM audiobook_narration WHERE work_id = ?;
+
+narrationById:
+SELECT * FROM audiobook_narration WHERE narration_id = ?;
+
+upsertVariant:
+INSERT OR REPLACE INTO audiobook_variant(
+    variant_id, narration_id, source_id, source_url, duration_ms, chapter_count, availability,
+    infrastructure, last_verified_at, user_pinned
+) VALUES ?;
+
+variantById:
+SELECT * FROM audiobook_variant WHERE variant_id = ?;
+
+variantsByNarration:
+SELECT * FROM audiobook_variant WHERE narration_id = ?;
+
+setVariantAvailability:
+UPDATE audiobook_variant SET availability = :availability, last_verified_at = :verifiedAt WHERE variant_id = :variantId;
+
+deleteChapters:
+DELETE FROM audiobook_chapter WHERE variant_id = ?;
+
+insertChapter:
+INSERT INTO audiobook_chapter(variant_id, idx, title, start_ms, duration_ms) VALUES ?;
+
+chaptersByVariant:
+SELECT * FROM audiobook_chapter WHERE variant_id = ? ORDER BY idx;
+
+upsertProgress:
+INSERT OR REPLACE INTO audiobook_progress(
+    narration_id, work_id, variant_id, global_ms, chapter_idx, chapter_offset_ms, total_ms, speed,
+    finished, updated_at
+) VALUES ?;
+
+progressByNarration:
+SELECT * FROM audiobook_progress WHERE narration_id = ?;
+
+-- «Продолжить» на доме «Книги»: незаконченные, свежие первыми.
+continueListening:
+SELECT p.*, w.title, w.authors_json, w.cover_url, n.narrators_json
+FROM audiobook_progress p
+JOIN audiobook_work w ON w.work_id = p.work_id
+JOIN audiobook_narration n ON n.narration_id = p.narration_id
+WHERE p.finished = 0
+ORDER BY p.updated_at DESC
+LIMIT :limit;
+
+insertBookmark:
+INSERT INTO audiobook_bookmark(id, narration_id, global_ms, chapter_idx, chapter_offset_ms, note, created_at)
+VALUES ?;
+
+bookmarksByNarration:
+SELECT * FROM audiobook_bookmark WHERE narration_id = ? ORDER BY global_ms;
+
+deleteBookmark:
+DELETE FROM audiobook_bookmark WHERE id = ?;
+
+insertListenSession:
+INSERT INTO audiobook_listen_session(id, narration_id, started_at, listened_ms, book_ms, device_offline)
+VALUES ?;
+
+-- «На этой неделе: 4 ч 20 мин» — реальное время прослушивания с момента `since`.
+listenedSince:
+SELECT CAST(COALESCE(SUM(listened_ms), 0) AS INTEGER) FROM audiobook_listen_session WHERE started_at >= ?;

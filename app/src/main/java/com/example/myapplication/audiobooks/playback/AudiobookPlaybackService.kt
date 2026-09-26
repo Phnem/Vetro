@@ -29,12 +29,17 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import org.koin.android.ext.android.get
 import org.koin.android.ext.android.inject
 
 /** Same-process Media3 service; the Activity may disappear while audio continues. */
 @UnstableApi
 class AudiobookPlaybackService : MediaLibraryService() {
     private val manifestResolver: ManifestResolver by inject()
+    // Своя область без отмены в onDestroy: последняя запись позиции должна дойти до БД.
+    private val progressTracker by lazy {
+        AudiobookProgressTracker(get(), CoroutineScope(SupervisorJob() + Dispatchers.IO))
+    }
     private lateinit var player: ExoPlayer
     private lateinit var session: MediaLibrarySession
     private lateinit var resumptionStore: PlaybackResumptionStore
@@ -49,7 +54,7 @@ class AudiobookPlaybackService : MediaLibraryService() {
     private val savePosition = object : Runnable {
         override fun run() {
             if (::player.isInitialized && player.isPlaying) {
-                resumptionStore.save(player)
+                saveAll()
                 handler.postDelayed(this, POSITION_SAVE_INTERVAL_MS)
             }
         }
@@ -69,7 +74,7 @@ class AudiobookPlaybackService : MediaLibraryService() {
         }
 
         override fun onEvents(player: Player, events: Player.Events) {
-            if (player.currentMediaItem != null) resumptionStore.save(player)
+            if (player.currentMediaItem != null) saveAll()
             if (events.contains(Player.EVENT_MEDIA_ITEM_TRANSITION) ||
                 events.contains(Player.EVENT_POSITION_DISCONTINUITY)) {
                 refreshChapterMetadata()
@@ -153,7 +158,7 @@ class AudiobookPlaybackService : MediaLibraryService() {
         chapterLoadJob?.cancel()
         sleepTimer.cancel()
         recoveryScope.cancel()
-        resumptionStore.save(player)
+        saveAll()
         player.removeListener(playerListener)
         session.release()
         player.release()
@@ -167,6 +172,12 @@ class AudiobookPlaybackService : MediaLibraryService() {
 
     private fun publishSessionState() {
         if (::session.isInitialized) session.setSessionExtras(sessionState())
+    }
+
+    /** Очередь — для системного «продолжить», позиция книги — в БД для «Продолжить» на доме. */
+    private fun saveAll() {
+        resumptionStore.save(player)
+        progressTracker.save(player, chapterTimeline, chapterVariant)
     }
 
     /** Media3 updates a progressive source in place when only metadata changes and URI stays fixed. */

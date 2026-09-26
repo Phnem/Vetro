@@ -1,6 +1,7 @@
 package com.example.myapplication.di
 
 import com.example.myapplication.audiobooks.AudiobookFeatureGate
+import com.example.myapplication.audiobooks.data.AudiobookRepository
 import com.example.myapplication.audiobooks.data.local.LocalFolderSource
 import com.example.myapplication.audiobooks.data.remote.Aknigi24Source
 import com.example.myapplication.audiobooks.domain.source.AudiobookSource
@@ -22,4 +23,5 @@ val audiobookModule = module {
     single(named("rate_aknigi24")) { TokenBucketRateLimiter(maxTokens = 3.0, refillTokensPerSecond = 2.0) }
     single { Aknigi24Source(get(), get(named("rate_aknigi24"))) } bind AudiobookSource::class bind ManifestSource::class
     single { ManifestResolver(sources = getAll<ManifestSource>()) }
+    single { AudiobookRepository(get()) }
 }

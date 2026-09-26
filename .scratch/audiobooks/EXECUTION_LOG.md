@@ -211,3 +211,20 @@ Outcome: DONE (без device-smoke: по новому ритму проверя�
   Лимит 2 rps (burst 3), общий root OkHttp.
 - Фикстуры живых страниц `search-soliaris.html`, `book-soliaris.html`; `Aknigi24ParserTest` 4/4.
 - Дальше: AB-12/13 — БД (work/narration/variant/progress), затем дом «Книги».
+
+## 2026-09-26 — AB-13 (БД раздела), AB-12 отложен
+
+Outcome: DONE_WITH_DEVIATIONS.
+
+- `Audiobook.sq` + `16.sqm`: work / narration / variant / chapter / progress / bookmark /
+  listen_session по spec/03. `Migration16Test`: обновлённая и чистая установки дают одинаковую
+  схему; «Продолжить» отдаёт незаконченные книги, свежие первыми.
+- `AudiobookRepository`: `saveOpened` (вариант → озвучка → произведение; озвучки одной книги
+  собираются по отпечатку «имена авторов словами, отсортированы | название | язык» — начало AB-24),
+  `ensureFromPlayback` (минимальные записи для локальной папки), `saveProgress` (NonCancellable),
+  `continueListening` (Flow), `listenedSince`.
+- `AudiobookProgressTracker` в сервисе: позиция по шкале книги, глава и смещение, скорость,
+  «дослушано» (< 60 с или < 1 %); пишется там же, где очередь для системного возобновления.
+- Отклонение: AB-12 (строка коллекции `MediaType.AUDIOBOOK`, guard'ы воркеров и синка) переносится
+  к AB-33 «Добавить в библиотеку» — дому «Книги» он не нужен, а риск для коллекции высокий.
+  Backup audiobook-таблиц — вместе с ним.
