@@ -35,6 +35,10 @@ class BooksHomeViewModel(
     /** Ключ — `BooksCatalog.SHOWCASE_KEY` или ключ полки. */
     val content: StateFlow<Map<String, CachedShelf>> = _content.asStateFlow()
 
+    /** Полки, которые не удалось загрузить: карточка говорит об этом и повторяет по нажатию. */
+    private val _failed = MutableStateFlow<Set<String>>(emptySet())
+    val failed: StateFlow<Set<String>> = _failed.asStateFlow()
+
     private val _weekListenedMs = MutableStateFlow(0L)
     val weekListenedMs: StateFlow<Long> = _weekListenedMs.asStateFlow()
 
@@ -51,12 +55,19 @@ class BooksHomeViewModel(
             keys.forEach { key -> catalog.cached(key)?.let { put(key, it) } }
             keys.forEach { key ->
                 val cached = _content.value[key]
-                if (cached == null || catalog.isStale(cached)) {
-                    val fresh = if (key == BooksCatalog.SHOWCASE_KEY) catalog.refreshShowcase() else catalog.refreshShelf(key)
-                    fresh?.let { put(key, it) }
-                }
+                if (cached == null || catalog.isStale(cached)) refresh(key)
             }
         }
+    }
+
+    fun retry(key: String) {
+        viewModelScope.launch { refresh(key) }
+    }
+
+    private suspend fun refresh(key: String) {
+        _failed.update { it - key }
+        val fresh = if (key == BooksCatalog.SHOWCASE_KEY) catalog.refreshShowcase() else catalog.refreshShelf(key)
+        if (fresh != null) put(key, fresh) else if (_content.value[key] == null) _failed.update { it + key }
     }
 
     fun play(book: CachedBook) {

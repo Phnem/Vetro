@@ -115,6 +115,7 @@ fun BooksHomeScreen(
     val continueItems by vm.continueItems.collectAsStateWithLifecycle()
     val weekMs by vm.weekListenedMs.collectAsStateWithLifecycle()
     val launch by vm.launch.collectAsStateWithLifecycle()
+    val failed by vm.failed.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
     val reducedMotion = rememberReducedMotion()
     val morph = remember { ShelfMorph() }
@@ -169,6 +170,8 @@ fun BooksHomeScreen(
             shelves = shelves,
             morph = morph,
             onResume = vm::resume,
+            failed = failed,
+            onRetry = vm::retry,
             onOpenShelf = { shelf -> morph.expand(shelf, scope, reducedMotion) },
             onAddFolder = { showLocal = true },
         )
@@ -195,8 +198,12 @@ fun BooksHomeScreen(
                     .background(background)
                     .statusBarsPadding(),
             ) {
-                LocalBooksPanel(getAudiobookStrings(language), Modifier.fillMaxSize(), autoOpenPicker = false)
-                CloseButton(strings.close, isDark, Modifier.align(Alignment.TopEnd).padding(12.dp)) { showLocal = false }
+                LocalBooksPanel(
+                    getAudiobookStrings(language),
+                    Modifier.fillMaxSize(),
+                    autoOpenPicker = false,
+                    onClose = { showLocal = false },
+                )
             }
         }
 
@@ -222,6 +229,8 @@ private fun HomeList(
     weekMs: Long,
     shelves: List<OpenShelf>,
     morph: ShelfMorph,
+    failed: Set<String>,
+    onRetry: (String) -> Unit,
     onResume: (ContinueItem) -> Unit,
     onOpenShelf: (OpenShelf) -> Unit,
     onAddFolder: () -> Unit,
@@ -274,7 +283,11 @@ private fun HomeList(
             FanShelfCard(
                 title = shelf.title,
                 subtitle = shelf.subtitle,
-                topStart = shelf.fetchedAt?.let { strings.updated(strings.ago(now - it)) } ?: strings.loading,
+                topStart = when {
+                    shelf.fetchedAt != null -> strings.updated(strings.ago(now - shelf.fetchedAt))
+                    shelf.key in failed -> strings.shelfFailed
+                    else -> strings.loading
+                },
                 topEnd = if (shelf.books.isEmpty()) "" else topEnd,
                 books = shelf.books,
                 isDark = isDark,
@@ -288,8 +301,8 @@ private fun HomeList(
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null,
-                        enabled = shelf.books.isNotEmpty(),
-                    ) { onOpenShelf(shelf) },
+                        enabled = shelf.books.isNotEmpty() || shelf.key in failed,
+                    ) { if (shelf.books.isEmpty()) onRetry(shelf.key) else onOpenShelf(shelf) },
             )
         }
     }
@@ -569,11 +582,6 @@ internal fun OrangeButton(text: String, modifier: Modifier = Modifier, enabled: 
     ) {
         Text(text, color = Color.White, fontFamily = SnProFamily, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
     }
-}
-
-@Composable
-private fun CloseButton(label: String, isDark: Boolean, modifier: Modifier, onClick: () -> Unit) {
-    RoundIconButton(R.drawable.ph_x, label, isDark, modifier, onClick)
 }
 
 /** Круглая кнопка шапки: полупрозрачная над градиентом, как хабы настроек; иконка Phosphor 22 dp. */

@@ -2,6 +2,22 @@ package com.example.myapplication.audiobooks.ui
 
 import com.example.myapplication.ui.shared.theme.IosScroll
 import android.content.ComponentName
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.material3.Icon
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.style.TextAlign
+import com.example.myapplication.ui.shared.theme.BrandOrange
+import com.example.myapplication.ui.shared.theme.IosDesign
+import com.example.myapplication.ui.shared.theme.SnProFamily
+import com.phnem.vetro.R
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -67,10 +83,16 @@ import org.koin.compose.koinInject
 /** Local-books home: real covers are supplied by the folder source, not demo artwork. */
 @Composable
 @UnstableApi
-fun LocalBooksPanel(strings: AudiobookStrings, modifier: Modifier = Modifier, autoOpenPicker: Boolean = false) {
+fun LocalBooksPanel(
+    strings: AudiobookStrings,
+    modifier: Modifier = Modifier,
+    autoOpenPicker: Boolean = false,
+    onClose: (() -> Unit)? = null,
+) {
     val context = LocalContext.current.applicationContext
     val source: LocalFolderSource = koinInject()
     val resolver: ManifestResolver = koinInject()
+    val playerState: AudiobookPlayerState = koinInject()
     val scope = rememberCoroutineScope()
     var books by remember { mutableStateOf<List<LocalBook>>(emptyList()) }
     var unavailableFolders by remember { mutableStateOf(0) }
@@ -126,6 +148,7 @@ fun LocalBooksPanel(strings: AudiobookStrings, modifier: Modifier = Modifier, au
                     controller.prepare()
                     controller.play()
                     homePrefs.edit().putString("last_played_variant", book.variant.value).apply()
+                    playerState.requestExpand()
                     lastPlayed = book.variant.value
                     message = strings.playbackStarted
                 } finally {
@@ -138,97 +161,116 @@ fun LocalBooksPanel(strings: AudiobookStrings, modifier: Modifier = Modifier, au
         }
     }
 
-    Column(modifier.verticalScroll(rememberScrollState(), flingBehavior = IosScroll.flingBehavior()).padding(horizontal = 20.dp).padding(top = 24.dp, bottom = 24.dp),
-        verticalArrangement = Arrangement.spacedBy(18.dp)) {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically) {
-            Text(strings.books, fontSize = 32.sp, fontWeight = FontWeight.Bold)
-            Box(Modifier.size(46.dp).clip(CircleShape).background(shelfSurface)
-                .clickable(enabled = !busy) { picker.launch(null) }
-                .semantics { contentDescription = strings.chooseFolder }, contentAlignment = Alignment.Center) {
-                Text("+", color = ink, fontSize = 26.sp)
+    val isDark = com.example.myapplication.ui.shared.theme.isAppInDarkTheme()
+    val muted = ink.copy(alpha = 0.6f)
+    LazyVerticalGrid(
+        columns = GridCells.Fixed(2),
+        modifier = modifier,
+        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 32.dp),
+        horizontalArrangement = Arrangement.spacedBy(14.dp),
+        verticalArrangement = Arrangement.spacedBy(18.dp),
+    ) {
+        item(span = { GridItemSpan(maxLineSpan) }) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text(strings.myLibrary, color = ink, fontFamily = SnProFamily, fontWeight = FontWeight.Bold, fontSize = 30.sp)
+                    if (books.isNotEmpty()) {
+                        Text(books.size.toString(), color = muted, fontFamily = SnProFamily, fontSize = 15.sp)
+                    }
+                }
+                PanelButton(R.drawable.ph_folder_plus, strings.chooseFolder, isDark, enabled = !busy) { picker.launch(null) }
+                if (onClose != null) {
+                    Spacer(Modifier.width(10.dp))
+                    PanelButton(R.drawable.ph_x, strings.collapse, isDark, onClick = onClose)
+                }
             }
         }
-        message?.let { Text(it, fontSize = 13.sp) }
-        if (unavailableFolders > 0) Text(strings.folderAccessLost, fontSize = 13.sp)
+        val notice = message ?: if (unavailableFolders > 0) strings.folderAccessLost else null
+        if (notice != null) {
+            item(span = { GridItemSpan(maxLineSpan) }) {
+                Text(notice, color = muted, fontFamily = SnProFamily, fontSize = 13.sp)
+            }
+        }
         if (books.isEmpty()) {
-            Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(26.dp))
-                .background(shelfSurface).padding(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text(strings.emptyLibrary, color = ink, fontSize = 21.sp, fontWeight = FontWeight.SemiBold)
-                Button(onClick = { picker.launch(null) }, enabled = !busy) { Text(strings.chooseFolder) }
+            // Пустое состояние называет причину и одно действие, которое его заполняет.
+            item(span = { GridItemSpan(maxLineSpan) }) {
+                Column(
+                    Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(24.dp))
+                        .background(IosDesign.groupRowBackground(isDark))
+                        .padding(22.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    Icon(painterResource(R.drawable.ph_books), null, tint = muted, modifier = Modifier.size(40.dp))
+                    Spacer(Modifier.height(12.dp))
+                    Text(strings.emptyLibrary, color = ink, fontFamily = SnProFamily, fontWeight = FontWeight.SemiBold,
+                        fontSize = 17.sp, textAlign = TextAlign.Center)
+                    Spacer(Modifier.height(16.dp))
+                    Box(
+                        Modifier
+                            .height(48.dp)
+                            .clip(CircleShape)
+                            .background(if (busy) BrandOrange.copy(alpha = 0.4f) else BrandOrange)
+                            .clickable(enabled = !busy) { picker.launch(null) }
+                            .padding(horizontal = 24.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(strings.chooseFolder, color = Color.White, fontFamily = SnProFamily, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
+                    }
+                }
             }
         } else {
-            val recent = books.firstOrNull { it.variant.value == lastPlayed }
-            if (recent != null) {
-                Text(strings.continueListening, fontSize = 21.sp, fontWeight = FontWeight.Bold)
-                Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp))
-                    .background(shelfSurface).clickable(enabled = !busy) { playBook(recent) }.padding(14.dp),
-                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(15.dp)) {
-                    LocalCover(recent, Modifier.size(width = 94.dp, height = 134.dp))
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text(recent.title, color = ink, fontSize = 19.sp, fontWeight = FontWeight.Bold,
-                            maxLines = 3, overflow = TextOverflow.Ellipsis)
-                        Text("${recent.fileCount} · ${strings.play}", color = ink.copy(alpha = 0.66f), fontSize = 12.sp)
-                        Text("▶  ${strings.continueListening}", color = Color(0xFFFF7735), fontSize = 13.sp)
-                    }
+            items(books, key = { it.variant.value }) { book ->
+                Column(Modifier.clickable(enabled = !busy) { playBook(book) }) {
+                    LocalCover(book, Modifier.fillMaxWidth().aspectRatio(2f / 3f))
+                    Spacer(Modifier.height(8.dp))
+                    Text(book.title, color = ink, fontFamily = SnProFamily, fontWeight = FontWeight.SemiBold, fontSize = 14.sp,
+                        maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    Text(
+                        if (book.variant.value == lastPlayed) strings.continueListening else book.fileCount.toString(),
+                        color = if (book.variant.value == lastPlayed) BrandOrange else muted,
+                        fontFamily = SnProFamily, fontSize = 12.sp,
+                    )
                 }
             }
-            Text(strings.shelves, fontSize = 21.sp, fontWeight = FontWeight.Bold)
-            Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(26.dp))
-                .background(shelfSurface).clickable { expandedShelf = !expandedShelf }
-                .animateContentSize().padding(top = 18.dp, start = 16.dp, end = 16.dp),
-                horizontalAlignment = Alignment.CenterHorizontally) {
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text(strings.myLibrary, color = ink, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
-                    Text(books.size.toString(), color = ink.copy(alpha = 0.58f), fontSize = 13.sp)
-                }
-                Text(if (expandedShelf) "⌃" else "⌄", color = ink.copy(alpha = 0.55f), fontSize = 18.sp)
-                BoxWithConstraints(Modifier.fillMaxWidth().height(156.dp)) {
-                    val visible = books.take(3)
-                    val cardWidth = 91.dp
-                    val center = (maxWidth - cardWidth) / 2
-                    visible.forEachIndexed { index, book ->
-                        val x by animateDpAsState(
-                            if (expandedShelf) (maxWidth - cardWidth * visible.size) / 2 + cardWidth * index
-                            else center + 37.dp * (index - (visible.size - 1) / 2f),
-                            label = "shelf-cover-x",
-                        )
-                        val rotation by animateFloatAsState(
-                            if (expandedShelf) 0f else (index - (visible.size - 1) / 2f) * 7f,
-                            label = "shelf-cover-angle",
-                        )
-                        LocalCover(book, Modifier.offset(x = x, y = 7.dp).size(width = cardWidth, height = 139.dp)
-                            .graphicsLayer { rotationZ = rotation })
-                    }
-                }
-                if (expandedShelf) {
-                    books.forEach { book ->
-                        Row(Modifier.fillMaxWidth().clickable(enabled = !busy) { playBook(book) }
-                            .padding(vertical = 9.dp), verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                            LocalCover(book, Modifier.size(width = 44.dp, height = 62.dp))
-                            Text(book.title, color = ink, modifier = Modifier.weight(1f),
-                                maxLines = 2, overflow = TextOverflow.Ellipsis)
-                            Text("▶", color = Color(0xFFFF7735))
-                        }
-                    }
-                }
-            }
-            Button(onClick = { picker.launch(null) }, enabled = !busy) { Text(strings.chooseFolder) }
         }
+    }
+}
+
+/** Круглая кнопка панели: полупрозрачная над градиентом раздела, иконка Phosphor. */
+@Composable
+private fun PanelButton(icon: Int, description: String, isDark: Boolean, enabled: Boolean = true, onClick: () -> Unit) {
+    Box(
+        Modifier
+            .size(44.dp)
+            .clip(CircleShape)
+            .background(IosDesign.groupRowBackground(isDark))
+            .clickable(enabled = enabled, onClickLabel = description, onClick = onClick)
+            .semantics { contentDescription = description },
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(painterResource(icon), null, tint = if (isDark) Color.White else Color(0xFF111111), modifier = Modifier.size(22.dp))
     }
 }
 
 @Composable
 private fun LocalCover(book: LocalBook, modifier: Modifier = Modifier) {
-    Box(modifier.clip(RoundedCornerShape(10.dp)).background(Color(0xFF48525A)),
-        contentAlignment = Alignment.Center) {
+    val shape = RoundedCornerShape(14.dp)
+    Box(
+        modifier
+            .shadow(8.dp, shape, clip = false)
+            .clip(shape)
+            .background(Color.White.copy(alpha = 0.07f)),
+        contentAlignment = Alignment.Center,
+    ) {
         if (book.artworkUri != null) {
             AsyncImage(model = book.artworkUri, contentDescription = book.title, modifier = Modifier.matchParentSize(),
                 contentScale = ContentScale.Crop)
         } else {
-            Text(book.title.take(24), color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.SemiBold,
-                modifier = Modifier.padding(8.dp), maxLines = 3, overflow = TextOverflow.Ellipsis)
+            Text(book.title.take(40), color = Color.White.copy(alpha = 0.72f), fontFamily = SnProFamily, fontSize = 13.sp,
+                fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center, modifier = Modifier.padding(10.dp),
+                maxLines = 4, overflow = TextOverflow.Ellipsis)
         }
     }
 }

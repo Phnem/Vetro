@@ -33,6 +33,7 @@ data class BooksHomeStrings(
     val loading: String,
     val preparing: String,
     val favorite: String,
+    val shelfFailed: String,
     val close: String,
 )
 
@@ -67,6 +68,7 @@ fun booksHomeStrings(language: AppLanguage): BooksHomeStrings = when (language) 
         loading = "Загружаем полку…",
         preparing = "Готовим книгу…",
         favorite = "В избранное",
+        shelfFailed = "Источник не ответил · нажмите, чтобы повторить",
         close = "Закрыть",
     )
     AppLanguage.EN -> BooksHomeStrings(
@@ -99,6 +101,7 @@ fun booksHomeStrings(language: AppLanguage): BooksHomeStrings = when (language) 
         loading = "Loading the shelf…",
         preparing = "Preparing the book…",
         favorite = "Favourite",
+        shelfFailed = "The source did not answer · tap to retry",
         close = "Close",
     )
 }
