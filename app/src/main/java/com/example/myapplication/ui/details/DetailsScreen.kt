@@ -115,6 +115,7 @@ fun DetailsScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val webLinks by viewModel.webLinks.collectAsStateWithLifecycle()
     val seasons by viewModel.seasons.collectAsStateWithLifecycle()
+    val enrichment by viewModel.enrichment.collectAsStateWithLifecycle()
     val isDark = isAppInDarkTheme()
 
     val current = anime
@@ -189,6 +190,7 @@ fun DetailsScreen(
                         imgPath = viewModel.getImgPath(current.imageFileName),
                         webLinks = webLinks,
                         seasons = seasons,
+                        enrichment = enrichment,
                         onWatch = {
                             performHaptic(view, Haptic.Light)
                             openEpisodes()
@@ -321,6 +323,7 @@ private fun DetailsInfoPage(
     imgPath: String?,
     webLinks: List<com.example.myapplication.domain.enrichment.weblinks.ResolvedWebLink>,
     seasons: List<com.example.myapplication.domain.seasons.SeasonInfo>,
+    enrichment: com.example.myapplication.domain.enrichment.title.TitleEnrichment?,
     onWatch: () -> Unit,
     onDownload: () -> Unit,
     onToggleFavorite: () -> Unit,
@@ -437,9 +440,11 @@ private fun DetailsInfoPage(
             // Grab-индикатор как у обычной шторки: сразу читается, что лист «наезжает» на арт.
             GrabberHandle(isDark)
             Spacer(Modifier.height(6.dp))
-            Text(
-                text = displayTitle,
-                style = MaterialTheme.typography.headlineMedium.copy(
+            // Прозрачный логотип тайтла (TMDb / Fanart.tv) вместо текста, если он есть и загрузился.
+            DetailsTitle(
+                displayTitle = displayTitle,
+                logo = enrichment?.logo,
+                textStyle = MaterialTheme.typography.headlineMedium.copy(
                     fontFamily = SnProFamily,
                     fontWeight = FontWeight.Bold,
                     fontSize = 28.sp,
@@ -448,8 +453,6 @@ private fun DetailsInfoPage(
                     hyphens = Hyphens.Auto,
                 ),
                 color = onBg,
-                maxLines = 3,
-                overflow = TextOverflow.Ellipsis,
             )
 
             // Строки мета-чипов «дата · рейтинг · серии» здесь больше нет: дата дублировала
@@ -499,11 +502,22 @@ private fun DetailsInfoPage(
                 )
             }
 
+            // ——— Трейлер и следующая серия (слой обогащения) ———
+            enrichment?.trailer?.let { trailer ->
+                Spacer(Modifier.height(14.dp))
+                TrailerPill(trailer = trailer, ru = ru, isDark = isDark)
+            }
+            enrichment?.nextRelease?.let { release ->
+                Spacer(Modifier.height(14.dp))
+                NextReleaseCard(release = release, ru = ru, isDark = isDark)
+            }
+
             Spacer(Modifier.height(24.dp))
 
             // ——— Информация: сетка 2×N. Пока карточка API не пришла, факты берутся из
             // локальной записи (счётчик серий), поэтому секция не мигает пустотой. ———
-            val facts = remember(anime, details, ru) { buildDetailFacts(anime, details, ru) }
+            val ratings = enrichment?.ratings
+            val facts = remember(anime, details, ru, ratings) { buildDetailFacts(anime, details, ru, ratings) }
             if (facts.isNotEmpty()) {
                 SectionHeader(text = if (ru) "Информация" else "Information", color = onBg)
                 Spacer(Modifier.height(12.dp))
@@ -524,6 +538,20 @@ private fun DetailsInfoPage(
                     genres.forEach { genre ->
                         MetaChip(text = genre, chipBg = chipBg, fg = muted)
                     }
+                }
+                Spacer(Modifier.height(24.dp))
+            }
+
+            // ——— Русская озвучка: какие студии озвучивают (Shikimori) ———
+            val dubs = enrichment?.russianDubs.orEmpty()
+            if (ru && dubs.isNotEmpty()) {
+                SectionHeader(text = "Русская озвучка", color = onBg)
+                Spacer(Modifier.height(12.dp))
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    dubs.take(12).forEach { studio -> MetaChip(text = studio, chipBg = chipBg, fg = muted) }
                 }
                 Spacer(Modifier.height(24.dp))
             }

@@ -1,5 +1,8 @@
 package com.example.myapplication.ui.details
 
+import androidx.compose.material.icons.rounded.Leaderboard
+import androidx.compose.material.icons.rounded.ThumbUp
+import com.example.myapplication.network.enrichment.OmdbRatings
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -69,6 +72,7 @@ fun buildDetailFacts(
     anime: Anime,
     details: AnimeDetails?,
     ru: Boolean,
+    ratings: OmdbRatings? = null,
 ): List<DetailFact> {
     val isManga = anime.mediaType == MediaType.MANGA
     val facts = mutableListOf<DetailFact>()
@@ -84,6 +88,11 @@ fun buildDetailFacts(
             value = label,
         )
     }
+
+    // Оценки критиков (OMDb) — сразу за своим рейтингом: это тот же вопрос «насколько хорошо».
+    ratings?.imdbRating?.let { facts += DetailFact("imdb", Icons.Rounded.Star, "IMDb", "%.1f".format(it)) }
+    ratings?.rottenTomatoes?.let { facts += DetailFact("rt", Icons.Rounded.ThumbUp, "Rotten Tomatoes", "$it%") }
+    ratings?.metacritic?.let { facts += DetailFact("metacritic", Icons.Rounded.Leaderboard, "Metacritic", "$it") }
 
     val statusCode = normalizeCode(details?.status)
     statusLabel(statusCode, ru)?.let { label ->

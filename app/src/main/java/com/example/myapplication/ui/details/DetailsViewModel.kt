@@ -1,5 +1,7 @@
 package com.example.myapplication.ui.details
 
+import com.example.myapplication.domain.enrichment.title.TitleEnrichmentRepository
+import com.example.myapplication.domain.enrichment.title.TitleEnrichment
 import com.example.myapplication.data.local.AppLanguagePrefs
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -35,6 +37,7 @@ class DetailsViewModel(
     private val seasonEpisodesStore: SeasonEpisodesStore,
     private val seasonEpisodesResolver: SeasonEpisodesResolver,
     private val seasonCatchUp: SeasonCatchUp,
+    private val titleEnrichment: TitleEnrichmentRepository,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow<DetailsUiState>(DetailsUiState.Idle)
@@ -43,6 +46,13 @@ class DetailsViewModel(
     // Инициализация синхронно: узел sharedBounds есть в дереве на 0-м кадре — Exit transition работает.
     private val _currentAnime = MutableStateFlow<Anime?>(repository.getAnimeById(animeId))
     val currentAnime: StateFlow<Anime?> = _currentAnime.asStateFlow()
+
+    /**
+     * Обогащение карточки (логотип, трейлер, рейтинги критиков, следующая серия) — отдельно от базовой
+     * карточки: грузится после неё и не мешает ей; ошибка или отсутствие ключей — просто null.
+     */
+    private val _enrichment = MutableStateFlow<TitleEnrichment?>(null)
+    val enrichment: StateFlow<TitleEnrichment?> = _enrichment.asStateFlow()
 
     private val _currentLanguage = MutableStateFlow(AppLanguage.EN)
     val currentLanguage: StateFlow<AppLanguage> = _currentLanguage.asStateFlow()
@@ -77,6 +87,11 @@ class DetailsViewModel(
             val prefs = settingsDataStore.data.first()
             _currentLanguage.value = AppLanguagePrefs.from(prefs)
             _currentAnime.value?.let { loadDetails(it, _currentLanguage.value) }
+            _currentAnime.value?.let { anime ->
+                _enrichment.value = runCatching { titleEnrichment.load(anime, _currentLanguage.value) }
+                    .onFailure { if (it is kotlinx.coroutines.CancellationException) throw it }
+                    .getOrNull()?.takeUnless { it.isEmpty && it.russianDubs.isEmpty() }
+            }
         }
     }
 
