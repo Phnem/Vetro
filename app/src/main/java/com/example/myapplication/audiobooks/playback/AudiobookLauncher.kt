@@ -1,5 +1,9 @@
 package com.example.myapplication.audiobooks.playback
 
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.CoroutineScope
+import com.example.myapplication.audiobooks.data.NarrationChain
 import android.content.ComponentName
 import android.content.Context
 import androidx.media3.common.util.UnstableApi
@@ -33,7 +37,10 @@ class AudiobookLauncher(
     private val repository: AudiobookRepository,
     private val playerState: AudiobookPlayerState,
     private val search: AudiobookSearch,
+    private val chain: NarrationChain,
 ) {
+    /** Фоновые дела запуска (сбор цепочки) переживают экран, с которого нажали «Слушать». */
+    private val background = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     sealed interface Result {
         data object Started : Result
         data object Restricted : Result
@@ -88,6 +95,9 @@ class AudiobookLauncher(
         return runCatching {
             start(opened, manifest, d.title, d.authors.joinToString(", "), d.narrators.joinToString(", "), d.coverUrl,
                 startFraction, startGlobalMs, startChapter)
+            // Пока книга играет, находим её копии на других сайтах: если сайт отвалится посреди
+            // прослушивания, плеер перейдёт на следующее звено сразу, без поиска.
+            background.launch { runCatching { chain.discover(opened.narrationId) } }
             Result.Started
         }.getOrElse { if (it is kotlinx.coroutines.CancellationException) throw it else Result.Unavailable }
     }

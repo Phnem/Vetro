@@ -96,7 +96,7 @@ abstract class WebAudiobookSource(
     private suspend fun durations(list: SitePlaylist): List<Long?> {
         val given = list.tracks.map { it.durationSec?.takeIf { d -> d > 0 } }
         if (given.all { it != null }) return given
-        val total = list.totalSec?.takeIf { it > 0 } ?: return given
+        val total = list.totalSec?.takeIf { it > 0 } ?: return byBitrate(list, given)
         val knownSum = given.filterNotNull().sum()
         val missing = given.indices.filter { given[it] == null }
         val rest = (total - knownSum).takeIf { it > missing.size } ?: return given
@@ -109,6 +109,23 @@ abstract class WebAudiobookSource(
         }
         val result = given.toMutableList()
         missing.forEachIndexed { k, i -> result[i] = (rest * shares[k]).toLong().coerceAtLeast(1L) }
+        return result
+    }
+
+    /**
+     * Ни длин, ни общей длины: битрейт из заголовка первого файла, длины — по размерам (HEAD).
+     * Не вышло — длины остаются неизвестными, книга играет без разметки глав на шкале.
+     */
+    private suspend fun byBitrate(list: SitePlaylist, given: List<Long?>): List<Long?> {
+        val first = list.tracks.first().url
+        val head = web.range(first, list.headers, 0, Mp3Probe.HEAD_BYTES.toLong() - 1) ?: return given
+        val tag = Mp3Probe.tagSize(head)
+        val frame = if (tag > 0) web.range(first, list.headers, tag.toLong(), tag + Mp3Probe.HEAD_BYTES.toLong() - 1) else head
+        val kbps = frame?.let(Mp3Probe::bitrateKbps) ?: return given
+        val missing = given.indices.filter { given[it] == null }
+        val sizes = web.contentLengths(missing.map { list.tracks[it].url }, list.headers)
+        val result = given.toMutableList()
+        missing.forEachIndexed { k, i -> result[i] = sizes[k]?.let { (it * 8 / (kbps * 1000L)).coerceAtLeast(1L) } }
         return result
     }
 

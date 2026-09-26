@@ -35,6 +35,10 @@ class AudiobookPlayerState {
     var skipSilence by mutableStateOf(false)
         internal set
 
+    /** Последний переход плеера по цепочке сайтов: номер и имя сайта (пусто — запасных нет). */
+    var sourceNotice by mutableStateOf(0 to "")
+        internal set
+
     /** Счётчик просьб раскрыть полный плеер; хост отвечает на каждое новое значение. */
     var expandRequests by mutableIntStateOf(0)
         private set

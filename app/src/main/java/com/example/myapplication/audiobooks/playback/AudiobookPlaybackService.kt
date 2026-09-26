@@ -16,6 +16,9 @@ import androidx.media3.session.MediaSession
 import androidx.media3.session.SessionCommand
 import androidx.media3.session.SessionResult
 import com.example.myapplication.audiobooks.domain.source.ManifestResolver
+import com.example.myapplication.audiobooks.data.NarrationChain
+import com.example.myapplication.audiobooks.domain.model.NarrationId
+import com.example.myapplication.audiobooks.domain.model.WorkId
 import com.example.myapplication.audiobooks.domain.model.TrackUriCodec
 import com.example.myapplication.audiobooks.domain.model.VariantId
 import com.example.myapplication.audiobooks.domain.timeline.BookTimeline
@@ -36,6 +39,7 @@ import org.koin.android.ext.android.inject
 @UnstableApi
 class AudiobookPlaybackService : MediaLibraryService() {
     private val manifestResolver: ManifestResolver by inject()
+    private val chain: NarrationChain by inject()
     // Своя область без отмены в onDestroy: последняя запись позиции должна дойти до БД.
     private val progressTracker by lazy {
         AudiobookProgressTracker(get(), CoroutineScope(SupervisorJob() + Dispatchers.IO))
@@ -47,6 +51,12 @@ class AudiobookPlaybackService : MediaLibraryService() {
     private var sleepRemainingMs = -1L
     private val recoveryScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var retryingMediaId: String? = null
+    /** Звенья цепочки, уже не ответившие для этой озвучки; сбрасывается, когда озвучка сменилась. */
+    private val triedVariants = mutableSetOf<VariantId>()
+    private var triedNarration: String? = null
+    private var failoverJob: Job? = null
+    private var sourceNotice = ""
+    private var sourceNoticeSeq = 0
     private var chapterVariant: VariantId? = null
     private var chapterTimeline: BookTimeline? = null
     private var chapterLoadJob: Job? = null
@@ -89,10 +99,13 @@ class AudiobookPlaybackService : MediaLibraryService() {
             val responseCode = generateSequence(error as Throwable?) { it.cause }
                 .filterIsInstance<HttpDataSource.InvalidResponseCodeException>()
                 .firstOrNull()?.responseCode
-            if (responseCode !in setOf(401, 403, 410)) return
             val item = player.currentMediaItem ?: return
             val ref = item.localConfiguration?.uri?.toString()?.let(TrackUriCodec::decode) ?: return
-            if (retryingMediaId == item.mediaId) return
+            // Подписанная ссылка протухла — сначала один раз перезапрашиваем плейлист у того же сайта.
+            if (responseCode !in setOf(401, 403, 410) || retryingMediaId == item.mediaId) {
+                failover(error, ref.variant)
+                return
+            }
             retryingMediaId = item.mediaId
             val index = player.currentMediaItemIndex
             val position = player.currentPosition.coerceAtLeast(0L)
@@ -157,6 +170,7 @@ class AudiobookPlaybackService : MediaLibraryService() {
         handler.removeCallbacks(updateChapter)
         chapterLoadJob?.cancel()
         sleepTimer.cancel()
+        failoverJob?.cancel()
         recoveryScope.cancel()
         saveAll()
         player.removeListener(playerListener)
@@ -168,6 +182,8 @@ class AudiobookPlaybackService : MediaLibraryService() {
     private fun sessionState() = Bundle().apply {
         putLong(AudiobookSessionCommands.REMAINING_MS, sleepRemainingMs)
         putBoolean(AudiobookSessionCommands.SKIP_SILENCE, player.skipSilenceEnabled)
+        putString(AudiobookSessionCommands.SOURCE_NOTICE, sourceNotice)
+        putInt(AudiobookSessionCommands.SOURCE_NOTICE_SEQ, sourceNoticeSeq)
     }
 
     private fun publishSessionState() {
@@ -178,6 +194,61 @@ class AudiobookPlaybackService : MediaLibraryService() {
     private fun saveAll() {
         resumptionStore.save(player)
         progressTracker.save(player, chapterTimeline, chapterVariant)
+    }
+
+    /**
+     * Звено цепочки не отдаёт звук: переходим к следующему сайту с той же озвучкой и продолжаем с того
+     * же места книги. Сеть пропала целиком — сайты ни при чём, цепочку не трогаем.
+     */
+    private fun failover(error: PlaybackException, failed: VariantId) {
+        if (error.errorCode !in FAILOVER_ERRORS || !NetworkState.isOnline(this)) return
+        val item = player.currentMediaItem ?: return
+        val extras = item.mediaMetadata.extras ?: return
+        val narration = extras.getString("narrationId") ?: return
+        val work = extras.getString("workId") ?: return
+        if (failoverJob?.isActive == true) return
+        if (triedNarration != narration) {
+            triedNarration = narration
+            triedVariants.clear()
+        }
+        triedVariants += failed
+        val trackIndex = TrackUriCodec.decode(item.localConfiguration?.uri?.toString().orEmpty())?.trackIndex ?: 0
+        val timeline = chapterTimeline?.takeIf { chapterVariant == failed }
+        val globalMs = timeline?.toGlobal(trackIndex, player.currentPosition.coerceAtLeast(0L))
+        val fraction = globalMs?.let { timeline.progress(it) }
+        val meta = item.mediaMetadata
+        val shouldPlay = player.playWhenReady
+        failoverJob = recoveryScope.launch {
+            chain.fail(failed)
+            val next = chain.next(NarrationId(narration), triedVariants)
+            if (next == null) {
+                notifySource("")
+                return@launch
+            }
+            triedVariants += next.link.variant
+            val items = PlaybackQueueBuilder.build(
+                next.manifest, WorkId(work), NarrationId(narration),
+                meta.albumTitle?.toString().orEmpty(), meta.artist?.toString().orEmpty(),
+                meta.albumArtist?.toString().orEmpty(), meta.artworkUri?.toString(),
+            )
+            val nextTimeline = runCatching { BookTimeline(next.manifest.tracks, next.manifest.chapters) }.getOrNull()
+            val total = nextTimeline?.totalMs
+            // Та же запись у другого сайта: место по шкале книги; разметка расходится — по доле.
+            val start = globalMs?.takeIf { total != null && it < total }
+                ?: fraction?.let { f -> total?.let { (it * f).toLong() } }
+            val (index, offset) = start?.let { nextTimeline?.toTrack(it) } ?: (trackIndex.coerceAtMost(items.lastIndex) to 0L)
+            player.setMediaItems(items, index, offset)
+            player.prepare()
+            if (shouldPlay) player.play()
+            notifySource(chain.sourceName(next.link.source.id))
+        }
+    }
+
+    /** Плееру в приложении: на какой сайт переключились (пусто — запасных не осталось). */
+    private fun notifySource(name: String) {
+        sourceNotice = name
+        sourceNoticeSeq++
+        publishSessionState()
     }
 
     /** Media3 updates a progressive source in place when only metadata changes and URI stays fixed. */
@@ -283,6 +354,20 @@ class AudiobookPlaybackService : MediaLibraryService() {
     }
 
     private companion object {
+        /** Ошибки сайта или файла (ответ, обрыв, битый файл), а не устройства: на них идём по цепочке. */
+        val FAILOVER_ERRORS = setOf(
+            PlaybackException.ERROR_CODE_IO_UNSPECIFIED,
+            PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED,
+            PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT,
+            PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS,
+            PlaybackException.ERROR_CODE_IO_FILE_NOT_FOUND,
+            PlaybackException.ERROR_CODE_IO_INVALID_HTTP_CONTENT_TYPE,
+            PlaybackException.ERROR_CODE_IO_READ_POSITION_OUT_OF_RANGE,
+            PlaybackException.ERROR_CODE_PARSING_CONTAINER_MALFORMED,
+            PlaybackException.ERROR_CODE_PARSING_CONTAINER_UNSUPPORTED,
+            PlaybackException.ERROR_CODE_DECODING_FAILED,
+        )
+
         const val POSITION_SAVE_INTERVAL_MS = 5_000L
         const val CHAPTER_UPDATE_INTERVAL_MS = 1_000L
         const val PREFS = "audiobook_player_options"

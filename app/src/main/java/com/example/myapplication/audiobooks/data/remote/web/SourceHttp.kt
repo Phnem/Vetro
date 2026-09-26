@@ -65,6 +65,31 @@ class SourceHttp(
         }.awaitAll()
     }
 
+    /** Байты [from]..[to] файла (Range) — для чтения заголовка MP3; не ответил — null. */
+    suspend fun range(url: String, headers: Map<String, String>, from: Long, to: Long): ByteArray? = withContext(Dispatchers.IO) {
+        runCatching {
+            val request = Request.Builder().url(url)
+                .header("User-Agent", userAgent)
+                .header("Range", "bytes=$from-$to")
+                .apply { headers.forEach { (k, v) -> header(k, v) } }
+                .build()
+            http.newCall(request).execute().use { r ->
+                if (!r.isSuccessful) return@use null
+                // Сервер без Range отдаёт файл целиком — читаем только нужное.
+                r.body?.byteStream()?.use { input ->
+                    val buffer = ByteArray((to - from + 1).toInt())
+                    var read = 0
+                    while (read < buffer.size) {
+                        val n = input.read(buffer, read, buffer.size - read)
+                        if (n < 0) break
+                        read += n
+                    }
+                    buffer.copyOf(read)
+                }
+            }
+        }.getOrNull()
+    }
+
     private suspend fun call(builder: Request.Builder, headers: Map<String, String>): SourceResult<String> =
         withContext(Dispatchers.IO) {
             rate.acquire()

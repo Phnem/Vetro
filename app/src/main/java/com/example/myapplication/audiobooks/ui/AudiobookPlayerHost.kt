@@ -1,5 +1,8 @@
 package com.example.myapplication.audiobooks.ui
 
+import com.example.myapplication.di.AUDIOBOOK_SOURCES
+import org.koin.core.qualifier.named
+import android.widget.Toast
 import com.example.myapplication.audiobooks.data.remote.web.SiteText
 import com.example.myapplication.audiobooks.domain.source.WorkMatch
 import com.example.myapplication.audiobooks.domain.source.AudiobookSearch
@@ -142,7 +145,7 @@ fun AudiobookPlayerHost(language: AppLanguage = AppLanguage.RU, modifier: Modifi
     val repository: AudiobookRepository = koinInject()
     val launcher: AudiobookLauncher = koinInject()
     val koin = getKoin()
-    val sources = remember { koin.getAll<AudiobookSource>() }
+    val sources = remember { koin.get<List<AudiobookSource>>(named(AUDIOBOOK_SOURCES)) }
     val search: AudiobookSearch = koinInject()
     val strings = remember(language) { playerStrings(language) }
     val scope = rememberCoroutineScope()
@@ -177,6 +180,10 @@ fun AudiobookPlayerHost(language: AppLanguage = AppLanguage.RU, modifier: Modifi
                 state.trackPositionMs.longValue = controller.currentPosition.coerceAtLeast(0L)
                 state.sleepRemainingMs = controller.sessionExtras.getLong(AudiobookSessionCommands.REMAINING_MS, -1L)
                 state.skipSilence = controller.sessionExtras.getBoolean(AudiobookSessionCommands.SKIP_SILENCE, false)
+                val noticeSeq = controller.sessionExtras.getInt(AudiobookSessionCommands.SOURCE_NOTICE_SEQ, 0)
+                if (noticeSeq != state.sourceNotice.first) {
+                    state.sourceNotice = noticeSeq to controller.sessionExtras.getString(AudiobookSessionCommands.SOURCE_NOTICE).orEmpty()
+                }
                 delay(if (snapshot?.isPlaying == true) 250L else 1_000L)
             }
         } finally {
@@ -191,6 +198,17 @@ fun AudiobookPlayerHost(language: AppLanguage = AppLanguage.RU, modifier: Modifi
     LaunchedEffect(variant) {
         state.timeline = variant?.let { v ->
             runCatching { resolver.manifest(v).let { BookTimeline(it.tracks, it.chapters) } }.getOrNull()
+        }
+    }
+    // Переход по цепочке сайтов виден пользователю: плеер не молча сменил источник или замолчал.
+    var shownNotice by remember { mutableIntStateOf(state.sourceNotice.first) }
+    LaunchedEffect(state.sourceNotice) {
+        val (seq, name) = state.sourceNotice
+        if (seq != shownNotice) {
+            shownNotice = seq
+            if (seq > 0) {
+                Toast.makeText(context, if (name.isEmpty()) strings.noSourcesLeft else strings.switchedSource(name), Toast.LENGTH_LONG).show()
+            }
         }
     }
     // Просьба раскрыть плеер («Слушать», глава со страницы книги) может прийти раньше, чем сессия

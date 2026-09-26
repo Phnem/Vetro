@@ -4,6 +4,7 @@ import com.example.myapplication.audiobooks.AudiobookFeatureGate
 import com.example.myapplication.audiobooks.data.AudiobookRepository
 import com.example.myapplication.audiobooks.data.BooksCatalog
 import com.example.myapplication.audiobooks.data.CachedShelf
+import com.example.myapplication.audiobooks.data.NarrationChain
 import com.example.myapplication.audiobooks.playback.AudiobookLauncher
 import com.example.myapplication.audiobooks.ui.AudiobookPlayerState
 import com.example.myapplication.audiobooks.ui.home.BooksHomeViewModel
@@ -15,6 +16,10 @@ import org.koin.core.module.dsl.viewModel
 import com.example.myapplication.audiobooks.data.local.LocalFolderSource
 import com.example.myapplication.audiobooks.data.remote.Aknigi24Source
 import com.example.myapplication.audiobooks.data.remote.AudioknigaOneSource
+import com.example.myapplication.audiobooks.data.remote.InternetArchiveSource
+import com.example.myapplication.audiobooks.data.remote.IpaudioWpSource
+import com.example.myapplication.audiobooks.data.remote.IzibSource
+import com.example.myapplication.audiobooks.data.remote.RealAudiobooksSource
 import com.example.myapplication.audiobooks.data.remote.AudioknigiFunSource
 import com.example.myapplication.audiobooks.data.remote.BazaKnigSource
 import com.example.myapplication.audiobooks.data.remote.KnigavuheSource
@@ -37,29 +42,32 @@ import org.koin.dsl.module
 val audiobookModule = module {
     single { AudiobookFeatureGate(enabled = BuildConfig.AUDIOBOOKS_ENABLED) }
     single { LocalFolderSource(get()) }
-    single<ManifestSource> { get<LocalFolderSource>() }
-    // Онлайн-источники: каждый ещё и ManifestSource, чтобы резолвер находил его по VariantId.
-    // Лимит на хост — вежливые 2 запроса в секунду с запасом 3: запросы только от действий пользователя.
-    single(named("rate_aknigi24")) { TokenBucketRateLimiter(maxTokens = 3.0, refillTokensPerSecond = 2.0) }
     single { KnigavuheMetadata(get(), TokenBucketRateLimiter(maxTokens = 2.0, refillTokensPerSecond = 1.0)) }
-    single { Aknigi24Source(get(), get(named("rate_aknigi24"))) } bind AudiobookSource::class bind ManifestSource::class
-    // Остальные сайты (решение Q9 + находки пользователя): у каждого свой лимит на хост.
-    single { YaknigaSource(site(get())) } bind AudiobookSource::class bind ManifestSource::class
-    single { AudioknigaOneSource(site(get())) } bind AudiobookSource::class bind ManifestSource::class
-    single { KnigavuheSource(site(get())) } bind AudiobookSource::class bind ManifestSource::class
-    single { BazaKnigSource(site(get())) } bind AudiobookSource::class bind ManifestSource::class
-    single { SlushatKnigiSource(site(get())) } bind AudiobookSource::class bind ManifestSource::class
-    single { AudioknigiFunSource(site(get())) } bind AudiobookSource::class bind ManifestSource::class
-    // Приоритет для витрины, озвучек и запасных при запуске: сперва стабильные прямые ссылки с длинами
-    // глав (Aknigi24, Yakniga, Audiokniga.one), затем подписанные ссылки и сайты без длин глав.
+    // Все онлайн-источники одним списком — он же приоритет для витрины, озвучек и цепочки запасных:
+    // сперва стабильные прямые ссылки с длинами глав, затем подписанные ссылки и сайты без длин,
+    // английские — после русских. Лимит на хост — вежливые 2 запроса в секунду с запасом 3.
     single(named(SOURCES)) {
-        listOf<AudiobookSource>(
-            get<Aknigi24Source>(), get<YaknigaSource>(), get<AudioknigaOneSource>(), get<KnigavuheSource>(),
-            get<BazaKnigSource>(), get<SlushatKnigiSource>(), get<AudioknigiFunSource>(),
-        )
+        val http = get<OkHttpClient>()
+        buildList<AudiobookSource> {
+            // RU
+            add(Aknigi24Source(http, TokenBucketRateLimiter(maxTokens = 3.0, refillTokensPerSecond = 2.0)))
+            add(YaknigaSource(site(http)))
+            add(AudioknigaOneSource(site(http)))
+            add(IzibSource(site(http)))
+            add(KnigavuheSource(site(http)))
+            add(BazaKnigSource(site(http)))
+            add(SlushatKnigiSource(site(http)))
+            add(AudioknigiFunSource(site(http)))
+            // EN (+ Internet Archive: LibriVox и «Audio Books & Poetry», в том числе на других языках)
+            add(InternetArchiveSource(site(http)))
+            add(RealAudiobooksSource(site(http)))
+            IpaudioWpSource.SITES.forEach { (id, name, base) -> add(IpaudioWpSource(site(http), id, name, base)) }
+        }
     }
     single { AudiobookSearch(get(named(SOURCES))) }
-    single { ManifestResolver(sources = getAll<ManifestSource>()) }
+    single { NarrationChain(get(), get(named(SOURCES)), get(), get()) }
+    // Резолвер знает все источники манифестов: сайты и локальную папку.
+    single { ManifestResolver(sources = get<List<AudiobookSource>>(named(SOURCES)) + get<LocalFolderSource>()) }
     single { AudiobookRepository(get()) }
     single {
         BooksCatalog(
@@ -74,14 +82,15 @@ val audiobookModule = module {
         )
     }
     single { AudiobookPlayerState() }
-    single { AudiobookLauncher(androidContext(), get(named(SOURCES)), get(), get(), get(), get()) }
+    single { AudiobookLauncher(androidContext(), get(named(SOURCES)), get(), get(), get(), get(), get()) }
     viewModel { BooksHomeViewModel(get(), get(), get()) }
     viewModel { (source: String, key: String, title: String) ->
         BookDetailsViewModel(source, key, title, get(named(SOURCES)), get(), get(), get())
     }
 }
 
-private const val SOURCES = "audiobook_sources"
+internal const val AUDIOBOOK_SOURCES = "audiobook_sources"
+private const val SOURCES = AUDIOBOOK_SOURCES
 
 /** Сеть сайта-источника: общий клиент и свой вежливый лимит — 2 запроса в секунду с запасом 3. */
 private fun site(http: OkHttpClient) =

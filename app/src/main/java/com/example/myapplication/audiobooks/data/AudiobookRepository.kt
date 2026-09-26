@@ -189,6 +189,38 @@ class AudiobookRepository(
         q.setWorkFavorite(favorite = if (favorite) 1 else 0, workId = workId.value)
     }
 
+    /** Копии одной озвучки на разных сайтах — звенья цепочки запасных (порядок задаёт вызывающий). */
+    suspend fun variants(narrationId: NarrationId): List<VariantLink> = io {
+        q.variantsByNarration(narrationId.value).executeAsList().map { v ->
+            VariantLink(
+                variantId = VariantId(v.variant_id),
+                sourceId = v.source_id,
+                key = v.source_url,
+                available = v.availability != UNAVAILABLE,
+                verifiedAt = v.last_verified_at,
+                pinned = v.user_pinned != 0L,
+            )
+        }
+    }
+
+    /** Отметка звена после попытки: сайт ответил или нет — следующий запуск начнёт с живого. */
+    suspend fun markVariant(variantId: VariantId, available: Boolean) = io {
+        q.setVariantAvailability(if (available) AVAILABLE else UNAVAILABLE, nowMs(), variantId.value)
+    }
+
+    /** Что за книга у озвучки — для поиска её копий на других сайтах. */
+    suspend fun bookOf(narrationId: NarrationId): NarrationBook? = io {
+        val narration = q.narrationById(narrationId.value).executeAsOneOrNull() ?: return@io null
+        val work = q.workById(narration.work_id).executeAsOneOrNull() ?: return@io null
+        NarrationBook(
+            workId = WorkId(work.work_id),
+            title = work.title,
+            authors = decode(work.authors_json),
+            narrators = decode(narration.narrators_json),
+            coverUrl = work.cover_url,
+        )
+    }
+
     suspend fun listenedSince(sinceMs: Long): Long = io { q.listenedSince(sinceMs).executeAsOne() }
 
     private fun decode(value: String): List<String> = runCatching { json.decodeFromString<List<String>>(value) }
@@ -203,6 +235,9 @@ class AudiobookRepository(
          * Отпечаток для сопоставления, не личность: 16 hex SHA-1 от нормализованных полей. Имена
          * раскладываются на слова и сортируются — «Лем Станислав» и «Станислав Лем» совпадают.
          */
+        const val AVAILABLE = "AVAILABLE"
+        const val UNAVAILABLE = "UNAVAILABLE"
+
         fun fingerprint(names: List<String>, title: String, language: String): String {
             val people = names.flatMap { normalize(it).split(' ') }.filter { it.isNotBlank() }.sorted().joinToString(" ")
             val raw = "$people|${normalize(title)}|$language"
@@ -214,6 +249,24 @@ class AudiobookRepository(
             .replace(Regex("[^\\p{L}\\p{N}]+"), " ").trim()
     }
 }
+
+data class VariantLink(
+    val variantId: VariantId,
+    val sourceId: String,
+    /** Ключ книги у сайта ([com.example.myapplication.audiobooks.domain.source.SourceBookRef.key]). */
+    val key: String,
+    val available: Boolean,
+    val verifiedAt: Long?,
+    val pinned: Boolean,
+)
+
+data class NarrationBook(
+    val workId: WorkId,
+    val title: String,
+    val authors: List<String>,
+    val narrators: List<String>,
+    val coverUrl: String?,
+)
 
 data class OpenedBook(val workId: WorkId, val narrationId: NarrationId, val variantId: VariantId)
 
