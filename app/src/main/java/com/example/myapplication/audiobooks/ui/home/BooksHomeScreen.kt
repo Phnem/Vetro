@@ -1,5 +1,6 @@
 package com.example.myapplication.audiobooks.ui.home
 
+import androidx.compose.ui.unit.toSize
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.annotation.DrawableRes
@@ -62,7 +63,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.LayoutCoordinates
-import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onPlaced
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -357,13 +357,16 @@ internal class ShelfMorph {
         }
     }
 
-    /** Прямоугольник в координатах этого экрана (не всего окна: страница пейджера сдвинута). */
+    /**
+     * Прямоугольник в координатах этого экрана (не всего окна: страница пейджера сдвинута).
+     * Необрезанный: boundsInRoot срезает обложку веера клипом карточки, и полёт стартовал
+     * с укороченной, сдвинутой вверх рамки — в конце закрытия это давало рывок.
+     */
     private fun rectOf(coords: LayoutCoordinates?): Rect? {
         val r = root ?: return null
         if (coords == null || !coords.isAttached || !r.isAttached) return null
-        val bounds = coords.boundsInRoot()
-        val origin = r.boundsInRoot().topLeft
-        return bounds.translate(-origin)
+        val topLeft = r.localPositionOf(coords, Offset.Zero)
+        return Rect(topLeft, coords.size.toSize())
     }
 
     companion object {
@@ -381,24 +384,20 @@ internal data class OpenShelf(
 )
 
 /**
- * Три обложки веера в полёте. Размер — финальный (ряд полки), путь и поворот — transform, так что
- * картинка не перемеряется. Пока полёт не набрал ход, обложки обрезаны карточкой, как в веере.
+ * Три обложки веера в полёте — отдельный слой поверх дома и страницы на всё время перехода.
+ * Размер — финальный (ряд полки), путь и поворот — transform, так что картинка не перемеряется.
+ *
+ * Порядок наложения — веерный с первого кадра (края под серединой), а не «по списку с переключением
+ * в конце». Нижний край карточки работает как передняя кромка полки: у каждой обложки своя линия
+ * среза, которая непрерывно съезжает к краю карточки, пока обложка садится в веер, — книга плавно
+ * уходит за кромку, и в последнем кадре срез совпадает с клипом карточки пиксель в пиксель.
  */
 @Composable
 private fun BoxScope.FlyingCovers(morph: ShelfMorph, shelf: OpenShelf) {
     val density = LocalDensity.current
-    Box(
-        Modifier
-            .matchParentSize()
-            .drawWithContent {
-                val p = morph.progress.value
-                if (p <= 0.001f || p >= 0.999f) return@drawWithContent
-                val full = Rect(Offset.Zero, size)
-                val clip = morph.card?.let { lerp(it, full, (p / 0.3f).coerceIn(0f, 1f)) } ?: full
-                clipRect(clip.left, clip.top, clip.right, clip.bottom) { this@drawWithContent.drawContent() }
-            },
-    ) {
-        for (i in 0 until ShelfMorph.FLYING) {
+    Box(Modifier.matchParentSize()) {
+        // Порядок отрисовки = порядок веера: FanBookIndex кладёт первую книгу (середину) последней.
+        for (i in FanBookIndex) {
             val book = shelf.books.getOrNull(i) ?: continue
             val from = morph.from.getOrNull(i) ?: continue
             val to = morph.to.getOrNull(i) ?: continue
@@ -407,6 +406,22 @@ private fun BoxScope.FlyingCovers(morph: ShelfMorph, shelf: OpenShelf) {
                 book = book,
                 modifier = Modifier
                     .size(with(density) { to.width.toDp() }, with(density) { to.height.toDp() })
+                    // Срез в координатах экрана (узел стоит в начале слоя, сдвиг — в graphicsLayer ниже).
+                    .drawWithContent {
+                        val p = morph.progress.value
+                        if (p <= 0.001f || p >= 0.999f) return@drawWithContent
+                        val edge = morph.card?.bottom
+                        if (edge == null) {
+                            drawContent()
+                            return@drawWithContent
+                        }
+                        val bottom = lerp(from.center.y, to.center.y, p) + lerp(from.height, to.height, p) / 2f
+                        val overhang = (from.bottom - edge).coerceAtLeast(0f)
+                        val line = maxOf(edge, bottom - (1f - p) * overhang)
+                        clipRect(-size.width * 4f, -size.height * 8f, size.width * 16f, line) {
+                            this@drawWithContent.drawContent()
+                        }
+                    }
                     .graphicsLayer {
                         val p = morph.progress.value
                         val c = lerp(from.center, to.center, p)

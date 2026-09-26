@@ -1,5 +1,9 @@
 package com.example.myapplication.audiobooks.ui
 
+import androidx.compose.ui.text.style.LineHeightStyle
+import androidx.compose.ui.text.PlatformTextStyle
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.PredictiveBackHandler
 import android.content.ComponentName
@@ -37,6 +41,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -139,6 +144,10 @@ fun AudiobookPlayerHost(language: AppLanguage = AppLanguage.RU, modifier: Modifi
     val scope = rememberCoroutineScope()
     val view = LocalView.current
     val expansion = remember { Animatable(0f) }
+    // Куда окно едет, а не где оно сейчас: жест назад и перетаскивание проводят value через
+    // середину, и флаг «полный» не должен от этого выключать сам жест (иначе короткий бросок
+    // отменялся и окно возвращалось в полный размер).
+    var expanded by remember { mutableStateOf(false) }
 
     // Живое подключение к сессии: пишет общее состояние, частота опроса — по тому, что видно.
     LaunchedEffect(context) {
@@ -180,23 +189,27 @@ fun AudiobookPlayerHost(language: AppLanguage = AppLanguage.RU, modifier: Modifi
             runCatching { resolver.manifest(v).let { BookTimeline(it.tracks, it.chapters) } }.getOrNull()
         }
     }
-    // Просьба раскрыть плеер («Слушать») может прийти раньше, чем сессия отдаст книгу.
+    // Просьба раскрыть плеер («Слушать», глава со страницы книги) может прийти раньше, чем сессия
+    // отдаст книгу: ждём готовности и раскрываем. Эффект не зависит от «съеденности» просьбы —
+    // раньше отметка «съедено» перезапускала эффект и обрывала раскрытие на первом кадре.
     var consumedExpand by remember { mutableIntStateOf(state.expandRequests) }
+    LaunchedEffect(Unit) {
+        snapshotFlow { Triple(state.expandRequests, state.book != null, state.controller != null) }
+            .collect { (request, hasBook, hasController) ->
+                if (request != consumedExpand && hasBook && hasController) {
+                    consumedExpand = request
+                    expanded = true
+                    launch { expansion.animateTo(1f, MotionTokens.largeSurfaceEnter()) }
+                }
+            }
+    }
     val favorite by remember(book?.workId) {
         book?.workId?.let(repository::isFavorite) ?: flowOf(false)
     }.collectAsState(initial = false)
     val controller = state.controller
     if (book == null || controller == null) return
 
-    val pendingExpand = state.expandRequests != consumedExpand
-    LaunchedEffect(pendingExpand) {
-        if (pendingExpand) {
-            consumedExpand = state.expandRequests
-            expansion.animateTo(1f, MotionTokens.largeSurfaceEnter())
-        }
-    }
-
-    val isFull by remember { derivedStateOf { expansion.value > 0.5f } }
+    val isFull = expanded
     val sheetVisible = remember { MutableTransitionState(false) }
     var sheet by remember { mutableStateOf<PlayerSheet?>(null) }
     var narration by remember { mutableStateOf(NarrationChoice()) }
@@ -210,21 +223,29 @@ fun AudiobookPlayerHost(language: AppLanguage = AppLanguage.RU, modifier: Modifi
     LaunchedEffect(sheetVisible.isIdle, sheetVisible.currentState) {
         if (sheetVisible.isIdle && !sheetVisible.currentState) sheet = null
     }
-    fun collapse() = scope.launch { expansion.animateTo(0f, MotionTokens.largeSurfaceExit()) }
-    fun expand() = scope.launch { expansion.animateTo(1f, MotionTokens.largeSurfaceEnter()) }
+    fun collapse() {
+        expanded = false
+        scope.launch { expansion.animateTo(0f, MotionTokens.largeSurfaceExit()) }
+    }
+    fun expand() {
+        expanded = true
+        scope.launch { expansion.animateTo(1f, MotionTokens.largeSurfaceEnter()) }
+    }
     fun toggleFavorite() {
         val work = book.workId ?: return
         performHaptic(view, if (favorite) Haptic.Light else Haptic.Success)
         scope.launch { repository.setFavorite(work, !favorite) }
     }
 
-    // Системный жест «назад» ведёт окно пальцем; отпустили — доезжает в мини, отменили — обратно.
+    // Системный жест «назад» ведёт окно пальцем. Как у системного «назад»: отпустили где угодно —
+    // окно доезжает в мини с того места, где его оставил палец; вернули палец к краю (система
+    // отменила) — обратно в полный. Длина жеста не решает, решает отпускание.
     PredictiveBackHandler(enabled = isFull && sheet == null) { events ->
         try {
-            events.collect { e -> expansion.snapTo(1f - e.progress) }
-            expansion.animateTo(0f, MotionTokens.largeSurfaceExit())
+            events.collect { e -> expansion.snapTo(1f - BackFollow * e.progress) }
+            collapse()
         } catch (e: CancellationException) {
-            scope.launch { expansion.animateTo(1f, MotionTokens.largeSurfaceEnter()) }
+            expand()
             throw e
         }
     }
@@ -365,11 +386,14 @@ fun AudiobookPlayerHost(language: AppLanguage = AppLanguage.RU, modifier: Modifi
                                 scope.launch { expansion.snapTo((expansion.value - dy / heightPx).coerceIn(0f, 1f)) }
                             },
                             onDragStopped = { velocity ->
-                                val close = MotionTokens.willDismiss(
-                                    offset = (1f - expansion.value) * heightPx,
-                                    containerSize = heightPx,
-                                    velocity = velocity / density.density,
-                                )
+                                // Бросок вниз сворачивает с любого места, бросок вверх — раскрывает;
+                                // медленное отпускание решает пройденная доля экрана.
+                                val v = velocity / density.density
+                                val close = when {
+                                    v > MotionTokens.DismissVelocityThresholdDpPerSec -> true
+                                    v < -MotionTokens.DismissVelocityThresholdDpPerSec -> false
+                                    else -> expansion.value < 0.75f
+                                }
                                 if (close) collapse() else expand()
                             },
                         ),
@@ -481,12 +505,20 @@ private fun MiniPlayerContent(
                 Row(Modifier.fillMaxSize().padding(start = 4.dp, end = 10.dp), verticalAlignment = Alignment.CenterVertically) {
                     BookArt(book.artworkUri, Modifier.size(30.dp).clip(CircleShape))
                     Spacer(Modifier.width(7.dp))
-                    Column {
-                        Text(book.author.ifBlank { book.title }, color = Color.White, fontFamily = SnProFamily,
-                            fontWeight = FontWeight.SemiBold, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        if (book.narrator.isNotBlank()) {
-                            Text(book.narrator, color = Color.White.copy(alpha = 0.6f), fontFamily = SnProFamily,
-                                fontSize = 9.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    // Две строки обязаны поместиться в капсулу 38dp при любом масштабе шрифта: высота строк
+                    // задана явно, без шрифтовых полей, а масштаб в крошечной капсуле ограничен — иначе
+                    // вторая строка вылезала под капсулу поверх обложки.
+                    val density = LocalDensity.current
+                    CompositionLocalProvider(
+                        LocalDensity provides Density(density.density, density.fontScale.coerceAtMost(1.1f)),
+                    ) {
+                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.Center) {
+                            Text(book.author.ifBlank { book.title }, style = CapsuleLine.copy(fontSize = 11.sp, lineHeight = 13.sp,
+                                fontWeight = FontWeight.SemiBold), color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            if (book.narrator.isNotBlank()) {
+                                Text(book.narrator, style = CapsuleLine.copy(fontSize = 9.sp, lineHeight = 11.sp),
+                                    color = Color.White.copy(alpha = 0.6f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            }
                         }
                     }
                 }
@@ -693,4 +725,14 @@ private fun SeekBar(fraction: Float, enabled: Boolean, onSeek: (Float) -> Unit, 
 }
 
 private val MiniSize = 196.dp
+
+/** Строка капсулы мини-плеера: без шрифтовых полей, высота строки задаётся на месте. */
+private val CapsuleLine = TextStyle(
+    fontFamily = SnProFamily,
+    platformStyle = PlatformTextStyle(includeFontPadding = false),
+    lineHeightStyle = LineHeightStyle(LineHeightStyle.Alignment.Center, LineHeightStyle.Trim.Both),
+)
+
+/** Доля «пути назад», которую окно проходит под пальцем; остаток доезжает само после отпускания. */
+private const val BackFollow = 0.85f
 private val MiniRadius = 30.dp
