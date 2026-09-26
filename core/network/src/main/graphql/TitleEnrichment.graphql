@@ -1,0 +1,19 @@
+# Обогащение карточки аниме (.scratch/sources-expansion): время следующей серии, трейлер и id MAL.
+query TitleEnrichment($id: Int) {
+  Media(id: $id, type: ANIME) {
+    id
+    idMal
+    status
+    episodes
+    duration
+    nextAiringEpisode {
+      episode
+      airingAt
+    }
+    trailer {
+      id
+      site
+      thumbnail
+    }
+  }
+}

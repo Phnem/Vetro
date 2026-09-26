@@ -31,6 +31,49 @@ android {
             "KINOPOISK_API_KEY",
             "\"${localProperties.getProperty("KINOPOISK_API_KEY", "")}\""
         )
+        // Ключи API обогащения (Часть A, .scratch/sources-expansion). Пустой ключ — модуль молча
+        // выключен. Как и у TMDB, строка попадает в APK: бесплатные ключи с лимитом, серверный прокси
+        // — в бэклоге. Для Anime-Skip по умолчанию — общий client id из их документации.
+        buildConfigField(
+            "String",
+            "OPENSUBTITLES_API_KEY",
+            "\"${localProperties.getProperty("OPENSUBTITLES_API_KEY", "")}\""
+        )
+        buildConfigField(
+            "String",
+            "OMDB_API_KEY",
+            "\"${localProperties.getProperty("OMDB_API_KEY", "")}\""
+        )
+        buildConfigField(
+            "String",
+            "YOUTUBE_API_KEY",
+            "\"${localProperties.getProperty("YOUTUBE_API_KEY", "")}\""
+        )
+        buildConfigField(
+            "String",
+            "FANART_API_KEY",
+            "\"${localProperties.getProperty("FANART_API_KEY", "")}\""
+        )
+        buildConfigField(
+            "String",
+            "NYT_API_KEY",
+            "\"${localProperties.getProperty("NYT_API_KEY", "")}\""
+        )
+        buildConfigField(
+            "String",
+            "TASTEDIVE_API_KEY",
+            "\"${localProperties.getProperty("TASTEDIVE_API_KEY", "")}\""
+        )
+        buildConfigField(
+            "String",
+            "GOOGLE_BOOKS_API_KEY",
+            "\"${localProperties.getProperty("GOOGLE_BOOKS_API_KEY", "")}\""
+        )
+        buildConfigField(
+            "String",
+            "ANIME_SKIP_CLIENT_ID",
+            "\"${localProperties.getProperty("ANIME_SKIP_CLIENT_ID", "ZGfO0sMF3eCwLYf8yMSCJjlynwNGRXWE")}\""
+        )
     }
 }
 

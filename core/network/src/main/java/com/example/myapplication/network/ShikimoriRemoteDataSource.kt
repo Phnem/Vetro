@@ -6,6 +6,7 @@ import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.request.get
 import io.ktor.client.request.parameter
+import io.ktor.client.statement.bodyAsText
 /**
  * Type-safe remote data source for Shikimori API.
  */
@@ -72,6 +73,17 @@ class ShikimoriRemoteDataSource(
         burstRate.acquire()
         val full = client.get("https://shikimori.one/api/animes/$id").body<ShikimoriSearchItemDto>()
         full.toApiSearchResult(language)
+    }
+
+    /**
+     * Обогащение аниме (.scratch/sources-expansion): время следующей серии, какие студии озвучивают
+     * и сабят (RU-трек выхода), промо-ролики и русское лицензионное название. Та же ручка, что и
+     * карточка, — отдельный разбор полей, которых нет в DTO поиска.
+     */
+    suspend fun animeEnrichment(id: Int): Result<com.example.myapplication.network.enrichment.ShikimoriEnrichment?> = runCatching {
+        burstRate.acquire()
+        val body = client.get("https://shikimori.one/api/animes/$id").bodyAsText()
+        com.example.myapplication.network.enrichment.ShikimoriEnrichmentParser.parse(body)
     }
 
     /** Явное русское название по Shikimori id (обратное обогащение, Stage 10). */

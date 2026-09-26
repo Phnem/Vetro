@@ -15,6 +15,8 @@ data class ExternalIds(
     val kinopoisk: Int? = null,
     /** Canonical IMDb id (`tt0412142`). String: the `tt` prefix and leading zeros are significant. */
     val imdb: String? = null,
+    /** TheTVDB id: ключ Fanart.tv (сериалы) и TVmaze. */
+    val tvdb: Int? = null,
 )
 
 /**

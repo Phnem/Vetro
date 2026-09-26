@@ -9,6 +9,7 @@ import com.example.myapplication.network.anilist.EnrichTitlesSearchQuery
 import com.example.myapplication.network.anilist.EpisodeCheckByIdsQuery
 import com.example.myapplication.network.anilist.EpisodeCheckByMalIdsQuery
 import com.example.myapplication.network.anilist.MediaByIdQuery
+import com.example.myapplication.network.anilist.TitleEnrichmentQuery
 import com.example.myapplication.network.anilist.fragment.EpisodeCheckFields
 import com.example.myapplication.network.anilist.MediaListCollectionChunkQuery
 import com.example.myapplication.network.anilist.RecommendationsBatchQuery
@@ -470,6 +471,28 @@ class AniListRemoteDataSource(
         )
     }
 
+    /** Обогащение аниме: точное время следующей серии, официальный трейлер, id MAL. */
+    suspend fun titleEnrichment(id: Int): Result<AniListTitleEnrichment?> = runCatching {
+        withContext(Dispatchers.IO) {
+            rateLimiter.acquire()
+            val response = apolloClient.query(TitleEnrichmentQuery(id = Optional.present(id))).execute()
+            response.throwIfGraphQlErrors("TitleEnrichment")
+            val media = response.data?.Media ?: return@withContext null
+            AniListTitleEnrichment(
+                anilistId = media.id,
+                malId = media.idMal,
+                status = media.status?.name,
+                episodes = media.episodes,
+                episodeDurationMin = media.duration,
+                nextEpisode = media.nextAiringEpisode?.episode,
+                nextAiringAtEpochSec = media.nextAiringEpisode?.airingAt?.toLong(),
+                trailerSite = media.trailer?.site,
+                trailerId = media.trailer?.id,
+                trailerThumbnail = media.trailer?.thumbnail,
+            )
+        }
+    }
+
     private fun <T : com.apollographql.apollo.api.Operation.Data> ApolloResponse<T>.throwIfGraphQlErrors(operation: String) {
         val errs = errors
         if (!errs.isNullOrEmpty()) {
@@ -479,3 +502,17 @@ class AniListRemoteDataSource(
         }
     }
 }
+
+/** Поля AniList для обогащения; время — секунды эпохи, как отдаёт AniList. */
+data class AniListTitleEnrichment(
+    val anilistId: Int,
+    val malId: Int?,
+    val status: String?,
+    val episodes: Int?,
+    val episodeDurationMin: Int?,
+    val nextEpisode: Int?,
+    val nextAiringAtEpochSec: Long?,
+    val trailerSite: String?,
+    val trailerId: String?,
+    val trailerThumbnail: String?,
+)
