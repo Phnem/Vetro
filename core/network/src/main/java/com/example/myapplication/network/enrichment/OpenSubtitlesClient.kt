@@ -21,8 +21,8 @@ class OpenSubtitlesClient(
     private val http: EnrichmentHttp,
     private val rate: TokenBucketRateLimiter,
     private val apiKey: () -> String = { BuildConfig.OPENSUBTITLES_API_KEY },
-    private val userAgent: String = "Vetro v3",
 ) {
+    // User-Agent с именем приложения, которого требует OpenSubtitles, ставит общий клиент (VetroApp/1.0).
     val isConfigured: Boolean get() = apiKey().isNotBlank()
 
     /**
@@ -47,7 +47,6 @@ class OpenSubtitlesClient(
         val path = "subtitles?${params.joinToString("&")}"
         return http.text("OpenSubtitles", "$BASE/$path", rate, policy = CachePolicy("opensubtitles:$path", CacheTtl.DAY)) {
             header("Api-Key", key)
-            header("User-Agent", userAgent)
         }.parse { OpenSubtitlesParser.candidates(it).takeIf(List<SubtitleCandidate>::isNotEmpty) }
     }
 
@@ -56,7 +55,6 @@ class OpenSubtitlesClient(
         val key = apiKey().takeIf { it.isNotBlank() } ?: return disabled()
         return http.text("OpenSubtitles", "$BASE/login", rate, HttpMethod.Post) {
             header("Api-Key", key)
-            header("User-Agent", userAgent)
             contentType(ContentType.Application.Json)
             setBody(buildJsonObject { put("username", username); put("password", password) }.toString())
         }.parse(OpenSubtitlesParser::session)
@@ -67,7 +65,6 @@ class OpenSubtitlesClient(
         val key = apiKey().takeIf { it.isNotBlank() } ?: return disabled()
         return http.text("OpenSubtitles", "${session.baseUrl ?: BASE}/download", rate, HttpMethod.Post) {
             header("Api-Key", key)
-            header("User-Agent", userAgent)
             header("Authorization", "Bearer ${session.token}")
             contentType(ContentType.Application.Json)
             setBody(buildJsonObject { put("file_id", fileId); put("sub_format", "srt") }.toString())

@@ -31,6 +31,7 @@ class VetroApplication : Application(), SingletonImageLoader.Factory {
                 com.example.myapplication.sync.supabase.supabaseModule,
                 appModule,
                 audiobookModule,
+                com.example.myapplication.di.enrichmentModule,
                 databaseModule,
                 viewModelModule
             )
