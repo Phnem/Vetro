@@ -1,8 +1,20 @@
 # Current handoff
 
-## Checkout isolation
+## Состояние на 2026-09-26 (читать первым)
 
-Audiobook implementation continues only in `D:\AndroidStudioProjects\Vetro-collection-audiobooks` on `codex/audiobooks-implementation`, forked from shared baseline `5b5d618`. The original `D:\AndroidStudioProjects\Vetro-collection` checkout stays on the other agent's `perf/v3.3.5`; do not edit or build there for audiobook work. User paused feature work until this separation was complete. The latest visual corrections and two attached references are recorded in `issues/10-player-ui.md` and `references/img/`.
+- Работа — в `D:\AndroidStudioProjects\Vetro-collection-audiobooks`, ветка `codex/audiobooks-implementation`
+  (в неё влита `perf/v3.3.5`). Решения пользователя Q9–Q11 — в `spec/14`: сайты со стримингом включены
+  по умолчанию, пустой дом = витрина 7 книг + полки источников. Ритм: тикет → компиляция → дальше;
+  пользователь сам собирает release и тестирует, серийные замеры не делать.
+- Готово: AB-15 контракт источника, AB-17 Aknigi24 (поиск, детали, главы из `#player-data`, прямые
+  MP3), AB-13 БД раздела + позиция по шкале книги, первый срез AB-29/30 (дом «Книги», вееры, морф
+  веер→полка, лист книги со «Слушать»). Флаг `AUDIOBOOKS_ENABLED=true` в этой ветке.
+- Следующее: правки по отзыву пользователя о доме; затем AB-18 Audiokniga.one и Knigavuhe (у Aknigi24
+  нет трилогии Лю Цысиня, «Ложной слепоты», «Марсианина» Вейера), AB-24/25 агрегация и fallback,
+  AB-31 полноценная страница книги, AB-32 поиск, AB-27 обложки/атмосфера, остаток AB-11.
+- Отложено осознанно: AB-12 (строка коллекции `MediaType.AUDIOBOOK`) — вместе с AB-33.
+
+Ниже — прежний handoff предыдущего агента (история).
 
 ## Goal and canonical documents
 

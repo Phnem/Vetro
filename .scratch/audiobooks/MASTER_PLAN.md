@@ -3,9 +3,9 @@
 ## Workflow
 
 Current workflow state: IMPLEMENTING_TICKET
-Current ticket: AB-15 + AB-17 (контракт источника и Aknigi24 со стримингом)
-Last completed ticket: AB-10 (DONE_WITH_DEVIATIONS: frame gate 2/3930 принят), AB-11 частично
-Next eligible ticket: AB-12/13 (БД), затем AB-29/30 (дом «Книги» с витриной и полками)
+Current ticket: AB-29/30 (дом «Книги»: первый срез у пользователя на проверке)
+Last completed ticket: AB-15, AB-17, AB-13 (2026-09-26); AB-12 перенесён к AB-33
+Next eligible ticket: AB-18 (Audiokniga.one), затем Knigavuhe, AB-24/25, AB-31, AB-32
 Last updated: 2026-09-26 (решения Q9–Q11, новый порядок вех; ветка влита с perf/v3.3.5)
 
 ### Ритм работы (решение пользователя 2026-09-26)
