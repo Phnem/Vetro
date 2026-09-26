@@ -17,6 +17,8 @@ import androidx.media3.session.SessionCommand
 import androidx.media3.session.SessionResult
 import com.example.myapplication.audiobooks.domain.source.ManifestResolver
 import com.example.myapplication.audiobooks.domain.model.TrackUriCodec
+import com.example.myapplication.audiobooks.domain.model.VariantId
+import com.example.myapplication.audiobooks.domain.timeline.BookTimeline
 import com.example.myapplication.MainActivity
 import com.phnem.vetro.BuildConfig
 import com.google.common.util.concurrent.Futures
@@ -25,6 +27,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import org.koin.android.ext.android.inject
 
@@ -39,6 +42,9 @@ class AudiobookPlaybackService : MediaLibraryService() {
     private var sleepRemainingMs = -1L
     private val recoveryScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var retryingMediaId: String? = null
+    private var chapterVariant: VariantId? = null
+    private var chapterTimeline: BookTimeline? = null
+    private var chapterLoadJob: Job? = null
     private val handler = Handler(Looper.getMainLooper())
     private val savePosition = object : Runnable {
         override fun run() {
@@ -48,13 +54,26 @@ class AudiobookPlaybackService : MediaLibraryService() {
             }
         }
     }
+    private val updateChapter = object : Runnable {
+        override fun run() {
+            refreshChapterMetadata()
+            // На паузе глава не меняется: тик нужен только во время воспроизведения.
+            if (player.isPlaying) handler.postDelayed(this, CHAPTER_UPDATE_INTERVAL_MS)
+        }
+    }
     private val playerListener = object : Player.Listener {
         override fun onIsPlayingChanged(isPlaying: Boolean) {
             sleepTimer.onPlaybackChanged()
+            handler.removeCallbacks(updateChapter)
+            if (isPlaying) handler.post(updateChapter)
         }
 
         override fun onEvents(player: Player, events: Player.Events) {
             if (player.currentMediaItem != null) resumptionStore.save(player)
+            if (events.contains(Player.EVENT_MEDIA_ITEM_TRANSITION) ||
+                events.contains(Player.EVENT_POSITION_DISCONTINUITY)) {
+                refreshChapterMetadata()
+            }
             val currentId = player.currentMediaItem?.mediaId
             if (currentId != null && currentId != retryingMediaId) retryingMediaId = null
             handler.removeCallbacks(savePosition)
@@ -118,6 +137,7 @@ class AudiobookPlaybackService : MediaLibraryService() {
                 ),
             )
             .build()
+        handler.post(updateChapter)
     }
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaLibrarySession? =
@@ -129,6 +149,8 @@ class AudiobookPlaybackService : MediaLibraryService() {
 
     override fun onDestroy() {
         handler.removeCallbacks(savePosition)
+        handler.removeCallbacks(updateChapter)
+        chapterLoadJob?.cancel()
         sleepTimer.cancel()
         recoveryScope.cancel()
         resumptionStore.save(player)
@@ -145,6 +167,43 @@ class AudiobookPlaybackService : MediaLibraryService() {
 
     private fun publishSessionState() {
         if (::session.isInitialized) session.setSessionExtras(sessionState())
+    }
+
+    /** Media3 updates a progressive source in place when only metadata changes and URI stays fixed. */
+    private fun refreshChapterMetadata() {
+        val item = player.currentMediaItem ?: return
+        val ref = item.localConfiguration?.uri?.toString()?.let(TrackUriCodec::decode) ?: return
+        if (chapterVariant != ref.variant) {
+            chapterLoadJob?.cancel()
+            chapterVariant = ref.variant
+            chapterTimeline = null
+            chapterLoadJob = recoveryScope.launch {
+                val timeline = runCatching {
+                    manifestResolver.manifest(ref.variant).let { BookTimeline(it.tracks, it.chapters) }
+                }.getOrNull()
+                if (chapterVariant == ref.variant) {
+                    chapterTimeline = timeline
+                    updateCurrentChapter()
+                }
+            }
+        } else {
+            updateCurrentChapter()
+        }
+    }
+
+    private fun updateCurrentChapter() {
+        val item = player.currentMediaItem ?: return
+        val ref = item.localConfiguration?.uri?.toString()?.let(TrackUriCodec::decode) ?: return
+        if (ref.variant != chapterVariant) return
+        val global = chapterTimeline?.toGlobal(ref.trackIndex, player.currentPosition.coerceAtLeast(0L)) ?: return
+        val chapter = chapterTimeline?.chapterAt(global) ?: return
+        val previousIndex = item.mediaMetadata.extras?.getInt("chapterIndex", -1) ?: -1
+        if (previousIndex == chapter.index && item.mediaMetadata.title?.toString() == chapter.title) return
+        val extras = Bundle(item.mediaMetadata.extras ?: Bundle.EMPTY).apply { putInt("chapterIndex", chapter.index) }
+        val updated = item.buildUpon().setMediaMetadata(
+            item.mediaMetadata.buildUpon().setTitle(chapter.title).setExtras(extras).build(),
+        ).build()
+        player.replaceMediaItem(player.currentMediaItemIndex, updated)
     }
 
     private inner class SessionCallback(
@@ -214,6 +273,7 @@ class AudiobookPlaybackService : MediaLibraryService() {
 
     private companion object {
         const val POSITION_SAVE_INTERVAL_MS = 5_000L
+        const val CHAPTER_UPDATE_INTERVAL_MS = 1_000L
         const val PREFS = "audiobook_player_options"
     }
 }
