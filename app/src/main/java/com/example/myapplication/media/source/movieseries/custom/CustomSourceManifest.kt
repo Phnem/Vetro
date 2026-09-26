@@ -122,7 +122,7 @@ val SUPPORTED_PLACEHOLDERS = setOf(
     "tmdbId", "imdbId", "kinopoiskId", "season", "episode", "title", "lookupId",
 )
 
-private val PLACEHOLDER = Regex("""\{([A-Za-z]+)}""")
+private val PLACEHOLDER = Regex("""\{([A-Za-z]+)\}""")
 private val SAFE_ID = Regex("[A-Za-z0-9._-]{1,64}")
 
 /**

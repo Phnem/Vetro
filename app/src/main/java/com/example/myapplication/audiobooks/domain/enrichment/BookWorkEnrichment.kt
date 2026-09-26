@@ -93,7 +93,7 @@ internal object BookWorkMatching {
     fun normalize(text: String): String = text
         .lowercase(Locale.ROOT)
         .replace('ё', 'е')
-        .replace(Regex("""\([^)]*\)|\[[^]]*]"""), " ")
+        .replace(Regex("""\([^)]*\)|\[[^\]]*\]"""), " ")
         .substringBefore(':')
         .replace(Regex("""[^\p{L}\p{N}]+"""), " ")
         .trim()

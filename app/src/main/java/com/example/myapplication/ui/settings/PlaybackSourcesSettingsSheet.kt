@@ -1,5 +1,13 @@
 package com.example.myapplication.ui.settings
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.ui.platform.LocalContext
+import com.example.myapplication.media.source.movieseries.custom.CustomSourceInstaller
+import com.example.myapplication.media.source.movieseries.custom.PackagePreview
+import com.example.myapplication.media.source.sdk.PackageCapability
+import com.example.myapplication.media.source.sdk.PackageMediaType
+import com.example.myapplication.media.source.sdk.PackageOrigin
 import com.example.myapplication.ui.shared.theme.IosScroll
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -116,8 +124,11 @@ fun PlaybackSourcesSettingsSheet(
                 sources = state.customSources,
                 isInstalling = state.isInstalling,
                 installError = state.installError,
+                preview = state.packagePreview,
                 ru = ru,
                 onInstall = viewModel::installCustomSource,
+                onConfirmPackage = viewModel::confirmPackage,
+                onDismissPackage = viewModel::dismissPackage,
                 onToggle = viewModel::setCustomSourceEnabled,
                 onRefresh = viewModel::refreshCustomSource,
                 onRemove = viewModel::removeCustomSource,
@@ -333,13 +344,27 @@ private fun CustomSourcesSection(
     sources: List<CustomSourceSummary>,
     isInstalling: Boolean,
     installError: String?,
+    preview: PackagePreview?,
     ru: Boolean,
     onInstall: (String) -> Unit,
+    onConfirmPackage: () -> Unit,
+    onDismissPackage: () -> Unit,
     onToggle: (String, Boolean) -> Unit,
     onRefresh: (String) -> Unit,
     onRemove: (String) -> Unit,
 ) {
     var input by rememberSaveable { mutableStateOf("") }
+    val context = LocalContext.current
+    // Пакет из файла: читается целиком (он небольшой, лимит проверит установщик) и идёт тем же путём.
+    val pickFile = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        uri ?: return@rememberLauncherForActivityResult
+        val text = runCatching {
+            context.contentResolver.openInputStream(uri)?.use { stream ->
+                stream.readNBytesCompat(CustomSourceInstaller.MAX_PACKAGE_BYTES + 1).toString(Charsets.UTF_8)
+            }
+        }.getOrNull()
+        if (!text.isNullOrBlank()) onInstall(text)
+    }
 
     Spacer(Modifier.height(4.dp))
     Text(
@@ -350,11 +375,11 @@ private fun CustomSourcesSection(
     )
     Text(
         text = if (ru) {
-            "Вставьте ссылку на конфигурацию источника или сам файл конфигурации. " +
-                "Поддерживаются манифест Vetro и аддон Stremio."
+            "Вставьте ссылку на конфигурацию источника или сам файл конфигурации, либо выберите файл. " +
+                "Поддерживаются пакет Vetro, манифест Vetro и аддон Stremio."
         } else {
-            "Paste a link to a source configuration, or the configuration itself. " +
-                "Vetro manifests and Stremio addons are supported."
+            "Paste a link to a source configuration or the configuration itself, or pick a file. " +
+                "Vetro packages, Vetro manifests and Stremio addons are supported."
         },
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         fontFamily = SnProFamily,
@@ -374,20 +399,30 @@ private fun CustomSourcesSection(
             fontFamily = SnProFamily,
         )
     }
-    Button(
-        onClick = {
-            onInstall(input)
-            input = ""
-        },
-        enabled = !isInstalling && input.isNotBlank(),
-        shape = SquircleShape(18.dp),
-    ) {
-        if (isInstalling) {
-            CircularProgressIndicator(modifier = Modifier.height(18.dp), strokeWidth = 2.dp)
-        } else {
-            Text(if (ru) "Добавить" else "Add", fontFamily = SnProFamily)
+    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        Button(
+            onClick = {
+                onInstall(input)
+                input = ""
+            },
+            enabled = !isInstalling && input.isNotBlank(),
+            shape = SquircleShape(18.dp),
+        ) {
+            if (isInstalling) {
+                CircularProgressIndicator(modifier = Modifier.height(18.dp), strokeWidth = 2.dp)
+            } else {
+                Text(if (ru) "Добавить" else "Add", fontFamily = SnProFamily)
+            }
+        }
+        OutlinedButton(
+            onClick = { pickFile.launch(arrayOf("application/json", "application/octet-stream", "text/plain")) },
+            enabled = !isInstalling,
+            shape = SquircleShape(18.dp),
+        ) {
+            Text(if (ru) "Выбрать файл" else "Pick a file", fontFamily = SnProFamily)
         }
     }
+    preview?.let { PackageReviewCard(it, ru, onConfirm = onConfirmPackage, onDismiss = onDismissPackage) }
 
     if (sources.isNotEmpty()) {
         Spacer(Modifier.height(4.dp))
@@ -407,6 +442,104 @@ private fun CustomSourcesSection(
             )
         }
     }
+}
+
+/**
+ * Экран возможностей пакета перед установкой: что умеет, с какими хостами говорит, нужен ли ключ,
+ * кем подписан. Ничего не установлено, пока пользователь не нажал «Установить».
+ */
+@Composable
+private fun PackageReviewCard(
+    preview: PackagePreview,
+    ru: Boolean,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val muted = MaterialTheme.colorScheme.onSurfaceVariant
+    Surface(shape = SquircleShape(18.dp), tonalElevation = 2.dp, modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(
+                "${preview.name} ${preview.version}",
+                style = MaterialTheme.typography.titleMedium,
+                fontFamily = SnProFamily,
+                fontWeight = FontWeight.SemiBold,
+            )
+            preview.replacesVersion?.let {
+                Text(if (ru) "Обновление с версии $it" else "Update from version $it", color = muted, fontFamily = SnProFamily)
+            }
+            preview.author?.let { ReviewLine(if (ru) "Автор" else "Author", it) }
+            ReviewLine(if (ru) "Контент" else "Content", preview.mediaTypes.joinToString { mediaTypeLabel(it, ru) })
+            ReviewLine(if (ru) "Умеет" else "Can", preview.capabilities.joinToString { capabilityLabel(it, ru) })
+            ReviewLine(if (ru) "Обращается к" else "Talks to", preview.hosts.joinToString())
+            ReviewLine(
+                if (ru) "Ключ" else "Key",
+                if (preview.needsKey) (if (ru) "нужен ваш ключ" else "needs your key") else (if (ru) "не нужен" else "not needed"),
+            )
+            val signed = preview.origin as? PackageOrigin.Signed
+            ReviewLine(
+                if (ru) "Подпись" else "Signature",
+                if (signed != null) {
+                    (if (ru) "ключ " else "key ") + signed.publicKey.take(12) + "…"
+                } else {
+                    if (ru) "нет — обновления не будут проверяться по ключу автора" else "none — updates cannot be checked against an author key"
+                },
+            )
+            ReviewLine("SHA-256", preview.sha256.take(16) + "…")
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Button(onClick = onConfirm, shape = SquircleShape(18.dp)) {
+                    Text(if (ru) "Установить" else "Install", fontFamily = SnProFamily)
+                }
+                TextButton(onClick = onDismiss) {
+                    Text(if (ru) "Отмена" else "Cancel", fontFamily = SnProFamily)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ReviewLine(label: String, value: String) {
+    Row {
+        Text(
+            "$label: ",
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            fontFamily = SnProFamily,
+            style = MaterialTheme.typography.bodyMedium,
+        )
+        Text(value, fontFamily = SnProFamily, style = MaterialTheme.typography.bodyMedium)
+    }
+}
+
+private fun mediaTypeLabel(type: PackageMediaType, ru: Boolean): String = when (type) {
+    PackageMediaType.MOVIE -> if (ru) "фильмы" else "movies"
+    PackageMediaType.SERIES -> if (ru) "сериалы" else "series"
+    PackageMediaType.ANIME -> if (ru) "аниме" else "anime"
+    PackageMediaType.MANGA -> if (ru) "манга" else "manga"
+    PackageMediaType.AUDIOBOOK -> if (ru) "аудиокниги" else "audiobooks"
+}
+
+private fun capabilityLabel(capability: PackageCapability, ru: Boolean): String = when (capability) {
+    PackageCapability.SEARCH -> if (ru) "поиск по названию" else "title search"
+    PackageCapability.SEARCH_BY_EXTERNAL_ID -> if (ru) "поиск по id" else "id lookup"
+    PackageCapability.UNITS -> if (ru) "серии и главы" else "episodes and chapters"
+    PackageCapability.STREAMS -> if (ru) "видео" else "video"
+    PackageCapability.SUBTITLES -> if (ru) "субтитры" else "subtitles"
+    PackageCapability.VARIANTS -> if (ru) "озвучки" else "audio variants"
+    PackageCapability.PAGES -> if (ru) "страницы манги" else "manga pages"
+    PackageCapability.AUDIO -> if (ru) "аудио" else "audio"
+    PackageCapability.DOWNLOAD -> if (ru) "скачивание" else "downloads"
+}
+
+/** `InputStream.readNBytes` появился только в Java 11 / API 33. */
+private fun java.io.InputStream.readNBytesCompat(limit: Int): ByteArray {
+    val out = java.io.ByteArrayOutputStream()
+    val buffer = ByteArray(8 * 1024)
+    while (out.size() < limit) {
+        val n = read(buffer, 0, minOf(buffer.size, limit - out.size()))
+        if (n < 0) break
+        out.write(buffer, 0, n)
+    }
+    return out.toByteArray()
 }
 
 @Composable

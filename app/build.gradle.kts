@@ -207,6 +207,7 @@ dependencies {
     // Только ради версии нативной библиотеки (16 КБ страницы) — см. комментарий в каталоге.
     implementation(libs.androidx.graphics.path)
     implementation(libs.androidx.security.crypto)
+    implementation(libs.tink.android)
     implementation(libs.backdrop)
 
     // 5. AndroidX Core

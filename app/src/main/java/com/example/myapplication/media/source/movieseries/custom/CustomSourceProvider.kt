@@ -45,7 +45,7 @@ private class Substitutions(
     fun valueFor(placeholder: String): String? = values[placeholder]
 }
 
-private val PLACEHOLDER = Regex("""\{([A-Za-z]+)}""")
+private val PLACEHOLDER = Regex("""\{([A-Za-z]+)\}""")
 
 /**
  * A user-installed source driven entirely by its manifest.

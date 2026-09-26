@@ -14,6 +14,8 @@ coreKtx = "1.15.0"
 appcompat = "1.7.0"
 material = "1.12.0"
 securityCrypto = "1.1.0-alpha06"
+# Та же версия, что тянет security-crypto: Ed25519 для подписи пакетов провайдеров, APK не растёт.
+tinkAndroid = "1.8.0"
 # Markdown renderer (GitHub changelog)
 markdownRenderer = "0.39.2"
 
@@ -107,6 +109,7 @@ datastore-preferences = { module = "androidx.datastore:datastore-preferences", v
 # у 1.0.1 RELRO выходит за конец сегмента, и Android 16 запускает приложение в режиме совместимости.
 androidx-graphics-path = { module = "androidx.graphics:graphics-path", version.ref = "graphicsPath" }
 androidx-security-crypto = { module = "androidx.security:security-crypto", version.ref = "securityCrypto" }
+tink-android = { module = "com.google.crypto.tink:tink-android", version.ref = "tinkAndroid" }
 work-runtime-ktx = { module = "androidx.work:work-runtime-ktx", version.ref = "workManager" }
 
 # --- OkHttp ---

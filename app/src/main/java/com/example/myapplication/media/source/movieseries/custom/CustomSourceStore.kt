@@ -22,6 +22,17 @@ sealed interface InstalledSourceDefinition {
 
     @Serializable
     data class Stremio(val baseUrl: String, val manifest: StremioManifest) : InstalledSourceDefinition
+
+    /**
+     * Пакет провайдера v2. [sha256] — отпечаток импортированного файла; [signerKey] — ключ автора,
+     * зафиксированный при первом импорте (обновление только с ним).
+     */
+    @Serializable
+    data class Package(
+        val pkg: com.example.myapplication.media.source.sdk.ProviderPackage,
+        val sha256: String,
+        val signerKey: String? = null,
+    ) : InstalledSourceDefinition
 }
 
 /** One source the user added, with the state they control. */

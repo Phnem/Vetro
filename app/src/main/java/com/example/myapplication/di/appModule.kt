@@ -250,6 +250,13 @@ val appModule = module {
             followRedirects = false
         }
     }
+    // Пакеты провайдеров v2: редиректы выполняет песочница (только внутрь allowedHosts), не OkHttp.
+    single(named("provider-packages")) {
+        io.ktor.client.HttpClient(io.ktor.client.engine.okhttp.OkHttp) {
+            engine { preconfigured = get<okhttp3.OkHttpClient>() }
+            followRedirects = false
+        }
+    }
     single(named("personal-media")) {
         io.ktor.client.HttpClient(io.ktor.client.engine.okhttp.OkHttp) {
             engine { preconfigured = get<okhttp3.OkHttpClient>() }
@@ -332,6 +339,7 @@ val appModule = module {
         com.example.myapplication.media.source.movieseries.custom.CustomSourceRegistry(
             store = get(),
             client = get(),
+            packageClient = get(named("provider-packages")),
         )
     }
     single {

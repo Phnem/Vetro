@@ -20,6 +20,8 @@ data class CustomSourceSummary(
 sealed interface CustomSourceOutcome {
     data class Installed(val summary: CustomSourceSummary) : CustomSourceOutcome
     data class Rejected(val reason: String) : CustomSourceOutcome
+    /** Пакет v2 разобран и проверен; установка — после подтверждения пользователем ([confirm]). */
+    data class ReviewRequired(val preview: PackagePreview) : CustomSourceOutcome
 }
 
 /**
@@ -37,12 +39,40 @@ class CustomSourceSettingsService(
         store.all().map(InstalledSource::toSummary)
 
     /** Installs from a definition the user pasted or picked as a file. */
-    suspend fun installFromText(text: String, sourceUrl: String? = null): CustomSourceOutcome =
-        when (val parsed = installer.fromUnknownJson(text, sourceUrl)) {
+    suspend fun installFromText(text: String, sourceUrl: String? = null): CustomSourceOutcome {
+        if (installer.looksLikePackage(text)) {
+            val installed = installedFacts(text)
+            return when (val parsed = installer.fromPackageJson(text, sourceUrl, installed)) {
+                is PackageParse.Rejected -> CustomSourceOutcome.Rejected(parsed.reason)
+                is PackageParse.Ready -> CustomSourceOutcome.ReviewRequired(parsed.preview)
+            }
+        }
+        return when (val parsed = installer.fromUnknownJson(text, sourceUrl)) {
             is SourceInstallResult.Rejected -> CustomSourceOutcome.Rejected(parsed.reason)
             is SourceInstallResult.Installed ->
                 CustomSourceOutcome.Installed(store.install(parsed.source).toSummary())
         }
+    }
+
+    /**
+     * Установить просмотренный пакет. Правило обновления проверяется ещё раз: между просмотром и
+     * подтверждением могла встать другая версия.
+     */
+    suspend fun confirm(preview: PackagePreview): CustomSourceOutcome {
+        val current = store.all().firstOrNull { it.key == preview.source.key }?.packageFacts()
+        com.example.myapplication.media.source.sdk.PackageIntegrity
+            .updateProblem(current, preview.version, preview.origin)
+            ?.let { return CustomSourceOutcome.Rejected(it) }
+        return CustomSourceOutcome.Installed(store.install(preview.source).toSummary())
+    }
+
+    private suspend fun installedFacts(text: String): com.example.myapplication.media.source.sdk.InstalledPackageFacts? {
+        val id = runCatching {
+            (kotlinx.serialization.json.Json.parseToJsonElement(text) as kotlinx.serialization.json.JsonObject)["id"]
+                ?.let { (it as kotlinx.serialization.json.JsonPrimitive).content }
+        }.getOrNull() ?: return null
+        return store.all().firstOrNull { it.key == CustomSourceInstaller.packageKey(id) }?.packageFacts()
+    }
 
     /** Installs from a link to the definition. */
     suspend fun installFromUrl(url: String): CustomSourceOutcome {
@@ -81,12 +111,18 @@ class CustomSourceSettingsService(
     suspend fun remove(key: String) = store.remove(key)
 }
 
+private fun InstalledSource.packageFacts(): com.example.myapplication.media.source.sdk.InstalledPackageFacts? =
+    (definition as? InstalledSourceDefinition.Package)?.let {
+        com.example.myapplication.media.source.sdk.InstalledPackageFacts(it.pkg.version, it.signerKey)
+    }
+
 private fun InstalledSource.toSummary(): CustomSourceSummary = CustomSourceSummary(
     key = key,
     displayName = displayName,
     kindLabel = when (definition) {
         is InstalledSourceDefinition.Manifest -> "Vetro"
         is InstalledSourceDefinition.Stremio -> "Stremio"
+        is InstalledSourceDefinition.Package -> "Vetro ${definition.pkg.version}"
     },
     enabled = enabled,
     sourceUrl = sourceUrl,

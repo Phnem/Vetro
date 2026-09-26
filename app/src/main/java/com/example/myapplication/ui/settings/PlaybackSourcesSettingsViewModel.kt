@@ -1,5 +1,6 @@
 package com.example.myapplication.ui.settings
 
+import com.example.myapplication.media.source.movieseries.custom.PackagePreview
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.myapplication.media.source.PlaybackSourceConfigurationSummary
@@ -52,6 +53,8 @@ data class PlaybackSourcesSettingsUiState(
     val isInstalling: Boolean = false,
     /** Why the last install attempt was refused, shown verbatim so the user can fix it. */
     val installError: String? = null,
+    /** Проверенный пакет v2, ждущий подтверждения установки. */
+    val packagePreview: PackagePreview? = null,
 )
 
 class PlaybackSourcesSettingsViewModel(
@@ -164,6 +167,20 @@ class PlaybackSourcesSettingsViewModel(
         }
     }
 
+    /** Пользователь посмотрел, что умеет пакет и куда ходит, и согласился. */
+    fun confirmPackage() {
+        val sources = customSources ?: return
+        val preview = _uiState.value.packagePreview ?: return
+        viewModelScope.launch {
+            _uiState.update { it.copy(isInstalling = true, packagePreview = null) }
+            applyOutcome(sources, sources.confirm(preview))
+        }
+    }
+
+    fun dismissPackage() {
+        _uiState.update { it.copy(packagePreview = null) }
+    }
+
     fun refreshCustomSource(key: String) {
         val sources = customSources ?: return
         viewModelScope.launch {
@@ -208,6 +225,10 @@ class PlaybackSourcesSettingsViewModel(
                     installError = outcome.reason,
                     message = PlaybackSourceSettingsMessage.CUSTOM_SOURCE_REJECTED,
                 )
+            }
+
+            is CustomSourceOutcome.ReviewRequired -> _uiState.update {
+                it.copy(isInstalling = false, installError = null, packagePreview = outcome.preview)
             }
         }
     }
