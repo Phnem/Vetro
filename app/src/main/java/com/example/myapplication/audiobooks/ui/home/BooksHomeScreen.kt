@@ -260,7 +260,7 @@ private fun HomeList(
             }
         }
         continueItems.firstOrNull()?.let { first ->
-            item(key = "continue") { ContinueCard(first, strings, isDark) { onResume(first) } }
+            item(key = "continue") { NowPlayingCard(first, strings, onResume = { onResume(first) }) }
         }
         items(shelves, key = { it.key }) { shelf ->
             val topEnd = if (shelf.key == BooksCatalog.SHOWCASE_KEY) {
@@ -288,47 +288,6 @@ private fun HomeList(
                         enabled = shelf.books.isNotEmpty(),
                     ) { onOpenShelf(shelf) },
             )
-        }
-    }
-}
-
-@Composable
-private fun ContinueCard(item: ContinueItem, strings: BooksHomeStrings, isDark: Boolean, onResume: () -> Unit) {
-    val ink = if (isDark) Color.White else Color(0xFF111111)
-    val book = CachedBook("", "", item.title, item.authors, item.narrators, item.coverUrl, null, 1)
-    Column(
-        Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(24.dp))
-            .background(IosDesign.rowBackground(isDark))
-            .padding(16.dp),
-    ) {
-        SectionLabel(strings.continueListening, isDark)
-        Spacer(Modifier.height(12.dp))
-        Row {
-            BookCover(book, Modifier.size(88.dp, 132.dp))
-            Spacer(Modifier.width(14.dp))
-            Column(Modifier.weight(1f)) {
-                Text(item.title, color = ink, fontFamily = SnProFamily, fontWeight = FontWeight.Bold, fontSize = 18.sp,
-                    maxLines = 2, overflow = TextOverflow.Ellipsis)
-                Text(
-                    (item.authors + item.narrators).joinToString(" · "),
-                    color = ink.copy(alpha = 0.55f), fontFamily = SnProFamily, fontSize = 13.sp,
-                    maxLines = 1, overflow = TextOverflow.Ellipsis,
-                )
-                Spacer(Modifier.height(8.dp))
-                Text(strings.chapter(item.chapterIndex + 1), color = ink.copy(alpha = 0.75f), fontFamily = SnProFamily, fontSize = 13.sp)
-                val total = item.totalMs
-                if (total != null && total > 0) {
-                    Spacer(Modifier.height(6.dp))
-                    ProgressLine(item.globalMs.toFloat() / total, isDark)
-                    Spacer(Modifier.height(4.dp))
-                    val leftSec = ((total - item.globalMs).coerceAtLeast(0) / item.speed / 1000).toLong()
-                    Text(strings.left(strings.duration(leftSec)), color = ink.copy(alpha = 0.5f), fontFamily = SnProFamily, fontSize = 12.sp)
-                }
-                Spacer(Modifier.weight(1f))
-                OrangeButton(strings.resume, Modifier.padding(top = 10.dp), onClick = onResume)
-            }
         }
     }
 }

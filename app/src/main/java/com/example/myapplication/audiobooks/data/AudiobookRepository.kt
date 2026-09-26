@@ -68,6 +68,8 @@ class AudiobookRepository(
                     cover_blurhash = work?.cover_blurhash,
                     selected_narration_id = work?.selected_narration_id,
                     updated_at = nowMs(),
+                    // INSERT OR REPLACE переписывает строку целиком: избранное переносим явно.
+                    is_favorite = work?.is_favorite ?: 0,
                 ),
             )
             val narrationFp = fingerprint(book.narrators, "", "")
@@ -122,7 +124,7 @@ class AudiobookRepository(
                         series_title = null, series_index = null, description = null, genres_json = "[]",
                         language = BookLanguage.RU.name, year = null, is_collection = 0,
                         cover_url = meta.coverUrl, cover_palette_json = null, cover_blurhash = null,
-                        selected_narration_id = meta.narrationId.value, updated_at = nowMs(),
+                        selected_narration_id = meta.narrationId.value, updated_at = nowMs(), is_favorite = 0,
                     ),
                 )
             }
@@ -179,6 +181,13 @@ class AudiobookRepository(
                 )
             }
         }
+
+    fun isFavorite(workId: WorkId): Flow<Boolean> =
+        q.workFavorite(workId.value).asFlow().mapToList(Dispatchers.IO).map { it.firstOrNull() == 1L }
+
+    suspend fun setFavorite(workId: WorkId, favorite: Boolean) = io {
+        q.setWorkFavorite(favorite = if (favorite) 1 else 0, workId = workId.value)
+    }
 
     suspend fun listenedSince(sinceMs: Long): Long = io { q.listenedSince(sinceMs).executeAsOne() }
 

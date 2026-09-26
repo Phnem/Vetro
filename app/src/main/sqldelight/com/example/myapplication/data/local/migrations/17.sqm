@@ -1,0 +1,2 @@
+-- Избранное аудиокниги (сердце в плеере и на карточке «Продолжить»). Локально, как и все audiobook_*.
+ALTER TABLE audiobook_work ADD COLUMN is_favorite INTEGER NOT NULL DEFAULT 0;

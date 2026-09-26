@@ -18,7 +18,8 @@ CREATE TABLE audiobook_work (
     cover_palette_json TEXT,
     cover_blurhash TEXT,
     selected_narration_id TEXT,
-    updated_at INTEGER NOT NULL
+    updated_at INTEGER NOT NULL,
+    is_favorite INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX audiobook_work_collection ON audiobook_work(collection_id);
 CREATE INDEX audiobook_work_fingerprint ON audiobook_work(cluster_fingerprint);
@@ -96,8 +97,14 @@ upsertWork:
 INSERT OR REPLACE INTO audiobook_work(
     work_id, cluster_fingerprint, collection_id, title, title_original, authors_json, series_title,
     series_index, description, genres_json, language, year, is_collection, cover_url,
-    cover_palette_json, cover_blurhash, selected_narration_id, updated_at
+    cover_palette_json, cover_blurhash, selected_narration_id, updated_at, is_favorite
 ) VALUES ?;
+
+setWorkFavorite:
+UPDATE audiobook_work SET is_favorite = :favorite WHERE work_id = :workId;
+
+workFavorite:
+SELECT is_favorite FROM audiobook_work WHERE work_id = ?;
 
 workById:
 SELECT * FROM audiobook_work WHERE work_id = ?;

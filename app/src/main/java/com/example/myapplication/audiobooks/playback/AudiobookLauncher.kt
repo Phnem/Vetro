@@ -13,6 +13,7 @@ import com.example.myapplication.audiobooks.domain.source.ManifestResolver
 import com.example.myapplication.audiobooks.domain.source.SourceBook
 import com.example.myapplication.audiobooks.domain.source.SourceResult
 import com.example.myapplication.audiobooks.domain.timeline.BookTimeline
+import com.example.myapplication.audiobooks.ui.AudiobookPlayerState
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -28,6 +29,7 @@ class AudiobookLauncher(
     private val sources: List<AudiobookSource>,
     private val resolver: ManifestResolver,
     private val repository: AudiobookRepository,
+    private val playerState: AudiobookPlayerState,
 ) {
     sealed interface Result {
         data object Started : Result
@@ -35,7 +37,11 @@ class AudiobookLauncher(
         data object Unavailable : Result
     }
 
-    suspend fun play(book: SourceBook): Result {
+    /**
+     * @param startFraction доля книги, с которой начать, если у этой озвучки ещё нет своей позиции
+     *   (смена чтеца: разметка глав у разных озвучек разная, переносим по доле — spec/03 случай 4).
+     */
+    suspend fun play(book: SourceBook, startFraction: Float? = null, expand: Boolean = true): Result {
         val source = sources.firstOrNull { it.id == book.ref.source } ?: return Result.Unavailable
         val details = when (val r = source.details(book.ref)) {
             is SourceResult.Ok -> r.value
@@ -45,7 +51,10 @@ class AudiobookLauncher(
         val opened = repository.saveOpened(source, details)
         val manifest = runCatching { resolver.manifest(opened.variantId) }.getOrElse { return Result.Unavailable }
         val d = details.book
-        start(opened, manifest, d.title, d.authors.joinToString(", "), d.narrators.joinToString(", "), d.coverUrl)
+        start(opened, manifest, d.title, d.authors.joinToString(", "), d.narrators.joinToString(", "), d.coverUrl, startFraction)
+        // «Слушать» открывает полный плеер, а не мини: пользователь пришёл слушать эту книгу.
+        // У карточки «Продолжить» свои контролы — там плеер остаётся свёрнутым.
+        if (expand) playerState.requestExpand()
         return Result.Started
     }
 
@@ -56,13 +65,15 @@ class AudiobookLauncher(
         author: String,
         narrator: String,
         cover: String?,
+        startFraction: Float?,
     ) {
         val items = PlaybackQueueBuilder.build(manifest, book.workId, book.narrationId, title, author, narrator, cover)
         // Продолжаем с места, где остановились в этой озвучке; шкала книги → (трек, смещение).
         val saved = repository.progress(book.narrationId)
-        val (index, offset) = saved?.takeIf { !it.finished }?.let {
-            runCatching { BookTimeline(manifest.tracks, manifest.chapters).toTrack(it.globalMs) }.getOrNull()
-        } ?: (0 to 0L)
+        val timeline = runCatching { BookTimeline(manifest.tracks, manifest.chapters) }.getOrNull()
+        val startGlobal = saved?.takeIf { !it.finished }?.globalMs
+            ?: startFraction?.let { f -> timeline?.totalMs?.let { (it * f).toLong() } }
+        val (index, offset) = startGlobal?.let { timeline?.toTrack(it) } ?: (0 to 0L)
         val token = SessionToken(context, ComponentName(context, AudiobookPlaybackService::class.java))
         val future = MediaController.Builder(context, token).buildAsync()
         try {

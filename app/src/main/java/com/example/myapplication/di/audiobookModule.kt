@@ -5,6 +5,7 @@ import com.example.myapplication.audiobooks.data.AudiobookRepository
 import com.example.myapplication.audiobooks.data.BooksCatalog
 import com.example.myapplication.audiobooks.data.CachedShelf
 import com.example.myapplication.audiobooks.playback.AudiobookLauncher
+import com.example.myapplication.audiobooks.ui.AudiobookPlayerState
 import com.example.myapplication.audiobooks.ui.home.BooksHomeViewModel
 import com.example.myapplication.data.local.JsonMapFileStore
 import java.io.File
@@ -45,6 +46,7 @@ val audiobookModule = module {
             metadata = get(),
         )
     }
-    single { AudiobookLauncher(androidContext(), getAll<AudiobookSource>(), get(), get()) }
+    single { AudiobookPlayerState() }
+    single { AudiobookLauncher(androidContext(), getAll<AudiobookSource>(), get(), get(), get()) }
     viewModel { BooksHomeViewModel(get(), get(), get()) }
 }

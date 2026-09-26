@@ -175,6 +175,27 @@ object FrostedMaterials {
      * Тинт легче, чем у плашки: на доке нет текста, который надо вытягивать, зато есть иконки, и
      * плотная подложка убила бы ощущение стекла над движущимся списком.
      */
+    /**
+     * Кнопки и плашки поверх обложки аудиокниги: плеер, мини-плеер, карточка «Продолжить»
+     * (spec/07 `playerControl`, UNIVERSAL_GLASS_SPEC `material.regular`). Под ними всегда арт, поэтому
+     * размытие полное; тинт темнее дока — на кнопках белые иконки, им нужен контраст на светлой обложке.
+     * Тема не влияет: подложка — картинка, а не фон приложения.
+     */
+    @Composable
+    fun playerControl(): FrostedMaterial = remember {
+        FrostedMaterial(
+            blur = 24.dp,
+            saturation = 1.16f,
+            contrast = 1.05f,
+            tint = Color(0xFF141414).copy(alpha = 0.42f),
+            noiseAlpha = 0.020f,
+            rim = Color.White.copy(alpha = 0.16f),
+            highlight = Highlight(width = 0.75.dp, alpha = 0.5f),
+            shadow = Shadow(radius = 24.dp, color = Color.Black.copy(alpha = 0.22f)),
+            fallbackFill = Color(0xE6202020),
+        )
+    }
+
     @Composable
     fun dock(): FrostedMaterial {
         val isDark = isAppInDarkTheme()

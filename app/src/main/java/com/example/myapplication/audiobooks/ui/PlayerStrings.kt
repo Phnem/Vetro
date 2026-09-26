@@ -1,0 +1,147 @@
+package com.example.myapplication.audiobooks.ui
+
+import com.example.myapplication.network.AppLanguage
+
+/** Строки плеера и его шторок. Отдельно от `AudiobookStrings`: лимит полей конструктора. */
+data class PlayerStrings(
+    val collapse: String,
+    val more: String,
+    val play: String,
+    val pause: String,
+    val back15: String,
+    val forward30: String,
+    val favorite: String,
+    val speed: String,
+    val chapters: String,
+    val chapterShort: (Int, Int) -> String,
+    val timer: String,
+    val narration: String,
+    val sleepTitle: String,
+    val start: String,
+    val turnOff: String,
+    val endOfChapter: String,
+    val stopsIn: (String) -> String,
+    val minutes: (Int) -> String,
+    val hoursMinutes: (Int, Int) -> String,
+    val speedTitle: String,
+    val skipSilence: String,
+    val skipSilenceHint: String,
+    val chaptersTitle: String,
+    val chapterCount: (Int) -> String,
+    val allChapters: String,
+    val notListened: String,
+    val nowPlaying: String,
+    val listened: String,
+    val narrationTitle: String,
+    val narrationSearching: String,
+    val narrationNone: String,
+    val narrationCurrent: String,
+    val narrationSwitched: String,
+    val narrationUnavailable: String,
+    val moreTitle: String,
+    val moveMiniTopLeft: String,
+    val moveMiniTopRight: String,
+    val moveMiniBottomLeft: String,
+    val moveMiniBottomRight: String,
+)
+
+fun playerStrings(language: AppLanguage): PlayerStrings = when (language) {
+    AppLanguage.RU -> PlayerStrings(
+        collapse = "Свернуть плеер",
+        more = "Ещё",
+        play = "Слушать",
+        pause = "Пауза",
+        back15 = "Назад на 15 секунд",
+        forward30 = "Вперёд на 30 секунд",
+        favorite = "В избранное",
+        speed = "Скорость",
+        chapters = "Главы",
+        chapterShort = { i, n -> "$i из $n" },
+        timer = "Таймер",
+        narration = "Озвучка",
+        sleepTitle = "Таймер сна",
+        start = "Запустить",
+        turnOff = "Выключить",
+        endOfChapter = "До конца главы",
+        stopsIn = { "Остановится через $it" },
+        minutes = { "$it мин" },
+        hoursMinutes = { h, m -> if (m == 0) "$h ч" else "$h ч $m мин" },
+        speedTitle = "Скорость",
+        skipSilence = "Пропуск тишины",
+        skipSilenceHint = "Паузы между фразами становятся короче",
+        chaptersTitle = "Главы",
+        chapterCount = { n -> "$n ${ruPlural(n, "глава", "главы", "глав")}" },
+        allChapters = "Все главы",
+        notListened = "Непрослушанные",
+        nowPlaying = "сейчас",
+        listened = "прослушано",
+        narrationTitle = "Озвучка",
+        narrationSearching = "Ищем другие озвучки…",
+        narrationNone = "Других озвучек у источников пока нет",
+        narrationCurrent = "Слушаете сейчас",
+        narrationSwitched = "Место перенесено примерно",
+        narrationUnavailable = "Эта озвучка сейчас недоступна",
+        moreTitle = "Ещё",
+        moveMiniTopLeft = "Переместить в левый верхний угол",
+        moveMiniTopRight = "Переместить в правый верхний угол",
+        moveMiniBottomLeft = "Переместить в левый нижний угол",
+        moveMiniBottomRight = "Переместить в правый нижний угол",
+    )
+    AppLanguage.EN -> PlayerStrings(
+        collapse = "Collapse player",
+        more = "More",
+        play = "Play",
+        pause = "Pause",
+        back15 = "Back 15 seconds",
+        forward30 = "Forward 30 seconds",
+        favorite = "Favourite",
+        speed = "Speed",
+        chapters = "Chapters",
+        chapterShort = { i, n -> "$i of $n" },
+        timer = "Timer",
+        narration = "Narration",
+        sleepTitle = "Sleep timer",
+        start = "Start",
+        turnOff = "Turn off",
+        endOfChapter = "End of chapter",
+        stopsIn = { "Stops in $it" },
+        minutes = { "$it min" },
+        hoursMinutes = { h, m -> if (m == 0) "$h h" else "$h h $m min" },
+        speedTitle = "Speed",
+        skipSilence = "Skip silence",
+        skipSilenceHint = "Shortens pauses between phrases",
+        chaptersTitle = "Chapters",
+        chapterCount = { n -> if (n == 1) "1 chapter" else "$n chapters" },
+        allChapters = "All chapters",
+        notListened = "Not listened",
+        nowPlaying = "now",
+        listened = "listened",
+        narrationTitle = "Narration",
+        narrationSearching = "Looking for other narrations…",
+        narrationNone = "No other narrations at the sources yet",
+        narrationCurrent = "Listening now",
+        narrationSwitched = "Position moved approximately",
+        narrationUnavailable = "This narration is unavailable right now",
+        moreTitle = "More",
+        moveMiniTopLeft = "Move to top left",
+        moveMiniTopRight = "Move to top right",
+        moveMiniBottomLeft = "Move to bottom left",
+        moveMiniBottomRight = "Move to bottom right",
+    )
+}
+
+/** «1 минута / 3 минуты / 5 минут» — русская множественность. */
+internal fun ruPlural(n: Int, one: String, few: String, many: String): String {
+    val mod100 = n % 100
+    val mod10 = n % 10
+    return when {
+        mod100 in 11..14 -> many
+        mod10 == 1 -> one
+        mod10 in 2..4 -> few
+        else -> many
+    }
+}
+
+/** «25 мин», «1 ч 25 мин». */
+internal fun PlayerStrings.duration(totalMinutes: Int): String =
+    if (totalMinutes < 60) minutes(totalMinutes) else hoursMinutes(totalMinutes / 60, totalMinutes % 60)

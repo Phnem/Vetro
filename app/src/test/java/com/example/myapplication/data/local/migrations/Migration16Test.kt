@@ -25,7 +25,8 @@ class Migration16Test {
         migrated = JdbcSqliteDriver(JdbcSqliteDriver.IN_MEMORY)
         migrated.execute(null, "CREATE TABLE anime (id TEXT PRIMARY KEY NOT NULL)", 0)
         migrated.execute(null, "PRAGMA user_version = 16", 0)
-        AnimeDatabase.Schema.migrate(migrated, 16, 17).value
+        // 16.sqm создаёт таблицы, 17.sqm добавляет избранное — сравниваем с итоговой схемой.
+        AnimeDatabase.Schema.migrate(migrated, 16, 18).value
         fresh = JdbcSqliteDriver(JdbcSqliteDriver.IN_MEMORY)
         AnimeDatabase.Schema.create(fresh).value
     }
@@ -68,14 +69,16 @@ class Migration16Test {
         parameters = 0,
     ).value
 
-    private fun String.normalize() = replace(Regex("\\s+"), " ").trim()
+    // ALTER TABLE ADD COLUMN SQLite дописывает в текст CREATE с пробелом перед запятой — пробелы у
+    // скобок и запятых смысла не несут.
+    private fun String.normalize() = replace(Regex("\\s+"), " ").replace(Regex("\\s*([(),])\\s*"), "$1").trim()
 
     private fun work(id: String) = Audiobook_work(
         work_id = id, cluster_fingerprint = "fp-$id", collection_id = null, title = "Title $id",
         title_original = null, authors_json = "[]", series_title = null, series_index = null,
         description = null, genres_json = "[]", language = "RU", year = null, is_collection = 0,
         cover_url = null, cover_palette_json = null, cover_blurhash = null, selected_narration_id = null,
-        updated_at = 0,
+        updated_at = 0, is_favorite = 0,
     )
 
     private fun narration(id: String, workId: String) = Audiobook_narration(

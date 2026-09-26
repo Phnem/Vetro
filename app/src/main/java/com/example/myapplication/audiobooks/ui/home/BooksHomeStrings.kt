@@ -32,6 +32,7 @@ data class BooksHomeStrings(
     val addFolder: String,
     val loading: String,
     val preparing: String,
+    val favorite: String,
     val close: String,
 )
 
@@ -65,6 +66,7 @@ fun booksHomeStrings(language: AppLanguage): BooksHomeStrings = when (language) 
         addFolder = "Добавить папку с книгами",
         loading = "Загружаем полку…",
         preparing = "Готовим книгу…",
+        favorite = "В избранное",
         close = "Закрыть",
     )
     AppLanguage.EN -> BooksHomeStrings(
@@ -96,6 +98,7 @@ fun booksHomeStrings(language: AppLanguage): BooksHomeStrings = when (language) 
         addFolder = "Add a folder with books",
         loading = "Loading the shelf…",
         preparing = "Preparing the book…",
+        favorite = "Favourite",
         close = "Close",
     )
 }

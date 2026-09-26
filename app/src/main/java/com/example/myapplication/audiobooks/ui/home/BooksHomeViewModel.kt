@@ -69,7 +69,7 @@ class BooksHomeViewModel(
         val source = variant.substringBefore(':')
         val key = variant.substringAfter(':')
         val book = CachedBook(source, key, item.title, item.authors, item.narrators, item.coverUrl, null, 1)
-        start(key) { launcher.play(book.toSourceBook()) }
+        start(key) { launcher.play(book.toSourceBook(), expand = false) }
     }
 
     fun consumeLaunch() {
