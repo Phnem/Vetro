@@ -65,6 +65,18 @@ class SourceHttp(
         }.awaitAll()
     }
 
+    /** Небольшой файл целиком (`.torrent`); не ответил — null. */
+    suspend fun bytes(url: String, headers: Map<String, String> = emptyMap()): ByteArray? = withContext(Dispatchers.IO) {
+        rate.acquire()
+        runCatching {
+            val request = Request.Builder().url(url)
+                .header("User-Agent", userAgent)
+                .apply { headers.forEach { (k, v) -> header(k, v) } }
+                .build()
+            http.newCall(request).execute().use { r -> if (r.isSuccessful) r.body?.bytes() else null }
+        }.getOrNull()
+    }
+
     /** Байты [from]..[to] файла (Range) — для чтения заголовка MP3; не ответил — null. */
     suspend fun range(url: String, headers: Map<String, String>, from: Long, to: Long): ByteArray? = withContext(Dispatchers.IO) {
         runCatching {

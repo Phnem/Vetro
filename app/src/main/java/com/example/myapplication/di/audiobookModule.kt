@@ -20,6 +20,11 @@ import com.example.myapplication.audiobooks.data.remote.InternetArchiveSource
 import com.example.myapplication.audiobooks.data.remote.IpaudioWpSource
 import com.example.myapplication.audiobooks.data.remote.IzibSource
 import com.example.myapplication.audiobooks.data.remote.RealAudiobooksSource
+import com.example.myapplication.audiobooks.torrent.AudioBookBaySource
+import com.example.myapplication.audiobooks.torrent.AudiobooSource
+import com.example.myapplication.audiobooks.torrent.PirateBaySource
+import com.example.myapplication.audiobooks.torrent.RutorSource
+import com.example.myapplication.audiobooks.torrent.TorrentEngine
 import com.example.myapplication.audiobooks.data.remote.AudioknigiFunSource
 import com.example.myapplication.audiobooks.data.remote.BazaKnigSource
 import com.example.myapplication.audiobooks.data.remote.KnigavuheSource
@@ -42,6 +47,7 @@ import org.koin.dsl.module
 val audiobookModule = module {
     single { AudiobookFeatureGate(enabled = BuildConfig.AUDIOBOOKS_ENABLED) }
     single { LocalFolderSource(get()) }
+    single { TorrentEngine(androidContext()) }
     single { KnigavuheMetadata(get(), TokenBucketRateLimiter(maxTokens = 2.0, refillTokensPerSecond = 1.0)) }
     // Все онлайн-источники одним списком — он же приоритет для витрины, озвучек и цепочки запасных:
     // сперва стабильные прямые ссылки с длинами глав, затем подписанные ссылки и сайты без длин,
@@ -62,6 +68,12 @@ val audiobookModule = module {
             add(InternetArchiveSource(site(http)))
             add(RealAudiobooksSource(site(http)))
             IpaudioWpSource.SITES.forEach { (id, name, base) -> add(IpaudioWpSource(site(http), id, name, base)) }
+            // Трекеры — последними: звук приходит не сразу, зато раздача остаётся на устройстве.
+            val torrents = get<TorrentEngine>()
+            add(RutorSource(site(http), torrents))
+            add(AudiobooSource(site(http), torrents))
+            add(AudioBookBaySource(site(http), torrents))
+            add(PirateBaySource(site(http), torrents))
         }
     }
     single { AudiobookSearch(get(named(SOURCES))) }

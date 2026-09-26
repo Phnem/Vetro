@@ -122,7 +122,7 @@ class AudiobookPlaybackService : MediaLibraryService() {
     override fun onCreate() {
         super.onCreate()
         resumptionStore = PlaybackResumptionStore(this)
-        player = AudiobookPlayerFactory.create(this, manifestResolver)
+        player = AudiobookPlayerFactory.create(this, manifestResolver, get())
         player.skipSilenceEnabled = getSharedPreferences(PREFS, MODE_PRIVATE).getBoolean(AudiobookSessionCommands.SKIP_SILENCE, false)
         sleepTimer = SleepTimerController(player) { remaining ->
             sleepRemainingMs = remaining ?: -1L

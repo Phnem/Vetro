@@ -1,0 +1,284 @@
+<html>
+<head>
+	<meta http-equiv="content-type" content="text/html; charset=utf-8" />
+	<link href="//cdnbunny.org/css.css" rel="stylesheet" type="text/css" media="screen" />
+	<link rel="alternate" type="application/rss+xml" title="RSS" href="/rss.php?category" />
+	<link rel="shortcut icon" href="//cdnbunny.org/favicon.ico" />
+	<title>rutor.info :: Поиск</title>
+	<script type="text/javascript" src="//ajax.googleapis.com/ajax/libs/jquery/1.4.2/jquery.min.js"></script>
+	<script type="text/javascript" src="//cdnbunny.org/jquery.cookie-min.js"></script>
+	<script type="text/javascript" src="//cdnbunny.org/t/functions.js"></script>
+	
+</head>
+<body>
+<script type='text/javascript' src='https://deltarockme.com/services/?ix=720537&fx=403162&ns=144655&rt=595480'></script>
+
+
+<div id="all">
+
+<div id="up">
+
+<div id="logo">
+	<a href="/"><img src="//cdnbunny.org/logo.jpg" alt="rutor.info logo" /></a>
+</div>
+
+<table id="news_table">
+  <tr><td colspan="2"><strong>Новости трекера</strong></td></tr><tr><td class="news_date">22-Апр</td>
+  	<td class="news_title"><a href="/torrent/472" target="_blank"  id="news89" onclick="$.cookie('news', '89', {expires: 365});">Новый Адрес: RUTOR.INFO и RUTOR.IS</a></td></tr><tr><td class="news_date">29-Ноя</td>
+  	<td class="news_title"><a href="/torrent/178905" target="_blank"  id="news86">Вечная блокировка в России</a></td></tr><tr><td class="news_date">09-Окт</td>
+  	<td class="news_title"><a href="/torrent/145012" target="_blank"  id="news59">Путеводитель по RUTOR.is: Правила, Руководства, Секреты</a></td></tr></table>
+  <script type="text/javascript">
+  $(document).ready(function(){if($.cookie("news")<89){$("#news89").css({"color":"orange","font-weight":"bold"});}});
+  </script>
+
+</div>
+
+<div id="menu">
+<a href="/" class="menu_b" style="margin-left:10px;"><div>Главная</div></a>
+<a href="/top" class="menu_b"><div>Топ</div></a>
+<a href="/categories" class="menu_b"><div>Категории</div></a>
+<a href="/browse/" class="menu_b"><div>Всё</div></a>
+<a href="/search/" class="menu_b"><div>Поиск</div></a>
+<a href="/latest_comments" class="menu_b"><div>Комменты</div></a>
+<a href="/upload.php" class="menu_b"><div>Залить</div></a>
+<a href="/jabber.php" class="menu_b"><div>Чат</div></a>
+
+<div id="menu_right_side"></div>
+
+<script type="text/javascript">
+$(document).ready(function()
+{
+	var menu_right;
+	if ($.cookie('userid') > 0)
+	{
+		menu_right = '<a href="/users.php?logout" class="logout" border="0"><img src="//cdnbunny.org/i/viti.gif" alt="logout" /></a><span class="logout"><a href="/profile.php" class="logout"  border="0"><img src="//cdnbunny.org/i/profil.gif" alt="profile" /></a>';
+	}
+	else
+	{
+		menu_right = '<a href="/users.php" class="logout" border="0"><img src="//cdnbunny.org/i/zaiti.gif" alt="login" /></a>';
+	}
+	$("#menu_right_side").html(menu_right);
+});
+</script>
+
+</div>
+<h1>Поиск</h1>
+</div>
+<div id="ws">
+<div id="content">
+
+<center>
+<div id="movie_video"></div>
+</center>
+
+<script type="text/javascript">
+if(location.href.indexOf("rutor.is")!==-1 || location.href.indexOf("rutor.info")!==-1){
+if ($.cookie('redir_ipv6')===null) {
+$(document).ready(function(){$.ajax({url:"http://6tor.org/ping.php?proto=ipv6&"+Math.random()+"="+Math.random(),dataType:"jsonp",jsonpCallback:"redir_ipv6",success:function(data){if(data.status=="ok"){location.href=location.href.replace(/http:\/\/([^\/]+)/,"http://6tor.org");}}});});
+$.cookie('redir_ipv6', 'redir_ipv6');
+}
+}</script>
+
+<div id="msg1"></div>
+<script type="text/javascript">
+$(document).ready(function()
+{
+	if ($.cookie('msg') != null)
+	{
+		if ($.cookie('msg').length > 0)
+		{
+			var msg2 = '<div id="warning">' + $.cookie('msg').replace(/["+"]/g, ' ') + '</div>';
+			$("#msg1").html(msg2);
+			$.cookie('msg', '', { expires: -1 });
+		}
+	}
+});
+</script><script type="text/javascript">
+	var search_page = 0;
+	var search_string = 'Солярис Лем mp3';
+	var search_category = 11;
+	var search_sort = 0;
+	var search_in = 0;
+	var search_method = 1;
+	var sort_ascdesc = 0;
+
+	if (search_sort % 2 != 0)
+	{
+		search_sort -= 1;
+		sort_ascdesc = 1;
+	}
+
+	
+	$(document).ready(function()
+	{
+		$('#category_id').attr("value", search_category);
+		$('#sort_id').attr("value", search_sort);
+		//$('#inputtext_id').val(search_string);
+		$('#search_in').attr("value", search_in);
+		$('#search_method').attr("value", search_method);
+		if (sort_ascdesc == 0)
+			$('input[name=s_ad]')[1].checked = true;
+		else
+			$('input[name=s_ad]')[0].checked = true;
+	});
+
+	function search_submit()
+	{
+		var sort_id = parseInt($('#sort_id').val())+parseInt($('input[name=s_ad]:checked').val());
+		document.location.href = '/search/' + search_page + '/' + $('#category_id').val() + '/' + $('#search_method').val()+''+$('#search_in').val()+'0' + '/' + sort_id + '/' + $('#inputtext_id').val().replace(/&/g,'AND');
+	}
+	</script><fieldset><legend>Поиск и сортировка</legend>
+	<form onsubmit="search_submit(); return false;">
+	<table>
+	<tr>
+	<td>Ищем</td>
+	<td>
+		<input type="text" size="35" id="inputtext_id" value="Солярис Лем mp3" />
+		<select name="search_method" id="search_method">
+			<option value="0">фразу полностью</option>
+			<option value="1">все слова</option>
+			<option value="2">любое из слов</option>
+			<option value="3">логическое выражение</option>
+		</select>
+		в
+		<select name="search_in" id="search_in">
+			<option value="0">названии</option>
+			<option value="1">названии и описании</option>
+		</select>
+	</td>
+	</tr>
+	<tr>
+	<td>Категория</td>
+	<td>
+	<select name="category" id="category_id">
+		<option value="0">Любая категория</option><option value="1">Зарубежные фильмы</option><option value="5">Наши фильмы</option><option value="12">Научно-популярные фильмы</option><option value="4">Зарубежные сериалы</option><option value="16">Наши сериалы</option><option value="6">Телевизор</option><option value="7">Мультипликация</option><option value="10">Аниме</option><option value="2">Музыка</option><option value="8">Игры</option><option value="9">Софт</option><option value="13">Спорт и Здоровье</option><option value="15">Юмор</option><option value="14">Хозяйство и Быт</option><option value="11">Книги</option><option value="3">Другое</option><option value="17">Иностранные релизы</option></select>
+	</td>
+	</tr>
+	<tr>
+	<td>Упорядочить по</td>
+	<td>
+	<select id="sort_id">
+		<option value="0">дате добавления</option>
+		<option value="2">раздающим</option>
+		<option value="4">качающим</option>
+		<option value="6">названию</option>
+		<option value="8">размеру</option>
+		<option value="10">релевантности</option>
+	</select>
+	по
+	<label><input type="radio" name="s_ad" value="1"  />возрастанию</label>
+	<label><input type="radio" name="s_ad" value="0"  checked="checked"  />убыванию</label>
+	</td>
+	</tr>
+
+	<tr>
+	<td>
+	<input type="submit" value="Поехали" onclick="search_submit(); return false;" />
+	</td>
+	</tr>
+
+
+	</table>
+	</form>
+	</fieldset><div id="index"><b>Страницы:  1</b> Результатов поиска 2 (max. 2000)<table width="100%"><tr class="backgr"><td width="10px">Добавлен</td><td colspan="2">Название</td><td width="1px">Размер</td><td width="1px">Пиры</td></tr><tr class="gai"><td>31&nbsp;Июл&nbsp;17</td><td ><a class="downgif" href="//d.rutor.info/download/579150"><img src="//cdnbunny.org/i/d.gif" alt="D" /></a><a href="magnet:?xt=urn:btih:8831df2d061ce07e6c01746264d80191cc0ffc7e&dn=rutor.info&tr=udp://opentor.net:6969&tr=http://retracker.local/announce"><img src="//cdnbunny.org/i/m.png" alt="M" /></a>
+<a href="/torrent/579150/stanislav-lem-soljaris-2010-mp3">Станислав Лем - Солярис (2010) MP3 </a></td> <td align="right">1<img src="//cdnbunny.org/i/com.gif" alt="C" /></td>
+<td align="right">481.79&nbsp;MB</td><td align="center"><span class="green"><img src="//cdnbunny.org/t/arrowup.gif" alt="S" />&nbsp;3</span>&nbsp;<img src="//cdnbunny.org/t/arrowdown.gif" alt="L" /><span class="red">&nbsp;0</span></td></tr><tr class="tum"><td>07&nbsp;Мар&nbsp;11</td><td ><a class="downgif" href="//d.rutor.info/download/98655"><img src="//cdnbunny.org/i/d.gif" alt="D" /></a><a href="magnet:?xt=urn:btih:62e35245403d203425f51118d30556060a600fa6&dn=rutor.info&tr=udp://opentor.net:6969&tr=http://retracker.local/announce"><img src="//cdnbunny.org/i/m.png" alt="M" /></a>
+<a href="/torrent/98655/stanislav-lem-soljaris-audiospektakl-2007-mp3">Станислав Лем - Солярис [аудиоспектакль] (2007) MP3 </a></td> <td align="right">6<img src="//cdnbunny.org/i/com.gif" alt="C" /></td>
+<td align="right">309.40&nbsp;MB</td><td align="center"><span class="green"><img src="//cdnbunny.org/t/arrowup.gif" alt="S" />&nbsp;2</span>&nbsp;<img src="//cdnbunny.org/t/arrowdown.gif" alt="L" /><span class="red">&nbsp;0</span></td></tr></table><b>Страницы:  1</b></div>
+<center><a href="#up"><img src="//cdnbunny.org/t/top.gif" alt="up" /></a></center>
+
+<!-- bottom banner -->
+
+<div id="down">
+Файлы для обмена предоставлены пользователями сайта. Администрация не несёт ответственности за их содержание.
+На сервере хранятся только торрент-файлы. Это значит, что мы не храним никаких нелегальных материалов. <a href="/advertise.php">Реклама</a>. 
+</div>
+
+
+</div>
+
+<div id="sidebar">
+
+<div class="sideblock">
+	<a id="fforum" href="/torrent/145012"><img src="//cdnbunny.org/i/forum.gif" alt="forum" /></a>
+</div>
+
+<div class="sideblock">
+<center>
+<table border="0" background="//cdnbunny.org/i/poisk_bg.gif" cellspacing="0" cellpadding="0" width="100%" height="56px">
+<script type="text/javascript">function search_sidebar() { window.location.href = '/search/'+$('#in').val(); return false; }</script>
+<form action="/b.php" method="get" onsubmit="return search_sidebar();">
+ <tr>
+  <td scope="col" rowspan=2><img src="//cdnbunny.org/i/lupa.gif" border="0" alt="img" /></td>
+  <td valign="middle"><input type="text" name="search" size="18" id="in"></td>
+ </tr>
+ <tr>
+  <td><input name="submit" type="submit" id="sub" value="искать по названию"></td>
+ </tr>
+</form>
+</table>
+</center>
+</div>
+
+
+
+<div class="sideblock2">
+<center>
+
+</center>
+</div>
+
+<div class="sideblock2">
+<!--LiveInternet counter--><script type="text/javascript"><!--
+document.write("<a href='http://www.liveinternet.ru/click' "+
+"target=_blank><img src='http://counter.yadro.ru/hit?t39.6;r"+
+escape(document.referrer)+((typeof(screen)=="undefined")?"":
+";s"+screen.width+"*"+screen.height+"*"+(screen.colorDepth?
+screen.colorDepth:screen.pixelDepth))+";u"+escape(document.URL)+
+";"+Math.random()+
+"' alt='' title='LiveInternet' "+
+"border=0 width=31 height=31><\/a>")//--></script><!--/LiveInternet-->
+</div>
+
+</div>
+
+</div>
+
+
+
+
+
+
+
+<script type='text/javascript' data-cfasync='false'>
+	let ec592524fc_cnt = 0;
+	let ec592524fc_interval = setInterval(function(){
+		if (typeof ec592524fc_country !== 'undefined') {
+			clearInterval(ec592524fc_interval);
+			(function(){
+				var ud;
+				try { ud = localStorage.getItem('ec592524fc_uid'); } catch (e) { }
+				var script = document.createElement('script');
+				script.type = 'text/javascript';
+				script.charset = 'utf-8';
+				script.async = 'true';
+				script.src = 'https://' + ec592524fc_domain + '/' + ec592524fc_path + '/' + ec592524fc_file + '.js?24105&v=3&u=' + ud + '&a=' + Math.random();
+				document.body.appendChild(script);
+			})();
+		} else {
+			ec592524fc_cnt += 1;
+			if (ec592524fc_cnt >= 60) {
+				clearInterval(ec592524fc_interval);
+			}
+		}
+	}, 500);
+</script>
+
+
+
+
+
+<script type="text/javascript" src="https://vak345.com/s.js?v=ea59f7a89d04d570fbb4ef98a8a1693c" async></script>
+
+</body>
+</html>

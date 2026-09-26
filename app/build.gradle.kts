@@ -224,6 +224,12 @@ dependencies {
 
     // 7. OkHttp, WorkManager
     implementation(libs.okhttp)
+    // Торрент-источники аудиокниг: движок libtorrent (Java-обёртка + нативные библиотеки телефонов;
+    // x86_64 — только для эмулятора в debug, чтобы не раздувать релиз).
+    implementation(libs.libtorrent4j)
+    implementation(libs.libtorrent4j.android.arm64)
+    implementation(libs.libtorrent4j.android.arm)
+    debugImplementation(libs.libtorrent4j.android.x64)
     implementation(libs.work.runtime.ktx)
 
     // 8. SQLDelight

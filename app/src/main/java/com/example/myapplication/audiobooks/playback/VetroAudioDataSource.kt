@@ -8,14 +8,17 @@ import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.ResolvingDataSource
 import com.example.myapplication.audiobooks.domain.model.TrackUriCodec
 import com.example.myapplication.audiobooks.domain.source.ManifestResolver
+import com.example.myapplication.audiobooks.torrent.SchemeRoutingDataSource
+import com.example.myapplication.audiobooks.torrent.TorrentDataSource
+import com.example.myapplication.audiobooks.torrent.TorrentEngine
 import java.io.IOException
 import kotlinx.coroutines.runBlocking
 
 /** Replaces a stable vetro-audio track URI with a fresh provider URL at each open(). */
 @UnstableApi
 object VetroAudioDataSource {
-    fun factory(context: Context, resolver: ManifestResolver): DataSource.Factory =
-        factory(DefaultDataSource.Factory(context), resolver)
+    fun factory(context: Context, resolver: ManifestResolver, torrents: TorrentEngine): DataSource.Factory =
+        factory(SchemeRoutingDataSource.Factory(DefaultDataSource.Factory(context), TorrentDataSource.Factory(torrents)), resolver)
 
     fun factory(upstream: DataSource.Factory, resolver: ManifestResolver): DataSource.Factory =
         ResolvingDataSource.Factory(upstream) { spec: DataSpec ->

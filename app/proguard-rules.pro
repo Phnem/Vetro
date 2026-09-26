@@ -49,3 +49,7 @@
     public static int d(...);
     public static int v(...);
 }
+
+# libtorrent4j (торрент-источники аудиокниг): SWIG/JNI находит классы и методы по именам.
+-keep class org.libtorrent4j.swig.** { *; }
+-keep class org.libtorrent4j.** { *; }

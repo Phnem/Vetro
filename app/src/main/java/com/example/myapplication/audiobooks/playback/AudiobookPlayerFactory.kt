@@ -6,13 +6,14 @@ import androidx.media3.common.C
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import com.example.myapplication.audiobooks.domain.source.ManifestResolver
+import com.example.myapplication.audiobooks.torrent.TorrentEngine
 
 /** A speech-only player owned by AudiobookPlaybackService. */
 object AudiobookPlayerFactory {
-    fun create(context: Context, manifestResolver: ManifestResolver): ExoPlayer = ExoPlayer.Builder(context)
+    fun create(context: Context, manifestResolver: ManifestResolver, torrents: TorrentEngine): ExoPlayer = ExoPlayer.Builder(context)
         .setMediaSourceFactory(
             DefaultMediaSourceFactory(context)
-                .setDataSourceFactory(VetroAudioDataSource.factory(context, manifestResolver)),
+                .setDataSourceFactory(VetroAudioDataSource.factory(context, manifestResolver, torrents)),
         )
         .setAudioAttributes(
             AudioAttributes.Builder()

@@ -59,7 +59,7 @@ class LocalFolderSourceDeviceTest {
             val items = PlaybackQueueBuilder.build(
                 manifest, books.single().workId, books.single().narrationId, books.single().title, "", "",
             )
-            VetroAudioDataSource.factory(context, resolver).createDataSource().apply {
+            VetroAudioDataSource.factory(context, resolver, com.example.myapplication.audiobooks.torrent.TorrentEngine(context)).createDataSource().apply {
                 open(DataSpec(items.first().localConfiguration!!.uri))
                 val bytes = ByteArray(4)
                 assertEquals(4, read(bytes, 0, 4))
