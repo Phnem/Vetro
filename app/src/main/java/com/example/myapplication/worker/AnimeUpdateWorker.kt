@@ -1,9 +1,9 @@
 package com.example.myapplication.worker
 
+import com.example.myapplication.data.local.AppLanguagePrefs
 import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
-import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.example.myapplication.updates.EpisodeUpdateCheckCoordinator
@@ -11,6 +11,7 @@ import com.example.myapplication.network.AppLanguage
 import com.example.myapplication.manga.updates.MangaUpdateCheckUseCase
 import com.example.myapplication.notifications.AnimeNotifier
 import com.example.myapplication.notifications.MangaNotifier
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
@@ -31,17 +32,11 @@ class AnimeUpdateWorker(
     private val mangaUpdateCheck: MangaUpdateCheckUseCase by inject()
     private val settingsDataStore: DataStore<Preferences> by inject(named("settings"))
 
-    private val langKey = stringPreferencesKey("lang")
 
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
         try {
-            val langStr = settingsDataStore.data.first()[langKey] ?: "EN"
-            val language = try {
-                AppLanguage.valueOf(langStr)
-            } catch (e: Exception) {
-                AppLanguage.EN
-            }
-            val newlyDetected = episodeUpdateCheckCoordinator.detectAndStore(language)
+            val language = AppLanguagePrefs.current(settingsDataStore)
+            val newlyDetected = episodeUpdateCheckCoordinator.detectAndStore(language, catchUpSeasons = false)
             // Догоняем расклад сезонов ДО уведомления: пуш «вышла 10-я серия 4-го сезона»,
             // открывающий тайтл с одним сезоном, — это ровно та ручная работа («Найти ещё»),
             // которую пользователь делал после каждого пуша. Ошибки здесь не отменяют пуш:
@@ -73,6 +68,8 @@ class AnimeUpdateWorker(
             runCatching { seasonEpisodesResolver.refreshStale() }
                 .onFailure { it.printStackTrace() }
             Result.success()
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             e.printStackTrace()
             Result.failure()

@@ -1,5 +1,6 @@
 package com.example.myapplication.ui.shared.components
 
+import com.example.myapplication.ui.shared.theme.BrandOrange
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateFloatAsState
@@ -17,7 +18,6 @@ import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.defaultMinSize
@@ -46,6 +46,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import kotlin.math.roundToInt
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.sp
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
@@ -368,7 +370,9 @@ fun IosSegmentedControl(
 ) {
     val trackColor = if (isDark) Color.White.copy(alpha = 0.10f) else Color.Black.copy(alpha = 0.06f)
     val pillColor = if (isDark) Color(0xFF636366) else Color.White
-    val animatedFraction by animateFloatAsState(
+    // State, а не делегат: позиция читается в фазе раскладки (offset {}), и полёт пилюли не
+    // пересобирает сегменты на каждом кадре.
+    val animatedFraction = animateFloatAsState(
         targetValue = selectedIndex.toFloat(),
         animationSpec = MotionTokens.standard(),
         label = "segmentedPill",
@@ -388,7 +392,9 @@ fun IosSegmentedControl(
                 modifier = Modifier
                     .width(segWidth)
                     .height(28.dp)
-                    .offset(x = segWidth * animatedFraction)
+                    .offset {
+                        IntOffset((segWidth.toPx() * animatedFraction.value).roundToInt(), 0)
+                    }
                     .shadow(elevation = if (isDark) 0.dp else 1.5.dp, shape = pillShape, clip = false)
                     .clip(pillShape)
                     .background(pillColor),
@@ -417,7 +423,7 @@ fun IosSegmentedControl(
 
 /**
  * Входная физика попап-диалога (гайдбук §10): «усадка сверху» scale 1.15→1.0 на [MotionTokens.dialogPop],
- * alpha 0→1 tween(200). Оборачивай контент нативного [androidx.compose.ui.window.Dialog].
+ * alpha 0→1 (MotionTokens.tweenStandard). Оборачивай контент нативного [androidx.compose.ui.window.Dialog].
  */
 @Composable
 fun IosDialogAnimatedContent(content: @Composable () -> Unit) {
@@ -425,7 +431,7 @@ fun IosDialogAnimatedContent(content: @Composable () -> Unit) {
     val alpha = remember { Animatable(0f) }
     LaunchedEffect(Unit) {
         launch { scale.animateTo(1f, MotionTokens.dialogPop()) }
-        launch { alpha.animateTo(1f, tween(200)) }
+        launch { alpha.animateTo(1f, MotionTokens.tweenStandard()) }
     }
     Box(
         modifier = Modifier.graphicsLayer {
@@ -506,7 +512,7 @@ fun IosPickerSheet(
                         Icon(
                             imageVector = Icons.Filled.Check,
                             contentDescription = null,
-                            tint = Color(0xFFE85002),
+                            tint = BrandOrange,
                             modifier = Modifier.size(20.dp),
                         )
                     }
@@ -565,7 +571,7 @@ fun IosSelectionSheet(
             )
         }
         if (doneLabel != null && onDone != null) {
-            val doneAccent = options.getOrNull(selectedIndex)?.accent ?: Color(0xFFE85002)
+            val doneAccent = options.getOrNull(selectedIndex)?.accent ?: BrandOrange
             Spacer(Modifier.height(6.dp))
             Box(
                 modifier = Modifier
@@ -632,23 +638,23 @@ private fun IosSelectionCard(
     val selectedBg = option.accent.copy(alpha = if (isDark) 0.22f else 0.14f)
     val cardBg by animateColorAsState(
         targetValue = if (selected) selectedBg else normalBg,
-        animationSpec = if (selected) tween(durationMillis = 220, delayMillis = 50) else tween(160),
+        animationSpec = if (selected) MotionTokens.tweenStandard(delayMillis = 50) else MotionTokens.tweenFast(),
         label = "selectionCardBg",
     )
     val contentColor by animateColorAsState(
         targetValue = if (selected) option.accent else MaterialTheme.colorScheme.onSurface,
-        animationSpec = if (selected) tween(durationMillis = 220, delayMillis = 50) else tween(160),
+        animationSpec = if (selected) MotionTokens.tweenStandard(delayMillis = 50) else MotionTokens.tweenFast(),
         label = "selectionCardContent",
     )
     val subtitleColor by animateColorAsState(
         targetValue = if (selected) option.accent.copy(alpha = 0.85f)
             else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
-        animationSpec = if (selected) tween(durationMillis = 220, delayMillis = 50) else tween(160),
+        animationSpec = if (selected) MotionTokens.tweenStandard(delayMillis = 50) else MotionTokens.tweenFast(),
         label = "selectionCardSubtitle",
     )
     val fill by animateFloatAsState(
         targetValue = if (selected) 1f else 0f,
-        animationSpec = if (selected) tween(durationMillis = 220, delayMillis = 50) else tween(160),
+        animationSpec = if (selected) MotionTokens.tweenStandard(delayMillis = 50) else MotionTokens.tweenFast(),
         label = "selectionRadioFill",
     )
 
@@ -755,7 +761,7 @@ private fun IosRadioDot(progress: Float, accent: Color, isDark: Boolean) {
 fun IosSwitch(
     checked: Boolean,
     modifier: Modifier = Modifier,
-    onColor: Color = Color(0xFFE85002),
+    onColor: Color = BrandOrange,
     onCheckedChange: ((Boolean) -> Unit)? = null,
 ) {
     // Единый прогресс 0 (off) → 1 (on): лёгкий overshoot придаёт «резину» движению.

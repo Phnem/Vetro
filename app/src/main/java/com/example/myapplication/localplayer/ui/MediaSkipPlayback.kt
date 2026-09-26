@@ -5,11 +5,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.common.Player
 import com.example.myapplication.localplayer.domain.MediaSkipCoordinator
@@ -63,7 +65,11 @@ fun rememberMediaSkipPlayback(
     anilistId: Int?,
     malId: Int?,
     durationMs: Long,
-    positionMs: Long,
+    /**
+     * Позиция — лямбдой: читается только внутри derivedStateOf/snapshotFlow ниже, поэтому тик
+     * часов плеера не пересобирает ни этот адаптер, ни экран, который его вызвал.
+     */
+    positionMs: () -> Long,
     autoSkipEnabled: Boolean,
     exactTimestamps: List<VetroTimestamp> = emptyList(),
     exactOrigin: String? = null,
@@ -122,10 +128,13 @@ fun rememberMediaSkipPlayback(
     }
 
     val currentResolution = resolved?.takeIf { it.first == mediaKey }?.second
-    val active = currentResolution?.let {
-        coordinator.activeSegment(mediaKey, positionMs)
+    // Меняется только на входе в сегмент и выходе из него — а не на каждом тике позиции.
+    val activeState = remember(mediaKey, currentResolution, positionMs) {
+        derivedStateOf {
+            currentResolution?.let { coordinator.activeSegment(mediaKey, positionMs()) }
+        }
     }
-    val latestPosition by rememberUpdatedState(positionMs)
+    val active = activeState.value
     val latestResolution by rememberUpdatedState(currentResolution)
     val diagnosticSnapshot = remember(diagnosticEpisodeKey) {
         MediaDiagnosticSnapshot(
@@ -171,18 +180,21 @@ fun rememberMediaSkipPlayback(
     var undoTarget by remember(mediaKey) { mutableStateOf<Pair<Long, SkipSegment>?>(null) }
     var undoSecondsLeft by remember(mediaKey) { mutableStateOf(0) }
 
-    LaunchedEffect(mediaKey, active, positionMs, autoSkipEnabled) {
-        val decision = coordinator.automaticSeek(mediaKey, positionMs, autoSkipEnabled)
-        if (decision != null) {
-            player.seekTo(decision.targetMs)
-            undoTarget = decision.fromMs to decision.segment
-            undoSecondsLeft = UNDO_WINDOW_SECONDS
-            SkipDiagnostics.logOnce(
-                diagnosticEpisodeKey,
-                currentResolution,
-                durationMs,
-                decision,
-            )
+    // Один подписчик на позицию на всю серию вместо перезапуска эффекта на каждом тике.
+    LaunchedEffect(mediaKey, currentResolution, autoSkipEnabled) {
+        snapshotFlow { positionMs() }.collect { position ->
+            val decision = coordinator.automaticSeek(mediaKey, position, autoSkipEnabled)
+            if (decision != null) {
+                player.seekTo(decision.targetMs)
+                undoTarget = decision.fromMs to decision.segment
+                undoSecondsLeft = UNDO_WINDOW_SECONDS
+                SkipDiagnostics.logOnce(
+                    diagnosticEpisodeKey,
+                    currentResolution,
+                    durationMs,
+                    decision,
+                )
+            }
         }
     }
 
@@ -200,7 +212,7 @@ fun rememberMediaSkipPlayback(
     return MediaSkipPlaybackState(
         activeSegment = active,
         manualSkip = {
-            coordinator.manualSeek(mediaKey, latestPosition)?.let { decision ->
+            coordinator.manualSeek(mediaKey, positionMs())?.let { decision ->
                 player.seekTo(decision.targetMs)
                 SkipDiagnostics.logOnce(
                     diagnosticEpisodeKey,

@@ -1,6 +1,9 @@
 package com.example.myapplication.ui.settings
 
-import android.content.Context
+import com.example.myapplication.ui.shared.theme.IosScroll
+import com.example.myapplication.ui.shared.glassControl
+import com.example.myapplication.ui.shared.rememberPinnableBackdrop
+import android.app.Activity
 import android.content.Intent
 import android.widget.Toast
 import androidx.core.net.toUri
@@ -18,7 +21,6 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -42,21 +44,15 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AutoFixHigh
-import androidx.compose.material.icons.filled.Translate
 import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.filled.Code
-import androidx.compose.material.icons.filled.Dock
-import androidx.compose.material.icons.filled.OpenInFull
-import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.FileOpen
 import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.filled.PlayCircle
@@ -70,8 +66,6 @@ import androidx.compose.material.icons.outlined.Category
 import androidx.compose.material.icons.outlined.DarkMode
 import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material.icons.outlined.LightMode
-import androidx.compose.material.icons.outlined.ManageAccounts
-import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.SystemUpdate
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -93,6 +87,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.animation.core.animateFloatAsState
+import com.example.myapplication.ui.shared.fadedBlurEffect
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
@@ -110,12 +107,11 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
-import com.example.myapplication.isAppInDarkTheme
+import com.example.myapplication.ui.shared.theme.isAppInDarkTheme
 import com.phnem.vetro.R
 import com.example.myapplication.data.models.AppTheme
 import com.example.myapplication.data.models.AppUpdateStatus
 import com.example.myapplication.data.models.UiStrings
-import com.example.myapplication.network.AppContentType
 import com.example.myapplication.network.AppLanguage
 import com.example.myapplication.ui.navigation.navigateToWelcome
 import com.example.myapplication.ui.shared.rememberDockAutoHide
@@ -131,9 +127,9 @@ import com.example.myapplication.ui.shared.components.IosRow
 import com.example.myapplication.ui.shared.components.IosSegmentedControl
 import com.example.myapplication.ui.shared.DONATION_URL
 import com.example.myapplication.ui.shared.components.IosSwitch
-import com.example.myapplication.ui.shared.theme.BrandBlue
-import com.example.myapplication.ui.shared.theme.BrandBlueSoft
-import com.example.myapplication.ui.shared.theme.BrandRed
+import com.example.myapplication.ui.shared.theme.BrandOrange
+import com.example.myapplication.ui.shared.theme.BrandOrangeBright
+import com.example.myapplication.ui.shared.theme.BrandDeepRed
 import com.example.myapplication.ui.shared.theme.IosDesign
 import com.example.myapplication.ui.shared.theme.SnProFamily
 import com.example.myapplication.ui.shared.theme.SquircleShape
@@ -148,6 +144,7 @@ import com.example.myapplication.utils.getCollectionEnrichmentStrings
 import com.example.myapplication.utils.getPlayerSettingsStrings
 import com.example.myapplication.utils.getGithubUpdateStrings
 import com.example.myapplication.utils.getStrings
+import com.example.myapplication.utils.Haptic
 import com.example.myapplication.utils.performHaptic
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import com.kyant.backdrop.backdrops.layerBackdrop
@@ -267,8 +264,10 @@ fun SettingsScreen(
     }
 
     // Мягкий блюр фона под модальными листами (§10, но без ударной физики — тут sheet).
-    val blurRadius by animateDpAsState(
-        targetValue = if (activeSheet != null) 16.dp else 0.dp,
+    // Радиус постоянный, проявляется размытая копия (см. fadedBlurEffect); значение читается в
+    // слое — анимация не пересобирает экран настроек.
+    val backgroundBlur = animateFloatAsState(
+        targetValue = if (activeSheet != null) 1f else 0f,
         animationSpec = tween(300),
         label = "backgroundBlur"
     )
@@ -292,27 +291,27 @@ fun SettingsScreen(
     if (uiState.showRepairDbLogDialog) {
         RepairDbLogDialog(
             devRepairStrings = devRepairStrings,
-            onCreateLog = { performHaptic(view, "light"); viewModel.exportRepairDbLog(context) },
-            onDismiss = { performHaptic(view, "light"); viewModel.discardRepairDbLog() },
+            onCreateLog = { performHaptic(view, Haptic.Light); viewModel.exportRepairDbLog(context) },
+            onDismiss = { performHaptic(view, Haptic.Light); viewModel.discardRepairDbLog() },
         )
     }
     if (uiState.showTitleDubbingNoAiDialog) {
         TitleDubbingNoAiDialog(
             strings = titleDubbingStrings,
             onConnect = {
-                performHaptic(view, "light")
+                performHaptic(view, Haptic.Light)
                 viewModel.dismissTitleDubbingNoAiDialog()
                 activeSheet = SettingsOverlaySheet.AiConnect
             },
-            onDismiss = { performHaptic(view, "light"); viewModel.dismissTitleDubbingNoAiDialog() },
+            onDismiss = { performHaptic(view, Haptic.Light); viewModel.dismissTitleDubbingNoAiDialog() },
         )
     }
     if (showFdroidUpdateDialog) {
         FdroidUpdateWarningDialog(
             strings = githubUpdateStrings,
-            onDismiss = { performHaptic(view, "light"); showFdroidUpdateDialog = false },
+            onDismiss = { performHaptic(view, Haptic.Light); showFdroidUpdateDialog = false },
             onContinue = {
-                performHaptic(view, "light"); showFdroidUpdateDialog = false
+                performHaptic(view, Haptic.Light); showFdroidUpdateDialog = false
                 viewModel.openFdroidUpdateWebsite(context)
             },
         )
@@ -320,9 +319,9 @@ fun SettingsScreen(
     if (showGithubUpdatesEnableDialog) {
         FdroidUpdateWarningDialog(
             strings = githubUpdateStrings,
-            onDismiss = { performHaptic(view, "light"); showGithubUpdatesEnableDialog = false },
+            onDismiss = { performHaptic(view, Haptic.Light); showGithubUpdatesEnableDialog = false },
             onContinue = {
-                performHaptic(view, "light"); showGithubUpdatesEnableDialog = false
+                performHaptic(view, Haptic.Light); showGithubUpdatesEnableDialog = false
                 showDeveloperSection = false
                 viewModel.setDevGithubUpdatesEnabled(true)
             },
@@ -356,7 +355,13 @@ fun SettingsScreen(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .blur(blurRadius)
+                    // Постоянный слой вместо Modifier.blur: тот добавлял слой в цепочку только при
+                    // радиусе > 0, то есть над layerBackdrop при каждом открытии листа.
+                    .graphicsLayer {
+                        val amount = backgroundBlur.value
+                        renderEffect = fadedBlurEffect(SETTINGS_SHEET_BLUR.toPx(), amount)
+                        clip = amount > 0.01f
+                    }
                     .sharedBounds(
                         rememberSharedContentState(key = "settings_container"),
                         animatedVisibilityScope = animatedVisibilityScope,
@@ -378,6 +383,7 @@ fun SettingsScreen(
                 }
 
                 LazyColumn(
+                    flingBehavior = IosScroll.flingBehavior(),
                     state = listState,
                     modifier = Modifier
                         .fillMaxSize()
@@ -413,7 +419,7 @@ fun SettingsScreen(
                                         icon = Icons.Filled.PlayCircle,
                                         iconWell = false,
                                         showChevron = true,
-                                        onClick = { performHaptic(view, "light"); activeSheet = SettingsOverlaySheet.PlaybackSources },
+                                        onClick = { performHaptic(view, Haptic.Light); activeSheet = SettingsOverlaySheet.PlaybackSources },
                                     )
                                 },
                                 {
@@ -424,7 +430,7 @@ fun SettingsScreen(
                                         iconWell = false,
                                         value = if (uiState.language == AppLanguage.RU) "Русский" else "English",
                                         showChevron = true,
-                                        onClick = { performHaptic(view, "light"); activeSheet = SettingsOverlaySheet.Picker("lang") },
+                                        onClick = { performHaptic(view, Haptic.Light); activeSheet = SettingsOverlaySheet.Picker("lang") },
                                     )
                                 },
                                 {
@@ -439,7 +445,7 @@ fun SettingsScreen(
                                             AppTheme.SYSTEM -> strings.themeSystem
                                         },
                                         showChevron = true,
-                                        onClick = { performHaptic(view, "light"); activeSheet = SettingsOverlaySheet.Picker("theme") },
+                                        onClick = { performHaptic(view, Haptic.Light); activeSheet = SettingsOverlaySheet.Picker("theme") },
                                     )
                                 },
                             ),
@@ -459,7 +465,7 @@ fun SettingsScreen(
                                         iconRes = R.drawable.hugeicon_account,
                                         iconWell = false,
                                         showChevron = true,
-                                        onClick = { performHaptic(view, "light"); activeSheet = SettingsOverlaySheet.Cloud },
+                                        onClick = { performHaptic(view, Haptic.Light); activeSheet = SettingsOverlaySheet.Cloud },
                                     )
                                 },
                                 *(if (onOpenSyncPanel != null) {
@@ -479,7 +485,7 @@ fun SettingsScreen(
                                             icon = Icons.Filled.Sync,
                                             iconWell = false,
                                             showChevron = true,
-                                            onClick = { performHaptic(view, "light"); onOpenSyncPanel() },
+                                            onClick = { performHaptic(view, Haptic.Light); onOpenSyncPanel() },
                                         )
                                     })
                                 } else emptyArray()),
@@ -491,7 +497,7 @@ fun SettingsScreen(
                                         icon = Icons.Filled.AutoFixHigh,
                                         iconWell = false,
                                         showChevron = true,
-                                        onClick = { performHaptic(view, "light"); activeSheet = SettingsOverlaySheet.Enrichment },
+                                        onClick = { performHaptic(view, Haptic.Light); activeSheet = SettingsOverlaySheet.Enrichment },
                                     )
                                 },
                                 {
@@ -502,7 +508,7 @@ fun SettingsScreen(
                                         iconRes = R.drawable.ic_ai_sparkle,
                                         iconWell = false,
                                         showChevron = true,
-                                        onClick = { performHaptic(view, "light"); activeSheet = SettingsOverlaySheet.AiConnect },
+                                        onClick = { performHaptic(view, Haptic.Light); activeSheet = SettingsOverlaySheet.AiConnect },
                                     )
                                 },
                                 {
@@ -516,7 +522,7 @@ fun SettingsScreen(
                                             IosSwitch(
                                                 checked = uiState.autoSkipSegments,
                                                 onCheckedChange = {
-                                                    performHaptic(view, "light")
+                                                    performHaptic(view, Haptic.Light)
                                                     viewModel.setAutoSkipSegments(it)
                                                 },
                                             )
@@ -534,7 +540,7 @@ fun SettingsScreen(
                                             IosSwitch(
                                                 checked = uiState.autoNextEpisode,
                                                 onCheckedChange = {
-                                                    performHaptic(view, "light")
+                                                    performHaptic(view, Haptic.Light)
                                                     viewModel.setAutoNextEpisode(it)
                                                 },
                                             )
@@ -549,7 +555,7 @@ fun SettingsScreen(
                                         iconRes = R.drawable.hugeicon_contact,
                                         iconWell = false,
                                         showChevron = true,
-                                        onClick = { performHaptic(view, "light"); activeSheet = SettingsOverlaySheet.Contact },
+                                        onClick = { performHaptic(view, Haptic.Light); activeSheet = SettingsOverlaySheet.Contact },
                                     )
                                 },
                             ),
@@ -585,7 +591,7 @@ fun SettingsScreen(
                                         valueColor = if (updateAvailable) IconUpdateReady else null,
                                         showChevron = true,
                                         onClick = {
-                                            performHaptic(view, "light")
+                                            performHaptic(view, Haptic.Light)
                                             if (uiState.devGithubUpdatesEnabled) {
                                                 activeSheet = SettingsOverlaySheet.UpdateChangelog
                                                 viewModel.notifyUpdateChangelogSheetPresentedFromSettings()
@@ -605,7 +611,7 @@ fun SettingsScreen(
                                         iconWell = false,
                                         showChevron = true,
                                         onClick = {
-                                            performHaptic(view, "light")
+                                            performHaptic(view, Haptic.Light)
                                             context.startActivity(Intent(Intent.ACTION_VIEW, DONATION_URL.toUri()))
                                         },
                                     )
@@ -618,7 +624,7 @@ fun SettingsScreen(
                                         iconWell = false,
                                         chevronExpanded = showDeveloperSection,
                                         onClick = {
-                                            performHaptic(view, "light")
+                                            performHaptic(view, Haptic.Light)
                                             showDeveloperSection = !showDeveloperSection
                                         },
                                     )
@@ -639,21 +645,22 @@ fun SettingsScreen(
                                 githubUpdateStrings = githubUpdateStrings,
                                 uiState = uiState,
                                 isDark = isDark,
-                                onMirrorDbToggle = { performHaptic(view, "light"); viewModel.setDevMirrorDb(it) },
-                                onHideShareToggle = { performHaptic(view, "light"); viewModel.setDevHideShare(it) },
-                                onFpsOverlayToggle = { performHaptic(view, "light"); viewModel.setDevFpsOverlay(it) },
-                                onAdaptiveGlassToggle = { performHaptic(view, "light"); viewModel.setDevAdaptiveGlassScroll(it) },
-                                onSelectDockNavigationToggle = { performHaptic(view, "light"); viewModel.setDevSelectDockNavigation(it) },
-                                onGlassCapsuleDockToggle = { performHaptic(view, "light"); viewModel.setDevGlassCapsuleDock(it) },
-                                onStagedSheetMotionToggle = { performHaptic(view, "light"); viewModel.setDevStagedSheetMotion(it) },
+                                onMirrorDbToggle = { performHaptic(view, Haptic.Light); viewModel.setDevMirrorDb(it) },
+                                onHideShareToggle = { performHaptic(view, Haptic.Light); viewModel.setDevHideShare(it) },
+                                onFpsOverlayToggle = { performHaptic(view, Haptic.Light); viewModel.setDevFpsOverlay(it) },
+                                onAdaptiveGlassToggle = { performHaptic(view, Haptic.Light); viewModel.setDevAdaptiveGlassScroll(it) },
+                                onLegacyUiToggle = { enabled ->
+                                    performHaptic(view, Haptic.Light)
+                                    viewModel.setDevLegacyUi(enabled) { (context as? Activity)?.recreate() }
+                                },
                                 onGithubUpdatesToggle = { enabled ->
-                                    performHaptic(view, "light")
+                                    performHaptic(view, Haptic.Light)
                                     if (enabled) showGithubUpdatesEnableDialog = true
                                     else viewModel.setDevGithubUpdatesEnabled(false)
                                 },
-                                onExportLogs = { performHaptic(view, "light"); viewModel.exportLogs(context) },
-                                onExportPdf = { performHaptic(view, "light"); viewModel.exportCollectionPdf(context) },
-                                onImportDb = { performHaptic(view, "light"); importDbPicker.launch("*/*") },
+                                onExportLogs = { performHaptic(view, Haptic.Light); viewModel.exportLogs(context) },
+                                onExportPdf = { performHaptic(view, Haptic.Light); viewModel.exportCollectionPdf(context) },
+                                onImportDb = { performHaptic(view, Haptic.Light); importDbPicker.launch("*/*") },
                             )
                         }
                     }
@@ -697,6 +704,7 @@ fun SettingsScreen(
                         .align(Alignment.BottomEnd)
                         .padding(bottom = 24.dp + bottomInset, end = 24.dp)
                 ) {
+                    val shareBackdrop = rememberPinnableBackdrop(backdrop)
                     // Тот же рецепт жидкого стекла, что у бегунка рейтинга: сэмплируем
                     // общий backdrop списка, слабый blur + крупная линза преломляют контент
                     // под кнопкой, сверху — стеклянный блик и светлая окантовка.
@@ -704,28 +712,30 @@ fun SettingsScreen(
                         modifier = Modifier
                             .size(58.dp)
                             .clip(CircleShape)
-                            .drawBackdrop(
-                                backdrop = backdrop,
-                                shape = { CircleShape },
-                                effects = {
-                                    vibrancy()
-                                    blur(2f.dp.toPx())
-                                    lens(16f.dp.toPx(), 44f.dp.toPx())
-                                },
-                            )
-                            .background(
-                                Brush.verticalGradient(
-                                    0f to Color.White.copy(alpha = 0.22f),
-                                    0.5f to Color.Transparent,
-                                    1f to Color.Black.copy(alpha = 0.10f),
-                                ),
-                                CircleShape,
-                            )
-                            .border(1.dp, Color.White.copy(alpha = 0.45f), CircleShape)
+                            .glassControl(shareBackdrop, CircleShape) {
+                                drawBackdrop(
+                                    backdrop = shareBackdrop,
+                                    shape = { CircleShape },
+                                    effects = {
+                                        vibrancy()
+                                        blur(2f.dp.toPx())
+                                        lens(16f.dp.toPx(), 44f.dp.toPx())
+                                    },
+                                )
+                                    .background(
+                                        Brush.verticalGradient(
+                                            0f to Color.White.copy(alpha = 0.22f),
+                                            0.5f to Color.Transparent,
+                                            1f to Color.Black.copy(alpha = 0.10f),
+                                        ),
+                                        CircleShape,
+                                    )
+                                    .border(1.dp, Color.White.copy(alpha = 0.45f), CircleShape)
+                            }
                             .clickable(
                                 interactionSource = remember { MutableInteractionSource() },
                                 indication = null,
-                                onClick = { performHaptic(view, "light"); viewModel.shareWithDb(context) }
+                                onClick = { performHaptic(view, Haptic.Light); viewModel.shareWithDb(context) }
                             ),
                         contentAlignment = Alignment.Center
                     ) {
@@ -760,7 +770,7 @@ fun SettingsScreen(
                         isDark = isDark,
                         cardCornerRadius = 22.dp,
                         onSelect = { i ->
-                            performHaptic(view, "light")
+                            performHaptic(view, Haptic.Light)
                             viewModel.setLanguage(if (i == 1) AppLanguage.RU else AppLanguage.EN)
                             activeSheet = null
                         },
@@ -780,7 +790,7 @@ fun SettingsScreen(
                         isDark = isDark,
                         cardCornerRadius = 22.dp,
                         onSelect = { i ->
-                            performHaptic(view, "light")
+                            performHaptic(view, Haptic.Light)
                             viewModel.setTheme(
                                 when (i) {
                                     0 -> AppTheme.LIGHT
@@ -900,9 +910,7 @@ private fun DeveloperGroups(
     onHideShareToggle: (Boolean) -> Unit,
     onFpsOverlayToggle: (Boolean) -> Unit,
     onAdaptiveGlassToggle: (Boolean) -> Unit,
-    onSelectDockNavigationToggle: (Boolean) -> Unit,
-    onGlassCapsuleDockToggle: (Boolean) -> Unit,
-    onStagedSheetMotionToggle: (Boolean) -> Unit,
+    onLegacyUiToggle: (Boolean) -> Unit,
     onGithubUpdatesToggle: (Boolean) -> Unit,
     onExportLogs: () -> Unit,
     onExportPdf: () -> Unit,
@@ -956,65 +964,22 @@ private fun DeveloperGroups(
                 },
                 {
                     // Подписи зашиты здесь, а не в UiStrings: там 252 поля из 254 допустимых
-                    // (за пределом RELEASE падает с VerifyError в clinit), а тумблер временный —
-                    // уедет вместе со старым доком.
+                    // (за пределом RELEASE падает с VerifyError в clinit).
                     val ru = strings.languageName == "RU"
                     IosRow(
-                        title = if (ru) "Навигация свайпом" else "Swipe navigation",
+                        title = if (ru) "Классический интерфейс" else "Classic interface",
                         subtitle = if (ru) {
-                            "Док-селектор и пять страниц вместо открытия окон"
+                            "Старый док, жидкое стекло, окна вместо страниц"
                         } else {
-                            "Select dock with five pages instead of opening screens"
+                            "Old dock, liquid glass, screens instead of pages"
                         },
                         isDark = isDark,
                         icon = Icons.Filled.ViewCarousel,
                         iconBackground = devIcon,
                         trailing = {
                             IosSwitch(
-                                checked = uiState.devSelectDockNavigation,
-                                onCheckedChange = onSelectDockNavigationToggle,
-                            )
-                        },
-                    )
-                },
-                {
-                    // Подписи зашиты здесь по той же причине, что у соседнего тумблера: в
-                    // UiStrings свободных полей почти не осталось, а оба пункта временные.
-                    val ru = strings.languageName == "RU"
-                    IosRow(
-                        title = if (ru) "Док из матового стекла" else "Frosted glass dock",
-                        subtitle = if (ru) {
-                            "Капсула с подвижной подсветкой активного пункта, без подписей"
-                        } else {
-                            "Capsule with a sliding highlight, icons only"
-                        },
-                        isDark = isDark,
-                        icon = Icons.Filled.Dock,
-                        iconBackground = devIcon,
-                        trailing = {
-                            IosSwitch(
-                                checked = uiState.devGlassCapsuleDock,
-                                onCheckedChange = onGlassCapsuleDockToggle,
-                            )
-                        },
-                    )
-                },
-                {
-                    val ru = strings.languageName == "RU"
-                    IosRow(
-                        title = if (ru) "Морф панелей из дока" else "Staged sheet morph",
-                        subtitle = if (ru) {
-                            "Статистика раскрывается из своей кнопки, а не выезжает снизу"
-                        } else {
-                            "Stats grows out of its own button instead of sliding up"
-                        },
-                        isDark = isDark,
-                        icon = Icons.Filled.OpenInFull,
-                        iconBackground = devIcon,
-                        trailing = {
-                            IosSwitch(
-                                checked = uiState.devStagedSheetMotion,
-                                onCheckedChange = onStagedSheetMotionToggle,
+                                checked = uiState.devLegacyUi,
+                                onCheckedChange = onLegacyUiToggle,
                             )
                         },
                     )
@@ -1078,7 +1043,7 @@ private fun DevActionRow(
         iconBackground = iconBg,
         showChevron = !isLoading,
         trailing = if (isLoading) {
-            { CircularProgressIndicator(modifier = Modifier.size(18.dp), color = BrandBlue, strokeWidth = 2.dp) }
+            { CircularProgressIndicator(modifier = Modifier.size(18.dp), color = BrandOrange, strokeWidth = 2.dp) }
         } else null,
         onClick = if (isLoading) null else onClick,
     )
@@ -1091,7 +1056,7 @@ private fun TitleDubbingNoAiDialog(
     onDismiss: () -> Unit,
 ) {
     val isDark = isAppInDarkTheme()
-    val accent = if (isDark) BrandBlueSoft else BrandRed
+    val accent = if (isDark) BrandOrangeBright else BrandDeepRed
     val surface = IosDesign.rowBackground(isDark)
     val onSurface = MaterialTheme.colorScheme.onSurface
     val muted = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f)
@@ -1129,7 +1094,7 @@ private fun FdroidUpdateWarningDialog(
     onContinue: () -> Unit,
 ) {
     val isDark = isAppInDarkTheme()
-    val accent = if (isDark) BrandBlueSoft else BrandRed
+    val accent = if (isDark) BrandOrangeBright else BrandDeepRed
     val surface = IosDesign.rowBackground(isDark)
     val onSurface = MaterialTheme.colorScheme.onSurface
     val muted = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f)
@@ -1167,7 +1132,7 @@ private fun RepairDbLogDialog(
     onDismiss: () -> Unit,
 ) {
     val isDark = isAppInDarkTheme()
-    val accent = if (isDark) BrandBlueSoft else BrandRed
+    val accent = if (isDark) BrandOrangeBright else BrandDeepRed
     val surface = IosDesign.rowBackground(isDark)
     val onSurface = MaterialTheme.colorScheme.onSurface
     val muted = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f)
@@ -1348,3 +1313,6 @@ fun CapsuleChipRow(
         }
     }
 }
+
+/** Радиус размытия фона под листами настроек. */
+private val SETTINGS_SHEET_BLUR = 16.dp

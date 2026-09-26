@@ -7,6 +7,7 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.sqldelight)
     alias(libs.plugins.apollo)
+    alias(libs.plugins.baselineprofile)
 }
 
 val localProperties = Properties().apply {
@@ -38,8 +39,8 @@ android {
         applicationId = "com.phnem.vetro"
         minSdk = 26
         targetSdk = 36
-        versionCode = 334
-        versionName = "V3.3.4-Beta"
+        versionCode = 335
+        versionName = "v3.3.5-Beta"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         buildConfigField("String", "GITHUB_OWNER", "\"Phnem\"")
@@ -132,10 +133,10 @@ android {
 
     packaging {
         jniLibs {
-            // Переехало сюда из android:extractNativeLibs="true" в манифесте: AGP считает
-            // атрибут устаревшим и ругался на каждой сборке. Значение то же самое — .so
-            // по-прежнему распаковываются при установке, поведение не изменилось.
-            useLegacyPackaging = true
+            // Распаковка .so при установке была нужна только бинарнику ffmpeg (его запускали как
+            // исполняемый файл). Без него библиотеки грузятся прямо из APK: меньше места после
+            // установки, выравнивание под 16 КБ страницы AGP делает сам.
+            useLegacyPackaging = false
         }
     }
 }
@@ -180,7 +181,6 @@ dependencies {
     // 3. Coil 3
     implementation(libs.coil.compose)
     implementation(libs.coil.network.okhttp)
-    implementation(libs.lottie.compose)
 
     // 3b. Local player (isolated feature: com.example.myapplication.localplayer)
     implementation(libs.media3.exoplayer)
@@ -200,6 +200,12 @@ dependencies {
     implementation(libs.navigation.compose)
     implementation(libs.activity.compose)
     implementation(libs.datastore.preferences)
+    // Ставит baseline profile (src/release/generated/baselineProfiles) при установке и первом
+    // запуске: горячие пути старта и прокрутки компилируются заранее, а не интерпретируются.
+    implementation(libs.androidx.profileinstaller)
+    baselineProfile(project(":baselineprofile"))
+    // Только ради версии нативной библиотеки (16 КБ страницы) — см. комментарий в каталоге.
+    implementation(libs.androidx.graphics.path)
     implementation(libs.androidx.security.crypto)
     implementation(libs.backdrop)
 

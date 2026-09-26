@@ -1,5 +1,6 @@
 package com.example.myapplication.ui.home
 
+import com.example.myapplication.ui.shared.theme.IosScroll
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
@@ -78,7 +79,7 @@ import com.example.myapplication.domain.stats.StatsCardExplanationState
 import com.example.myapplication.domain.stats.StatsCardKind
 import com.example.myapplication.domain.stats.StatsExplanationCoordinator
 import com.example.myapplication.network.AppLanguage
-import com.example.myapplication.isAppInDarkTheme
+import com.example.myapplication.ui.shared.theme.isAppInDarkTheme
 import com.example.myapplication.ui.home.stats.StatsCardDeckContent
 import com.example.myapplication.ui.home.stats.StatsCardDetailContent
 import androidx.compose.foundation.layout.offset
@@ -220,7 +221,7 @@ private fun StatsContent(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .verticalScroll(scroll)
+            .verticalScroll(scroll, flingBehavior = IosScroll.flingBehavior())
             .padding(horizontal = 28.dp, vertical = 20.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {

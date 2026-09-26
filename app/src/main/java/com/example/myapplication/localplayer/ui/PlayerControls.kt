@@ -1,12 +1,12 @@
 package com.example.myapplication.localplayer.ui
 
+import androidx.compose.foundation.border
+import com.example.myapplication.ui.shared.theme.IosScroll
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
-import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.core.tween
@@ -41,18 +41,11 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.activity.compose.BackHandler
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.AspectRatio
-import androidx.compose.material.icons.rounded.CropFree
 import androidx.compose.material.icons.rounded.FastForward
 import androidx.compose.material.icons.rounded.Lock
-import androidx.compose.material.icons.rounded.MusicNote
-import androidx.compose.material.icons.rounded.Pause
-import androidx.compose.material.icons.rounded.PictureInPictureAlt
 import androidx.compose.material.icons.rounded.PlayArrow
-import androidx.compose.material.icons.rounded.ScreenRotation
 import androidx.compose.material.icons.automirrored.rounded.Undo
 import androidx.compose.material.icons.rounded.SkipNext
-import androidx.compose.material.icons.rounded.SkipPrevious
 import androidx.compose.material.icons.rounded.Speed
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -61,6 +54,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
@@ -105,10 +99,12 @@ import androidx.media3.exoplayer.ExoPlayer
 import com.example.myapplication.ui.shared.theme.BrandOrangeBright
 import com.example.myapplication.ui.shared.theme.MotionTokens
 import com.example.myapplication.ui.shared.theme.SnProFamily
+import com.example.myapplication.utils.Haptic
 import com.example.myapplication.utils.performHaptic
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withTimeoutOrNull
 import java.util.Locale
 import kotlin.math.roundToInt
@@ -135,7 +131,6 @@ private const val SEEK_BURST_HOLD_MS = 750L
  */
 private val TOP_DOCK_ICON = 29.dp
 
-private fun isRuLocale() = Locale.getDefault().language == "ru"
 
 /** Активная серия дабл-тапов: сторона и сколько шагов по [SEEK_STEP_MS] уже накоплено. */
 private data class SeekBurst(val forward: Boolean, val steps: Int)
@@ -151,11 +146,11 @@ fun PlayerControlsOverlay(
     title: String,
     /** Вторая строка шапки — серия и сезон. `null` = заголовок остаётся однострочным. */
     subtitle: String? = null,
-    ambient: PlayerAmbient,
     isPlaying: Boolean,
     isBuffering: Boolean,
-    position: Long,
-    buffered: Long,
+    /** Позиция и буфер — лямбдами из [PlaybackClock]: их читают только полоса и метка времени. */
+    position: () -> Long,
+    buffered: () -> Long,
     duration: Long,
     hasPrev: Boolean,
     hasNext: Boolean,
@@ -459,7 +454,7 @@ fun PlayerControlsOverlay(
                 // доком на экране.
                 DockIconButton(
                     icon = painterResource(R.drawable.ic_player_lock_open),
-                    contentDescription = if (isRuLocale()) "Разблокировать" else "Unlock",
+                    contentDescription = if (playerIsRu()) "Разблокировать" else "Unlock",
                     tint = Color.White,
                     onClick = { locked = false; showUnlockHint = false; controlsVisible = true },
                 )
@@ -529,9 +524,6 @@ fun PlayerControlsOverlay(
         // Кнопка «Пропустить» — весь опенинг, независимо от автоскрытия.
         if (skipVisible) {
             SkipButton(
-                tint = ambient.bottomTint,
-                backdrop = ambient.bottomBackdrop,
-                content = ambient.bottomContent,
                 onClick = onSkip,
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
@@ -546,9 +538,6 @@ fun PlayerControlsOverlay(
         if (undoOffer != null) {
             UndoSkipButton(
                 secondsLeft = undoOffer.secondsLeft,
-                tint = ambient.bottomTint,
-                backdrop = ambient.bottomBackdrop,
-                content = ambient.bottomContent,
                 onClick = onUndoSkip,
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
@@ -633,7 +622,7 @@ fun PlayerControlsOverlay(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     DockIconButton(
                         icon = painterResource(R.drawable.ic_player_audio),
-                        contentDescription = if (isRuLocale()) "Аудиодорожка" else "Audio track",
+                        contentDescription = if (playerIsRu()) "Аудиодорожка" else "Audio track",
                         tint = Color.White,
                         iconSize = TOP_DOCK_ICON,
                         onClick = {
@@ -642,7 +631,7 @@ fun PlayerControlsOverlay(
                     )
                     DockIconButton(
                         icon = painterResource(R.drawable.ic_player_speed),
-                        contentDescription = if (isRuLocale()) "Скорость" else "Speed",
+                        contentDescription = if (playerIsRu()) "Скорость" else "Speed",
                         tint = Color.White,
                         iconSize = TOP_DOCK_ICON,
                         onClick = { menuKind = PlayerMenu.SPEED; menuState.targetState = true },
@@ -715,11 +704,7 @@ fun PlayerControlsOverlay(
                         modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Text(
-                            text = "${formatTime(position)} / ${formatTime(duration)}",
-                            style = MaterialTheme.typography.labelLarge.copy(fontFamily = SnProFamily, fontWeight = FontWeight.Medium),
-                            color = Color.White,
-                        )
+                        PlaybackTimeLabel(position = position, duration = duration)
                     }
 
                     SeekBar(
@@ -802,7 +787,6 @@ fun PlayerControlsOverlay(
             OptionMenu(
                 state = menuState,
                 menu = kind,
-                tint = ambient.topTint,
                 audioTracks = audioTracks,
                 speed = speed,
                 onSelectSpeed = { onSelectSpeed(it); menuState.targetState = false },
@@ -821,10 +805,24 @@ fun PlayerControlsOverlay(
  * Геометрия (отступы под бегунок и его ход) считается по ФИКСИРОВАННОМУ слоту [THUMB_SLOT], а
  * анимируется только видимый размер — иначе на время анимации заливка уезжала бы от бегунка.
  */
+/**
+ * «0:42 / 23:40». Пересобирается раз в секунду — когда меняется показанная секунда, — а не на
+ * каждом тике часов плеера.
+ */
+@Composable
+private fun PlaybackTimeLabel(position: () -> Long, duration: Long) {
+    val seconds by remember(position) { derivedStateOf { position() / 1_000L } }
+    Text(
+        text = "${formatTime(seconds * 1_000L)} / ${formatTime(duration)}",
+        style = MaterialTheme.typography.labelLarge.copy(fontFamily = SnProFamily, fontWeight = FontWeight.Medium),
+        color = Color.White,
+    )
+}
+
 @Composable
 private fun SeekBar(
-    position: Long,
-    buffered: Long,
+    position: () -> Long,
+    buffered: () -> Long,
     duration: Long,
     thumbColor: Color,
     onScrubStart: () -> Unit,
@@ -853,21 +851,26 @@ private fun SeekBar(
         label = "seekThumbSize",
     )
 
-    val fraction by remember(position, duration, isScrubbing, scrubFraction, pendingSeek) {
+    // Читается только в лямбдах отрисовки и слоя: ход позиции перерисовывает полосу, не
+    // пересобирая её. Все входы — состояния, поэтому ключи remember — лишь то, что не состояние.
+    val fraction by remember(position, duration) {
         derivedStateOf {
+            val pending = pendingSeek
             when {
                 isScrubbing -> scrubFraction
-                pendingSeek != null -> pendingSeek!!
-                duration > 0 -> (position.toFloat() / duration).coerceIn(0f, 1f)
+                pending != null -> pending
+                duration > 0 -> (position().toFloat() / duration).coerceIn(0f, 1f)
                 else -> 0f
             }
         }
     }
+    // Отпускаем удержание бегунка, когда плеер доехал до отпущенного места.
     LaunchedEffect(position, duration, pendingSeek) {
         val ps = pendingSeek ?: return@LaunchedEffect
-        if (duration > 0 && kotlin.math.abs(position.toFloat() / duration - ps) < 0.02f) pendingSeek = null
+        if (duration <= 0) return@LaunchedEffect
+        snapshotFlow { position() }.first { kotlin.math.abs(it.toFloat() / duration - ps) < 0.02f }
+        pendingSeek = null
     }
-    val bufferedFraction = if (duration > 0) (buffered.toFloat() / duration).coerceIn(0f, 1f) else 0f
 
     BoxWithConstraints(
         modifier = modifier
@@ -884,14 +887,14 @@ private fun SeekBar(
                         down.consume()
                         isScrubbing = true
                         onScrubStart()
-                        performHaptic(view, "light")
+                        performHaptic(view, Haptic.Light)
                         scrubFraction = xToFraction(down.position.x)
                         while (true) {
                             val event = awaitPointerEvent()
                             val change = event.changes.firstOrNull { it.id == down.id } ?: event.changes.first()
                             if (!change.pressed) {
                                 change.consume()
-                                performHaptic(view, "heavy")
+                                performHaptic(view, Haptic.Heavy)
                                 isScrubbing = false
                                 pendingSeek = scrubFraction
                                 onScrubEnd(scrubFraction)
@@ -918,6 +921,8 @@ private fun SeekBar(
                     val r = h / 2f
                     val pad = slotPx / 2f
                     val usable = (size.width - slotPx).coerceAtLeast(1f)
+                    val bufferedFraction =
+                        if (duration > 0) (buffered().toFloat() / duration).coerceIn(0f, 1f) else 0f
                     drawRoundRect(color = Color.White.copy(alpha = 0.28f), cornerRadius = CornerRadius(r, r))
                     drawRoundRect(
                         color = Color.White.copy(alpha = 0.48f),
@@ -1036,7 +1041,7 @@ private fun SeekRipple(burst: SeekBurst, modifier: Modifier = Modifier) {
             }
             Spacer(Modifier.height(6.dp))
             Text(
-                text = if (isRuLocale()) "$seconds секунд" else "$seconds seconds",
+                text = if (playerIsRu()) "$seconds секунд" else "$seconds seconds",
                 style = MaterialTheme.typography.titleMedium.copy(
                     fontFamily = SnProFamily,
                     fontWeight = FontWeight.SemiBold,
@@ -1049,15 +1054,13 @@ private fun SeekRipple(burst: SeekBurst, modifier: Modifier = Modifier) {
 
 @Composable
 private fun SkipButton(
-    tint: Color,
-    backdrop: DockBackdrop?,
-    content: Color,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val content = Color.White
     Row(
         modifier = modifier
-            .ambientDockSurface(Capsule, tint, backdrop)
+            .playerOutlineCapsule()
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
@@ -1067,7 +1070,7 @@ private fun SkipButton(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
-            text = if (isRuLocale()) "Пропустить" else "Skip",
+            text = if (playerIsRu()) "Пропустить" else "Skip",
             style = MaterialTheme.typography.titleMedium.copy(fontFamily = SnProFamily, fontWeight = FontWeight.SemiBold),
             color = content,
         )
@@ -1087,15 +1090,13 @@ private fun SkipButton(
 @Composable
 private fun UndoSkipButton(
     secondsLeft: Int,
-    tint: Color,
-    backdrop: DockBackdrop?,
-    content: Color,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val content = Color.White
     Row(
         modifier = modifier
-            .ambientDockSurface(Capsule, tint, backdrop)
+            .playerOutlineCapsule()
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
@@ -1105,7 +1106,7 @@ private fun UndoSkipButton(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
-            text = if (isRuLocale()) "Вернуть" else "Undo",
+            text = if (playerIsRu()) "Вернуть" else "Undo",
             style = MaterialTheme.typography.titleMedium.copy(
                 fontFamily = SnProFamily,
                 fontWeight = FontWeight.SemiBold,
@@ -1123,8 +1124,8 @@ private fun UndoSkipButton(
         Box(
             modifier = Modifier
                 .size(24.dp)
-                .clip(CircleShape)
-                .background(content.copy(alpha = 0.16f)),
+                // Счётчик — белое кольцо, в тон рамке кнопки.
+                .border(1.dp, content.copy(alpha = 0.85f), CircleShape),
             contentAlignment = Alignment.Center,
         ) {
             Text(
@@ -1152,7 +1153,6 @@ internal fun seekForwardTarget(position: Long, duration: Long, amountMs: Long): 
 private fun OptionMenu(
     state: MutableTransitionState<Boolean>,
     menu: PlayerMenu,
-    tint: Color,
     audioTracks: List<AudioTrackOption>,
     speed: Float,
     onSelectSpeed: (Float) -> Unit,
@@ -1164,7 +1164,7 @@ private fun OptionMenu(
     val labels = when (menu) {
         PlayerMenu.AUDIO -> audioTracks.map { it.label }
         PlayerMenu.SPEED -> SPEED_OPTIONS.map { s ->
-            if (s == 1f) (if (isRuLocale()) "Обычная (1×)" else "Normal (1×)") else "${trimSpeed(s)}×"
+            if (s == 1f) (if (playerIsRu()) "Обычная (1×)" else "Normal (1×)") else "${trimSpeed(s)}×"
         }
     }
     val selectedIndex = when (menu) {
@@ -1221,19 +1221,18 @@ private fun OptionMenu(
                             .statusBarsPadding()
                             .displayCutoutPadding()
                             .padding(top = 66.dp, end = 14.dp)
-                            .verticalScroll(rememberScrollState()),
+                            .verticalScroll(rememberScrollState(), flingBehavior = IosScroll.flingBehavior()),
                         horizontalAlignment = Alignment.End,
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         when (menu) {
                             PlayerMenu.AUDIO -> audioTracks.forEach { opt ->
-                                MenuPill(opt.label, opt.isSelected, tint) { onSelectAudio(opt) }
+                                MenuPill(opt.label, opt.isSelected) { onSelectAudio(opt) }
                             }
                             PlayerMenu.SPEED -> SPEED_OPTIONS.forEach { s ->
                                 MenuPill(
-                                    label = if (s == 1f) (if (isRuLocale()) "Обычная (1×)" else "Normal (1×)") else "${trimSpeed(s)}×",
+                                    label = if (s == 1f) (if (playerIsRu()) "Обычная (1×)" else "Normal (1×)") else "${trimSpeed(s)}×",
                                     selected = s == speed,
-                                    tint = tint,
                                 ) { onSelectSpeed(s) }
                             }
                         }
@@ -1262,10 +1261,10 @@ private suspend fun PointerInputScope.consumeDragsOnly() {
 }
 
 @Composable
-private fun MenuPill(label: String, selected: Boolean, tint: Color, onClick: () -> Unit) {
+private fun MenuPill(label: String, selected: Boolean, onClick: () -> Unit) {
     Row(
         modifier = Modifier
-            .ambientDockSurface(Capsule, tint)
+            .playerOutlineCapsule()
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
@@ -1470,7 +1469,7 @@ private fun PlayerActionButton(
     }
 }
 
-/** Иконка-кнопка внутри дока; цвет приходит из [PlayerAmbient] под этим доком. */
+/** Иконка-кнопка плеера: белая иконка без подложки, как все контролы поверх кадра. */
 @Composable
 private fun DockIconButton(
     icon: Painter,
@@ -1494,7 +1493,7 @@ private fun DockIconButton(
     }
 }
 
-/** Иконка-кнопка внутри дока; цвет приходит из [PlayerAmbient] под этим доком. */
+/** Иконка-кнопка плеера: белая иконка без подложки, как все контролы поверх кадра. */
 @Composable
 private fun DockIconButton(
     icon: ImageVector,
@@ -1529,3 +1528,14 @@ private fun formatTime(ms: Long): String {
 
 private fun trimSpeed(s: Float): String =
     if (s % 1f == 0f) s.toInt().toString() else s.toString().trimEnd('0').trimEnd('.')
+
+/**
+ * Общая форма боковых кнопок и пунктов меню плеера: капсула без заливки с белым кантом — тот же
+ * язык, что у остальных контролов поверх кадра (белые иконки и текст без подложек).
+ *
+ * Заменила «амбиентный» материал, который раз в секунду снимал кадр через PixelCopy, размывал
+ * его и перекрашивал кнопки под сцену: ради двух боковых кнопок и меню это были два битмапа,
+ * блюр на CPU и четыре цветовые анимации, пересобиравшие хост плеера на каждом кадре.
+ */
+private fun Modifier.playerOutlineCapsule(): Modifier =
+    this.border(1.dp, Color.White.copy(alpha = 0.9f), Capsule)

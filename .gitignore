@@ -16,6 +16,8 @@
 local.properties
 **/build/
 **/generated/
+# Baseline/startup profile is source: it ships in release builds (see :baselineprofile).
+!/app/src/release/generated/
 .kotlin/
 wrapper/
 app/release/
@@ -57,3 +59,6 @@ __pycache__/
 
 # graft's local graph cache — regenerable, not committed (run `graft build`).
 /graft/
+
+# Legacy Python download worker (not packaged since Chaquopy removal) — kept locally only
+/app/src/main/python/

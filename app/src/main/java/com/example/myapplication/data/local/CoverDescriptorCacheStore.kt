@@ -1,12 +1,12 @@
 package com.example.myapplication.data.local
 
+import com.example.myapplication.network.AppJson
 import android.content.Context
 import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
-import kotlinx.serialization.json.Json
 import java.io.File
 
 private const val TAG = "CoverDescriptorCache"
@@ -21,7 +21,7 @@ private const val CACHE_FILE = "cover_descriptors_cache.json"
 class CoverDescriptorCacheStore(context: Context) {
 
     private val file = File(context.filesDir, CACHE_FILE)
-    private val json = Json { ignoreUnknownKeys = true }
+    private val json = AppJson
 
     suspend fun read(key: String): List<String>? = withContext(Dispatchers.IO) {
         readAll()[key]

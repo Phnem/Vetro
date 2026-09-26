@@ -1,5 +1,6 @@
 package com.example.myapplication
 
+import coil3.network.okhttp.OkHttpNetworkFetcherFactory
 import android.app.Application
 import coil3.ImageLoader
 import coil3.PlatformContext
@@ -11,11 +12,12 @@ import okio.Path.Companion.toOkioPath
 import androidx.work.WorkManager
 import org.koin.android.ext.koin.androidContext
 import org.koin.core.context.startKoin
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 import com.example.myapplication.di.appModule
 import com.example.myapplication.di.databaseModule
 import com.example.myapplication.di.viewModelModule
 import com.example.myapplication.di.audiobookModule
-import com.example.myapplication.manga.ui.RegionBitmapDecoder
 import com.example.myapplication.network.di.coreNetworkModule
 
 class VetroApplication : Application(), SingletonImageLoader.Factory {
@@ -33,24 +35,36 @@ class VetroApplication : Application(), SingletonImageLoader.Factory {
                 viewModelModule
             )
         }
-        WorkManager.getInstance(this).cancelUniqueWork("AiRecommendationWork")
-        // Фоновые AI-объяснения статистики: живут независимо от открытия шторки
-        org.koin.core.context.GlobalContext.get()
-            .get<com.example.myapplication.domain.stats.StatsExplanationCoordinator>()
-            .start()
-        // Live Maintenance (обогащение коллекции): периодика раз в 6 ч, если фича включена (по умолчанию — да)
-        org.koin.core.context.GlobalContext.get()
-            .get<com.example.myapplication.domain.enrichment.CollectionEnrichmentCoordinator>()
-            .ensureScheduled()
+        // Ничего ниже не нужно для первого кадра. Раньше это шло прямо здесь, на главном потоке до
+        // первого кадра: инициализация WorkManager (своя БД), сборка координатора объяснений с
+        // AI-цепочкой и шифрованным хранилищем и его подписка на всю коллекцию — вторым полным
+        // чтением БД параллельно с главной. Теперь — в фоне, когда старт уже позади.
+        val koin = org.koin.core.context.GlobalContext.get()
+        koin.get<AppScope>().launch {
+            delay(DEFERRED_STARTUP_MS)
+            WorkManager.getInstance(this@VetroApplication).cancelUniqueWork("AiRecommendationWork")
+            // Фоновые AI-объяснения статистики: живут независимо от открытия шторки (кэш по
+            // отпечатку коллекции, поэтому отложенный старт ничего не теряет).
+            koin.get<com.example.myapplication.domain.stats.StatsExplanationCoordinator>().start()
+            // Live Maintenance (обогащение коллекции): периодика раз в 6 ч, если фича включена
+            // (по умолчанию — да). Постановка с KEEP — повторный вызов безвреден.
+            koin.get<com.example.myapplication.domain.enrichment.CollectionEnrichmentCoordinator>()
+                .ensureScheduled()
+        }
     }
 
     override fun newImageLoader(context: PlatformContext): ImageLoader {
+        // Страницы манги идут через свой загрузчик — со своим дисковым кэшем и регион-декодером
+        // (см. MangaImageLoader), чтобы глава не вытесняла обложки коллекции.
         return ImageLoader.Builder(context)
+            // Картинки — через корневой OkHttp (общий пул соединений с остальной сетью), а не через
+            // отдельный клиент, который Coil создаёт сам.
             .components {
-                // Вебтун-страницы бывают в десятки тысяч пикселей высотой: штатный декодер на них
-                // либо ловит OOM, либо упирается в лимит текстуры и не рисует ничего. Фабрика
-                // сама решает, вмешиваться ли, — обычные страницы и обложки идут прежним путём.
-                add(RegionBitmapDecoder.Factory())
+                add(
+                    OkHttpNetworkFetcherFactory(
+                        callFactory = { org.koin.core.context.GlobalContext.get().get<okhttp3.OkHttpClient>() },
+                    ),
+                )
             }
             .memoryCache {
                 MemoryCache.Builder()
@@ -66,3 +80,6 @@ class VetroApplication : Application(), SingletonImageLoader.Factory {
             .build()
     }
 }
+
+/** Через сколько после старта процесса запускать фоновые координаторы. */
+private const val DEFERRED_STARTUP_MS = 5_000L

@@ -23,6 +23,7 @@ val viewModelModule = module {
             authRepository = get(),
             appUpdateRepository = get(),
             imageCompressionMigrator = get(),
+            startupSweeps = get(),
         )
     }
     viewModel {
@@ -97,14 +98,6 @@ val viewModelModule = module {
             apiKeySyncRepository = get(),
         )
     }
-    viewModel { (language: com.example.myapplication.network.AppLanguage) ->
-        com.example.myapplication.ui.details.DownloadWizardViewModel(
-            application = androidApplication(),
-            fileIpcManager = get(),
-            language = language,
-            localLibraryUseCase = get(),
-        )
-    }
     viewModel { (animeId: String) ->
         DetailsViewModel(
             animeId = animeId,
@@ -115,19 +108,6 @@ val viewModelModule = module {
             seasonEpisodesStore = get(),
             seasonEpisodesResolver = get(),
             seasonCatchUp = get(),
-        )
-    }
-    // Local player (isolated feature — remove to unwire it).
-    viewModel { (animeId: String, animeTitle: String, animeMalId: Int?, animeAnilistId: Int?) ->
-        com.example.myapplication.localplayer.ui.LocalPlayerViewModel(
-            app = androidApplication(),
-            animeId = animeId,
-            animeTitle = animeTitle,
-            animeMalId = animeMalId,
-            animeAnilistId = animeAnilistId,
-            store = get(),
-            libraryUseCase = get(),
-            settingsDataStore = get(named("settings")),
         )
     }
     viewModel { (anime: com.example.myapplication.data.models.Anime) ->

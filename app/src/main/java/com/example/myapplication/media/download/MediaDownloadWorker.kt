@@ -1,5 +1,6 @@
 package com.example.myapplication.media.download
 
+import com.example.myapplication.network.AppJson
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Context
@@ -20,7 +21,6 @@ import com.example.myapplication.media.source.rehydratePersonalServerCredentials
 import com.example.myapplication.media.source.forPlaybackCandidate
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import kotlinx.serialization.json.Json
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.koin.core.component.KoinComponent
@@ -44,7 +44,7 @@ class MediaDownloadWorker(
 
     private val okHttpClient: OkHttpClient by inject()
     private val playbackCredentials: PlaybackSourceCredentialsStore by inject()
-    private val json = Json { ignoreUnknownKeys = true }
+    private val json = AppJson
 
     /**
      * The shared client is tuned for short API calls; an episode is a multi-minute transfer over
@@ -342,9 +342,11 @@ class MediaDownloadWorker(
                 throw IOException("Ответ слишком мал для видео: $total байт")
             }
             var copied = alreadyOnDisk
+            var lastPercent = -1
             body.byteStream().use { input ->
-                java.io.FileOutputStream(tmp, resuming).buffered().use { output ->
-                    val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+                java.io.FileOutputStream(tmp, resuming).buffered(COPY_BUFFER_BYTES).use { output ->
+                    // 64 КБ вместо 8: в восемь раз меньше системных вызовов на серию в сотни МБ.
+                    val buffer = ByteArray(COPY_BUFFER_BYTES)
                     while (true) {
                         checkCancelled(jobId)
                         val count = input.read(buffer)
@@ -353,9 +355,14 @@ class MediaDownloadWorker(
                         copied += count
                         total?.let {
                             val percent = ((copied * 100L) / it).toInt().coerceIn(0, 99)
-                            MediaJobBus.update(
-                                MediaJobProgress(jobId, "downloading", percent)
-                            )
+                            // Раньше публиковалось на каждом чтении — десятки тысяч событий на
+                            // серию, каждое будило подписчиков шины; процент меняется ≤100 раз.
+                            if (percent != lastPercent) {
+                                lastPercent = percent
+                                MediaJobBus.update(
+                                    MediaJobProgress(jobId, "downloading", percent)
+                                )
+                            }
                         }
                     }
                 }
@@ -428,7 +435,6 @@ class MediaDownloadWorker(
     }
 
     private fun ensureNotificationChannel() {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
         val manager = applicationContext.getSystemService(NotificationManager::class.java)
         if (manager.getNotificationChannel(CHANNEL_ID) != null) return
         manager.createNotificationChannel(
@@ -478,6 +484,7 @@ class MediaDownloadWorker(
         private const val TAG = "MediaDownloadWorker"
         private const val CHANNEL_ID = "vetro_media_download"
         private const val MIN_PLAUSIBLE_VIDEO_BYTES = 128 * 1024L
+        private const val COPY_BUFFER_BYTES = 64 * 1024
         private const val PROGRESSIVE_ATTEMPTS = 4
         private const val RETRY_BACKOFF_MS = 1_000L
 

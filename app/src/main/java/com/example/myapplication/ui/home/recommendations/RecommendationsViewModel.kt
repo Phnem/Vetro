@@ -1,8 +1,8 @@
 package com.example.myapplication.ui.home.recommendations
 
+import com.example.myapplication.data.local.AppLanguagePrefs
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
-import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.myapplication.data.local.AnimeLocalDataSource
@@ -31,7 +31,6 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-private val KEY_LANG = stringPreferencesKey("lang")
 
 sealed interface RecommendationsUiState {
     /** Первый пересчёт (кэша ещё нет). */
@@ -76,7 +75,7 @@ class RecommendationsViewModel(
 
     private val language: StateFlow<AppLanguage> = settingsDataStore.data
         .map { prefs ->
-            runCatching { AppLanguage.valueOf(prefs[KEY_LANG] ?: "EN") }.getOrElse { AppLanguage.EN }
+            AppLanguagePrefs.from(prefs)
         }
         .stateIn(viewModelScope, SharingStarted.Eagerly, AppLanguage.EN)
 
@@ -111,7 +110,7 @@ class RecommendationsViewModel(
 
     /** Язык — прямым чтением DataStore: StateFlow при первом запуске может ещё держать дефолт. */
     private suspend fun readLanguage(): AppLanguage = runCatching {
-        AppLanguage.valueOf(settingsDataStore.data.first()[KEY_LANG] ?: "EN")
+        AppLanguagePrefs.current(settingsDataStore)
     }.getOrElse { AppLanguage.EN }
 
     private suspend fun refresh(force: Boolean = false) {

@@ -56,18 +56,18 @@ object IosDesign {
     // Монохромно-оранжевая брендовая гамма: категории различаются оттенком/светлотой
     // внутри одной тёплой палитры (#E85002 + серые), белая пиктограмма остаётся читаемой.
     object Category {
-        val Account = Color(0xFFE85002)      // фирменный оранжевый
-        val Cloud = Color(0xFF646464)        // серый (синхронизация/облако)
-        val Language = Color(0xFFE85002)     // обожжённая глина
-        val Appearance = Color(0xFFF16001)   // яркий оранжевый (внешний вид)
-        val Media = Color(0xFF333333)        // тёмно-серый (тип контента/медиа)
-        val Notifications = Color(0xFFC10801) // глубокий красный
-        val Security = Color(0xFFC10801)     // глубокий красный
-        val Network = Color(0xFFE85002)      // тёмный песочный
+        val Account = BrandOrange      // фирменный оранжевый
+        val Cloud = BrandGray        // серый (синхронизация/облако)
+        val Language = BrandOrange     // обожжённая глина
+        val Appearance = BrandOrangeBright   // яркий оранжевый (внешний вид)
+        val Media = BrandDarkGray        // тёмно-серый (тип контента/медиа)
+        val Notifications = BrandDeepRed // глубокий красный
+        val Security = BrandDeepRed     // глубокий красный
+        val Network = BrandOrange      // тёмный песочный
         val Ai = Color(0xFF8A8A8E)           // средне-серый
         val Storage = Color(0xFF77716C)      // тёплый серый
-        val Update = Color(0xFFE85002)       // янтарный
-        val Support = Color(0xFFE85002)      // светлая глина (связь/поддержка)
+        val Update = BrandOrange       // янтарный
+        val Support = BrandOrange      // светлая глина (связь/поддержка)
         val Donate = Color(0xFFD93A2B)       // алый (осветлённый #C10801)
     }
 

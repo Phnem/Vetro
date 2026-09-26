@@ -140,8 +140,4 @@ object SanitizeHeaders {
             val value = v.replace("\r", "").replace("\n", " ").trim()
             if (value.isEmpty()) null else key to value
         }.toMap()
-
-    /** ffmpeg `-headers` format: `Key: Value\r\nKey2: Value2\r\n` */
-    fun toFfmpegHeaderString(headers: Map<String, String>): String =
-        sanitize(headers).entries.joinToString("") { (k, v) -> "$k: $v\r\n" }
 }

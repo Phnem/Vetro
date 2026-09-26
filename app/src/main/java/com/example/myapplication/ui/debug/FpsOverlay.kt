@@ -18,9 +18,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.example.myapplication.isAppInDarkTheme
-import com.example.myapplication.ui.shared.theme.BrandBlueSoft
-import com.example.myapplication.ui.shared.theme.BrandRed
+import com.example.myapplication.ui.shared.theme.isAppInDarkTheme
+import com.example.myapplication.ui.shared.theme.BrandOrangeBright
+import com.example.myapplication.ui.shared.theme.BrandDeepRed
 import com.example.myapplication.ui.shared.theme.OverlayThemeTokens
 import com.example.myapplication.ui.shared.theme.SnProFamily
 
@@ -54,7 +54,7 @@ fun FpsOverlay(modifier: Modifier = Modifier) {
     }
 
     val isDark = isAppInDarkTheme()
-    val accent = if (isDark) BrandBlueSoft else BrandRed
+    val accent = if (isDark) BrandOrangeBright else BrandDeepRed
     val bg =
         if (isDark) OverlayThemeTokens.TileBackgroundDark
         else MaterialTheme.colorScheme.surface.copy(alpha = 0.65f)

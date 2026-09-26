@@ -26,7 +26,6 @@ import com.phnem.vetro.R
  * Порядок — по убыванию частоты обращения; донат последним намеренно: просьба о деньгах не должна
  * стоять первой в списке.
  */
-@Composable
 fun ttmMenuItems(
     language: AppLanguage,
     onStats: () -> Unit,

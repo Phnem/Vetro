@@ -1,5 +1,6 @@
 package com.example.myapplication.media.source.movieseries.custom
 
+import com.example.myapplication.network.AppJson
 import com.example.myapplication.data.models.MediaType
 import com.example.myapplication.media.source.PlaybackRequest
 import com.example.myapplication.media.source.SanitizeHeaders
@@ -19,7 +20,6 @@ import io.ktor.client.request.get
 import io.ktor.client.statement.bodyAsText
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.Json
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 
 /**
@@ -173,7 +173,7 @@ class StremioAddonProvider(
     override val displayName: String = addon.manifest.name
     override val capabilities: Set<ProviderCapability> = addon.capabilities
 
-    private val json = Json { ignoreUnknownKeys = true }
+    private val json = AppJson
 
     override suspend fun resolve(request: PlaybackRequest): ProviderResolution =
         resolveTyped(displayName) { resolveFromAddon(request) }

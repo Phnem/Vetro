@@ -1,5 +1,6 @@
 package com.example.myapplication.media
 
+import com.example.myapplication.data.local.AppLanguagePrefs
 import android.content.Context
 import android.util.Log
 import androidx.datastore.core.DataStore
@@ -9,11 +10,8 @@ import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.OutOfQuotaPolicy
 import androidx.work.WorkManager
 import androidx.work.workDataOf
-import com.example.myapplication.data.local.DevPreferencesKeys
 import com.example.myapplication.data.models.Anime
 import com.example.myapplication.domain.seasons.SeasonInfo
-import com.example.myapplication.download.FileIpcManager
-import com.example.myapplication.download.InputTask
 import com.example.myapplication.media.download.MediaDownloadWorker
 import com.example.myapplication.media.download.MediaJobBus
 import com.example.myapplication.media.source.SourceEngine
@@ -29,14 +27,12 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
-import androidx.datastore.preferences.core.stringPreferencesKey
 import java.io.File
 import java.util.UUID
 
 class MediaGatewayImpl(
     private val context: Context,
     private val sourceEngine: SourceEngine,
-    private val fileIpcManager: FileIpcManager,
     private val settingsDataStore: DataStore<Preferences>,
 ) : MediaGateway {
 
@@ -47,18 +43,14 @@ class MediaGatewayImpl(
         episodeNumber: Int,
         seasonInfo: SeasonInfo?,
     ): PlaybackResolution {
-        return if (useNativeEngine()) {
-            val language = currentLanguage()
-            try {
-                sourceEngine.resolve(PlaybackRequest(anime, episodeNumber, seasonInfo, language))
-            } catch (error: CancellationException) {
-                throw error
-            } catch (error: Exception) {
-                Log.w(TAG, "native resolve failed: ${error.message}")
-                PlaybackResolution.Failure
-            }
-        } else {
-            PlaybackResolution.NotConfigured(anime.mediaType)
+        val language = currentLanguage()
+        return try {
+            sourceEngine.resolve(PlaybackRequest(anime, episodeNumber, seasonInfo, language))
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: Exception) {
+            Log.w(TAG, "native resolve failed: ${error.message}")
+            PlaybackResolution.Failure
         }
     }
 
@@ -81,7 +73,10 @@ class MediaGatewayImpl(
         )
 
         val candidates = downloadableCandidates(video, fallbackVideos)
-        val persistedCandidates = candidates.map(VetroVideo::withoutPersistedSecrets)
+        val persistedCandidates = fitCandidatesToBudget(
+            candidates.map(VetroVideo::withoutPersistedSecrets),
+            CANDIDATES_BUDGET_BYTES,
+        ) { json.encodeToString(it) }
         val data = workDataOf(
             MediaDownloadWorker.KEY_JOB_ID to jobId,
             MediaDownloadWorker.KEY_URL to video.url,
@@ -110,24 +105,17 @@ class MediaGatewayImpl(
         return JobId(jobId)
     }
 
-    /** Legacy multi-episode Python path used by DownloadWizard. */
-    suspend fun enqueueLegacyPythonDownload(task: InputTask) {
-        fileIpcManager.submitTask(task)
-    }
 
-    private suspend fun useNativeEngine(): Boolean =
-        settingsDataStore.data.map { prefs ->
-            prefs[DevPreferencesKeys.USE_NATIVE_MEDIA_ENGINE] ?: true
-        }.first()
 
     private suspend fun currentLanguage(): AppLanguage =
         settingsDataStore.data.map { prefs ->
-            runCatching { AppLanguage.valueOf(prefs[KEY_LANG] ?: "EN") }
-                .getOrElse { AppLanguage.EN }
+            AppLanguagePrefs.from(prefs)
         }.first()
 
     companion object {
+        /** Из 10 КБ входа задачи: остальное — URL, заголовки, путь, ключи. */
+        private const val CANDIDATES_BUDGET_BYTES = 6_000
+
         private const val TAG = "MediaGateway"
-        private val KEY_LANG = stringPreferencesKey("lang")
     }
 }

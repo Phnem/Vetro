@@ -1,7 +1,9 @@
 package com.example.myapplication.data.remote
 
+import com.example.myapplication.network.AppJson
 import com.example.myapplication.network.AppContentType
 import io.ktor.client.HttpClient
+import io.ktor.client.request.header
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
 import io.ktor.client.statement.bodyAsText
@@ -40,7 +42,7 @@ class GeminiStructuredClient(
         check(parsed.ok) { "Gemini key check failed" }
     }
 
-    private val json = Json { ignoreUnknownKeys = true }
+    private val json = AppJson
 
     private val modelId = "gemini-3.1-flash-lite"
 
@@ -98,8 +100,10 @@ class GeminiStructuredClient(
 
     private suspend fun postGenerateContent(body: JsonObject, apiKey: String): String {
         val url =
-            "https://generativelanguage.googleapis.com/v1beta/models/$modelId:generateContent?key=$apiKey"
+            "https://generativelanguage.googleapis.com/v1beta/models/$modelId:generateContent"
         val responseText = httpClient.post(url) {
+            // Ключ в заголовке, а не в query: URL целиком уходит в логи HTTP-клиента.
+            header("x-goog-api-key", apiKey)
             contentType(ContentType.Application.Json)
             setBody(json.encodeToString(JsonElement.serializer(), body))
         }.bodyAsText()

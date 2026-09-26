@@ -1,24 +1,44 @@
 package com.example.myapplication.network
 
+private val NON_ALNUM_RUN = Regex("[^\\p{L}\\p{N}]+")
+
 /**
- * Levenshtein edit-distance for fuzzy title matching.
+ * Название как слова: нижний регистр, всё, кроме букв и цифр, заменено одиночными пробелами,
+ * края обрезаны. Для сравнения по токенам.
  */
-internal fun levenshtein(a: String, b: String): Int {
+fun normalizeTitleWords(value: String): String = value.lowercase().replace(NON_ALNUM_RUN, " ").trim()
+
+/** Название как ключ: нижний регистр, только буквы и цифры. Для дедупликации и «содержит». */
+fun titleKey(value: String): String = value.lowercase().replace(NON_ALNUM_RUN, "")
+
+/**
+ * Расстояние Левенштейна — одна реализация на всё приложение (раньше их было три, одна строила
+ * полную матрицу n×m на каждое сравнение названий). Две строки таблицы, O(min) памяти.
+ */
+fun levenshtein(a: String, b: String): Int {
     if (a == b) return 0
     if (a.isEmpty()) return b.length
     if (b.isEmpty()) return a.length
     var prev = IntArray(a.length + 1) { it }
+    var curr = IntArray(a.length + 1)
     for (j in 1..b.length) {
-        val curr = IntArray(a.length + 1).apply {
-            set(0, j)
-            for (i in 1..a.length) {
-                val cost = if (a[i - 1] == b[j - 1]) 0 else 1
-                set(i, minOf(prev[i - 1] + cost, prev[i] + 1, get(i - 1) + 1))
-            }
+        curr[0] = j
+        for (i in 1..a.length) {
+            val cost = if (a[i - 1] == b[j - 1]) 0 else 1
+            curr[i] = minOf(prev[i - 1] + cost, prev[i] + 1, curr[i - 1] + 1)
         }
+        val swap = prev
         prev = curr
+        curr = swap
     }
     return prev[a.length]
+}
+
+/** Похожесть 0..1 по расстоянию Левенштейна: 1 — совпадение, пустые строки считаются равными. */
+fun levenshteinSimilarity(a: String, b: String): Double {
+    val maxLen = maxOf(a.length, b.length)
+    if (maxLen == 0) return 1.0
+    return 1.0 - levenshtein(a, b).toDouble() / maxLen
 }
 
 /**

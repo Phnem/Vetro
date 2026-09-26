@@ -59,7 +59,7 @@ class KtorWebLinkResolver(
     private val client: HttpClient,
 ) : WebLinkResolver {
 
-    private val json = Json { ignoreUnknownKeys = true }
+    private val json = AppJson
 
     override suspend fun resolveRu(query: String): List<WebLinkResolution> = coroutineScope {
         val q = query.trim()
@@ -315,7 +315,7 @@ class KtorWebLinkResolver(
         }
     }
 
-    private fun normalize(s: String): String = s.lowercase().replace(Regex("[^\\p{L}\\p{N}]"), "")
+    private fun normalize(s: String): String = titleKey(s)
 
     companion object {
         private const val TAG = "WebLinkResolver"

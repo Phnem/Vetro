@@ -8,11 +8,9 @@ import io.ktor.http.ContentType
 import io.ktor.http.contentType
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.int
 import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
@@ -25,7 +23,7 @@ import kotlinx.serialization.json.jsonPrimitive
 class TraceMoeRemoteDataSource(
     private val httpClient: HttpClient
 ) {
-    private val json = Json { ignoreUnknownKeys = true }
+    private val json = AppJson
 
     suspend fun search(
         imageBytes: ByteArray,

@@ -45,6 +45,9 @@ CREATE TABLE anime (
 selectPendingSync:
 SELECT * FROM anime WHERE sync_status != 'SYNCED' ORDER BY orderIndex ASC;
 
+countPendingSync:
+SELECT COUNT(*) FROM anime WHERE sync_status != 'SYNCED';
+
 CREATE TABLE anime_tags (
     anime_id TEXT NOT NULL,
     tag TEXT NOT NULL,
@@ -141,6 +144,43 @@ LIMIT ? OFFSET ?;
 
 getAnimeById:
 SELECT * FROM anime WHERE id = ?;
+
+-- Та же выборка, что у getAllAnimeWithTagsConcat, по одному id: теги одним запросом.
+getAnimeWithTagsConcatById:
+SELECT
+    anime.id,
+    anime.title,
+    anime.imagePath,
+    anime.episodes,
+    anime.rating,
+    anime.status,
+    anime.isFavorite,
+    anime.updatedAt,
+    anime.orderIndex,
+    anime.dateAdded,
+    anime.categoryType,
+    anime.sync_status,
+    anime.comment,
+    anime.isAiRecommendation,
+    anime.anilist_id,
+    anime.mal_id,
+    anime.shikimori_id,
+    anime.anilist_not_found_at,
+    anime.mal_not_found_at,
+    anime.shikimori_not_found_at,
+    anime.mediaType,
+    anime.title_en,
+    anime.title_ru,
+    anime.tmdb_id,
+    anime.tmdb_not_found_at,
+    anime.kinopoisk_id,
+    anime.kinopoisk_not_found_at,
+    anime.imdb_id,
+    GROUP_CONCAT(anime_tags.tag, CHAR(31)) AS tagsConcat
+FROM anime
+LEFT JOIN anime_tags ON anime.id = anime_tags.anime_id
+WHERE anime.id = ?
+GROUP BY anime.id;
 
 insertAnime:
 INSERT INTO anime(
@@ -284,9 +324,41 @@ SET title_en_checked_at = ?, updatedAt = ?, sync_status = 'PENDING_UPDATE'
 WHERE id = ?;
 
 selectNeedingTitleEn:
-SELECT * FROM anime
-WHERE mediaType = 'ANIME' AND title_en IS NULL AND title_en_checked_at IS NULL
-ORDER BY dateAdded DESC
+SELECT
+    anime.id,
+    anime.title,
+    anime.imagePath,
+    anime.episodes,
+    anime.rating,
+    anime.status,
+    anime.isFavorite,
+    anime.updatedAt,
+    anime.orderIndex,
+    anime.dateAdded,
+    anime.categoryType,
+    anime.sync_status,
+    anime.comment,
+    anime.isAiRecommendation,
+    anime.anilist_id,
+    anime.mal_id,
+    anime.shikimori_id,
+    anime.anilist_not_found_at,
+    anime.mal_not_found_at,
+    anime.shikimori_not_found_at,
+    anime.mediaType,
+    anime.title_en,
+    anime.title_ru,
+    anime.tmdb_id,
+    anime.tmdb_not_found_at,
+    anime.kinopoisk_id,
+    anime.kinopoisk_not_found_at,
+    anime.imdb_id,
+    GROUP_CONCAT(anime_tags.tag, CHAR(31)) AS tagsConcat
+FROM anime
+LEFT JOIN anime_tags ON anime.id = anime_tags.anime_id
+WHERE anime.mediaType = 'ANIME' AND anime.title_en IS NULL AND anime.title_en_checked_at IS NULL
+GROUP BY anime.id
+ORDER BY anime.dateAdded DESC
 LIMIT ?;
 
 countNeedingTitleEn:
@@ -309,9 +381,41 @@ SET title_ru_checked_at = ?, updatedAt = ?, sync_status = 'PENDING_UPDATE'
 WHERE id = ?;
 
 selectNeedingTitleRu:
-SELECT * FROM anime
-WHERE mediaType = 'ANIME' AND title_ru IS NULL AND title_ru_checked_at IS NULL
-ORDER BY dateAdded DESC
+SELECT
+    anime.id,
+    anime.title,
+    anime.imagePath,
+    anime.episodes,
+    anime.rating,
+    anime.status,
+    anime.isFavorite,
+    anime.updatedAt,
+    anime.orderIndex,
+    anime.dateAdded,
+    anime.categoryType,
+    anime.sync_status,
+    anime.comment,
+    anime.isAiRecommendation,
+    anime.anilist_id,
+    anime.mal_id,
+    anime.shikimori_id,
+    anime.anilist_not_found_at,
+    anime.mal_not_found_at,
+    anime.shikimori_not_found_at,
+    anime.mediaType,
+    anime.title_en,
+    anime.title_ru,
+    anime.tmdb_id,
+    anime.tmdb_not_found_at,
+    anime.kinopoisk_id,
+    anime.kinopoisk_not_found_at,
+    anime.imdb_id,
+    GROUP_CONCAT(anime_tags.tag, CHAR(31)) AS tagsConcat
+FROM anime
+LEFT JOIN anime_tags ON anime.id = anime_tags.anime_id
+WHERE anime.mediaType = 'ANIME' AND anime.title_ru IS NULL AND anime.title_ru_checked_at IS NULL
+GROUP BY anime.id
+ORDER BY anime.dateAdded DESC
 LIMIT ?;
 
 countNeedingTitleRu:

@@ -1,5 +1,10 @@
 package com.example.myapplication.ui.details
 
+import com.example.myapplication.ui.shared.theme.IosScroll
+import com.example.myapplication.ui.shared.glassControl
+import com.example.myapplication.ui.shared.StatusBarIconsOverArt
+import androidx.compose.ui.platform.LocalDensity
+import com.example.myapplication.ui.shared.LocalModernUi
 import android.graphics.BitmapFactory
 
 import androidx.compose.animation.AnimatedVisibility
@@ -65,7 +70,7 @@ import com.example.myapplication.data.models.Anime
 import com.example.myapplication.data.models.MediaType
 import com.example.myapplication.manga.ui.MangaChaptersPage
 import com.example.myapplication.manga.ui.rememberMangaContinueReading
-import com.example.myapplication.isAppInDarkTheme
+import com.example.myapplication.ui.shared.theme.isAppInDarkTheme
 import com.example.myapplication.network.AppLanguage
 import com.example.myapplication.ui.shared.GlassPreset
 import com.example.myapplication.ui.shared.adaptiveGlassBackdrop
@@ -74,6 +79,7 @@ import com.example.myapplication.ui.shared.theme.MotionTokens
 import com.example.myapplication.ui.shared.components.GrabberHandle
 import com.example.myapplication.ui.shared.theme.BrandOrangeBright
 import com.example.myapplication.ui.shared.theme.SnProFamily
+import com.example.myapplication.utils.Haptic
 import com.example.myapplication.utils.performHaptic
 import com.kyant.backdrop.Backdrop
 import com.kyant.backdrop.backdrops.layerBackdrop
@@ -92,7 +98,7 @@ import org.koin.core.parameter.parametersOf
 /**
  * Полноэкранные детали тайтла — NavHost destination (DetailsRoute). Две страницы в
  * [HorizontalPager] со свайпом влево/вправо: «Детали» (постер-hero, мета, описание) и
- * «Серии» (локальная библиотека скачанных эпизодов, см. [DetailsEpisodesPage]).
+ * «Серии» (сезоны и серии со стримом и загрузкой, см. [ModernDetailsEpisodesPage]).
  * Внизу — стеклянный мини-док в духе главного дока, но компактный: активная вкладка
  * раскрывается с подписью, неактивная сворачивается до иконки.
  */
@@ -128,6 +134,13 @@ fun DetailsScreen(
         initialPage = if (openEpisodes) 1 else 0,
         pageCount = { 2 },
     )
+    // Значки статус-бара белые, пока под ним арт страницы «Детали»; на странице серий и когда
+    // лист наехал на арт — по теме.
+    var heroUnderStatusBar by remember { mutableStateOf(true) }
+    val statusBarOverArt by remember {
+        derivedStateOf { pagerState.currentPage == 0 && heroUnderStatusBar }
+    }
+    StatusBarIconsOverArt(statusBarOverArt)
 
     val displayTitle = when (language) {
         AppLanguage.EN -> current.titleEn?.takeIf { it.isNotBlank() } ?: current.title
@@ -138,8 +151,13 @@ fun DetailsScreen(
     }
     // У манги вторая страница — главы из движка манги, а не серии: разный источник и разный ридер.
     val isManga = current.mediaType == MediaType.MANGA
-    val episodeMenuViewModel: EpisodeMenuViewModel =
+    // У манги вторая страница — главы, серийный VM ей не нужен: раньше он создавался и для неё,
+    // сканировал «скачанные серии» и грузил обложки серий впустую.
+    val episodeMenuViewModel: EpisodeMenuViewModel? = if (isManga) {
+        null
+    } else {
         koinViewModel(key = "episode_menu_${current.id}") { parametersOf(episodeAnime) }
+    }
 
 
     fun openEpisodes() {
@@ -153,8 +171,10 @@ fun DetailsScreen(
         // преломляют живой контент. Узел с layerBackdrop никогда не размонтируется.
         Box(modifier = Modifier.fillMaxSize().layerBackdrop(backdrop)) {
             HorizontalPager(
+                flingBehavior = IosScroll.pagerFlingBehavior(pagerState),
                 state = pagerState,
-                modifier = Modifier.fillMaxSize(),
+                // Свайп вправо со страницы «Детали» — назад на главную (как в iOS, от любой точки).
+                modifier = Modifier.fillMaxSize().detailsSwipeBack(pagerState, enabled = true),
                 beyondViewportPageCount = 1,
             ) { page ->
                 when (page) {
@@ -168,21 +188,22 @@ fun DetailsScreen(
                         webLinks = webLinks,
                         seasons = seasons,
                         onWatch = {
-                            performHaptic(view, "light")
+                            performHaptic(view, Haptic.Light)
                             openEpisodes()
                         },
                         onDownload = {
-                            performHaptic(view, "light")
+                            performHaptic(view, Haptic.Light)
                             openEpisodes()
                         },
                         onToggleFavorite = {
-                            performHaptic(view, if (current.isFavorite) "light" else "success")
+                            performHaptic(view, if (current.isFavorite) Haptic.Light else Haptic.Success)
                             viewModel.toggleFavorite()
                         },
                         onOpenSeason = {
-                            performHaptic(view, "light")
+                            performHaptic(view, Haptic.Light)
                             openEpisodes()
                         },
+                        onHeroUnderStatusBar = { heroUnderStatusBar = it },
                     )
 
                     else -> if (isManga) MangaChaptersPage(
@@ -206,7 +227,7 @@ fun DetailsScreen(
                         seasons = seasons,
                         fallbackEpisodes = current.episodes,
                         posterPath = viewModel.getImgPath(current.imageFileName),
-                        viewModel = episodeMenuViewModel,
+                        viewModel = checkNotNull(episodeMenuViewModel),
                     )
                 }
             }
@@ -230,7 +251,7 @@ fun DetailsScreen(
             isManga = isManga,
             activePage = pagerState.targetPage,
             onSelect = { page ->
-                performHaptic(view, "light")
+                performHaptic(view, Haptic.Light)
                 scope.launch {
                     pagerState.animateScrollToPage(page, animationSpec = MotionTokens.sheetPresent())
                 }
@@ -263,7 +284,7 @@ fun DetailsScreen(
                     DetailsGlassStartButton(
                         backdrop = backdrop,
                         onClick = {
-                            performHaptic(view, "light")
+                            performHaptic(view, Haptic.Light)
                             continueReading()
                         },
                         modifier = startButtonModifier,
@@ -273,8 +294,8 @@ fun DetailsScreen(
                 DetailsGlassStartButton(
                     backdrop = backdrop,
                     onClick = {
-                        performHaptic(view, "light")
-                        episodeMenuViewModel.startWatching()
+                        performHaptic(view, Haptic.Light)
+                        episodeMenuViewModel?.startWatching()
                     },
                     modifier = startButtonModifier,
                 )
@@ -302,6 +323,7 @@ private fun DetailsInfoPage(
     onDownload: () -> Unit,
     onToggleFavorite: () -> Unit,
     onOpenSeason: () -> Unit,
+    onHeroUnderStatusBar: (Boolean) -> Unit,
 ) {
     val context = LocalContext.current
     val details = (uiState as? DetailsUiState.Success)?.details
@@ -339,6 +361,16 @@ private fun DetailsInfoPage(
     val sheetOverlap = 28.dp
     val sheetCorner = 30.dp
     val scrollState = rememberScrollState()
+
+    // Арт под статус-баром, пока верх листа ниже статус-бара. Меняется один раз за прокрутку.
+    val density = LocalDensity.current
+    val statusBarPx = WindowInsets.statusBars.getTop(density)
+    val sheetTopPx = with(density) { (heroHeight - sheetOverlap).toPx() }
+    val heroUnderStatusBar by remember(statusBarPx, sheetTopPx) {
+        derivedStateOf { sheetTopPx - scrollState.value > statusBarPx }
+    }
+    val reportHero by rememberUpdatedState(onHeroUnderStatusBar)
+    LaunchedEffect(heroUnderStatusBar) { reportHero(heroUnderStatusBar) }
 
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
         val viewportHeight = maxHeight
@@ -385,7 +417,7 @@ private fun DetailsInfoPage(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .verticalScroll(scrollState),
+                .verticalScroll(scrollState, flingBehavior = IosScroll.flingBehavior()),
         ) {
             // Прозрачное окно, сквозь которое виден hero; дальше начинается сам лист.
             Spacer(Modifier.height(heroHeight - sheetOverlap))
@@ -882,18 +914,19 @@ private fun DetailsGlassBackButton(
     Box(
         modifier = modifier
             .size(48.dp)
-            .drawBackdrop(
-                backdrop = backdrop,
-                shape = { CircleShape },
-                effects = {
-                    vibrancy()
-                    blur(24f.dp.toPx())
-                    lens(8f.dp.toPx(), 48f.dp.toPx())
-                },
-                onDrawSurface = { drawRect(barTint) },
-            )
             .clip(CircleShape)
-            .border(0.5.dp, barBorder, CircleShape)
+            .glassControl(backdrop, CircleShape) {
+                drawBackdrop(
+                    backdrop = backdrop,
+                    shape = { CircleShape },
+                    effects = {
+                        vibrancy()
+                        blur(24f.dp.toPx())
+                        lens(8f.dp.toPx(), 48f.dp.toPx())
+                    },
+                    onDrawSurface = { drawRect(barTint) },
+                ).border(0.5.dp, barBorder, CircleShape)
+            }
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
@@ -904,7 +937,9 @@ private fun DetailsGlassBackButton(
         Icon(
             Icons.AutoMirrored.Filled.ArrowBack,
             contentDescription = "Back",
-            tint = Color.White,
+            // Белая стрелка — для прозрачного «жидкого» стекла поверх арта. Матовая подложка
+            // (glassControl в новом интерфейсе) в светлой теме почти белая: стрелка на ней терялась.
+            tint = if (LocalModernUi.current) MaterialTheme.colorScheme.onSurface else Color.White,
             modifier = Modifier.size(22.dp),
         )
     }

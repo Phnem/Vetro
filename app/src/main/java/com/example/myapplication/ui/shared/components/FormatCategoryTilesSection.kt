@@ -41,7 +41,7 @@ import androidx.compose.ui.unit.sp
 import com.example.myapplication.data.models.GenreCategory
 import com.example.myapplication.data.models.UiStrings
 import com.example.myapplication.data.repository.GenreRepository
-import com.example.myapplication.isAppInDarkTheme
+import com.example.myapplication.ui.shared.theme.isAppInDarkTheme
 import com.example.myapplication.network.AppLanguage
 import com.example.myapplication.ui.shared.icons.HeroCheck
 import com.example.myapplication.ui.shared.theme.OverlayThemeTokens

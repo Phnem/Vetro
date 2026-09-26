@@ -10,7 +10,6 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
@@ -41,8 +40,6 @@ import com.example.myapplication.media.ui.PipHostActivity
 import com.example.myapplication.media.ui.PipPlaybackCommands
 import com.example.myapplication.ui.shared.theme.MotionTokens
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withContext
 import kotlin.math.max
 
@@ -107,9 +104,8 @@ fun PlayerScreen(
     // ——— Наблюдаемое состояние плеера ———
     var isPlaying by remember { mutableStateOf(true) }
     var isBuffering by remember { mutableStateOf(true) }
-    var position by remember { mutableLongStateOf(0L) }
-    var buffered by remember { mutableLongStateOf(0L) }
-    var duration by remember { mutableLongStateOf(0L) }
+    // Позицию хост не читает: см. PlaybackClock.
+    val clock = rememberPlaybackClock(exoPlayer, isPlaying)
     var currentIndex by remember { mutableIntStateOf(startIndex.coerceAtLeast(0)) }
 
     val pinchState = remember { PlayerPinchState() }
@@ -131,9 +127,6 @@ fun PlayerScreen(
     }
     var viewportSize by remember { mutableStateOf(IntSize.Zero) }
     var videoAspect by remember { mutableFloatStateOf(16f / 9f) }
-    // Сюрфейс плеера — источник кадра для тона доков (PixelCopy), см. rememberPlayerAmbient.
-    var videoSurface by remember { mutableStateOf<android.view.SurfaceView?>(null) }
-    var drmProtected by remember { mutableStateOf(false) }
     val viewportAspect = viewportSize.width.toFloat() / viewportSize.height.coerceAtLeast(1)
     val cropScale = max(
         viewportAspect / videoAspect.coerceAtLeast(0.01f),
@@ -160,8 +153,8 @@ fun PlayerScreen(
         episodeNumber = currentEpisode?.episodeNumber,
         anilistId = anilistId,
         malId = malId,
-        durationMs = duration,
-        positionMs = position,
+        durationMs = clock.durationMs,
+        positionMs = clock.position,
         autoSkipEnabled = autoSkipEnabled,
         exactTimestamps = storedSkip?.timestamps.orEmpty(),
         exactOrigin = storedSkip?.origin,
@@ -176,7 +169,6 @@ fun PlayerScreen(
             override fun onPlaybackStateChanged(state: Int) {
                 isBuffering = state == Player.STATE_BUFFERING
                 if (state == Player.STATE_READY) playbackError = null
-                if (state != Player.STATE_IDLE) duration = exoPlayer.duration.coerceAtLeast(0L)
             }
 
             override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
@@ -186,15 +178,11 @@ fun PlayerScreen(
             }
 
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
-                position = 0L
-                buffered = 0L
-                duration = 0L
                 currentIndex = exoPlayer.currentMediaItemIndex
             }
 
             override fun onTracksChanged(tracks: Tracks) {
                 audioTracks = tracks.extractAudioOptions()
-                drmProtected = tracks.isDrmProtected()
                 // Новая серия ExoPlayer подбирает дорожку сама — если пользователь уже выбирал
                 // дорожку раньше в этом сеансе, переносим её выбор на серию, если такая есть.
                 matchPreferredAudioTrack(preferredAudioLabel, audioTracks)?.let { match ->
@@ -206,16 +194,6 @@ fun PlayerScreen(
                 if (size.width > 0 && size.height > 0) {
                     videoAspect = size.width * size.pixelWidthHeightRatio / size.height
                 }
-            }
-
-            // Позицию после seek применяем сразу — иначе бегунок на кадр «отскакивает» назад к старой
-            // позиции (poll ещё не успел обновиться), создавая ощущение лага.
-            override fun onPositionDiscontinuity(
-                oldPosition: Player.PositionInfo,
-                newPosition: Player.PositionInfo,
-                reason: Int,
-            ) {
-                position = exoPlayer.currentPosition
             }
         }
         onPlayerAvailable(exoPlayer)
@@ -272,17 +250,6 @@ fun PlayerScreen(
         onDispose { pipHost?.updatePipCommands(null) }
     }
 
-    // Опрос позиции (дешевле, чем per-frame; хватает для плавной полосы).
-    androidx.compose.runtime.LaunchedEffect(exoPlayer) {
-        while (isActive) {
-            position = exoPlayer.currentPosition
-            buffered = exoPlayer.bufferedPosition
-            val d = exoPlayer.duration
-            if (d > 0) duration = d
-            delay(250)
-        }
-    }
-
     // Полный экран: статус-бар и навигация уезжают, пока виден кадр (в PiP окно и так без баров).
     ImmersivePlayerWindow(enabled = !isInPip)
 
@@ -301,9 +268,7 @@ fun PlayerScreen(
                 },
             factory = { ctx ->
                 // surface_type по умолчанию = SurfaceView: дешевле по батарее и композитингу, чем
-                // TextureView. Не переводить на TextureView ради блюра: кадр для фона доков и так
-                // снимается через PixelCopy раз в секунду (см. rememberPlayerAmbient), а
-                // TextureView платил бы за это каждым кадром воспроизведения.
+                // TextureView.
                 PlayerView(ctx).apply {
                     player = exoPlayer
                     useController = false
@@ -312,7 +277,6 @@ fun PlayerScreen(
                         ViewGroup.LayoutParams.MATCH_PARENT,
                     )
                     setBackgroundColor(android.graphics.Color.BLACK)
-                    videoSurface = videoSurfaceView as? android.view.SurfaceView
                 }
             },
             update = { view ->
@@ -334,24 +298,15 @@ fun PlayerScreen(
 
         // В режиме «картинка в картинке» все контролы прячем — остаётся только видео.
         if (!isInPip) {
-            // Сэмплим кадр только пока контролы на экране — иначе читали бы сюрфейс впустую.
-            var controlsVisible by remember { mutableStateOf(true) }
-            val ambient = rememberPlayerAmbient(
-                surfaceProvider = { videoSurface },
-                adaptive = !drmProtected,
-                active = controlsVisible,
-            )
             PlayerControlsOverlay(
-                onControlsVisibleChange = { controlsVisible = it },
                 player = exoPlayer,
                 title = episodes.getOrNull(currentIndex)?.originalName.orEmpty(),
-                ambient = ambient,
                 onRotate = onRotate,
                 isPlaying = isPlaying,
                 isBuffering = isBuffering,
-                position = position,
-                buffered = buffered,
-                duration = duration,
+                position = clock.position,
+                buffered = clock.buffered,
+                duration = clock.durationMs,
                 hasPrev = currentIndex > 0,
                 hasNext = currentIndex < episodes.lastIndex,
                 pinchState = pinchState,

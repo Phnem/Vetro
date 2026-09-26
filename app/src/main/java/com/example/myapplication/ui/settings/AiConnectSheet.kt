@@ -1,5 +1,6 @@
 package com.example.myapplication.ui.settings
 
+import com.example.myapplication.ui.shared.theme.IosScroll
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -49,7 +50,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.myapplication.data.ai.AiProvider
-import com.example.myapplication.isAppInDarkTheme
+import com.example.myapplication.ui.shared.theme.isAppInDarkTheme
 import com.example.myapplication.ui.shared.theme.IosDesign
 import com.example.myapplication.ui.shared.theme.OverlayThemeTokens
 import com.example.myapplication.ui.shared.theme.SnProFamily
@@ -73,7 +74,7 @@ fun AiConnectSheet(
     val uriHandler = LocalUriHandler.current
 
     val sheetSurface = if (isDark) {
-        Color(0xFF000000).copy(alpha = 0.8f)
+        Color.Black.copy(alpha = 0.8f)
     } else {
         MaterialTheme.colorScheme.surface.copy(alpha = 0.95f)
     }
@@ -86,7 +87,7 @@ fun AiConnectSheet(
         modifier = sharedModifier
             .fillMaxWidth()
             .heightIn(max = 640.dp)
-            .verticalScroll(rememberScrollState())
+            .verticalScroll(rememberScrollState(), flingBehavior = IosScroll.flingBehavior())
             .padding(horizontal = 20.dp)
             .padding(top = IosDesign.SheetContentTop, bottom = 24.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),

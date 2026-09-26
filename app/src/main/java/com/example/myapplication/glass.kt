@@ -1,5 +1,10 @@
 package com.example.myapplication
 
+import com.example.myapplication.ui.shared.theme.isAppInDarkTheme
+import com.example.myapplication.ui.shared.theme.IosScroll
+import androidx.compose.foundation.layout.offset
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.draw.drawWithCache
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.AnimatedVisibilityScope
@@ -7,15 +12,10 @@ import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.MutableTransitionState
-import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
-import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.runtime.LaunchedEffect
@@ -23,7 +23,6 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -31,60 +30,42 @@ import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.wrapContentHeight
-import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Sort
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.outlined.FilterList
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Tv
 import androidx.compose.material.icons.rounded.Star
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import com.example.myapplication.ui.home.CapsuleDockItem
-import com.example.myapplication.ui.home.CapsuleGlassDock
 import com.example.myapplication.ui.shared.FrostedMaterials
 import com.example.myapplication.ui.shared.frostedGlass
-import com.example.myapplication.ui.shared.LocalGlassCapsuleDock
-import com.example.myapplication.ui.shared.stagedMorphOrigin
-import androidx.compose.runtime.mutableIntStateOf
+import com.example.myapplication.ui.shared.LocalModernUi
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.CornerRadius
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.RoundRect
@@ -93,9 +74,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Outline
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.painter.Painter
+import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.StrokeJoin
-import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.toArgb
@@ -104,7 +86,6 @@ import androidx.compose.ui.graphics.vector.path
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
-import android.os.Build
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.res.painterResource
@@ -115,40 +96,28 @@ import com.example.myapplication.data.models.UiStrings
 import com.example.myapplication.network.AppLanguage
 import com.example.myapplication.ui.home.WorkspaceSortNotificationActions
 import com.example.myapplication.ui.navigation.navigateToAddEdit
-import com.example.myapplication.ui.navigation.navigateToSettings
 import com.example.myapplication.ui.shared.GlassPreset
 import com.example.myapplication.ui.shared.adaptiveGlassBackdrop
 import com.example.myapplication.ui.shared.rememberAdaptiveGlassEffects
 import com.example.myapplication.ui.shared.components.GenreFilterPillSelection
 import com.example.myapplication.ui.shared.components.GlassIconButton
 import com.example.myapplication.ui.shared.fluidClickable
-import com.example.myapplication.ui.shared.gradientHighlightBorder
-import com.example.myapplication.ui.shared.theme.BrandBlue
+import com.example.myapplication.ui.shared.theme.BrandOrange
 import com.example.myapplication.ui.shared.theme.DarkBackground
-import com.example.myapplication.ui.shared.theme.OverlayGlassPanel
 import com.example.myapplication.ui.shared.theme.OverlayThemeTokens
 import com.example.myapplication.ui.shared.theme.MotionTokens
 import com.example.myapplication.ui.shared.theme.IosDesign
-import com.example.myapplication.ui.shared.theme.iosSheetContainer
-import com.example.myapplication.ui.shared.theme.SquircleCornerShape
 import com.example.myapplication.ui.shared.theme.SquircleShape
 import com.example.myapplication.ui.shared.components.GrabberHandle
 import com.example.myapplication.ui.shared.components.MotionBottomSheet
 import com.example.myapplication.ui.shared.components.rememberIosSheetSwipe
 import com.example.myapplication.ui.shared.theme.SnProFamily
 import com.example.myapplication.ui.shared.theme.iosRowHighlight
-import com.example.myapplication.ui.shared.theme.glassEdge
-import com.example.myapplication.ui.shared.theme.glassFill
-import com.example.myapplication.ui.shared.theme.softPlateShadowForLightSheet
 import com.example.myapplication.ui.shared.inertialCollision
 import com.example.myapplication.ui.shared.rememberInertialCollisionState
+import com.example.myapplication.utils.Haptic
 import com.example.myapplication.utils.performHaptic
 import com.kyant.backdrop.Backdrop
-
-@Composable
-fun isAppInDarkTheme(): Boolean {
-    return MaterialTheme.colorScheme.background.toArgb() == DarkBackground.toArgb()
-}
 
 // ==========================================
 // Simple glass card ("simp glass" style)
@@ -216,6 +185,11 @@ fun GlassActionDock(
     onOpenStats: () -> Unit = {},
     /** См. одноимённый параметр [WorkspaceSortNotificationActions] — док только прокидывает его. */
     showMiddleAction: Boolean = true,
+    /**
+     * Отдельная капля слева от капсулы (колокольчик центра уведомлений). Живёт внутри той же
+     * анимации появления, что и капсула: приезжает и уезжает вместе с ней, а не своей дорогой.
+     */
+    leading: (@Composable () -> Unit)? = null,
 ) {
     val isDark = isAppInDarkTheme()
     val glassEffects = rememberAdaptiveGlassEffects(GlassPreset.Card)
@@ -223,10 +197,12 @@ fun GlassActionDock(
     // бы как недоделка. Ветка структурная, и переключение тумблера на живом экране может один
     // раз показать плоскую заливку — для dev-флага это приемлемо, восстановление штатное
     // (см. GlassBackdropRecovery).
-    val frosted = LocalGlassCapsuleDock.current
+    val frosted = LocalModernUi.current
     val frostedMaterial = FrostedMaterials.dock()
     val dockShape = RoundedCornerShape(32.dp)
-    val topPadding by animateDpAsState(
+    // Сдвиг вниз при «всплытии» — State, читаемый в раскладке (offset), а не отступ в
+    // композиции: иначе док пересобирался на каждом кадре своего появления.
+    val topShift = animateDpAsState(
         targetValue = if (isFloating) 16.dp else 0.dp,
         animationSpec = MotionTokens.barRevealDp,
         label = "dockPadding"
@@ -237,7 +213,7 @@ fun GlassActionDock(
         label = "border"
     )
     val shineColorBase = if (isDark) Color.White.copy(alpha = 0.15f) else Color.White.copy(alpha = 0.6f)
-    val shineAlpha by animateFloatAsState(
+    val shineAlpha = animateFloatAsState(
         targetValue = if (isFloating) 1f else 0f,
         label = "shineAlpha"
     )
@@ -259,68 +235,85 @@ fun GlassActionDock(
             animationSpec = MotionTokens.standard()
         ) + fadeOut(animationSpec = MotionTokens.standard()),
         modifier = modifier
-            .padding(top = topPadding)
+            .offset { IntOffset(0, topShift.value.roundToPx()) }
             .statusBarsPadding()
     ) {
-        Box {
-            Box(
-                Modifier
-                    .matchParentSize()
-                    .clip(dockShape)
-                    .then(
-                        if (frosted) {
-                            Modifier.frostedGlass(
-                                backdrop = backdrop,
-                                shape = dockShape,
-                                material = frostedMaterial,
-                            )
-                        } else {
-                            Modifier
-                                .adaptiveGlassBackdrop(
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            leading?.invoke()
+            Box {
+                Box(
+                    Modifier
+                        .matchParentSize()
+                        .clip(dockShape)
+                        .then(
+                            if (frosted) {
+                                Modifier.frostedGlass(
                                     backdrop = backdrop,
                                     shape = dockShape,
-                                    effects = glassEffects,
+                                    material = frostedMaterial,
                                 )
-                                // Кант матового материала рисует он сам — второй поверх него
-                                // дал бы двойную линию по тому же контуру.
-                                .border(0.5.dp, borderColor, dockShape)
-                        },
-                    )
-            ) {
-                if (shineAlpha > 0f) {
-                    Canvas(modifier = Modifier.matchParentSize()) {
-                        val rect = Rect(offset = Offset.Zero, size = size)
-                        val path = Path().apply { addRoundRect(RoundRect(rect, CornerRadius(32.dp.toPx()))) }
-                        drawPath(
-                            path,
-                            brush = Brush.verticalGradient(
-                                colors = listOf(
-                                    shineColorBase.copy(alpha = shineColorBase.alpha * shineAlpha),
-                                    Color.Transparent,
-                                    Color.Transparent,
-                                    shineColorBase.copy(alpha = 0.05f * shineAlpha)
-                                )
-                            ),
-                            style = Stroke(width = 1.dp.toPx())
+                            } else {
+                                Modifier
+                                    .adaptiveGlassBackdrop(
+                                        backdrop = backdrop,
+                                        shape = dockShape,
+                                        effects = glassEffects,
+                                    )
+                                    // Кант матового материала рисует он сам — второй поверх него
+                                    // дал бы двойную линию по тому же контуру.
+                                    .border(0.5.dp, borderColor, dockShape)
+                            },
+                        )
+                ) {
+                    // Блик — часть жидкого рецепта. У матового материала свой кант и своя подсветка,
+                    // и второй контур поверх них давал двойную линию.
+                    if (!frosted) {
+                        Spacer(
+                            modifier = Modifier
+                                .matchParentSize()
+                                .drawWithCache {
+                                    val rect = Rect(offset = Offset.Zero, size = size)
+                                    val path = Path().apply { addRoundRect(RoundRect(rect, CornerRadius(32.dp.toPx()))) }
+                                    val stroke = Stroke(width = 1.dp.toPx())
+                                    onDrawBehind {
+                                        val alpha = shineAlpha.value
+                                        if (alpha <= 0f) return@onDrawBehind
+                                        drawPath(
+                                            path,
+                                            brush = Brush.verticalGradient(
+                                                colors = listOf(
+                                                    shineColorBase.copy(alpha = shineColorBase.alpha * alpha),
+                                                    Color.Transparent,
+                                                    Color.Transparent,
+                                                    shineColorBase.copy(alpha = 0.05f * alpha)
+                                                )
+                                            ),
+                                            style = stroke,
+                                        )
+                                    }
+                                }
                         )
                     }
                 }
-            }
 
-            WorkspaceSortNotificationActions(
-                strings = strings,
-                filterSelectedTags = filterSelectedTags,
-                updatesCount = updates.size,
-                onOpenSort = onOpenSort,
-                onOpenNotifications = onOpenNotifications,
-                onOpenMediaTypeFilter = onOpenMediaTypeFilter,
-                dockButtonBackground = buttonBgColor,
-                useDockSizing = true,
-                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                middleAction = middleAction,
-                onOpenStats = onOpenStats,
-                showMiddleAction = showMiddleAction,
-            )
+                WorkspaceSortNotificationActions(
+                    strings = strings,
+                    filterSelectedTags = filterSelectedTags,
+                    updatesCount = updates.size,
+                    onOpenSort = onOpenSort,
+                    onOpenNotifications = onOpenNotifications,
+                    onOpenMediaTypeFilter = onOpenMediaTypeFilter,
+                    dockButtonBackground = buttonBgColor,
+                    useDockSizing = true,
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                    middleAction = middleAction,
+                    onOpenStats = onOpenStats,
+                    showMiddleAction = showMiddleAction,
+                )
+            }
         }
     }
 }
@@ -347,166 +340,6 @@ fun GlassBottomNavigation(
 ) {
     val view = LocalView.current
     val isDark = isAppInDarkTheme()
-
-    // Dev-тумблер «Док из матового стекла»: другой материал и другая раскладка — это
-    // самостоятельный компонент, а не набор условий внутри прежнего. Ветвление одно и на самом
-    // верху, поэтому старый док остаётся ровно таким, каким был.
-    if (LocalGlassCapsuleDock.current) {
-        val ruDock = currentLanguage == AppLanguage.RU
-        // Подсветка отмечает последний открытый раздел: у классического дока постоянного
-        // «текущего экрана» нет — его пункты открывают окна и оверлеи поверх коллекции.
-        var lastOpened by rememberSaveable { mutableIntStateOf(-1) }
-        // Пункты — те же четыре, что и у прежнего дока, и в том же порядке: тумблер меняет вид,
-        // а не состав навигации.
-        //
-        // Иконки собираются ЗДЕСЬ вместе со своими shared-element ключами. Три из четырёх
-        // открывают окно морфом из собственной иконки, и ключи обязаны совпадать с теми, что
-        // ждут принимающие экраны, — иначе окна открываются без анимации.
-        CapsuleGlassDock(
-            backdrop = backdrop,
-            items = listOf(
-                CapsuleDockItem(
-                    contentDescription = if (ruDock) "Кадр" else "Frame",
-                    onClick = {
-                        performHaptic(view, "light")
-                        lastOpened = 0
-                        onInspectClick()
-                    },
-                ) { tint ->
-                    with(sharedTransitionScope) {
-                        Box(
-                            modifier = Modifier
-                                .size(DockSharedBoundsSize)
-                                .sharedBounds(
-                                    rememberSharedContentState(key = "inspect_container"),
-                                    animatedVisibilityScope = animatedVisibilityScope,
-                                    resizeMode = SharedTransitionScope.ResizeMode.RemeasureToBounds,
-                                ),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Icon(
-                                painter = painterResource(R.drawable.frame_inspect_24),
-                                contentDescription = if (ruDock) "Кадр" else "Frame",
-                                tint = tint,
-                                modifier = Modifier
-                                    .size(DockIconSize)
-                                    .sharedElement(
-                                        rememberSharedContentState(key = "inspect_icon"),
-                                        animatedVisibilityScope = animatedVisibilityScope,
-                                    ),
-                            )
-                        }
-                    }
-                },
-                CapsuleDockItem(
-                    contentDescription = if (ruDock) "Статистика" else "Stats",
-                    onClick = {
-                        performHaptic(view, "light")
-                        lastOpened = 1
-                        onShowStats()
-                    },
-                    isMorphOrigin = true,
-                ) { tint ->
-                    // Статистика — единственный пункт без shared-element: она раскрывается не
-                    // окном, а панелью поверх экрана (см. StagedSheetMotion.kt).
-                    Icon(
-                        imageVector = HeroiconsSquaresPlus,
-                        contentDescription = if (ruDock) "Статистика" else "Stats",
-                        tint = tint,
-                        modifier = Modifier.size(DockIconSize),
-                    )
-                },
-                CapsuleDockItem(
-                    contentDescription = if (ruDock) "Добавить" else "Add",
-                    onClick = {
-                        performHaptic(view, "success")
-                        lastOpened = 2
-                        nav.navigateToAddEdit()
-                    },
-                ) { tint ->
-                    with(sharedTransitionScope) {
-                        Box(
-                            modifier = Modifier
-                                .size(DockSharedBoundsSize)
-                                .sharedBounds(
-                                    rememberSharedContentState(key = "fab_container"),
-                                    animatedVisibilityScope = animatedVisibilityScope,
-                                    resizeMode = SharedTransitionScope.ResizeMode.RemeasureToBounds,
-                                    clipInOverlayDuringTransition = OverlayClip(CircleShape),
-                                ),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Icon(
-                                imageVector = HeroiconsPlus,
-                                contentDescription = if (ruDock) "Добавить" else "Add",
-                                tint = tint,
-                                modifier = Modifier
-                                    .size(DockIconSize)
-                                    .sharedElement(
-                                        rememberSharedContentState(key = "fab_icon"),
-                                        animatedVisibilityScope = animatedVisibilityScope,
-                                    ),
-                            )
-                        }
-                    }
-                },
-                CapsuleDockItem(
-                    contentDescription = if (ruDock) "Настройки" else "Settings",
-                    onClick = {
-                        performHaptic(view, "light")
-                        lastOpened = 3
-                        onSettingsClick()
-                    },
-                ) { tint ->
-                    with(sharedTransitionScope) {
-                        Box(
-                            modifier = Modifier
-                                .size(DockSharedBoundsSize)
-                                .sharedBounds(
-                                    rememberSharedContentState(key = "settings_container"),
-                                    animatedVisibilityScope = animatedVisibilityScope,
-                                    // scaleToBounds, как и у прежнего дока: RemeasureToBounds
-                                    // пересобирал бы весь список настроек на каждом кадре и
-                                    // ронял FPS.
-                                    resizeMode = SharedTransitionScope.ResizeMode.scaleToBounds(),
-                                ),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Icon(
-                                imageVector = Icons.Outlined.Settings,
-                                contentDescription = if (ruDock) "Настройки" else "Settings",
-                                tint = tint,
-                                modifier = Modifier
-                                    .size(DockIconSize)
-                                    .sharedElement(
-                                        rememberSharedContentState(key = "settings_icon"),
-                                        animatedVisibilityScope = animatedVisibilityScope,
-                                    ),
-                            )
-                        }
-                    }
-                },
-            ),
-            selectedIndex = lastOpened.takeIf { it >= 0 },
-            trailingButton = CapsuleDockItem(
-                contentDescription = if (ruDock) "Поиск" else "Search",
-                onClick = {
-                    performHaptic(view, "light")
-                    onSearchClick()
-                },
-            ) { tint ->
-                Icon(
-                    imageVector = Icons.Default.Search,
-                    contentDescription = if (ruDock) "Поиск" else "Search",
-                    tint = tint,
-                    modifier = Modifier.size(DockIconSize),
-                )
-            },
-            trailingActive = isSearchActive,
-            modifier = modifier.padding(bottom = 24.dp),
-        )
-        return
-    }
 
     val glassEffects = rememberAdaptiveGlassEffects(GlassPreset.CompactNav)
     // Более «пухлая» капсула (референс — Telegram): выше и с полным пилюльным скруглением.
@@ -546,168 +379,85 @@ fun GlassBottomNavigation(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceEvenly
             ) {
-                // --- Кадр (inspect) ---
-                Column(
-                    modifier = Modifier
-                        .width(60.dp)
-                        .clip(RoundedCornerShape(20.dp))
-                        .fluidClickable {
-                            performHaptic(view, "light")
-                            onInspectClick()
-                        },
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center
-                ) {
-                    with(sharedTransitionScope) {
-                        Box(
-                            modifier = Modifier
-                                .size(36.dp)
-                                .sharedBounds(
-                                    rememberSharedContentState(key = "inspect_container"),
-                                    animatedVisibilityScope = animatedVisibilityScope,
-                                    resizeMode = SharedTransitionScope.ResizeMode.RemeasureToBounds
-                                )
-                                .background(Color.Transparent),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                painter = painterResource(R.drawable.frame_inspect_24),
-                                contentDescription = "Scene search",
-                                tint = dockIconTint,
-                                modifier = Modifier
-                                    .size(34.dp)
-                                    .sharedElement(
-                                        rememberSharedContentState(key = "inspect_icon"),
-                                        animatedVisibilityScope = animatedVisibilityScope
-                                    )
-                            )
-                        }
-                    }
-                    DockLabel(labelInspect, currentThemeColor)
-                }
-
-                // --- Статистика ---
-                Column(
-                    modifier = Modifier
-                        .width(60.dp)
-                        .clip(RoundedCornerShape(20.dp))
-                        // Точка, из которой раскрывается панель статистики. Два dev-тумблера
-                        // независимы, поэтому морф обязан работать и со старым доком.
-                        .stagedMorphOrigin()
-                        .clickable(
-                            interactionSource = remember { MutableInteractionSource() },
-                            indication = null
-                        ) {
-                            performHaptic(view, "light")
-                            onShowStats()
-                        },
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center
-                ) {
-                    Box(modifier = Modifier.size(36.dp), contentAlignment = Alignment.Center) {
-                        Icon(
-                            imageVector = HeroiconsSquaresPlus,
-                            contentDescription = "Stats",
-                            tint = dockIconTint,
-                            modifier = Modifier.size(34.dp)
-                        )
-                    }
-                    DockLabel(labelStats, currentThemeColor)
-                }
-
-                // --- Добавить ---
-                Column(
-                    modifier = Modifier
-                        .width(60.dp)
-                        .clip(RoundedCornerShape(20.dp))
-                        .clickable(
-                            interactionSource = remember { MutableInteractionSource() },
-                            indication = null
-                        ) {
-                            performHaptic(view, "success")
-                            nav.navigateToAddEdit()
-                        },
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center
-                ) {
-                    with(sharedTransitionScope) {
-                        Box(
-                            modifier = Modifier
-                                .size(36.dp)
-                                .sharedBounds(
-                                    rememberSharedContentState(key = "fab_container"),
-                                    animatedVisibilityScope = animatedVisibilityScope,
-                                    resizeMode = SharedTransitionScope.ResizeMode.RemeasureToBounds,
-                                    clipInOverlayDuringTransition = OverlayClip(CircleShape)
-                                )
-                                .background(Color.Transparent),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = HeroiconsPlus,
-                                contentDescription = "Add",
-                                tint = dockIconTint,
-                                modifier = Modifier
-                                    .size(36.dp)
-                                    .sharedElement(
-                                        rememberSharedContentState(key = "fab_icon"),
-                                        animatedVisibilityScope = animatedVisibilityScope
-                                    )
-                            )
-                        }
-                    }
-                    DockLabel(labelAdd, currentThemeColor)
-                }
-
-                // --- Настройки ---
-                Column(
-                    modifier = Modifier
-                        .width(60.dp)
-                        .clip(RoundedCornerShape(20.dp))
-                        .fluidClickable {
-                            performHaptic(view, "light")
-                            onSettingsClick()
-                        },
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center
-                ) {
-                    with(sharedTransitionScope) {
-                        Box(
-                            modifier = Modifier
-                                .size(36.dp)
-                                .sharedBounds(
-                                    rememberSharedContentState(key = "settings_container"),
-                                    animatedVisibilityScope = animatedVisibilityScope,
-                                    // ScaleToBounds: контент меряется один раз и масштабируется
-                                    // при переходе (draw-time), без пер-кадрового relayout всего
-                                    // списка настроек из 48dp-иконки — снимает провал FPS (§ perf).
-                                    resizeMode = SharedTransitionScope.ResizeMode.scaleToBounds()
-                                )
-                                .background(Color.Transparent),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Outlined.Settings,
-                                contentDescription = "Settings",
-                                tint = dockIconTint,
-                                modifier = Modifier
-                                    .size(34.dp)
-                                    .sharedElement(
-                                        rememberSharedContentState(key = "settings_icon"),
-                                        animatedVisibilityScope = animatedVisibilityScope
-                                    )
-                            )
-                        }
-                    }
-                    DockLabel(labelSettings, currentThemeColor)
-                }
+                DockItem(
+                    icon = painterResource(R.drawable.frame_inspect_24),
+                    contentDescription = "Scene search",
+                    label = labelInspect,
+                    tint = dockIconTint,
+                    labelColor = currentThemeColor,
+                    shared = DockSharedElement("inspect_container", "inspect_icon", SharedTransitionScope.ResizeMode.RemeasureToBounds),
+                    sharedTransitionScope = sharedTransitionScope,
+                    animatedVisibilityScope = animatedVisibilityScope,
+                    fluidPress = true,
+                    onClick = {
+                        performHaptic(view, Haptic.Light)
+                        onInspectClick()
+                    },
+                )
+                DockItem(
+                    icon = rememberVectorPainter(HeroiconsSquaresPlus),
+                    contentDescription = "Stats",
+                    label = labelStats,
+                    tint = dockIconTint,
+                    labelColor = currentThemeColor,
+                    shared = null,
+                    sharedTransitionScope = sharedTransitionScope,
+                    animatedVisibilityScope = animatedVisibilityScope,
+                    fluidPress = false,
+                    onClick = {
+                        performHaptic(view, Haptic.Light)
+                        onShowStats()
+                    },
+                )
+                DockItem(
+                    icon = rememberVectorPainter(HeroiconsPlus),
+                    contentDescription = "Add",
+                    label = labelAdd,
+                    tint = dockIconTint,
+                    labelColor = currentThemeColor,
+                    shared = DockSharedElement(
+                        "fab_container",
+                        "fab_icon",
+                        SharedTransitionScope.ResizeMode.RemeasureToBounds,
+                        overlayClip = CircleShape,
+                    ),
+                    sharedTransitionScope = sharedTransitionScope,
+                    animatedVisibilityScope = animatedVisibilityScope,
+                    fluidPress = false,
+                    onClick = {
+                        performHaptic(view, Haptic.Success)
+                        nav.navigateToAddEdit()
+                    },
+                )
+                DockItem(
+                    icon = rememberVectorPainter(Icons.Outlined.Settings),
+                    contentDescription = "Settings",
+                    label = labelSettings,
+                    tint = dockIconTint,
+                    labelColor = currentThemeColor,
+                    // ScaleToBounds: контент меряется один раз и масштабируется при переходе
+                    // (draw-time), без пер-кадрового relayout всего списка настроек из 48dp-иконки —
+                    // снимает провал FPS (§ perf).
+                    shared = DockSharedElement(
+                        "settings_container",
+                        "settings_icon",
+                        SharedTransitionScope.ResizeMode.scaleToBounds(),
+                    ),
+                    sharedTransitionScope = sharedTransitionScope,
+                    animatedVisibilityScope = animatedVisibilityScope,
+                    fluidPress = true,
+                    onClick = {
+                        performHaptic(view, Haptic.Light)
+                        onSettingsClick()
+                    },
+                )
             }
         }
 
         GlassIconButton(
             icon = Icons.Default.Search,
             onClick = {
-                performHaptic(view, "light")
+                performHaptic(view, Haptic.Light)
                 onSearchClick()
             },
             modifier = Modifier
@@ -719,20 +469,104 @@ fun GlassBottomNavigation(
             backdrop = backdrop,
             backgroundColor = Color.Transparent,
             contentDescription = "Search",
-            tint = if (isSearchActive) BrandBlue else dockIconTint
+            tint = if (isSearchActive) BrandOrange else dockIconTint
         )
     }
 }
 
 /**
- * Габариты иконки капсульного дока.
+ * Габариты пункта дока.
  *
  * [DockSharedBoundsSize] — узел shared-element перехода; он же задаёт, из какого прямоугольника
- * иконка вырастает в окно, поэтому совпадает с прежним доком: геометрия перехода не должна
- * зависеть от того, какой тумблер включён.
+ * иконка вырастает в окно. [DockIconSize] — одна для всех пунктов: раньше «Добавить» была крупнее.
  */
 private val DockSharedBoundsSize = 36.dp
-private val DockIconSize = 26.dp
+private val DockIconSize = 34.dp
+private val DockItemWidth = 60.dp
+
+/** Пара shared-элементов пункта дока: узел (из него вырастает окно) и сама иконка. */
+private class DockSharedElement(
+    val containerKey: String,
+    val iconKey: String,
+    val resizeMode: SharedTransitionScope.ResizeMode,
+    val overlayClip: Shape? = null,
+)
+
+/**
+ * Пункт капсульного дока: иконка и подпись под ней. [fluidPress] — нажатие с «проседанием»
+ * (fluidClickable), иначе без индикации.
+ */
+@Composable
+private fun DockItem(
+    icon: Painter,
+    contentDescription: String,
+    label: String,
+    tint: Color,
+    labelColor: Color,
+    shared: DockSharedElement?,
+    sharedTransitionScope: SharedTransitionScope,
+    animatedVisibilityScope: AnimatedVisibilityScope,
+    fluidPress: Boolean,
+    onClick: () -> Unit,
+) {
+    val press = if (fluidPress) {
+        Modifier.fluidClickable(onClick = onClick)
+    } else {
+        Modifier.clickable(
+            interactionSource = remember { MutableInteractionSource() },
+            indication = null,
+            onClick = onClick,
+        )
+    }
+    Column(
+        modifier = Modifier
+            .width(DockItemWidth)
+            .clip(RoundedCornerShape(20.dp))
+            .then(press),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        with(sharedTransitionScope) {
+            val bounds = when {
+                shared == null -> Modifier
+                shared.overlayClip != null -> Modifier.sharedBounds(
+                    rememberSharedContentState(key = shared.containerKey),
+                    animatedVisibilityScope = animatedVisibilityScope,
+                    resizeMode = shared.resizeMode,
+                    clipInOverlayDuringTransition = OverlayClip(shared.overlayClip),
+                )
+                else -> Modifier.sharedBounds(
+                    rememberSharedContentState(key = shared.containerKey),
+                    animatedVisibilityScope = animatedVisibilityScope,
+                    resizeMode = shared.resizeMode,
+                )
+            }
+            Box(
+                modifier = Modifier.size(DockSharedBoundsSize).then(bounds),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    painter = icon,
+                    contentDescription = contentDescription,
+                    tint = tint,
+                    modifier = Modifier
+                        .size(DockIconSize)
+                        .then(
+                            if (shared == null) {
+                                Modifier
+                            } else {
+                                Modifier.sharedElement(
+                                    rememberSharedContentState(key = shared.iconKey),
+                                    animatedVisibilityScope = animatedVisibilityScope,
+                                )
+                            }
+                        ),
+                )
+            }
+        }
+        DockLabel(label, labelColor)
+    }
+}
 
 /** Подпись под иконкой дока (референс — Telegram). Компактная, приглушённая.
  *  8.5sp + колонка 60dp: длинные русские подписи («Статистика», «Настройки»)
@@ -898,7 +732,7 @@ val HeroiconsRectangleStack: ImageVector
 // ==========================================
 // ЦВЕТА И РАСШИРЕНИЯ ДЛЯ СТАРОГО ДИЗАЙНА
 // ==========================================
-private val IconFilterColor = Color(0xFFE85002)
+private val IconFilterColor = BrandOrange
 
 private sealed interface SortGridSelection {
     data class Sort(val option: SortOption, val isAscending: Boolean) : SortGridSelection
@@ -998,7 +832,7 @@ fun SortFilterOverlay(
 
                     val curSort = draftSelection as? SortGridSelection.Sort
                     fun toggleSort(o: SortOption) {
-                        performHaptic(view, "light")
+                        performHaptic(view, Haptic.Light)
                         val cur = draftSelection
                         draftSelection = if (cur is SortGridSelection.Sort && cur.option == o) {
                             SortGridSelection.Sort(o, !cur.isAscending)
@@ -1044,7 +878,7 @@ fun SortFilterOverlay(
                         selected = draftSelection == SortGridSelection.Genres,
                         isDark = isDark,
                         onClick = {
-                            performHaptic(view, "light")
+                            performHaptic(view, Haptic.Light)
                             draftSelection = SortGridSelection.Genres
                         }
                     )
@@ -1172,329 +1006,6 @@ private fun SortOptionRow(
     }
 }
 
-/**
- * Кнопка применения для SortFilterOverlay. Вынесена из тела [SortFilterOverlay],
- * чтобы декомпозировать большой composable и не превращать glass.kt в God Object.
- */
-@Composable
-private fun SortApplyButton(
-    isDark: Boolean,
-    label: String,
-    onClick: () -> Unit
-) {
-    Button(
-        onClick = onClick,
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(48.dp),
-        shape = RoundedCornerShape(OverlayThemeTokens.ApplyButtonCornerRadius),
-        colors = if (isDark) {
-            ButtonDefaults.buttonColors(
-                containerColor = OverlayThemeTokens.ApplyButtonContainerDark,
-                contentColor = OverlayThemeTokens.ApplyButtonLabelSoft
-            )
-        } else {
-            ButtonDefaults.buttonColors(
-                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.9f),
-                contentColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.82f)
-            )
-        },
-        elevation = ButtonDefaults.buttonElevation(
-            defaultElevation = 0.dp,
-            pressedElevation = 0.dp,
-            focusedElevation = 0.dp,
-            hoveredElevation = 0.dp
-        )
-    ) {
-        Text(
-            text = label,
-            fontWeight = FontWeight.SemiBold,
-            fontSize = 15.sp
-        )
-    }
-}
-
-@Composable
-private fun SortSortTile(
-    option: SortOption,
-    title: String,
-    subtitle: String,
-    icon: ImageVector,
-    accentColor: Color,
-    selection: SortGridSelection,
-    strings: UiStrings,
-    isDark: Boolean,
-    rim: Color,
-    cardBg: Color,
-    muted: Color,
-    modifier: Modifier = Modifier,
-    onSelect: (SortGridSelection) -> Unit
-) {
-    val isActive = selection is SortGridSelection.Sort && selection.option == option
-    val isAscending =
-        if (selection is SortGridSelection.Sort) selection.isAscending else true
-
-    val scheme = MaterialTheme.colorScheme
-    val mutedIconTint = scheme.onSurfaceVariant.copy(alpha = 0.42f)
-    val targetIconTint = if (isActive) accentColor else mutedIconTint
-    val animatedIconTint by animateColorAsState(
-        targetValue = targetIconTint,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioNoBouncy,
-            stiffness = Spring.StiffnessMedium
-        ),
-        label = "sortIconTint"
-    )
-    val targetBorderColor = if (isActive) accentColor else rim
-    val animatedBorderColor by animateColorAsState(
-        targetValue = targetBorderColor,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioNoBouncy,
-            stiffness = Spring.StiffnessMedium
-        ),
-        label = "sortTileBorder"
-    )
-
-    val shape = RoundedCornerShape(OverlayThemeTokens.TileCornerRadius)
-    val tileBg = if (isDark) OverlayThemeTokens.TileBackgroundDark else cardBg
-    val glowAlpha = if (isActive) {
-        if (isDark) 0.22f else OverlayThemeTokens.TileGlowAlphaLight
-    } else 0f
-    val accentGlow = accentColor.copy(alpha = glowAlpha)
-
-    Box(
-        modifier = modifier
-            .fillMaxHeight()
-            .defaultMinSize(minHeight = OverlayThemeTokens.SortTileMinHeight)
-            .then(
-                if (isDark) Modifier else Modifier.softPlateShadowForLightSheet(
-                    isDark = false,
-                    shape = shape,
-                    elevation = OverlayThemeTokens.SortOverlayGridLightShadowElevation,
-                )
-            )
-            .clip(shape)
-            .background(tileBg)
-            .background(
-                Brush.radialGradient(
-                    colors = listOf(accentGlow, Color.Transparent),
-                    center = Offset(0f, 0f),
-                    radius = 320f
-                )
-            )
-            .glassFill(isDark)
-            .glassEdge(OverlayThemeTokens.TileCornerRadius, isDark)
-            .border(1.dp, animatedBorderColor, shape)
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null
-            ) {
-                onSelect(
-                    if (isActive) {
-                        SortGridSelection.Sort(option, !isAscending)
-                    } else {
-                        SortGridSelection.Sort(option, isAscending = false)
-                    }
-                )
-            }
-            .padding(12.dp)
-    ) {
-        Column(
-            modifier = Modifier.fillMaxSize(),
-            verticalArrangement = Arrangement.SpaceBetween
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(36.dp)
-                    .clip(RoundedCornerShape(OverlayThemeTokens.IconBoxCorner))
-                    .background(
-                        if (isDark) OverlayThemeTokens.TileIconBgDark
-                        else MaterialTheme.colorScheme.surface.copy(alpha = 0.65f)
-                    ),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = null,
-                    tint = animatedIconTint,
-                    modifier = Modifier.size(18.dp)
-                )
-            }
-            Column {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    color = if (isActive) {
-                        if (isDark) Color.White else MaterialTheme.colorScheme.onSurface
-                    } else {
-                        muted
-                    },
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
-                )
-                if (isActive) {
-                    Text(
-                        text = if (isAscending) strings.sortOrderAscending else strings.sortOrderDescending,
-                        style = OverlayThemeTokens.MetricLabel,
-                        color = if (isDark) {
-                            Color.White.copy(alpha = 0.7f)
-                        } else {
-                            MaterialTheme.colorScheme.onSurface.copy(alpha = 0.62f)
-                        },
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                } else {
-                    Text(
-                        text = subtitle,
-                        style = OverlayThemeTokens.MetricLabel,
-                        color = muted,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun GenreSortTile(
-    title: String,
-    subtitle: String,
-    icon: ImageVector,
-    selection: SortGridSelection,
-    isDark: Boolean,
-    rim: Color,
-    cardBg: Color,
-    muted: Color,
-    modifier: Modifier = Modifier,
-    badgeCount: Int = 0,
-    onSelect: (SortGridSelection) -> Unit
-) {
-    val isActive = selection == SortGridSelection.Genres
-    val genreAccent = if (isDark) IconFilterColor else MaterialTheme.colorScheme.primary
-
-    val scheme = MaterialTheme.colorScheme
-    val mutedIconTint = scheme.onSurfaceVariant.copy(alpha = 0.42f)
-    val targetIconTint = if (isActive) genreAccent else mutedIconTint
-    val animatedIconTint by animateColorAsState(
-        targetValue = targetIconTint,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioNoBouncy,
-            stiffness = Spring.StiffnessMedium
-        ),
-        label = "genreIconTint"
-    )
-    val targetBorderColor = if (isActive) genreAccent else rim
-    val animatedBorderColor by animateColorAsState(
-        targetValue = targetBorderColor,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioNoBouncy,
-            stiffness = Spring.StiffnessMedium
-        ),
-        label = "genreSortTileBorder"
-    )
-
-    val shape = RoundedCornerShape(OverlayThemeTokens.TileCornerRadius)
-    val tileBg = if (isDark) OverlayThemeTokens.TileBackgroundDark else cardBg
-    val glowAlpha = if (isActive || badgeCount > 0) {
-        if (isDark) 0.22f else OverlayThemeTokens.TileGlowAlphaLight
-    } else 0f
-    val accentGlow = genreAccent.copy(alpha = glowAlpha)
-
-    Box(
-        modifier = modifier
-            .fillMaxHeight()
-            .defaultMinSize(minHeight = OverlayThemeTokens.SortTileMinHeight)
-            .then(
-                if (isDark) Modifier else Modifier.softPlateShadowForLightSheet(
-                    isDark = false,
-                    shape = shape,
-                    elevation = OverlayThemeTokens.SortOverlayGridLightShadowElevation,
-                )
-            )
-            .clip(shape)
-            .background(tileBg)
-            .background(
-                Brush.radialGradient(
-                    colors = listOf(accentGlow, Color.Transparent),
-                    center = Offset(0f, 0f),
-                    radius = 320f
-                )
-            )
-            .glassFill(isDark)
-            .glassEdge(OverlayThemeTokens.TileCornerRadius, isDark)
-            .border(1.dp, animatedBorderColor, shape)
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null
-            ) { onSelect(SortGridSelection.Genres) }
-            .padding(12.dp)
-    ) {
-        Column(
-            modifier = Modifier.fillMaxSize(),
-            verticalArrangement = Arrangement.SpaceBetween
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(36.dp)
-                    .clip(RoundedCornerShape(OverlayThemeTokens.IconBoxCorner))
-                    .background(
-                        if (isDark) OverlayThemeTokens.TileIconBgDark
-                        else MaterialTheme.colorScheme.surface.copy(alpha = 0.65f)
-                    ),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = null,
-                    tint = animatedIconTint,
-                    modifier = Modifier.size(18.dp)
-                )
-            }
-            Column {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    color = if (isActive) {
-                        if (isDark) Color.White else MaterialTheme.colorScheme.onSurface
-                    } else {
-                        muted
-                    },
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Text(
-                    text = subtitle,
-                    style = OverlayThemeTokens.MetricLabel,
-                    color = muted,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
-                )
-                if (badgeCount > 0) {
-                    Spacer(Modifier.height(6.dp))
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(genreAccent.copy(alpha = 0.35f))
-                            .padding(horizontal = 6.dp, vertical = 2.dp)
-                    ) {
-                        Text(
-                            text = badgeCount.toString(),
-                            style = MaterialTheme.typography.labelSmall,
-                            fontWeight = FontWeight.Bold,
-                            color = Color.White
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
 @Composable
 fun GenreFilterOverlay(
     visibleState: MutableTransitionState<Boolean>,
@@ -1532,7 +1043,7 @@ fun GenreFilterOverlay(
                 Column(
                     modifier = Modifier
                         .padding(start = 20.dp, top = 2.dp, end = 20.dp)
-                        .verticalScroll(rememberScrollState())
+                        .verticalScroll(rememberScrollState(), flingBehavior = IosScroll.flingBehavior())
                 ) {
                     Box(
                         modifier = Modifier
@@ -1571,7 +1082,7 @@ fun GenreFilterOverlay(
                             .height(52.dp)
                             .inertialCollision(state = collisionState, index = 2, baseMultiplier = 2.5f)
                             .clip(SquircleShape(26.dp))
-                            .background(BrandBlue)
+                            .background(BrandOrange)
                             .clickable(
                                 interactionSource = remember { MutableInteractionSource() },
                                 indication = null

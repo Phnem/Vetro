@@ -1,7 +1,7 @@
 package com.example.myapplication.media.source
 
+import com.example.myapplication.network.AppJson
 import android.util.Log
-import com.example.myapplication.data.models.Anime
 import com.example.myapplication.sync.TitleMatcher
 import io.ktor.client.HttpClient
 import io.ktor.client.request.get
@@ -13,7 +13,6 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.supervisorScope
-import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.contentOrNull
@@ -36,7 +35,7 @@ class AnimeGoSource(
 
     override val name: String = "AnimeGo"
     override val baseUrl: String = "https://animego.me"
-    private val json = Json { ignoreUnknownKeys = true }
+    private val json = AppJson
     private val cvh = CvhResolver(client)
 
     internal suspend fun resolveEpisode(
@@ -116,6 +115,7 @@ class AnimeGoSource(
                 "User-Agent" to DEFAULT_UA,
             ),
             isPreferred = true,
+            downloadAllowed = true,
         )
         listOf(
             VetroHoster(

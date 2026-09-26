@@ -1,19 +1,10 @@
 package com.example.myapplication.manga.data
 
 import android.content.Context
-import android.util.Log
+import com.example.myapplication.data.local.JsonMapFileStore
 import com.example.myapplication.manga.domain.MangaChapter
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
-import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.builtins.MapSerializer
-import kotlinx.serialization.builtins.serializer
-import kotlinx.serialization.json.Json
 import java.io.File
 
 @Serializable
@@ -36,42 +27,17 @@ data class CachedChapters(
  */
 class MangaChapterCacheStore(context: Context) {
 
-    private val file = File(context.filesDir, CACHE_FILE)
-    private val json = Json { ignoreUnknownKeys = true }
-    private val mutex = Mutex()
-    @Volatile private var loaded = false
-
-    private val _flow = MutableStateFlow<Map<String, CachedChapters>>(emptyMap())
+    private val store = JsonMapFileStore(File(context.filesDir, CACHE_FILE), CachedChapters.serializer(), TAG)
 
     /**
      * Оглавления реактивно: карточка главного экрана считает по ним прогресс чтения и не должна
      * узнавать об изменении списка глав только при перезапуске.
      */
-    val flow: StateFlow<Map<String, CachedChapters>> = _flow.asStateFlow()
+    val flow: StateFlow<Map<String, CachedChapters>> = store.flow
 
-    private var cache: Map<String, CachedChapters>
-        get() = _flow.value
-        set(value) { _flow.value = value }
+    suspend fun ensureLoaded() = store.ensureLoaded()
 
-    private val serializer = MapSerializer(String.serializer(), CachedChapters.serializer())
-
-    suspend fun ensureLoaded() {
-        if (loaded) return
-        mutex.withLock {
-            if (loaded) return
-            cache = withContext(Dispatchers.IO) {
-                runCatching {
-                    if (!file.exists()) emptyMap() else json.decodeFromString(serializer, file.readText())
-                }.getOrElse {
-                    Log.w(TAG, "Failed to read chapter cache", it)
-                    emptyMap()
-                }
-            }
-            loaded = true
-        }
-    }
-
-    fun entry(sourceId: String, mangaKey: String): CachedChapters? = cache[key(sourceId, mangaKey)]
+    fun entry(sourceId: String, mangaKey: String): CachedChapters? = store[key(sourceId, mangaKey)]
 
     /** Ключ записи в [flow] — чтобы подписчик искал оглавление по привязке, а не перебором. */
     fun entryKey(sourceId: String, mangaKey: String): String = key(sourceId, mangaKey)
@@ -87,45 +53,25 @@ class MangaChapterCacheStore(context: Context) {
 
     suspend fun put(sourceId: String, mangaKey: String, chapters: List<MangaChapter>) {
         if (chapters.isEmpty()) return
-        ensureLoaded()
-        mutex.withLock {
-            val map = cache.toMutableMap().apply {
-                put(
-                    key(sourceId, mangaKey),
-                    CachedChapters(
-                        sourceId = sourceId,
-                        mangaKey = mangaKey,
-                        chapters = chapters,
-                        resolvedAt = System.currentTimeMillis(),
-                    ),
-                )
-            }
-            cache = map.pruneToLimit()
-            persist(cache)
+        store.update { map ->
+            val entry = CachedChapters(
+                sourceId = sourceId,
+                mangaKey = mangaKey,
+                chapters = chapters,
+                resolvedAt = System.currentTimeMillis(),
+            )
+            (map + (key(sourceId, mangaKey) to entry)).pruneToLimit()
         }
     }
 
     suspend fun remove(sourceId: String, mangaKey: String) {
-        ensureLoaded()
-        mutex.withLock {
-            val entryKey = key(sourceId, mangaKey)
-            if (!cache.containsKey(entryKey)) return
-            cache = cache - entryKey
-            persist(cache)
-        }
+        store.update { it - key(sourceId, mangaKey) }
     }
 
     /** Убрать оглавления тайтлов, привязки к которым больше нет. */
     suspend fun retainOnly(activeKeys: Set<Pair<String, String>>) {
-        ensureLoaded()
-        mutex.withLock {
-            val allowed = activeKeys.map { (source, manga) -> key(source, manga) }.toSet()
-            val map = cache.filterKeys { it in allowed }
-            if (map.size != cache.size) {
-                cache = map
-                persist(map)
-            }
-        }
+        val allowed = activeKeys.map { (source, manga) -> key(source, manga) }.toSet()
+        store.update { map -> map.filterKeys { it in allowed } }
     }
 
     /**
@@ -140,17 +86,6 @@ class MangaChapterCacheStore(context: Context) {
                 .take(MAX_ENTRIES)
                 .associate { it.key to it.value }
         }
-
-    private suspend fun persist(map: Map<String, CachedChapters>) = withContext(Dispatchers.IO) {
-        runCatching {
-            val tmp = File(file.parentFile, "$CACHE_FILE.tmp")
-            tmp.writeText(json.encodeToString(serializer, map))
-            if (!tmp.renameTo(file)) {
-                file.delete()
-                tmp.renameTo(file)
-            }
-        }.onFailure { Log.w(TAG, "Failed to write chapter cache", it) }
-    }
 
     private fun key(sourceId: String, mangaKey: String) = "$sourceId::$mangaKey"
 

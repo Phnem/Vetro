@@ -1,5 +1,7 @@
 package com.example.myapplication.ui.addedit
 
+import com.example.myapplication.ui.shared.theme.BrandSand
+import com.example.myapplication.ui.shared.theme.BrandOrange
 import android.graphics.BlurMaskFilter
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
@@ -24,7 +26,7 @@ object AddEditColors {
 
     val FormatAnimeGradientStart = Color(0xFF3A1E0D)
     val FormatAnimeGradientEnd = Color(0xFF1A0D06)
-    val FormatAnimeIconBg = Color(0xFFE85002)
+    val FormatAnimeIconBg = BrandOrange
 
     val FormatMoviesGradientStart = Color(0xFF262626)
     val FormatMoviesGradientEnd = Color(0xFF101010)
@@ -32,10 +34,10 @@ object AddEditColors {
 
     val FormatSeriesGradientStart = Color(0xFF383021)
     val FormatSeriesGradientEnd = Color(0xFF1A160E)
-    val FormatSeriesIconBg = Color(0xFFD9C3AB)
+    val FormatSeriesIconBg = BrandSand
 
-    val QuickSelectGlow = Color(0xFFE85002)
-    val QuickSelectActiveBg = Color(0xFFE85002)
+    val QuickSelectGlow = BrandOrange
+    val QuickSelectActiveBg = BrandOrange
 
     val PillBackground = Color(0xFF1C1C1C)
     val PillBackgroundLight = Color(0xFFE8E8E8)

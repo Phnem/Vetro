@@ -5,7 +5,7 @@ import android.graphics.Canvas
 import android.util.Log
 import coil3.Image
 import coil3.ImageLoader
-import coil3.SingletonImageLoader
+import com.example.myapplication.manga.ui.MangaImageLoader
 import coil3.decode.DecodeResult
 import coil3.decode.Decoder
 import coil3.fetch.SourceFetchResult
@@ -42,7 +42,7 @@ class MangaPagePrefetcher(
 
     /** Тот же самый loader, что рисует страницы, — иначе прогрев попал бы в чужой кэш. */
     private val imageLoader: ImageLoader
-        get() = SingletonImageLoader.get(context)
+        get() = MangaImageLoader.get(context)
 
     /**
      * Прогреть окрестности [fromPage]: несколько страниц вперёд по текущей главе, а на её хвосте —

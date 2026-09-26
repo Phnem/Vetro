@@ -30,14 +30,16 @@ import org.koin.dsl.module
 
 private val Context.migrationDataStore: DataStore<Preferences> by preferencesDataStore(name = "migration_prefs")
 private val Context.settingsDataStore: DataStore<Preferences> by preferencesDataStore(name = "settings_prefs")
+/** Прогресс и качество серий — отдельно от настроек (см. EpisodePlaybackStore). */
+private val Context.playbackDataStore: DataStore<Preferences> by preferencesDataStore(name = "playback_prefs")
 
 val databaseModule = module {
     single { VetroStoragePaths(androidContext()) }
     single { SQLDelightDatabaseFactory(androidContext()) }
     single { get<SQLDelightDatabaseFactory>().getDatabase() }
     single { VetroPublicDbExporter(androidContext(), get(), get()) }
-    single { DeveloperMirrorCoordinator(settingsDataStore = get(named("settings")), exporter = get()) }
-    single { AnimeLocalDataSource(get(), get()) }
+    single { DeveloperMirrorCoordinator(settingsDataStore = get(named("settings")), exporter = get(), appScope = get()) }
+    single { AnimeLocalDataSource(get(), get(), get()) }
     single<ImageStorageRepository> {
         ImageStorageRepositoryImpl(
             context = androidContext(),
@@ -59,6 +61,9 @@ val databaseModule = module {
     }
     single<DataStore<Preferences>>(named("settings")) {
         androidContext().settingsDataStore
+    }
+    single<DataStore<Preferences>>(named("playback")) {
+        androidContext().playbackDataStore
     }
     single {
         LegacyStorageMigrator(
@@ -91,6 +96,15 @@ val databaseModule = module {
             storagePaths = get()
         )
     }
+    single {
+        com.example.myapplication.data.local.StartupSweeps(
+            dataStore = get(named("migration")),
+            legacyStorageMigrator = get(),
+            legacyCollectionSafMigrator = get(),
+            imageCompressionMigrator = get(),
+            appScope = get(),
+        )
+    }
 
     single {
         ExternalListSyncCoordinator(
@@ -98,8 +112,10 @@ val databaseModule = module {
             animeLocalDataSource = get(),
             animeRepository = get(),
             addFromApiUseCase = get(),
-            shikiRateLimiter = get(named("api_rate_burst")),
-            aniListRemoteDataSource = get()
+            shikiRateLimiter = get(com.example.myapplication.network.di.RATE_SHIKIMORI),
+            aniListRemoteDataSource = get(),
+            rootHttpClient = get(),
+            appScope = get(),
         )
     }
 }

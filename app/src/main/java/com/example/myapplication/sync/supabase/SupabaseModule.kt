@@ -17,6 +17,7 @@ import io.github.jan.supabase.storage.Storage
 import io.github.jan.supabase.functions.Functions
 import io.github.jan.supabase.logging.LogLevel
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import org.koin.android.ext.koin.androidContext
 import kotlin.coroutines.cancellation.CancellationException
@@ -53,6 +54,7 @@ val supabaseModule = org.koin.dsl.module {
             collectionImageRestoreCoordinator = get(),
             apiKeySyncRepository = get(),
             progressSyncRepository = get(),
+            appScope = get(),
         )
     }
 
@@ -104,6 +106,24 @@ class AuthRepository(
 
     fun hasToken(): Boolean {
         return supabase.auth.sessionStatus.value is io.github.jan.supabase.auth.status.SessionStatus.Authenticated
+    }
+
+    /**
+     * Есть ли сохранённая сессия — дождавшись, пока клиент прочитает её из хранилища.
+     *
+     * [hasToken] смотрит на статус «как есть», а сразу после старта он ещё `Initializing`: сплэш,
+     * который теперь не держат миграции, успевал решить «входа нет» и открывал экран входа
+     * вошедшему пользователю. Неудачное обновление токена (нет сети) — это тоже вход: сессия есть,
+     * её обновит следующая попытка.
+     */
+    suspend fun awaitSessionRestored(timeoutMs: Long = 3_000): Boolean {
+        val status = kotlinx.coroutines.withTimeoutOrNull(timeoutMs) {
+            supabase.auth.sessionStatus.first {
+                it !is io.github.jan.supabase.auth.status.SessionStatus.Initializing
+            }
+        } ?: supabase.auth.sessionStatus.value
+        return status is io.github.jan.supabase.auth.status.SessionStatus.Authenticated ||
+            status is io.github.jan.supabase.auth.status.SessionStatus.RefreshFailure
     }
 
     fun signInAsGuest() {

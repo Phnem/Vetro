@@ -1,5 +1,6 @@
 package com.example.myapplication.data.local
 
+import app.cash.sqldelight.db.QueryResult
 import android.content.Context
 import android.database.sqlite.SQLiteDatabase
 import android.util.Log
@@ -7,27 +8,41 @@ import app.cash.sqldelight.db.SqlDriver
 import app.cash.sqldelight.driver.android.AndroidSqliteDriver
 import com.example.myapplication.data.local.AnimeDatabase
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.withContext
 import java.lang.reflect.Method
 
 class SQLDelightDatabaseFactory(private val context: Context) {
-    private var cachedDriver: SqlDriver? = null
-    private var database: AnimeDatabase? = null
 
-    /** При изменении триггера Flow в DataSource переподписываются на новое подключение. */
-    val dbConnectionTrigger = MutableStateFlow(0)
+    /**
+     * Драйвер открывается один раз и на весь процесс. `lazy` синхронизирован: при холодном старте
+     * к БД одновременно приходят сплэш, фоновый координатор статистики и воркеры, и без блокировки
+     * каждый мог открыть собственный драйвер. Flow, подписанный на один драйвер, не видит записей
+     * через другой — список «замерзал».
+     */
+    private val lazyDriver: SqlDriver by lazy {
+        alignLegacyAnimeDbUserVersionOnce()
+        AndroidSqliteDriver(
+            schema = AnimeDatabase.Schema,
+            context = context,
+            name = "anime.db"
+        )
+    }
 
-    private fun getDriver(): SqlDriver {
-        if (cachedDriver == null) {
-            alignLegacyAnimeDbUserVersion()
-            cachedDriver = AndroidSqliteDriver(
-                schema = AnimeDatabase.Schema,
-                context = context,
-                name = "anime.db"
-            )
-        }
-        return cachedDriver!!
+    private val lazyDatabase: AnimeDatabase by lazy { AnimeDatabase(lazyDriver) }
+
+    private fun getDriver(): SqlDriver = lazyDriver
+
+    /**
+     * Выравнивание легаси-установок нужно один раз на версию схемы: дальше колонки и
+     * `user_version` уже в порядке, а лишнее открытие файла и три PRAGMA на каждом холодном
+     * старте — чистые потери.
+     */
+    private fun alignLegacyAnimeDbUserVersionOnce() {
+        val prefs = context.getSharedPreferences(ALIGN_PREFS, Context.MODE_PRIVATE)
+        val key = "aligned_v${AnimeDatabase.Schema.version}"
+        if (prefs.getBoolean(key, false)) return
+        alignLegacyAnimeDbUserVersion()
+        prefs.edit().putBoolean(key, true).apply()
     }
 
     /**
@@ -108,45 +123,38 @@ class SQLDelightDatabaseFactory(private val context: Context) {
         }
     }
 
-    fun getDatabase(): AnimeDatabase {
-        if (database == null) {
-            database = AnimeDatabase(getDriver())
-        }
-        return database!!
-    }
-
-    /** Закрывает старый коннект и при следующем доступе открывает новый (после .copyTo миграции). */
-    fun reconnectDatabase() {
-        cachedDriver?.close()
-        cachedDriver = null
-        database = null
-        dbConnectionTrigger.value += 1
-    }
+    fun getDatabase(): AnimeDatabase = lazyDatabase
 
     suspend fun checkpoint() {
         withContext(Dispatchers.IO) {
             try {
-                getDriver().let { driver ->
-                    if (driver is AndroidSqliteDriver) {
-                        // Get SQLiteDatabase through reflection
-                        val aClass = Class.forName("app.cash.sqldelight.driver.android.AndroidSqliteDriver")
-                        val method = aClass.getDeclaredMethod("getDatabase")
-                        method.isAccessible = true
-                        val database = method.invoke(driver) as? SQLiteDatabase
-                        database?.rawQuery("PRAGMA wal_checkpoint(FULL);", null)?.use { cursor ->
-                            if (cursor.moveToFirst()) {
-                                val busy = cursor.getInt(0)
-                                val log = cursor.getInt(1)
-                                val checkpointed = cursor.getInt(2)
-                                Log.d("SQLDelight", "WAL checkpoint: busy=$busy, log=$log, checkpointed=$checkpointed")
-                            }
-                        }
-                    }
+                // Публичный API драйвера, а не рефлексия в его поле SQLiteDatabase: рефлексию
+                // ломала бы обфускация, и ради неё SQLDelight держался в релизе целиком (-keep).
+                val result = getDriver().executeQuery(
+                    identifier = null,
+                    sql = "PRAGMA wal_checkpoint(FULL)",
+                    mapper = { cursor ->
+                        QueryResult.Value(
+                            if (cursor.next().value) {
+                                Triple(cursor.getLong(0), cursor.getLong(1), cursor.getLong(2))
+                            } else {
+                                null
+                            },
+                        )
+                    },
+                    parameters = 0,
+                ).value
+                result?.let { (busy, log, checkpointed) ->
+                    Log.d("SQLDelight", "WAL checkpoint: busy=$busy, log=$log, checkpointed=$checkpointed")
                 }
             } catch (e: Exception) {
                 // Checkpoint is not critical, log and continue
                 Log.w("SQLDelight", "Failed to checkpoint WAL", e)
             }
         }
+    }
+
+    private companion object {
+        const val ALIGN_PREFS = "anime_db_legacy_align"
     }
 }

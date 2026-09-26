@@ -68,11 +68,9 @@ class LegacyCollectionSafMigrator(
                     Intent.FLAG_GRANT_PREFIX_URI_PERMISSION,
             )
         }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            runCatching {
-                val documentsUri = DocumentsContract.buildTreeDocumentUri("primary:", "Documents")
-                intent.putExtra(DocumentsContract.EXTRA_INITIAL_URI, documentsUri)
-            }
+        runCatching {
+            val documentsUri = DocumentsContract.buildTreeDocumentUri("primary:", "Documents")
+            intent.putExtra(DocumentsContract.EXTRA_INITIAL_URI, documentsUri)
         }
         return intent
     }

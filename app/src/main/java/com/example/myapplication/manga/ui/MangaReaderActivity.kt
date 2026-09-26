@@ -1,5 +1,6 @@
 package com.example.myapplication.manga.ui
 
+import com.example.myapplication.data.local.AppLanguagePrefs
 import android.content.Context
 import android.content.Intent
 import android.os.Bundle
@@ -13,12 +14,11 @@ import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.ViewModelProvider
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
-import androidx.datastore.preferences.core.stringPreferencesKey
 import com.example.myapplication.manga.domain.MangaChapter
 import com.example.myapplication.domain.enrichment.CollectionEnrichmentCoordinator
 import com.example.myapplication.domain.enrichment.InteractiveMediaPauseViewModel
 import com.example.myapplication.network.AppLanguage
-import com.example.myapplication.ui.shared.theme.OneUiTheme
+import com.example.myapplication.ui.shared.theme.AppThemed
 import kotlinx.coroutines.flow.map
 import org.koin.android.ext.android.inject
 import org.koin.androidx.viewmodel.ext.android.viewModel
@@ -54,7 +54,7 @@ class MangaReaderActivity : ComponentActivity() {
         hideSystemBars()
 
         setContent {
-            OneUiTheme {
+            AppThemed(settings) {
                 val state by viewModel.state.collectAsState()
                 val mode by viewModel.readerMode.collectAsState()
                 val direction by viewModel.pageDirection.collectAsState()
@@ -64,8 +64,7 @@ class MangaReaderActivity : ComponentActivity() {
                 // на старте ридера незачем, а до первого значения подпись просто английская.
                 val ru by remember {
                     settings.data.map { prefs ->
-                        runCatching { AppLanguage.valueOf(prefs[KEY_LANG] ?: "EN") }
-                            .getOrElse { AppLanguage.EN } == AppLanguage.RU
+                        AppLanguagePrefs.from(prefs) == AppLanguage.RU
                     }
                 }.collectAsState(initial = false)
                 MangaReaderScreen(
@@ -100,7 +99,6 @@ class MangaReaderActivity : ComponentActivity() {
     companion object {
         private const val EXTRA_ANIME_ID = "manga_anime_id"
         private const val EXTRA_CHAPTER_KEY = "manga_chapter_key"
-        private val KEY_LANG = stringPreferencesKey("lang")
 
         /**
          * Запуск ридера. [chapters] кладутся в handoff здесь, а не на стороне вызывающего —

@@ -1,7 +1,5 @@
 package com.example.myapplication.ui.shared
 
-import androidx.compose.foundation.gestures.scrollBy
-import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -20,8 +18,10 @@ import androidx.compose.runtime.withFrameNanos
  * `LaunchedEffect` на КАЖДОЕ меню отдельно — поэтому каждое новое меню воспроизводило баг заново.
  *
  * Здесь это одно централизованное восстановление: когда [overlayActive] уходит из true в false
- * (закрылся последний оверлей над доком), мы перемонтируем запись ([onRemount] инкрементит
- * `key(...)` над `LazyColumn`) и «пинаем» скролл на пиксель туда-обратно.
+ * (закрылся последний оверлей над доком), запись перерисовывается ([onRedraw] меняет состояние,
+ * которое узел `layerBackdrop` читает в фазе отрисовки). Раньше здесь перемонтировался весь
+ * `LazyColumn` (`key(...)`) и скролл «пинался» на пиксель: перекомпоновка и раскладка списка
+ * ради того, чтобы узел заново записал свой слой.
  *
  * **Почему [effectsSettled], а не просто пара кадров.** Оверлей закрывается не мгновенно:
  * `blurAmount` и «вдавливание» — это анимации на ПРЕДКАХ узла `layerBackdrop`, живущие ещё
@@ -41,8 +41,7 @@ import androidx.compose.runtime.withFrameNanos
 fun GlassBackdropRecovery(
     overlayActive: Boolean,
     effectsSettled: Boolean,
-    listState: LazyListState,
-    onRemount: () -> Unit,
+    onRedraw: () -> Unit,
 ) {
     var recoveryPending by remember { mutableStateOf(false) }
     // Восстановление ставится в очередь на открытии оверлея, а исполняется, когда он закрылся
@@ -57,15 +56,8 @@ fun GlassBackdropRecovery(
         if (!shouldRecover) return@LaunchedEffect
         // Кадр на то, чтобы предки отрисовались уже без renderEffect/clip, и только потом запись.
         withFrameNanos { }
-        onRemount()
+        onRedraw()
         withFrameNanos { }
-        // Скролл-пинок — вторая линия обороны на случай, если перемонтирования не хватило.
-        // Список может быть короче экрана: тогда scrollBy честно съест 0 и это не ошибка.
-        runCatching {
-            listState.scrollBy(1f)
-            withFrameNanos { }
-            listState.scrollBy(-1f)
-        }
         // Флаг снимаем ПОСЛЕДНИМ: он входит в ключ этого же эффекта, и сброс в начале отменил бы
         // корутину на первом же withFrameNanos, не доведя восстановление до конца.
         recoveryPending = false

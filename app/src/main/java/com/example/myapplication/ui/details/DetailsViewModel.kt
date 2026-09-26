@@ -1,5 +1,6 @@
 package com.example.myapplication.ui.details
 
+import com.example.myapplication.data.local.AppLanguagePrefs
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.myapplication.data.models.Anime
@@ -8,7 +9,6 @@ import com.example.myapplication.data.repository.ImageStorageRepository
 import com.example.myapplication.network.AppLanguage
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
-import androidx.datastore.preferences.core.stringPreferencesKey
 import com.example.myapplication.data.local.SeasonEpisodesStore
 import com.example.myapplication.data.local.WebLinksStore
 import com.example.myapplication.domain.enrichment.weblinks.ResolvedWebLink
@@ -75,8 +75,7 @@ class DetailsViewModel(
         }
         viewModelScope.launch {
             val prefs = settingsDataStore.data.first()
-            val langKey = stringPreferencesKey("lang")
-            _currentLanguage.value = AppLanguage.valueOf(prefs[langKey] ?: "EN")
+            _currentLanguage.value = AppLanguagePrefs.from(prefs)
             _currentAnime.value?.let { loadDetails(it, _currentLanguage.value) }
         }
     }

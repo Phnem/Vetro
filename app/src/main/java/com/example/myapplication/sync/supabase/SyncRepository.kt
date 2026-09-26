@@ -71,7 +71,7 @@ class SyncRepository(
         }
 
         val userId = authRepository.currentUserId ?: return@withContext PushResult(0, "Not signed in")
-        Log.d(TAG, "Push for user_id=$userId, pending=${db.animeQueries.selectPendingSync().executeAsList().size}")
+        Log.d(TAG, "Push for user_id=$userId, pending=${db.animeQueries.countPendingSync().executeAsOne()}")
         ensureInitialLocalUpload(userId)
 
         // Однократный ресинк жанров в облако. Причины: (1) старый push тегов падал молча

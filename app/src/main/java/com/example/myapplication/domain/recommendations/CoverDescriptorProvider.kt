@@ -1,10 +1,10 @@
 package com.example.myapplication.domain.recommendations
 
+import com.example.myapplication.network.AppJson
 import android.util.Log
 import com.example.myapplication.data.ai.AiCredentialsStore
 import com.example.myapplication.data.ai.AiLlmEndpoint
 import com.example.myapplication.data.local.CoverDescriptorCacheStore
-import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -35,7 +35,7 @@ class CoverDescriptorProvider(
     private val cache: CoverDescriptorCacheStore,
     private val httpClient: OkHttpClient,
 ) {
-    private val json = Json { ignoreUnknownKeys = true }
+    private val json = AppJson
 
     /** Есть ли смысл вообще пытаться — вызывающий пропускает весь визуальный путь иначе. */
     fun isAvailable(): Boolean =

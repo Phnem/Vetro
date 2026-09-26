@@ -1,5 +1,9 @@
 package com.example.myapplication.ui.home
 
+import com.example.myapplication.ui.shared.theme.BrandSand
+import com.example.myapplication.ui.shared.theme.BrandOrange
+import com.example.myapplication.ui.shared.theme.BrandGray
+import com.example.myapplication.ui.shared.theme.BrandDeepRed
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -43,7 +47,7 @@ import com.example.myapplication.domain.stats.DonutChartData
 import com.example.myapplication.domain.stats.TagFrequencySlice
 import com.example.myapplication.domain.stats.buildBarChartData
 import com.example.myapplication.domain.stats.buildDonutChartData
-import com.example.myapplication.isAppInDarkTheme
+import com.example.myapplication.ui.shared.theme.isAppInDarkTheme
 import com.example.myapplication.network.AppLanguage
 import com.example.myapplication.ui.shared.theme.OverlayThemeTokens
 import com.example.myapplication.ui.shared.theme.SnProFamily
@@ -57,11 +61,11 @@ import kotlin.math.roundToInt
  * Пять фиксированных контрастных цветов. Индекс i в топ-5 обоих графиков = palette[i] в графике и в легенде.
  */
 internal val StatsGenrePalette: List<Color> = listOf(
-    Color(0xFFE85002),
-    Color(0xFFD9C3AB),
-    Color(0xFFC10801),
+    BrandOrange,
+    BrandSand,
+    BrandDeepRed,
     Color(0xFFFFB067),
-    Color(0xFF646464)
+    BrandGray
 )
 
 private const val DONUT_SEGMENT_GAP_DEG = 4f

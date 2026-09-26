@@ -100,7 +100,7 @@ class RegionBitmapDecoder(
             inMutable = false
             inPreferredConfig = config
             inPremultiplied = options.premultipliedAlpha
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && options.colorSpace != null) {
+            if (options.colorSpace != null) {
                 inPreferredColorSpace = options.colorSpace
             }
         }

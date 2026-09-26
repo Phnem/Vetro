@@ -1,5 +1,6 @@
 package com.example.myapplication.ui.home
 
+import com.example.myapplication.ui.shared.theme.BrandLightGray
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -44,7 +45,7 @@ import coil3.request.crossfade
 import coil3.size.Size
 import com.example.myapplication.data.models.RatingScale
 import com.example.myapplication.domain.search.apiRatingTo10
-import com.example.myapplication.isAppInDarkTheme
+import com.example.myapplication.ui.shared.theme.isAppInDarkTheme
 import com.example.myapplication.network.ApiSearchResult
 import com.example.myapplication.ui.shared.fluidClickable
 import com.example.myapplication.ui.shared.icons.HeroCheck
@@ -111,7 +112,7 @@ fun ApiSearchResultCard(
     val cardBg = if (isDark) Color(0xFF1C1C1C) else MaterialTheme.colorScheme.surface
     val borderStroke = if (isDark) Color.White.copy(alpha = 0.15f) else LightBorder
     val cardShadowColor = if (isDark) Color.Black.copy(alpha = 0.5f) else Color.Black.copy(alpha = 0.08f)
-    val subtitleColor = if (isDark) Color(0xFFA7A7A7) else Color(0xFF8E8E93)
+    val subtitleColor = if (isDark) BrandLightGray else Color(0xFF8E8E93)
     val chipBg = if (isDark) Color.Black.copy(alpha = 0.35f) else Color.Black.copy(alpha = 0.08f)
 
     Box(

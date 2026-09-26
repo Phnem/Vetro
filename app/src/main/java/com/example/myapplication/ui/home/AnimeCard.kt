@@ -1,5 +1,6 @@
 package com.example.myapplication.ui.home
 
+import com.example.myapplication.ui.shared.theme.BrandLightGray
 import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
@@ -51,7 +52,7 @@ import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 import coil3.request.crossfade
 import coil3.size.Size
-import com.example.myapplication.isAppInDarkTheme
+import com.example.myapplication.ui.shared.theme.isAppInDarkTheme
 import com.example.myapplication.ui.shared.fluidClickable
 import com.example.myapplication.ui.shared.theme.BrandOrangeBright
 import com.example.myapplication.ui.shared.theme.SnProFamily
@@ -290,7 +291,7 @@ fun AnimeCardBody(
     val borderWidth = 1.dp
     val cardBg = if (isDark) Color(0xFF1C1C1C) else MaterialTheme.colorScheme.surface
     val cardShadowColor = if (isDark) Color.Black.copy(alpha = 0.5f) else Color.Black.copy(alpha = 0.08f)
-    val subtitleColor = if (isDark) Color(0xFFA7A7A7) else Color(0xFF8E8E93)
+    val subtitleColor = if (isDark) BrandLightGray else Color(0xFF8E8E93)
     val chipBg = if (isDark) Color.Black.copy(alpha = 0.35f) else Color.Black.copy(alpha = 0.08f)
 
     Box(
@@ -307,7 +308,9 @@ fun AnimeCardBody(
                 } else Modifier
             )
             .shadow(
-                elevation = if (isDark) 8.dp else 4.dp,
+                // В тёмной теме тень — чёрное по фону #000000: её не видно, а RenderThread
+                // строил её для каждой карточки на экране. Узел оставляем, высоту обнуляем.
+                elevation = if (isDark) 0.dp else 4.dp,
                 shape = RoundedCornerShape(24.dp),
                 spotColor = cardShadowColor
             )
@@ -342,12 +345,15 @@ fun AnimeCardBody(
                 )
                 state.imagePath?.let { imgPath ->
                     val context = LocalContext.current
-                    AsyncImage(
-                        model = ImageRequest.Builder(context)
+                    val request = remember(imgPath) {
+                        ImageRequest.Builder(context)
                             .data(File(imgPath))
                             .size(Size(280, 400))
                             .crossfade(true)
-                            .build(),
+                            .build()
+                    }
+                    AsyncImage(
+                        model = request,
                         contentDescription = state.title,
                         contentScale = ContentScale.Crop,
                         modifier = Modifier.fillMaxSize()
@@ -422,7 +428,7 @@ fun AnimeCardBody(
                             modifier = Modifier
                                 .clip(CircleShape)
                                 .background(
-                                    if (isDark) Color(0xFF000000)
+                                    if (isDark) Color.Black
                                     else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.65f)
                                 )
                         ) {

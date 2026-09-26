@@ -1,5 +1,10 @@
 package com.example.myapplication.ui.workspace
 
+import com.example.myapplication.ui.shared.PlacedCoordinates
+import com.example.myapplication.ui.shared.theme.IosScroll
+import kotlinx.coroutines.flow.first
+import androidx.compose.runtime.snapshotFlow
+import com.example.myapplication.ui.home.updates.EpisodeNotificationTray
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.ExperimentalSharedTransitionApi
@@ -14,11 +19,9 @@ import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -28,7 +31,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
@@ -51,10 +58,10 @@ import com.example.myapplication.ui.navigation.navigateToAddEdit
 import com.example.myapplication.ui.navigation.navigateToInspect
 import com.example.myapplication.ui.navigation.navigateToWelcome
 import com.example.myapplication.ui.shared.DONATION_URL
-import com.example.myapplication.ui.shared.LocalAdaptiveGlassScrollInProgress
-import com.example.myapplication.ui.shared.LocalGlassCapsuleDock
+import com.example.myapplication.ui.shared.LocalBackdropPinned
 import com.example.myapplication.ui.shared.theme.MotionTokens
 import com.example.myapplication.utils.getStrings
+import com.example.myapplication.utils.Haptic
 import com.example.myapplication.utils.performHaptic
 import com.kyant.backdrop.backdrops.layerBackdrop
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
@@ -84,8 +91,6 @@ fun WorkspaceScreen(
     val view = LocalView.current
     val context = LocalContext.current
     val language by homeViewModel.uiLanguage.collectAsStateWithLifecycle()
-    val homeUiState by homeViewModel.uiState.collectAsStateWithLifecycle()
-    val syncReport by homeViewModel.syncReport.collectAsStateWithLifecycle()
 
     // Выделенная долгим удержанием карточка запирает рабочую область: страницы не листаются,
     // док гаснет и не нажимается. Скрим самого меню лежит внутри главной и до дока не достаёт —
@@ -95,15 +100,16 @@ fun WorkspaceScreen(
     // колбэком: док им сосед, а не потомок, и сам про их состояние не знает.
     var homeOverlayVisible by remember { mutableStateOf(false) }
     var settingsOverlayVisible by remember { mutableStateOf(false) }
-    // Автоскрытие дока (D9) и экономный режим его стекла живут здесь по той же причине: страницы
-    // доку не родители, `LocalAdaptiveGlassScrollInProgress` внутри них до него не достаёт.
+    // Автоскрытие дока (D9) живёт здесь по той же причине: страницы доку не родители.
     var pageDockVisible by remember { mutableStateOf(true) }
-    var pageScrollInProgress by remember { mutableStateOf(false) }
     var showSyncPanel by remember { mutableStateOf(false) }
     // Меню последнего гнезда дока раскрывается поверх страницы, поэтому его состояние живёт
     // рядом с доком, а не внутри какой-либо страницы.
     var menuOpen by remember { mutableStateOf(false) }
+    // Точка, из которой растёт меню: снимается по нажатию на гнездо, а не пишется на каждом
+    // кадре, пока док едет (раньше это пересобирало всю рабочую область на кадр).
     var menuOrigin by remember { mutableStateOf<Rect?>(null) }
+    val menuAnchor = remember { PlacedCoordinates() }
     // Статистика переехала из верхнего дока в меню, поэтому и рисуется теперь здесь: страница
     // коллекции к ней больше отношения не имеет.
     var showStats by remember { mutableStateOf(false) }
@@ -115,19 +121,13 @@ fun WorkspaceScreen(
     syncPanelState.targetState = showSyncPanel
     val dockHidden = homeOverlayVisible || settingsOverlayVisible || showSyncPanel || !pageDockVisible
 
-    // Док у двух режимов разной высоты, а страницы резервируют место под него сами. Константа
-    // «на всякий случай побольше» оставляла бы под капсулой полосу пустоты.
-    val dockInset = if (LocalGlassCapsuleDock.current) CapsuleDockInset else WorkspaceDockInset
+    // Страницы резервируют место под док сами — ровно под капсулу, без запаса на всякий случай.
+    val dockInset = CapsuleDockInset
 
     val pagerState = rememberPagerState(
         initialPage = WorkspacePage.Start.index,
         pageCount = { WorkspacePage.PageCount },
     )
-
-    // Стекло дока на время движения: и скролл списка страницы, и сам «наезд» между страницами
-    // переводят его в статичный режим (D10) — режим меняется свойствами узла, структура прежняя.
-    val pagerScrolling by remember { derivedStateOf { pagerState.isScrollInProgress } }
-    val dockGlassStatic = pageScrollInProgress || pagerScrolling
 
     val goTo: (WorkspacePage) -> Unit = { page ->
         scope.launch {
@@ -143,7 +143,7 @@ fun WorkspaceScreen(
     BackHandler(enabled = menuOpen) { menuOpen = false }
     BackHandler(enabled = !menuOpen && backTarget != null) {
         backTarget?.let { target ->
-            performHaptic(view, "light")
+            performHaptic(view, Haptic.Light)
             goTo(target)
         }
     }
@@ -156,9 +156,24 @@ fun WorkspaceScreen(
         drawContent()
     }
 
+    // Свайп между страницами и меню дока — тоже «пользователь что-то делает»: стопка обновлений
+    // серий схлопывается в колокольчик (см. EpisodeNotificationTray).
+    val notificationTray: EpisodeNotificationTray = koinInject()
+    LaunchedEffect(pagerState) {
+        snapshotFlow { pagerState.isScrollInProgress }.first { it }
+        notificationTray.collapse()
+    }
+    LaunchedEffect(menuOpen) { if (menuOpen) notificationTray.collapse() }
+
+    // Пока страницы едут, их стекло неподвижно относительно собственных бэкдропов — координаты
+    // ему не нужны, и kyant не должен пересчитывать его на каждом кадре (см. PinnableBackdrop).
+    val pinnedDuringSwipe = remember(pagerState) { { pagerState.isScrollInProgress } }
+
     Box(modifier = Modifier.fillMaxSize()) {
         Box(modifier = Modifier.fillMaxSize().layerBackdrop(backdrop)) {
+        CompositionLocalProvider(LocalBackdropPinned provides pinnedDuringSwipe) {
         HorizontalPager(
+            flingBehavior = IosScroll.pagerFlingBehavior(pagerState),
             state = pagerState,
             modifier = Modifier.fillMaxSize(),
             // Соседняя страница обязана быть готова заранее: иначе переход показывает пустой кадр.
@@ -175,7 +190,6 @@ fun WorkspaceScreen(
                     hostedInWorkspace = true,
                     onCardSelectionChange = { cardSelectionActive = it },
                     onOverlayVisibleChange = { homeOverlayVisible = it },
-                    onContentScrollChange = { pageScrollInProgress = it },
                     onDockVisibleChange = { pageDockVisible = it },
                 )
 
@@ -192,11 +206,11 @@ fun WorkspaceScreen(
                     bottomInset = dockInset,
                     onOpenSyncPanel = { showSyncPanel = true },
                     onOverlayVisibleChange = { settingsOverlayVisible = it },
-                    onContentScrollChange = { pageScrollInProgress = it },
                     onDockVisibleChange = { pageDockVisible = it },
                 )
             }
             }
+        }
         }
         }
 
@@ -204,6 +218,10 @@ fun WorkspaceScreen(
         // открывается пунктом настроек. Рендерим её здесь, поверх пейджера, — своим скримом
         // она накрывает и док.
         if (syncPanelState.currentState || syncPanelState.targetState) {
+            // Подписки — только пока панель на экране: состояние главной меняется на каждую букву
+            // поиска, и держать его в корне значило пересобирать рабочую область вместе с доком.
+            val homeUiState by homeViewModel.uiState.collectAsStateWithLifecycle()
+            val syncReport by homeViewModel.syncReport.collectAsStateWithLifecycle()
             Box(modifier = Modifier.fillMaxSize().zIndex(8f)) {
                 NotificationSyncOverlay(
                     syncCoordinator = koinInject(),
@@ -217,7 +235,7 @@ fun WorkspaceScreen(
                     onDismiss = { showSyncPanel = false },
                     onLogout = { navController.navigateToWelcome() },
                     onCheckUpdates = {
-                        performHaptic(view, "light")
+                        performHaptic(view, Haptic.Light)
                         homeViewModel.checkForUpdates(force = true)
                     },
                 )
@@ -225,6 +243,7 @@ fun WorkspaceScreen(
         }
 
         if (showStats) {
+            val homeUiState by homeViewModel.uiState.collectAsStateWithLifecycle()
             LaunchedEffect(Unit) { homeViewModel.loadStatsAnimeList() }
             StatsOverlay(
                 animeList = homeUiState.statsAnimeList,
@@ -240,7 +259,7 @@ fun WorkspaceScreen(
             origin = menuOrigin,
             backdrop = backdrop,
             onDismiss = { menuOpen = false },
-            items = ttmMenuItems(
+            items = remember(language) { ttmMenuItems(
                 language = language,
                 onStats = { showStats = true },
                 onFrame = {
@@ -257,24 +276,26 @@ fun WorkspaceScreen(
                         context.startActivity(Intent(Intent.ACTION_VIEW, DONATION_URL.toUri()))
                     }
                 },
-            ),
+            ) },
         )
 
-        CompositionLocalProvider(LocalAdaptiveGlassScrollInProgress provides dockGlassStatic) {
         WorkspaceDock(
             backdrop = backdrop,
             hidden = dockHidden,
             menuOpen = menuOpen,
             onOpenMenu = {
-                performHaptic(view, "light")
+                performHaptic(view, Haptic.Light)
+                menuOrigin = menuAnchor.boundsInRoot()
                 menuOpen = true
             },
-            onMenuBounds = { menuOrigin = it },
-            menuWindowMorph = MenuWindowMorph(
-                sharedTransitionScope = sharedTransitionScope,
-                animatedVisibilityScope = animatedVisibilityScope,
-                key = menuWindowKey,
-            ),
+            menuAnchor = menuAnchor,
+            menuWindowMorph = remember(menuWindowKey, sharedTransitionScope, animatedVisibilityScope) {
+                MenuWindowMorph(
+                    sharedTransitionScope = sharedTransitionScope,
+                    animatedVisibilityScope = animatedVisibilityScope,
+                    key = menuWindowKey,
+                )
+            },
             // targetPage, а не settledPage: как только жест перешёл порог, пилюля уже едет к
             // новому разделу. С settledPage она стояла бы на старом до конца анимации и потом
             // прыгала.
@@ -282,7 +303,7 @@ fun WorkspaceScreen(
             language = language,
             dimmed = cardSelectionActive,
             onSelect = { page ->
-                performHaptic(view, "light")
+                performHaptic(view, Haptic.Light)
                 goTo(page)
             },
             modifier = Modifier
@@ -291,7 +312,6 @@ fun WorkspaceScreen(
                 .padding(bottom = 16.dp)
                 .zIndex(6f),
         )
-        }
     }
 }
 
@@ -314,22 +334,48 @@ private fun Modifier.workspacePageMotion(pagerState: PagerState, index: Int): Mo
         translationX = transform.translationXFraction * size.width
         shape = RoundedCornerShape(transform.cornerDp.dp)
         clip = transform.cornerDp > 0f
-        // Тень по ведущему краю наезжающей страницы — обычная теневая высота слоя: рисовать её
-        // самим нельзя, снаружи клипа кисть не достаёт.
-        shadowElevation = transform.shadowAlpha * PAGE_SHADOW_ELEVATION.toPx()
     }
     .drawWithContent {
-        drawContent()
         // Второй расчёт вместо общего состояния: функция чистая и дешёвая, а лишний
         // `mutableStateOf` между слоем и отрисовкой добавил бы кадр рассинхрона.
-        val dim = pagerState.transformFor(index).dimAlpha
-        if (dim > 0f) drawRect(color = Color.Black, alpha = dim)
+        val transform = pagerState.transformFor(index)
+        // Тень по ведущему краю наезжающей страницы — градиентом слева от её границы. Раньше это
+        // была `shadowElevation` слоя на весь экран: RenderThread заново строил мягкую тень
+        // полноэкранного контура на каждом кадре свайпа. У наезжающей страницы клипа нет
+        // (скругление только у уходящей), поэтому рисовать за её левым краем можно.
+        if (transform.shadowAlpha > 0f) {
+            val width = PAGE_SHADOW_WIDTH.toPx()
+            drawRect(
+                brush = Brush.horizontalGradient(
+                    0f to Color.Transparent,
+                    1f to Color.Black.copy(alpha = PAGE_SHADOW_MAX_ALPHA * transform.shadowAlpha),
+                    startX = -width,
+                    endX = 0f,
+                ),
+                topLeft = Offset(-width, 0f),
+                size = Size(width, size.height),
+            )
+        }
+        drawContent()
+        if (transform.dimAlpha > 0f) drawRect(color = Color.Black, alpha = transform.dimAlpha)
     }
+    // Содержимое страницы — в собственном offscreen-слое: растеризуется в текстуру, когда
+    // меняется само, а на кадрах свайпа только масштабируется и сдвигается.
+    //
+    // Без этого содержимое заново проигрывалось на каждом кадре свайпа под масштабом уходящей
+    // страницы, а скругления-сквирклы (произвольный контур) Skia на каждом таком проходе
+    // растеризует маской на CPU и грузит текстурой: в трассе ~12 загрузок на кадр, 58 % кадров
+    // длиннее 16,7 мс. Включать слой только на время свайпа пробовали: первый кадр растеризует
+    // обе страницы сразу и даёт рывок в начале жеста (4,5 % против 1,4 % кадров > 16,7 мс), а
+    // выигрыш в обычном скролле в пределах шума. Цена — текстура размером со страницу.
+    .graphicsLayer(compositingStrategy = CompositingStrategy.Offscreen)
 
 private fun PagerState.transformFor(index: Int): PageTransform =
     workspacePageTransform(workspacePageOffset(index, currentPage, currentPageOffsetFraction))
 
-private val PAGE_SHADOW_ELEVATION = 24.dp
+/** Ширина и предельная плотность тени по ведущему краю наезжающей страницы. */
+private val PAGE_SHADOW_WIDTH = 24.dp
+private const val PAGE_SHADOW_MAX_ALPHA = 0.22f
 
 /** Ключи shared-bounds корней окон — те же, что ждут InspectScreen и AddEditScreen. */
 private const val MENU_WINDOW_INSPECT = "inspect_container"

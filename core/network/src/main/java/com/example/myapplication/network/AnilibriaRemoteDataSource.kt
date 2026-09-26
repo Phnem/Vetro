@@ -5,7 +5,6 @@ import io.ktor.client.HttpClient
 import io.ktor.client.request.get
 import io.ktor.client.request.parameter
 import io.ktor.client.statement.bodyAsText
-import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
@@ -29,7 +28,7 @@ class AnilibriaRemoteDataSource(
     private val client: HttpClient,
     private val burstRate: TokenBucketRateLimiter,
 ) {
-    private val json = Json { ignoreUnknownKeys = true }
+    private val json = AppJson
 
     suspend fun searchAnime(query: String, limit: Int = 10): Result<List<ApiSearchResult>> = runCatching {
         val q = query.trim()

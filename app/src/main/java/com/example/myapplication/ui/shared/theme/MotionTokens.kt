@@ -3,6 +3,7 @@ package com.example.myapplication.ui.shared.theme
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.Easing
 import androidx.compose.animation.core.FiniteAnimationSpec
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.SpringSpec
 import androidx.compose.animation.core.spring
@@ -107,6 +108,63 @@ object MotionTokens {
      * а не внутри крошечной плашки.
      */
     const val WindowContentRevealDelayMillis: Int = 200
+
+    // ---- Нормативная таблица пружин (UNIVERSAL_MOTION_SPEC.md, §4) -------------
+    // Спека задаёт пару (ζ, T) при массе 1: stiffness = (2π / T)². Масса больше единицы
+    // (закон 4, «Large») закладывается делением жёсткости, отдельного параметра у Compose нет.
+
+    /** Сжатие при нажатии: ζ 1.0, T 80 мс. */
+    fun <T> springPressIn(): SpringSpec<T> = specSpring(dampingRatio = 1.00f, periodMillis = 80)
+
+    /** Отпускание, тумблер, шеврон: ζ 0.86, T 200 мс. */
+    fun <T> springSnappy(): SpringSpec<T> = specSpring(dampingRatio = 0.86f, periodMillis = 200)
+
+    /** Плавающий док, кнопка скролла, тост, всплывающая карточка: ζ 0.88, T 240 мс. */
+    fun <T> springSurface(): SpringSpec<T> = specSpring(dampingRatio = 0.88f, periodMillis = 240)
+
+    /** Появление новых объектов в списке: ζ 0.92, T 320 мс. */
+    fun <T> springObject(): SpringSpec<T> = specSpring(dampingRatio = 0.92f, periodMillis = 320)
+
+    /** Любое закрытие: ζ 1.0 (нулевой отскок), T 160 мс ≈ 65% входа (закон 5). */
+    fun <T> springExit(): SpringSpec<T> = specSpring(dampingRatio = 1.00f, periodMillis = 160)
+
+    /** Каскад содержимого (§5.3): сдвиг на элемент и предел очереди. */
+    const val StaggerMillis: Int = 24
+    const val StaggerMaxItems: Int = 6
+
+    /** Когда содержимое начинает проявляться относительно старта оболочки (§5.3, кадр 50–100 мс). */
+    const val ContentRevealDelayMillis: Int = 60
+
+    /** Жёсткость пружины по периоду спеки: `k = (2π / T)²` при массе 1. */
+    fun stiffnessForPeriod(periodMillis: Int): Float {
+        val omega = (2.0 * Math.PI / (periodMillis / 1000.0))
+        return (omega * omega).toFloat()
+    }
+
+    private fun <T> specSpring(dampingRatio: Float, periodMillis: Int): SpringSpec<T> =
+        spring(dampingRatio = dampingRatio, stiffness = stiffnessForPeriod(periodMillis))
+
+    // ---- Длительности для оптики (закон 2: свет — короткие кривые) ---------------
+
+    const val DurationFastMillis: Int = 160
+    const val DurationStandardMillis: Int = 220
+    const val DurationEmphasizedMillis: Int = 300
+
+    /** Прозрачность и цвет — короткие кривые (см. длительности выше). */
+    fun <T> tweenFast(): FiniteAnimationSpec<T> = tween(DurationFastMillis)
+    fun <T> tweenStandard(delayMillis: Int = 0): FiniteAnimationSpec<T> =
+        tween(DurationStandardMillis, delayMillis = delayMillis)
+    fun <T> tweenEmphasized(): FiniteAnimationSpec<T> = tween(DurationEmphasizedMillis)
+
+    /** Появление/уход с кривыми спеки [EaseEnter] / [EaseExit]. */
+    fun <T> easeEnter(durationMillis: Int = EaseEnterMillis, delayMillis: Int = 0): FiniteAnimationSpec<T> =
+        tween(durationMillis, delayMillis = delayMillis, easing = EaseEnter)
+    fun <T> easeExit(durationMillis: Int = EaseExitMillis): FiniteAnimationSpec<T> =
+        tween(durationMillis, easing = EaseExit)
+
+    /** Переход, который ведёт палец (свайп «назад»): кривая должна быть линейной. */
+    fun <T> gestureLinear(durationMillis: Int): FiniteAnimationSpec<T> =
+        tween(durationMillis, easing = LinearEasing)
 
     // ---- Типизированные удобные алиасы (частые случаи) -----------------------
 

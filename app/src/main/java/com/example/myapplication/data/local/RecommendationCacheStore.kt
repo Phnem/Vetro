@@ -1,11 +1,11 @@
 package com.example.myapplication.data.local
 
+import com.example.myapplication.network.AppJson
 import android.content.Context
 import android.util.Log
 import com.example.myapplication.domain.recommendations.RecommendationsSnapshot
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import kotlinx.serialization.json.Json
 import java.io.File
 
 private const val TAG = "RecommendationCache"
@@ -21,7 +21,7 @@ private const val CACHE_FILE = "recommendations_cache.json"
 class RecommendationCacheStore(context: Context) {
 
     private val file = File(context.filesDir, CACHE_FILE)
-    private val json = Json { ignoreUnknownKeys = true }
+    private val json = AppJson
 
     suspend fun read(): RecommendationsSnapshot? = withContext(Dispatchers.IO) {
         runCatching {

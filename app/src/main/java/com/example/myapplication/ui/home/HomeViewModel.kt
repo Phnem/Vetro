@@ -1,12 +1,13 @@
 package com.example.myapplication.ui.home
 
+import com.example.myapplication.domain.BackgroundSchedule
+import kotlinx.coroutines.flow.collectLatest
+import com.example.myapplication.data.local.AppLanguagePrefs
 import android.app.NotificationManager
 import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.stringPreferencesKey
-import androidx.datastore.preferences.core.edit
-import com.example.myapplication.data.local.DevPreferencesKeys
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.myapplication.data.local.AnimeLocalDataSource
@@ -34,13 +35,13 @@ import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.Dispatchers
@@ -50,7 +51,6 @@ import androidx.work.*
 import com.example.myapplication.worker.AnimeUpdateWorker
 
 private val KEY_CONTENT_TYPE = stringPreferencesKey("contentType")
-private val KEY_LANG = stringPreferencesKey("lang")
 
 @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 class HomeViewModel(
@@ -177,17 +177,9 @@ class HomeViewModel(
     /** Language from DataStore — use this in UI instead of a separate SettingsViewModel (avoids duplicate VM scope). */
     val uiLanguage: StateFlow<AppLanguage> = settingsDataStore.data
         .map { prefs ->
-            runCatching { AppLanguage.valueOf(prefs[KEY_LANG] ?: "EN") }
-                .getOrElse { AppLanguage.EN }
+            AppLanguagePrefs.from(prefs)
         }
         .stateIn(viewModelScope, SharingStarted.Eagerly, AppLanguage.EN)
-    /** TEMP V3.3.3 promo state. Remove with PlayerPowerPromoDialog after the campaign. */
-    val playerPromoDismissed: StateFlow<Boolean> = settingsDataStore.data
-        .map { prefs -> prefs[DevPreferencesKeys.TEMP_PLAYER_PROMO_V333_DISMISSED] ?: false }
-        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
-    private val _playerPromoDeferredThisSession = MutableStateFlow(false)
-    val playerPromoDeferredThisSession: StateFlow<Boolean> =
-        _playerPromoDeferredThisSession.asStateFlow()
 
     val syncReport = MutableStateFlow(com.example.myapplication.SyncReport())
 
@@ -204,6 +196,17 @@ class HomeViewModel(
         started = SharingStarted.WhileSubscribed(5000),
         initialValue = persistentListOf()
     )
+
+    // Пути к обложкам резолвятся здесь, на IO, как только пришёл список: карточка берёт путь из
+    // композиции, и без прогрева первый показ каждой обложки ходил бы по файловой системе на
+    // главном потоке (stat'ы, а для вложений — listFiles()). Репозиторий пути запоминает.
+    init {
+        viewModelScope.launch(Dispatchers.IO) {
+            animeListFlow.collectLatest { list ->
+                list.forEach { anime -> anime.imageFileName?.let(imageStorage::getImageFilePath) }
+            }
+        }
+    }
 
     val apiSearchWithStatus: StateFlow<kotlinx.collections.immutable.ImmutableList<ApiSearchUiModel>> = combine(
         _uiState.map { it.apiSearchResults }.distinctUntilChanged(),
@@ -253,7 +256,7 @@ class HomeViewModel(
             .setRequiredNetworkType(NetworkType.CONNECTED)
             .build()
         val updateRequest = PeriodicWorkRequestBuilder<AnimeUpdateWorker>(
-            6, TimeUnit.HOURS
+            BackgroundSchedule.EPISODE_CHECK_HOURS, TimeUnit.HOURS
         )
             .setConstraints(constraints)
             .build()
@@ -411,7 +414,7 @@ class HomeViewModel(
     }
 
     fun deleteAnime(id: String) {
-        viewModelScope.launch {
+        viewModelScope.launch(Dispatchers.IO) {
             runCatching {
                 val anime = localDataSource.getAnimeById(id) ?: return@launch
                 anime.imageFileName?.let { imageStorage.deleteImage(it) }
@@ -421,7 +424,7 @@ class HomeViewModel(
     }
 
     fun toggleFavorite(id: String) {
-        viewModelScope.launch {
+        viewModelScope.launch(Dispatchers.IO) {
             runCatching {
                 val anime = localDataSource.getAnimeById(id) ?: return@launch
                 localDataSource.updateAnime(anime.copy(isFavorite = !anime.isFavorite))
@@ -437,7 +440,7 @@ class HomeViewModel(
         viewModelScope.launch {
             runCatching {
                 val language = readLanguageFromSettings()
-                episodeUpdateCheckCoordinator.detectAndStore(language)
+                episodeUpdateCheckCoordinator.detectAndStore(language, force = force)
                 _uiState.update { it.copy(isCheckingUpdates = false) }
                 // Приложение открыто → системные пуши не показываем: обновления живут
                 // in-app стопкой сверху. Убираем из шторки всё, что мог оставить
@@ -456,14 +459,13 @@ class HomeViewModel(
      * приложение открыто, обновления показываются in-app стопкой, а не в шторке.
      */
     fun clearSystemUpdateNotifications() {
-        notifier.cancelAllUpdateNotifications(localDataSource.getUpdates().map { it.animeId })
+        // Вызывается на каждом выходе на передний план — чтение из БД не на главном потоке.
+        viewModelScope.launch(Dispatchers.IO) {
+            notifier.cancelAllUpdateNotifications(localDataSource.getUpdates().map { it.animeId })
+        }
     }
 
-    private suspend fun readLanguageFromSettings(): AppLanguage {
-        val prefs = settingsDataStore.data.first()
-        val raw = prefs[KEY_LANG] ?: "EN"
-        return runCatching { AppLanguage.valueOf(raw) }.getOrElse { AppLanguage.EN }
-    }
+    private suspend fun readLanguageFromSettings(): AppLanguage = AppLanguagePrefs.current(settingsDataStore)
 
     /**
      * Смахнули карточку «вышла новая серия». Серия уже проставлена автоматически
@@ -476,6 +478,15 @@ class HomeViewModel(
         }
     }
 
+    /** «Очистить всё» центра уведомлений: убрать все обновления и пометить их прочитанными. */
+    fun markAllUpdatesRead(updates: List<AnimeUpdate>, ctx: Context) {
+        if (updates.isEmpty()) return
+        viewModelScope.launch {
+            localDataSource.markUpdatesRead(updates)
+            updates.forEach { cancelAnimeUpdateNotification(ctx, it.animeId) }
+        }
+    }
+
     private fun cancelAnimeUpdateNotification(ctx: Context, animeId: String) {
         // Только снимаем пуш этого тайтла из шторки. Сводку НЕ переотправляем —
         // при открытом приложении системные уведомления не показываем вовсе.
@@ -483,18 +494,6 @@ class HomeViewModel(
         nm.cancel(animeUpdateNotificationId(animeId))
     }
 
-    /** Hides the temporary promo until this app process/session is recreated. */
-    fun deferPlayerPromoForSession() {
-        _playerPromoDeferredThisSession.value = true
-    }
-    /** Permanently dismisses only the temporary V3.3.3 player promo. */
-    fun dismissPlayerPromoPermanently() {
-        viewModelScope.launch {
-            settingsDataStore.edit { prefs ->
-                prefs[DevPreferencesKeys.TEMP_PLAYER_PROMO_V333_DISMISSED] = true
-            }
-        }
-    }
     fun getAnimeById(id: String): Anime? {
         return localDataSource.getAnimeById(id)
     }
@@ -506,7 +505,7 @@ class HomeViewModel(
 
     fun loadStatsAnimeList() {
         viewModelScope.launch {
-            val list = localDataSource.getAllAnimeList().toImmutableList()
+            val list = withContext(Dispatchers.IO) { localDataSource.getAllAnimeList() }.toImmutableList()
             val avgRating = if (list.isEmpty()) {
                 0.0
             } else {

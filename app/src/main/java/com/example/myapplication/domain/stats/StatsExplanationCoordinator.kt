@@ -1,18 +1,16 @@
 package com.example.myapplication.domain.stats
 
+import com.example.myapplication.data.local.AppLanguagePrefs
 import android.util.Log
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
-import androidx.datastore.preferences.core.stringPreferencesKey
 import com.example.myapplication.data.ai.AiCredentialsStore
 import com.example.myapplication.data.local.AnimeLocalDataSource
 import com.example.myapplication.data.local.StatsExplanationCacheStore
 import com.example.myapplication.data.models.Anime
 import com.example.myapplication.network.AppLanguage
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.FlowPreview
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -24,7 +22,6 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
-private val KEY_LANG = stringPreferencesKey("lang")
 
 /** Состояние AI-объяснения одной карточки статистики (для UI детального режима). */
 sealed interface StatsCardExplanationState {
@@ -54,7 +51,8 @@ class StatsExplanationCoordinator(
     private val credentialsStore: AiCredentialsStore,
     private val cacheStore: StatsExplanationCacheStore,
     private val settingsDataStore: DataStore<Preferences>,
-    private val appScope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
+    /** Общая область процесса (AppScope); объяснения — это сетевые вызовы ИИ, так что IO. */
+    private val appScope: CoroutineScope,
 ) {
     private val _state = MutableStateFlow<Map<StatsCardKind, StatsCardExplanationState>>(emptyMap())
     val state: StateFlow<Map<StatsCardKind, StatsCardExplanationState>> = _state.asStateFlow()
@@ -66,7 +64,7 @@ class StatsExplanationCoordinator(
         if (started) return
         started = true
         val languageFlow = settingsDataStore.data
-            .map { prefs -> runCatching { AppLanguage.valueOf(prefs[KEY_LANG] ?: "EN") }.getOrDefault(AppLanguage.EN) }
+            .map { prefs -> AppLanguagePrefs.from(prefs) }
             .distinctUntilChanged()
         appScope.launch {
             combine(

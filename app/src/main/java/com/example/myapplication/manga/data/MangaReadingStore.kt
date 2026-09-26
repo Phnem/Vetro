@@ -1,5 +1,6 @@
 package com.example.myapplication.manga.data
 
+import com.example.myapplication.network.AppStoreJson
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
@@ -11,7 +12,6 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.Json
 import java.security.MessageDigest
 
 @Serializable
@@ -98,7 +98,7 @@ private val DEFAULT_DIRECTION = PageDirection.Rtl
 class MangaReadingStore(
     private val dataStore: DataStore<Preferences>,
 ) {
-    private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
+    private val json = AppStoreJson
     private val writeMutex = Mutex()
 
     fun progressFlow(animeId: String): Flow<Map<String, ChapterReadingProgress>> {

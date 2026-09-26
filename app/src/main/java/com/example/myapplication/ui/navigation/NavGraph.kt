@@ -1,13 +1,12 @@
 package com.example.myapplication.ui.navigation
 
+import com.example.myapplication.ui.details.SwipeBackGesture
 import androidx.compose.animation.EnterExitState
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionLayout
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateDp
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -19,16 +18,18 @@ import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.navigation.NavBackStackEntry
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.platform.LocalContext
 import com.example.myapplication.ui.details.DetailsScreen
 import com.example.myapplication.ui.shared.theme.MotionTokens
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
@@ -44,32 +45,14 @@ import com.example.myapplication.ui.inspect.InspectScreen
 import com.example.myapplication.ui.inspect.InspectViewModel
 import com.example.myapplication.ui.settings.SettingsScreen
 import com.example.myapplication.ui.settings.SettingsViewModel
-import com.example.myapplication.ui.splash.SplashViewModel
 import com.example.myapplication.ui.workspace.WorkspaceScreen
 import com.example.myapplication.audiobooks.ui.AudiobookPlayerHost
 import androidx.media3.common.util.UnstableApi
-import com.example.myapplication.ui.splash.VetroSplashScreen
-import com.example.myapplication.utils.getStrings
 import com.example.myapplication.utils.getWelcomeStrings
 import com.example.myapplication.utils.systemAppLanguage
 import org.koin.androidx.compose.koinViewModel
+import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
 import org.koin.compose.koinInject
-
-private const val SplashZoomMillis = 450
-
-private fun splashExitTransition() =
-    fadeOut(animationSpec = tween(SplashZoomMillis, easing = FastOutSlowInEasing)) +
-        scaleOut(
-            targetScale = 1.08f,
-            animationSpec = tween(SplashZoomMillis, easing = FastOutSlowInEasing),
-        )
-
-private fun splashEnterZoom() =
-    fadeIn(animationSpec = tween(SplashZoomMillis, easing = FastOutSlowInEasing)) +
-        scaleIn(
-            initialScale = 0.92f,
-            animationSpec = tween(SplashZoomMillis, easing = FastOutSlowInEasing),
-        )
 
 /**
  * Окно из меню ТТМ вырастает из гнезда «Ещё» и схлопывается обратно в него — это shared-bounds
@@ -79,49 +62,59 @@ private fun splashEnterZoom() =
  */
 private fun workspaceModalEnter() =
     fadeIn(
-        animationSpec = tween(
-            durationMillis = MotionTokens.EaseEnterMillis,
-            delayMillis = MotionTokens.WindowContentRevealDelayMillis,
-            easing = MotionTokens.EaseEnter,
-        ),
+        animationSpec = MotionTokens.easeEnter(delayMillis = MotionTokens.WindowContentRevealDelayMillis),
     )
 
 private fun workspaceModalExit() =
-    fadeOut(animationSpec = tween(MotionTokens.EaseExitMillis, easing = MotionTokens.EaseExit))
+    fadeOut(animationSpec = MotionTokens.easeExit())
 
 /**
  * Главная под окном из меню только притухает, без «вдавливания»: гнездо, в которое окно
  * схлопнется, лежит на ней, и масштаб главной сдвинул бы цель посреди полёта.
  */
 private fun homeDimExit() =
-    fadeOut(animationSpec = tween(300, easing = MotionTokens.EaseExit), targetAlpha = 0.55f)
+    fadeOut(animationSpec = MotionTokens.easeExit(MotionTokens.DurationEmphasizedMillis), targetAlpha = 0.55f)
 
 private fun homeDimPopEnter() =
-    fadeIn(animationSpec = tween(220, easing = MotionTokens.EaseEnter), initialAlpha = 0.55f)
+    fadeIn(animationSpec = MotionTokens.easeEnter(MotionTokens.DurationStandardMillis), initialAlpha = 0.55f)
 
 /** «Вдавливание» главной под экраном поверх неё (физика IosSheetScaffold). */
 private fun homeDepressExit() =
     scaleOut(
         targetScale = 0.92f,
         animationSpec = MotionTokens.sheetPresent(),
-    ) + fadeOut(animationSpec = tween(300), targetAlpha = 0.55f)
+    ) + fadeOut(animationSpec = MotionTokens.tweenEmphasized(), targetAlpha = 0.55f)
 
 private fun homeDepressPopEnter() =
-    scaleIn(
-        initialScale = 0.92f,
-        animationSpec = MotionTokens.sheetDismissForced(),
-    ) + fadeIn(animationSpec = tween(220), initialAlpha = 0.55f)
+    if (SwipeBackGesture.active) {
+        // Свайп «назад» по экрану деталей ведёт переход за пальцем — нужна линейная кривая.
+        scaleIn(initialScale = 0.92f, animationSpec = MotionTokens.gestureLinear(SWIPE_BACK_LINEAR_MS)) +
+            fadeIn(animationSpec = MotionTokens.gestureLinear(SWIPE_BACK_LINEAR_MS), initialAlpha = 0.55f)
+    } else {
+        scaleIn(
+            initialScale = 0.92f,
+            animationSpec = MotionTokens.sheetDismissForced(),
+        ) + fadeIn(animationSpec = MotionTokens.tweenStandard(), initialAlpha = 0.55f)
+    }
+
+/**
+ * Длительность линейного перехода «назад» при свайпе по экрану: на жесте она не видна (переход
+ * едет за пальцем), а после отпускания — это время доезда оставшейся доли.
+ */
+private const val SWIPE_BACK_LINEAR_MS = 320
 
 @OptIn(ExperimentalSharedTransitionApi::class, UnstableApi::class)
 @Composable
 fun AppNavGraph(
     navController: NavHostController,
     settingsViewModel: SettingsViewModel,
-    startDestination: Any = SplashRoute
+    startupSplash: StartupSplashState,
 ) {
     val homeViewModel: HomeViewModel = koinViewModel()
-    val addEditViewModel: AddEditViewModel = koinViewModel()
-    val inspectViewModel: InspectViewModel = koinViewModel()
+    // Формы AddEdit и Inspect создаются, когда их маршрут открыт впервые, а не на сплэше: у обеих
+    // в конструкторе горячие подписки на настройки. Владелец — тот же, что был (активити), поэтому
+    // экземпляр по-прежнему один на все заходы.
+    val activityViewModelOwner = checkNotNull(LocalViewModelStoreOwner.current)
 
     val context = LocalContext.current
     val authRepository: com.example.myapplication.sync.supabase.AuthRepository = koinInject()
@@ -134,58 +127,18 @@ fun AppNavGraph(
     // пара для shared-bounds морфа. Флаг читается из StateFlow в момент перехода, а не подпиской —
     // граф не должен перекомпоновываться на каждое изменение настроек.
     fun workspaceModal(entry: NavBackStackEntry) =
-        settingsViewModel.uiState.value.devSelectDockNavigation && entry.isWorkspaceModal()
+        settingsViewModel.uiState.value.modernUi && entry.isWorkspaceModal()
 
     SharedTransitionLayout {
         Box(Modifier.fillMaxSize()) {
-        NavHost(
+        // Граф появляется, когда сплэш решил, куда идти, — ещё под сплэшем (StartupSplash.kt).
+        val nextRoute = startupSplash.nextRoute
+        if (nextRoute != null) NavHost(
             navController = navController,
-            startDestination = startDestination
+            startDestination = if (nextRoute == StartupSplashState.HOME) HomeRoute else WelcomeRoute,
         ) {
-            composable<SplashRoute>(
-                exitTransition = { splashExitTransition() },
-                popExitTransition = { splashExitTransition() },
-            ) {
-                val splashViewModel: SplashViewModel = koinViewModel()
-                val splashState by splashViewModel.uiState.collectAsStateWithLifecycle()
-                val splashStrings = getStrings(systemAppLanguage())
-                val legacyFolderLauncher = rememberLauncherForActivityResult(
-                    contract = ActivityResultContracts.OpenDocumentTree(),
-                ) { uri ->
-                    splashViewModel.onLegacyFolderSelected(uri)
-                }
-                VetroSplashScreen(
-                    uiState = splashState,
-                    migrationTitle = splashStrings.splashStorageMigrationTitle,
-                    migrationSubtitle = splashStrings.splashStorageMigrationSubtitle,
-                    jsonMigrationTitle = splashStrings.splashJsonMigrationTitle,
-                    jsonMigrationSubtitle = splashStrings.splashJsonMigrationSubtitle,
-                    legacyFolderTitle = splashStrings.splashLegacyFolderTitle,
-                    legacyFolderSubtitle = splashStrings.splashLegacyFolderSubtitle,
-                    legacyFolderAction = splashStrings.splashLegacyFolderAction,
-                    legacyFolderSkip = splashStrings.splashLegacyFolderSkip,
-                    cloudRestoreTitle = splashStrings.cloudRestoreTitle,
-                    cloudRestoreSubtitle = splashStrings.cloudRestoreSubtitle,
-                    onPickLegacyFolder = { legacyFolderLauncher.launch(null) },
-                    onSkipLegacyFolder = { splashViewModel.skipLegacyFolderMigration() },
-                    onSplashComplete = { nextRoute ->
-                        when (nextRoute) {
-                            "home" -> navController.navigate(HomeRoute) {
-                                popUpTo(SplashRoute) { inclusive = true }
-                            }
-                            else -> navController.navigate(WelcomeRoute) {
-                                popUpTo(SplashRoute) { inclusive = true }
-                            }
-                        }
-                    }
-                )
-            }
-
             composable<WelcomeRoute>(
-                enterTransition = {
-                    if (initialState.destination.isSplashDestination()) splashEnterZoom()
-                    else fadeIn(animationSpec = tween(300))
-                },
+                enterTransition = { fadeIn(animationSpec = MotionTokens.tweenEmphasized()) },
             ) {
                 val context = LocalContext.current
                 val scope = rememberCoroutineScope()
@@ -265,10 +218,7 @@ fun AppNavGraph(
             }
 
             composable<HomeRoute>(
-                enterTransition = {
-                    if (initialState.destination.isSplashDestination()) splashEnterZoom()
-                    else fadeIn(animationSpec = tween(300))
-                },
+                enterTransition = { fadeIn(animationSpec = MotionTokens.tweenEmphasized()) },
                 // «Вдавливание» под деталями (физика IosSheetScaffold): фон уезжает назад
                 // и слегка гаснет, при закрытии деталей — физично возвращается. Predictive
                 // back сикает popEnter — возврат следует за пальцем.
@@ -284,10 +234,8 @@ fun AppNavGraph(
                         homeDepressPopEnter()
                     } else if (workspaceModal(initialState)) {
                         homeDimPopEnter()
-                    } else if (initialState.destination.isSplashDestination()) {
-                        splashEnterZoom()
                     } else {
-                        fadeIn(animationSpec = tween(300))
+                        fadeIn(animationSpec = MotionTokens.tweenEmphasized())
                     }
                 },
             ) {
@@ -295,7 +243,7 @@ fun AppNavGraph(
                 // Две навигации никогда не смонтированы одновременно — иначе задвоятся ключи
                 // shared-element (иконки старого дока и экраны-цели).
                 val settingsState by settingsViewModel.uiState.collectAsStateWithLifecycle()
-                if (settingsState.devSelectDockNavigation) {
+                if (settingsState.modernUi) {
                     WorkspaceScreen(
                         navController = navController,
                         homeViewModel = homeViewModel,
@@ -319,13 +267,21 @@ fun AppNavGraph(
                     slideInHorizontally(
                         initialOffsetX = { it },
                         animationSpec = MotionTokens.sheetOffset,
-                    ) + fadeIn(animationSpec = tween(220))
+                    ) + fadeIn(animationSpec = MotionTokens.tweenStandard())
                 },
                 popExitTransition = {
-                    slideOutHorizontally(
-                        targetOffsetX = { it },
-                        animationSpec = MotionTokens.dismissOffset,
-                    ) + fadeOut(animationSpec = tween(220))
+                    if (SwipeBackGesture.active) {
+                        // Окно идёт за пальцем 1:1 — линейно; см. SwipeBackGesture.
+                        slideOutHorizontally(
+                            targetOffsetX = { it },
+                            animationSpec = MotionTokens.gestureLinear(SWIPE_BACK_LINEAR_MS),
+                        ) + fadeOut(animationSpec = MotionTokens.gestureLinear(SWIPE_BACK_LINEAR_MS))
+                    } else {
+                        slideOutHorizontally(
+                            targetOffsetX = { it },
+                            animationSpec = MotionTokens.dismissOffset,
+                        ) + fadeOut(animationSpec = MotionTokens.tweenStandard())
+                    }
                 },
             ) { backStackEntry ->
                 val route = backStackEntry.toRoute<DetailsRoute>()
@@ -349,7 +305,7 @@ fun AppNavGraph(
                 val route = backStackEntry.toRoute<AddEditRoute>()
                 AddEditScreen(
                     navController = navController,
-                    viewModel = addEditViewModel,
+                    viewModel = koinViewModel<AddEditViewModel>(viewModelStoreOwner = activityViewModelOwner),
                     animeId = route.animeId,
                     sharedTransitionScope = this@SharedTransitionLayout,
                     animatedVisibilityScope = this
@@ -374,7 +330,7 @@ fun AppNavGraph(
             ) {
                 InspectScreen(
                     navController = navController,
-                    viewModel = inspectViewModel,
+                    viewModel = koinViewModel<InspectViewModel>(viewModelStoreOwner = activityViewModelOwner),
                     sharedTransitionScope = this@SharedTransitionLayout,
                     animatedVisibilityScope = this,
                     onBack = { navController.popBackStack() },
@@ -384,6 +340,19 @@ fun AppNavGraph(
         }
         val audiobookLanguage by homeViewModel.uiLanguage.collectAsStateWithLifecycle()
         AudiobookPlayerHost(audiobookLanguage)
+
+        if (startupSplash.visible) {
+            // Главную открываем, когда коллекция уже в списке, а не пустой кадр перед ней.
+            val homeListLoaded = remember(homeViewModel) {
+                homeViewModel.uiState.map { it.isListLoaded }.distinctUntilChanged()
+            }.collectAsState(initial = false)
+            StartupSplashOverlay(
+                state = startupSplash,
+                contentReady = {
+                    startupSplash.nextRoute != StartupSplashState.HOME || homeListLoaded.value
+                },
+            )
+        }
         }
     }
 }

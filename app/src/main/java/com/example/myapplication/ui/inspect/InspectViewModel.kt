@@ -1,5 +1,6 @@
 package com.example.myapplication.ui.inspect
 
+import com.example.myapplication.data.local.AppLanguagePrefs
 import android.content.Context
 import android.net.Uri
 import androidx.datastore.core.DataStore
@@ -34,7 +35,6 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
-private val KEY_LANG = stringPreferencesKey("lang")
 private val KEY_CONTENT_TYPE = stringPreferencesKey("contentType")
 
 sealed interface InspectUiState {
@@ -54,8 +54,7 @@ class InspectViewModel(
 
     val uiLanguage: StateFlow<AppLanguage> = settingsDataStore.data
         .map { prefs ->
-            runCatching { AppLanguage.valueOf(prefs[KEY_LANG] ?: "EN") }
-                .getOrElse { AppLanguage.EN }
+            AppLanguagePrefs.from(prefs)
         }
         .stateIn(viewModelScope, SharingStarted.Eagerly, AppLanguage.EN)
 

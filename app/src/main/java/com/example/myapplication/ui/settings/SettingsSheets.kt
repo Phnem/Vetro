@@ -1,9 +1,9 @@
 package com.example.myapplication.ui.settings
 
-import android.content.Context
+import com.example.myapplication.ui.shared.theme.BrandDeepRed
+import com.example.myapplication.ui.shared.theme.IosScroll
 import android.content.Intent
 import android.net.Uri
-import android.os.Build
 import android.widget.Toast
 import androidx.activity.result.ActivityResultLauncher
 import androidx.annotation.DrawableRes
@@ -59,12 +59,12 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
 import com.example.myapplication.data.models.AppUpdateStatus
-import com.example.myapplication.isAppInDarkTheme
+import com.example.myapplication.ui.shared.theme.isAppInDarkTheme
 import com.phnem.vetro.R
-import com.example.myapplication.SyncState
 import com.example.myapplication.network.AppLanguage
 import com.example.myapplication.utils.formatApkSizeLabel
 import com.example.myapplication.utils.getStrings
+import com.example.myapplication.utils.Haptic
 import com.example.myapplication.utils.performHaptic
 import com.example.myapplication.ui.shared.AuthProviderIcon
 import com.example.myapplication.ui.shared.theme.IosDesign
@@ -99,7 +99,7 @@ fun CloudSettingsSheet(
 
     val sheetInDarkTheme = isAppInDarkTheme()
     val sheetSurface = if (sheetInDarkTheme) {
-        Color(0xFF000000).copy(alpha = 0.8f)
+        Color.Black.copy(alpha = 0.8f)
     } else {
         MaterialTheme.colorScheme.surface.copy(alpha = 0.95f)
     }
@@ -115,7 +115,7 @@ fun CloudSettingsSheet(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .verticalScroll(rememberScrollState())
+                .verticalScroll(rememberScrollState(), flingBehavior = IosScroll.flingBehavior())
                 .padding(horizontal = 20.dp)
                 .padding(top = 16.dp, bottom = 28.dp),
         ) {
@@ -479,7 +479,7 @@ private fun SetEmailPasswordSection(
     val bodyColor = if (isDark) OverlayThemeTokens.LabelMutedDark else MaterialTheme.colorScheme.onSurfaceVariant
     val fieldShape = RoundedCornerShape(12.dp)
     val syncBrush = Brush.horizontalGradient(
-        colors = listOf(OverlayThemeTokens.AccentSyncBlue, Color(0xFFC10801)),
+        colors = listOf(OverlayThemeTokens.AccentSyncBlue, BrandDeepRed),
     )
 
     Column(
@@ -654,7 +654,7 @@ fun ContactSheet(
                 iconId = R.drawable.ic_github,
                 title = "GitHub",
                 onClick = {
-                    performHaptic(view, "light")
+                    performHaptic(view, Haptic.Light)
                     context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/Phnem/Vetro-Collection")))
                     onDismiss()
                 },
@@ -664,7 +664,7 @@ fun ContactSheet(
                 iconId = R.drawable.tg,
                 title = "Telegram",
                 onClick = {
-                    performHaptic(view, "light")
+                    performHaptic(view, Haptic.Light)
                     context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://t.me/Vetro_chat")))
                     onDismiss()
                 },
@@ -692,7 +692,7 @@ fun UpdateChangelogSheet(
     val sheetInDarkTheme = isAppInDarkTheme()
 
     val sheetSurface = if (sheetInDarkTheme) {
-        Color(0xFF000000).copy(alpha = 0.8f)
+        Color.Black.copy(alpha = 0.8f)
     } else {
         MaterialTheme.colorScheme.surface.copy(alpha = 0.95f)
     }
@@ -738,8 +738,7 @@ fun UpdateChangelogSheet(
         list = MaterialTheme.typography.bodySmall,
     )
 
-    val needsInstallPermission = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
-        !context.packageManager.canRequestPackageInstalls()
+    val needsInstallPermission = !context.packageManager.canRequestPackageInstalls()
     val showInstallPermissionAction =
         uiState.updateStatus == AppUpdateStatus.UPDATE_AVAILABLE &&
             needsInstallPermission &&
@@ -761,12 +760,12 @@ fun UpdateChangelogSheet(
             .fillMaxWidth()
             .padding(horizontal = 20.dp)
             .padding(top = IosDesign.SheetContentTop, bottom = 24.dp)
-            .verticalScroll(rememberScrollState())
+            .verticalScroll(rememberScrollState(), flingBehavior = IosScroll.flingBehavior())
     ) {
         Box(modifier = Modifier.fillMaxWidth()) {
             IconButton(
                 onClick = {
-                    performHaptic(view, "light")
+                    performHaptic(view, Haptic.Light)
                     onDismiss()
                 },
                 modifier = Modifier.align(Alignment.TopEnd)
@@ -923,7 +922,7 @@ fun UpdateChangelogSheet(
                         interactionSource = whatsNewInteractionSource,
                         indication = ripple(bounded = true),
                         onClick = {
-                            performHaptic(view, "light")
+                            performHaptic(view, Haptic.Light)
                             whatsNewExpanded = !whatsNewExpanded
                         },
                     ),
@@ -1021,7 +1020,7 @@ fun UpdateChangelogSheet(
                     ) {
                         OutlinedButton(
                             onClick = {
-                                performHaptic(view, "light")
+                                performHaptic(view, Haptic.Light)
                                 onDismiss()
                             },
                             modifier = Modifier.weight(1f),
@@ -1031,7 +1030,7 @@ fun UpdateChangelogSheet(
                         }
                         Button(
                             onClick = {
-                                performHaptic(view, "light")
+                                performHaptic(view, Haptic.Light)
                                 viewModel.startApkDownload(context)
                             },
                             modifier = Modifier.weight(1f),
@@ -1057,7 +1056,7 @@ fun UpdateChangelogSheet(
                     ) {
                         OutlinedButton(
                             onClick = {
-                                performHaptic(view, "light")
+                                performHaptic(view, Haptic.Light)
                                 viewModel.loadUpdateChangelog(context)
                             },
                             modifier = Modifier.weight(1f),
@@ -1067,7 +1066,7 @@ fun UpdateChangelogSheet(
                         }
                         OutlinedButton(
                             onClick = {
-                                performHaptic(view, "light")
+                                performHaptic(view, Haptic.Light)
                                 onDismiss()
                             },
                             modifier = Modifier.weight(1f),
@@ -1080,7 +1079,7 @@ fun UpdateChangelogSheet(
                 else -> {
                     OutlinedButton(
                         onClick = {
-                            performHaptic(view, "light")
+                            performHaptic(view, Haptic.Light)
                             onDismiss()
                         },
                         modifier = Modifier.fillMaxWidth(),
@@ -1096,7 +1095,7 @@ fun UpdateChangelogSheet(
             Spacer(Modifier.height(12.dp))
             OutlinedButton(
                 onClick = {
-                    performHaptic(view, "light")
+                    performHaptic(view, Haptic.Light)
                     installPermissionLauncher.launch(viewModel.manageUnknownAppSourcesIntent(context))
                 },
                 modifier = Modifier.fillMaxWidth(),

@@ -1,17 +1,16 @@
 package com.example.myapplication.ui.details
 
+import com.example.myapplication.ui.shared.theme.StatusSuccess
+import com.example.myapplication.ui.shared.theme.IosScroll
 import android.widget.Toast
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.SizeTransform
-import androidx.compose.animation.expandVertically
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -65,6 +64,7 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.graphicsLayer
@@ -72,7 +72,6 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -82,7 +81,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 import coil3.request.crossfade
-import com.example.myapplication.data.models.Anime
 import com.example.myapplication.domain.seasons.SeasonInfo
 import com.example.myapplication.domain.seasons.displayLabel
 import com.example.myapplication.localplayer.ui.DownloadedPlayerActivity
@@ -93,10 +91,9 @@ import com.example.myapplication.ui.shared.loading.BubbleClusterLoader
 import com.example.myapplication.ui.shared.theme.IosDesign
 import com.example.myapplication.ui.shared.theme.MotionTokens
 import com.example.myapplication.ui.shared.theme.SnProFamily
+import com.example.myapplication.utils.Haptic
 import com.example.myapplication.utils.performHaptic
 import kotlinx.coroutines.flow.collectLatest
-import org.koin.androidx.compose.koinViewModel
-import org.koin.core.parameter.parametersOf
 
 /**
  * Season-first episode menu. Season cards are collapsed on entry; tapping the card expands it,
@@ -115,23 +112,8 @@ fun ModernDetailsEpisodesPage(
     seasons: List<SeasonInfo> = emptyList(),
     fallbackEpisodes: Int = 0,
     posterPath: String? = null,
-    viewModel: EpisodeMenuViewModel = koinViewModel(key = "episode_menu_$animeId") {
-        parametersOf(
-            Anime(
-                id = animeId,
-                title = animeTitle,
-                titleRu = animeTitleRu,
-                titleEn = animeTitleEn,
-                episodes = fallbackEpisodes.coerceAtLeast(1),
-                rating = 0f,
-                imageFileName = null,
-                orderIndex = 0,
-                dateAdded = 0L,
-                malId = malId,
-                anilistId = anilistId,
-            )
-        )
-    },
+    /** Создаёт экран Details — одна точка, чтобы у сезона не появилось двух разных VM. */
+    viewModel: EpisodeMenuViewModel,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
@@ -203,6 +185,7 @@ fun ModernDetailsEpisodesPage(
 
     Box(Modifier.fillMaxSize().background(episodeBackground)) {
         LazyColumn(
+            flingBehavior = IosScroll.flingBehavior(),
             modifier = Modifier.fillMaxSize().statusBarsPadding(),
             contentPadding = PaddingValues(
                 top = 76.dp,
@@ -240,7 +223,7 @@ fun ModernDetailsEpisodesPage(
                         expanded = expanded,
                         posterPath = posterPath,
                         seasonCover = state.seasonCovers[season.seasonNumber],
-                        state = state,
+                        action = aggregateSeasonAction(season, state.actions),
                         ru = ru,
                         isDark = isDark,
                         onToggle = { viewModel.toggleSeason(season.seasonNumber) },
@@ -480,7 +463,7 @@ private fun SeasonHeaderCard(
     expanded: Boolean,
     posterPath: String?,
     seasonCover: String?,
-    state: EpisodeMenuUiState,
+    action: EpisodeActionState,
     ru: Boolean,
     isDark: Boolean,
     onToggle: () -> Unit,
@@ -493,7 +476,6 @@ private fun SeasonHeaderCard(
     } else {
         RoundedCornerShape(SEASON_CARD_RADIUS)
     }
-    val action = aggregateSeasonAction(season, state.actions)
     val chevronRotation by animateFloatAsState(
         targetValue = if (expanded) 180f else 0f,
         animationSpec = MotionTokens.standard(),
@@ -633,7 +615,7 @@ private fun EpisodeRow(
     val watched = progress?.watched == true
     val hasProgress = (progress?.positionMs ?: 0L) > 0L
     val statusColor = when {
-        watched -> Color(0xFF20C997)
+        watched -> StatusSuccess
         hasProgress -> MaterialTheme.colorScheme.primary
         else -> MaterialTheme.colorScheme.onSurfaceVariant
     }
@@ -643,7 +625,7 @@ private fun EpisodeRow(
         else -> if (ru) "Не начато" else "Unwatched"
     }
     val rowShape = RoundedCornerShape(16.dp)
-    val watchedColor = Color(0xFF20C997)
+    val watchedColor = StatusSuccess
     val rowColor = when {
         watched && isDark -> watchedColor.copy(alpha = 0.10f)
         watched -> watchedColor.copy(alpha = 0.07f)
@@ -653,13 +635,22 @@ private fun EpisodeRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .alpha(if (watched) 0.88f else 1f)
+            // Приглушение просмотренной серии — прозрачностью каждой операции рисования, а не
+            // `.alpha()`: тот рендерил всю строку вместе с обложкой в отдельный буфер на каждом
+            // кадре прокрутки. Визуально то же, буфера нет.
+            .graphicsLayer {
+                alpha = if (watched) 0.88f else 1f
+                compositingStrategy = CompositingStrategy.ModulateAlpha
+            }
             .clip(rowShape)
             .background(rowColor)
-            .border(
-                width = if (watched) 1.dp else 0.dp,
-                color = if (watched) watchedColor.copy(alpha = 0.48f) else Color.Transparent,
-                shape = rowShape,
+            // Обводка только у просмотренной — раньше у остальных рисовалась нулевая прозрачная.
+            .then(
+                if (watched) {
+                    Modifier.border(1.dp, watchedColor.copy(alpha = 0.48f), rowShape)
+                } else {
+                    Modifier
+                },
             )
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
@@ -802,17 +793,27 @@ private fun Artwork(
     isDark: Boolean,
 ) {
     val shape = RoundedCornerShape(cornerRadius)
+    val primary = MaterialTheme.colorScheme.primary
+    val secondary = MaterialTheme.colorScheme.secondary
+    val placeholder = remember(primary, secondary, isDark) {
+        Brush.linearGradient(
+            listOf(
+                primary.copy(alpha = if (isDark) 0.28f else 0.18f),
+                secondary.copy(alpha = if (isDark) 0.18f else 0.10f),
+            )
+        )
+    }
+    val context = LocalContext.current
+    // Запрос — один на обложку, а не новый на каждой рекомпозиции строки.
+    val request = remember(model) {
+        model?.takeIf { it.isNotBlank() }?.let {
+            ImageRequest.Builder(context).data(it).crossfade(true).build()
+        }
+    }
     Box(
         modifier = modifier
             .clip(shape)
-            .background(
-                Brush.linearGradient(
-                    listOf(
-                        MaterialTheme.colorScheme.primary.copy(alpha = if (isDark) 0.28f else 0.18f),
-                        MaterialTheme.colorScheme.secondary.copy(alpha = if (isDark) 0.18f else 0.10f),
-                    )
-                )
-            ),
+            .background(placeholder),
         contentAlignment = Alignment.Center,
     ) {
         Icon(
@@ -821,12 +822,9 @@ private fun Artwork(
             tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.45f),
             modifier = Modifier.size(24.dp),
         )
-        if (!model.isNullOrBlank()) {
+        if (request != null) {
             AsyncImage(
-                model = ImageRequest.Builder(LocalContext.current)
-                    .data(model)
-                    .crossfade(true)
-                    .build(),
+                model = request,
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.matchParentSize(),
@@ -843,7 +841,7 @@ private fun DownloadAction(
 ) {
     val active = state !is EpisodeActionState.Resolving && state !is EpisodeActionState.Downloading
     val tint = when (state) {
-        is EpisodeActionState.Completed -> Color(0xFF20C997)
+        is EpisodeActionState.Completed -> StatusSuccess
         is EpisodeActionState.Downloaded -> MaterialTheme.colorScheme.error
         is EpisodeActionState.Failed -> MaterialTheme.colorScheme.error
         else -> MaterialTheme.colorScheme.primary
@@ -986,7 +984,7 @@ private fun FindMoreSeasonsButton(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null,
                     onClick = {
-                        performHaptic(view, "light")
+                        performHaptic(view, Haptic.Light)
                         onClick()
                     },
                 )

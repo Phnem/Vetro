@@ -6,14 +6,16 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.compositionLocalOf
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import com.example.myapplication.isAppInDarkTheme
+import com.example.myapplication.ui.shared.theme.isAppInDarkTheme
 import com.kyant.backdrop.Backdrop
 import com.kyant.backdrop.drawBackdrop
 import com.kyant.backdrop.effects.blur
@@ -27,16 +29,13 @@ val LocalAdaptiveGlassEnabled = compositionLocalOf { true }
 val LocalAdaptiveGlassScrollInProgress = compositionLocalOf { false }
 
 /**
- * Dev toggle: нижний док — капсула матового стекла вместо прежнего «жидкого» (по умолчанию выкл).
+ * Новый интерфейс (по умолчанию) против классического, см. `DevPreferencesKeys.LEGACY_UI`:
+ * капсульный док, матовое стекло на всех стеклянных поверхностях, рабочая область со свайпом.
  *
- * Через CompositionLocal, а не параметром: док стоит глубоко внутри экрана коллекции, и тянуть
- * временный флаг через всю цепочку вызовов ради тумблера, который уедет после обкатки, дороже, чем
- * он стоит.
+ * Через CompositionLocal, а не параметром: материал — свойство всего приложения, а стеклянные
+ * поверхности стоят глубоко внутри экранов.
  */
-val LocalGlassCapsuleDock = compositionLocalOf { false }
-
-/** Dev toggle: нижние панели раскрываются морфом из своей кнопки (по умолчанию выкл). */
-val LocalStagedSheetMotion = compositionLocalOf { false }
+val LocalModernUi = staticCompositionLocalOf { true }
 
 enum class GlassPreset(
     val fullBlur: Dp,
@@ -86,6 +85,18 @@ data class AdaptiveGlassEffects(
 @Composable
 fun rememberAdaptiveGlassEffects(preset: GlassPreset): AdaptiveGlassEffects {
     val adaptiveEnabled = LocalAdaptiveGlassEnabled.current
+    // Без адаптива (по умолчанию) и в матовом режиме, где эти значения вообще не читаются,
+    // четыре анимации ниже крутились бы вхолостую на каждой поверхности: цели у них постоянные.
+    if (!adaptiveEnabled || LocalModernUi.current) {
+        return remember(preset) {
+            AdaptiveGlassEffects(
+                blur = preset.fullBlur,
+                lensRefraction = preset.lensRefraction,
+                lensDepth = preset.lensDepth,
+                scrimAlpha = 0f,
+            )
+        }
+    }
     val scrollInProgress = LocalAdaptiveGlassScrollInProgress.current
     val isDark = isAppInDarkTheme()
 
@@ -147,7 +158,7 @@ fun Modifier.adaptiveGlassBackdrop(
     shape: Shape,
     effects: AdaptiveGlassEffects,
 ): Modifier {
-    if (LocalGlassCapsuleDock.current) {
+    if (LocalModernUi.current) {
         return this.frostedGlass(
             backdrop = backdrop,
             shape = shape,
@@ -163,9 +174,10 @@ fun Modifier.adaptiveGlassBackdrop(
     } else {
         Color.Unspecified
     }
-    return this
-        .drawBackdrop(
-            backdrop = backdrop,
+    val source = rememberPinnableBackdrop(backdrop)
+    val glass = remember(source, shape, blurPx, lensRefractionPx, lensDepthPx) {
+        Modifier.drawBackdrop(
+            backdrop = source,
             shape = { shape },
             effects = {
                 vibrancy()
@@ -175,6 +187,9 @@ fun Modifier.adaptiveGlassBackdrop(
                 }
             },
         )
+    }
+    return this
+        .then(glass)
         .then(
             if (scrimColor != Color.Unspecified) {
                 Modifier.background(scrimColor, shape)

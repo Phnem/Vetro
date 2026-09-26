@@ -6,7 +6,6 @@ import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.client.request.parameter
 import io.ktor.client.statement.bodyAsText
-import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
@@ -26,7 +25,7 @@ class KitsuRemoteDataSource(
     private val client: HttpClient,
     private val burstRate: TokenBucketRateLimiter,
 ) {
-    private val json = Json { ignoreUnknownKeys = true }
+    private val json = AppJson
 
     suspend fun searchAnime(query: String, limit: Int = 10): Result<List<ApiSearchResult>> = runCatching {
         val q = query.trim()

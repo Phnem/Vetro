@@ -73,7 +73,9 @@ object AppReleaseVersionComparer {
     ) {
         companion object {
             fun parse(raw: String): ParsedVersion? {
-                val clean = raw.trim().removePrefix("v").trim().ifBlank { return null }
+                // Префикс снимается без учёта регистра: versionName долго был «V3.3.4-Beta», теги — «v3.3.4-Beta»,
+                // и заглавная «V» превращала мажорную цифру в 0, отчего любой релиз казался новее.
+                val clean = raw.trim().removePrefix("v").removePrefix("V").trim().ifBlank { return null }
                 val dashParts = clean.split('-', limit = 2)
                 val corePart = dashParts[0].trim()
                 val suffixRaw = dashParts.getOrElse(1) { "" }.trim()

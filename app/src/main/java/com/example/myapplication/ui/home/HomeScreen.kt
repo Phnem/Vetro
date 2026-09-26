@@ -1,5 +1,20 @@
 package com.example.myapplication.ui.home
 
+import com.example.myapplication.ui.shared.theme.BrandOrange
+import androidx.activity.compose.ReportDrawnWhen
+import com.example.myapplication.ui.shared.theme.IosScroll
+import com.example.myapplication.ui.home.updates.notificationStrings
+import com.example.myapplication.ui.home.updates.NotificationCenter
+import com.example.myapplication.ui.home.updates.NotificationBellButton
+import com.example.myapplication.ui.home.updates.NotificationBellAnchor
+import com.example.myapplication.ui.home.updates.EpisodeNotificationTray
+import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.animation.core.tween
+import com.example.myapplication.ui.shared.frostedGlass
+import com.example.myapplication.ui.shared.FrostedMaterials
+import com.example.myapplication.ui.shared.LocalModernUi
+import com.example.myapplication.ui.shared.LocalAdaptiveGlassEnabled
 import android.app.Activity
 import android.content.pm.PackageManager
 import android.graphics.RenderEffect
@@ -37,9 +52,8 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.key
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -58,9 +72,9 @@ import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.asComposeRenderEffect
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.nestedscroll.nestedScroll
-import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.boundsInRoot
-import androidx.compose.ui.layout.onGloballyPositioned
+import com.example.myapplication.ui.shared.PlacedCoordinates
+import com.example.myapplication.ui.shared.trackPlacement
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
@@ -79,7 +93,6 @@ import androidx.navigation.NavController
 import com.example.myapplication.ui.shared.GlassBackdropRecovery
 import com.example.myapplication.ui.shared.ListSyncLoadingOverlay
 import com.example.myapplication.ui.shared.LocalAdaptiveGlassScrollInProgress
-import com.example.myapplication.ui.shared.customOverscroll
 import com.example.myapplication.ui.shared.rememberDockAutoHide
 
 import com.example.myapplication.GlassActionDock
@@ -97,7 +110,7 @@ import com.example.myapplication.sync.supabase.CollectionImageRestoreCoordinator
 import com.example.myapplication.sync.supabase.SupabaseSyncCoordinator
 import com.example.myapplication.utils.getCloudSyncPillStrings
 import com.example.myapplication.utils.getStrings
-import com.example.myapplication.utils.systemAppLanguage
+import com.example.myapplication.utils.Haptic
 import com.example.myapplication.utils.performHaptic
 import com.example.myapplication.ui.home.recommendations.DiscoveryCard
 import com.example.myapplication.ui.home.recommendations.RecommendationsSheet
@@ -107,7 +120,6 @@ import com.example.myapplication.ui.home.recommendations.getRecommendationsStrin
 import com.example.myapplication.ui.home.cardmenu.CardActionMenuOverlay
 import com.example.myapplication.ui.home.cardmenu.CardMenuTarget
 import com.example.myapplication.ui.home.updates.EpisodeUpdateStack
-import com.example.myapplication.ui.shared.LocalGlassCapsuleDock
 import com.example.myapplication.ui.shared.LocalWorkspaceSearch
 import com.example.myapplication.ui.navigation.navigateToAddEdit
 import com.example.myapplication.ui.navigation.navigateToDetails
@@ -163,12 +175,13 @@ fun HomeScreen(
     val isCloudImageRestoring by collectionImageRestoreCoordinator.isRestoring.collectAsStateWithLifecycle()
     val currentLanguage by viewModel.uiLanguage.collectAsStateWithLifecycle()
     val strings = getStrings(currentLanguage)
-    val cloudSyncPillStrings = getCloudSyncPillStrings(systemAppLanguage())
+    val cloudSyncPillStrings = getCloudSyncPillStrings(currentLanguage)
     val syncReport by viewModel.syncReport.collectAsStateWithLifecycle()
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val list by viewModel.animeListFlow.collectAsStateWithLifecycle()
-    val playerPromoDismissed by viewModel.playerPromoDismissed.collectAsStateWithLifecycle()
-    val playerPromoDeferred by viewModel.playerPromoDeferredThisSession.collectAsStateWithLifecycle()
+    // Старт «полностью отрисован», когда коллекция на экране: система пишет это время в лог
+    // (Fully drawn), и по нему считается холодный старт, а не по первому кадру сплэша.
+    ReportDrawnWhen { uiState.isListLoaded }
     val webLinksMap by viewModel.webLinks.collectAsStateWithLifecycle()
     val airingMap by viewModel.airingProgress.collectAsStateWithLifecycle()
     val watchedMap by viewModel.watchedEpisodes.collectAsStateWithLifecycle()
@@ -186,8 +199,8 @@ fun HomeScreen(
     val ctx = LocalContext.current
     var showCSheet by remember { mutableStateOf(false) }
     var showRecsSheet by remember { mutableStateOf(false) }
-    /** Инкремент перемонтирует LazyColumn+layerBackdrop после закрытия оверлеев (см. GlassBackdropRecovery). */
-    var layerBackdropResetKey by remember { mutableIntStateOf(0) }
+    /** Инкремент перезаписывает layerBackdrop списка после закрытия оверлеев (см. GlassBackdropRecovery). */
+    val backdropRedraw = remember { mutableIntStateOf(0) }
     val recommendationsViewModel: RecommendationsViewModel = koinViewModel()
     val recsState by recommendationsViewModel.uiState.collectAsStateWithLifecycle()
     val recsStrings = getRecommendationsStrings(currentLanguage)
@@ -230,32 +243,6 @@ fun HomeScreen(
         if (list.none { it.id == id }) cardMenuTarget = null
     }
     val scope = rememberCoroutineScope()
-    val playerPromoTarget = remember(list) {
-        val playable = list.filter { it.mediaType == MediaType.ANIME && it.episodes > 0 }
-        (playable.ifEmpty { list.filter { it.episodes > 0 } })
-            .maxWithOrNull(compareBy<Anime> { it.rating }.thenBy { it.episodes })
-    }
-    if (
-        uiState.isListLoaded &&
-        playerPromoTarget != null &&
-        !playerPromoDismissed &&
-        !playerPromoDeferred
-    ) {
-        PlayerPowerPromoDialog(
-            language = currentLanguage,
-            onTry = {
-                val target = playerPromoTarget ?: return@PlayerPowerPromoDialog
-                performHaptic(view, "light")
-                viewModel.dismissPlayerPromoPermanently()
-                navController.navigateToDetails(target.id, openEpisodes = true)
-            },
-            onLater = {
-                performHaptic(view, "light")
-                viewModel.deferPlayerPromoForSession()
-            },
-        )
-    }
-
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
     ) { }
@@ -298,9 +285,8 @@ fun HomeScreen(
     // общаются они заявками (см. WorkspaceSearchState). В классическом режиме связи нет:
     // там кнопка поиска стоит в том же доке, что и всё остальное.
     val workspaceSearch = LocalWorkspaceSearch.current
-    // Объединённый режим: рабочая область + капсульный док. Только в нём у нижнего дока есть
-    // меню, в которое переехали статистика и синхронизация.
-    val mergedDockMode = hostedInWorkspace && LocalGlassCapsuleDock.current
+    // Рабочая область всегда с капсульным доком: статистика и синхронизация живут в его меню.
+    val mergedDockMode = hostedInWorkspace
     if (hostedInWorkspace) {
         LaunchedEffect(isSearchVisible) { workspaceSearch.report(isSearchVisible) }
         // Уехали на дальний раздел — пейджер выбрасывает страницу из композиции вместе с её
@@ -324,7 +310,7 @@ fun HomeScreen(
     val finalDockVisible = dockAutoHide.visible || isSearchVisible
 
     BackHandler(enabled = isSearchVisible || uiState.searchQuery.isNotEmpty()) {
-        performHaptic(view, "light")
+        performHaptic(view, Haptic.Light)
         isSearchVisible = false
         viewModel.updateSearchQuery("")
         focusManager.clearFocus()
@@ -332,15 +318,26 @@ fun HomeScreen(
     }
 
     val listState = rememberLazyListState()
-    val listScrollInProgress by remember { derivedStateOf { listState.isScrollInProgress } }
-
-    LaunchedEffect(listScrollInProgress) {
-        if (listScrollInProgress) {
-            cloudSyncPillDismissed = true
+    // Флаг скролла читается подпиской, а не в композиции: иначе начало и конец каждого жеста
+    // пересобирали бы всю главную.
+    val currentOnContentScrollChange by rememberUpdatedState(onContentScrollChange)
+    // Новый интерфейс: обновления серий показываются стопкой только до первого действия
+    // пользователя, дальше живут в колокольчике у верхнего дока (см. EpisodeNotificationTray).
+    val notificationTray: EpisodeNotificationTray = koinInject()
+    val bellAnchor = remember { NotificationBellAnchor() }
+    var notificationCenterOpen by remember { mutableStateOf(false) }
+    var updateStackGone by remember { mutableStateOf(notificationTray.collapsed) }
+    val collapseUpdatesToBell: () -> Unit = { if (hostedInWorkspace) notificationTray.collapse() }
+    LaunchedEffect(listState) {
+        snapshotFlow { listState.isScrollInProgress }.collect { inProgress ->
+            if (inProgress) {
+                cloudSyncPillDismissed = true
+                collapseUpdatesToBell()
+            }
+            currentOnContentScrollChange(inProgress)
         }
     }
 
-    var overscrollAmount by remember { mutableFloatStateOf(0f) }
     val isHeaderFloating by remember { derivedStateOf { listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 20 } }
     val showScrollToTop by remember { derivedStateOf { listState.firstVisibleItemIndex > 4 } }
     val bgColor = MaterialTheme.colorScheme.background
@@ -354,8 +351,13 @@ fun HomeScreen(
     val shouldBlur = (isSearchVisible && uiState.searchQuery.isBlank()) ||
             showCSheet || animeToDelete != null || animeToFavorite != null ||
             uiState.isGenreFilterVisible || showNotificationsOverlay || showSortOverlay ||
-            showMediaTypeFilterOverlay || listSyncUi.isRunning || cardMenuTarget != null
-    val blurAmount by animateDpAsState(
+            showMediaTypeFilterOverlay || listSyncUi.isRunning || cardMenuTarget != null ||
+            // Заголовок центра уведомлений лежит поверх шапки главной: без размытия текст
+            // «Коллекция» читался сквозь «Уведомления».
+            notificationCenterOpen
+    // Анимированные значения держим как State и читаем в лямбдах слоя/раскладки: чтение в
+    // композиции пересобирало всю главную на каждом кадре открытия и закрытия оверлея.
+    val blurAmount = animateDpAsState(
         targetValue = when {
             notificationsBlockingChildDialog -> 20.dp
             shouldBlur -> 10.dp
@@ -367,7 +369,7 @@ fun HomeScreen(
     // Кнопка «вверх» опускается к низу, когда док скрыт (как кнопка поиска), и поднимается вместе с доком.
     // При видимом доке держим её выше плавающей кнопки поиска (её верх ≈162dp над нав-панелью),
     // чтобы кнопки не слипались.
-    val scrollToTopBottomPadding by animateDpAsState(
+    val scrollToTopLift = animateDpAsState(
         targetValue = when {
             !finalDockVisible -> 88.dp
             // В рабочей области своего нижнего дока у главной нет, а чужой ниже и тоньше:
@@ -380,7 +382,7 @@ fun HomeScreen(
     )
 
     val openWorkspaceSort: () -> Unit = {
-        performHaptic(view, "light")
+        performHaptic(view, Haptic.Light)
         dismissCloudSyncPill()
         showSortOverlay = !showSortOverlay
         if (showSortOverlay) {
@@ -390,7 +392,7 @@ fun HomeScreen(
         }
     }
     val openWorkspaceNotifications: () -> Unit = {
-        performHaptic(view, "light")
+        performHaptic(view, Haptic.Light)
         dismissCloudSyncPill()
         showNotificationsOverlay = !showNotificationsOverlay
         if (showNotificationsOverlay) {
@@ -399,8 +401,15 @@ fun HomeScreen(
             viewModel.setGenreFilterVisible(false)
         }
     }
+    val notificationStrings = remember(currentLanguage) { notificationStrings(currentLanguage) }
+    val openNotificationCenter: () -> Unit = {
+        performHaptic(view, Haptic.Light)
+        dismissCloudSyncPill()
+        notificationTray.collapse()
+        notificationCenterOpen = !notificationCenterOpen
+    }
     val openMediaTypeFilter: () -> Unit = {
-        performHaptic(view, "light")
+        performHaptic(view, Haptic.Light)
         dismissCloudSyncPill()
         showMediaTypeFilterOverlay = !showMediaTypeFilterOverlay
         if (showMediaTypeFilterOverlay) {
@@ -415,17 +424,24 @@ fun HomeScreen(
     // как RenderEffect (см. shouldBlur). Шторка рекомендаций перекрывает экран своим scrim.
     val anyHomeSheetOpen = showMediaTypeFilterOverlay || showSortOverlay ||
         uiState.isGenreFilterVisible || showNotificationsOverlay || showCSheet
-    val homePushProgress by animateFloatAsState(
+    val homePushProgress = animateFloatAsState(
         targetValue = if (anyHomeSheetOpen) 1f else 0f,
         animationSpec = MotionTokens.sheetPresent(),
         label = "homePush",
     )
+    // Для восстановления стекла важен только момент «анимации над layerBackdrop доиграли».
+    val effectsSettled by remember {
+        derivedStateOf { blurAmount.value <= 0.dp && homePushProgress.value <= 0.001f }
+    }
 
     // Любая шторка/диалог/оверлей поверх главной → док рабочей области уезжает вниз: он
     // соседний узел, сам про эти состояния не знает.
-    val anyOverlayVisible = shouldBlur || anyHomeSheetOpen || showRecsSheet || isSearchVisible
-    LaunchedEffect(anyOverlayVisible) { onOverlayVisibleChange(anyOverlayVisible) }
-    LaunchedEffect(listScrollInProgress) { onContentScrollChange(listScrollInProgress) }
+    val anyOverlayVisible = shouldBlur || anyHomeSheetOpen || showRecsSheet || isSearchVisible ||
+        notificationCenterOpen
+    LaunchedEffect(anyOverlayVisible) {
+        onOverlayVisibleChange(anyOverlayVisible)
+        if (anyOverlayVisible) collapseUpdatesToBell()
+    }
     LaunchedEffect(finalDockVisible) { onDockVisibleChange(finalDockVisible) }
     // Уход со страницы посреди скролла не должен оставить чужой док спрятанным или его стекло
     // в экономном режиме навсегда.
@@ -443,10 +459,19 @@ fun HomeScreen(
         // Иначе system bar insets добавляются в paddingValues — фон не заливает полосы сверху/снизу
         contentWindowInsets = WindowInsets(0.dp, 0.dp, 0.dp, 0.dp)
     ) { paddingValues ->
-        CompositionLocalProvider(LocalAdaptiveGlassScrollInProgress provides listScrollInProgress) {
+        // Экономный режим стекла на время скролла нужен только адаптивному жидкому стеклу; без
+        // него флаг не читаем вовсе, чтобы жест не пересобирал корень главной.
+        val glassScrollInProgress = if (LocalAdaptiveGlassEnabled.current && !LocalModernUi.current) {
+            val inProgress by remember { derivedStateOf { listState.isScrollInProgress } }
+            inProgress
+        } else {
+            false
+        }
+        CompositionLocalProvider(LocalAdaptiveGlassScrollInProgress provides glassScrollInProgress) {
+        // Отдельной заливки под контентом нет: под главной уже фон того же цвета (корень
+        // MainActivity, бэкдроп рабочей области), а колонка ниже непрозрачна — это была
+        // лишняя полноэкранная заливка на каждый кадр.
         Box(modifier = Modifier.fillMaxSize().padding(paddingValues)) {
-            Box(modifier = Modifier.fillMaxSize().background(bgColor))
-
             if (notifVisibleState.currentState || notifVisibleState.targetState) {
                 Box(modifier = Modifier.zIndex(5f).fillMaxSize()) {
                     NotificationSyncOverlay(
@@ -463,7 +488,7 @@ fun HomeScreen(
                             navController.navigateToWelcome()
                         },
                         onCheckUpdates = {
-                            performHaptic(view, "light")
+                            performHaptic(view, Haptic.Light)
                             viewModel.checkForUpdates(force = true)
                         },
                         onBlockingChildDialogChange = { notificationsBlockingChildDialog = it }
@@ -481,11 +506,11 @@ fun HomeScreen(
                         filterSelectedTags = uiState.filterTags,
                         onDismiss = { showSortOverlay = false },
                         onApplySort = { option, isAscending ->
-                            performHaptic(view, "light")
+                            performHaptic(view, Haptic.Light)
                             viewModel.applySort(option, isAscending)
                         },
                         onApplyOpenGenreFilter = {
-                            performHaptic(view, "light")
+                            performHaptic(view, Haptic.Light)
                             viewModel.toggleGenreFilter()
                         }
                     )
@@ -544,7 +569,7 @@ fun HomeScreen(
                         total = listSyncUi.total,
                         strings = strings,
                         onDismiss = {
-                            performHaptic(view, "light")
+                            performHaptic(view, Haptic.Light)
                             listSyncCoordinator.cancelListSync()
                         }
                     )
@@ -557,19 +582,20 @@ fun HomeScreen(
                     .graphicsLayer {
                         // Якорь сверху: при «вдавливании» не открывается чёрный letterbox
                         // под status bar — контент остаётся edge-to-edge до выреза камеры.
-                        val s = androidx.compose.ui.util.lerp(1f, 0.94f, homePushProgress)
+                        val push = homePushProgress.value
+                        val s = androidx.compose.ui.util.lerp(1f, 0.94f, push)
                         scaleX = s
                         scaleY = s
                         transformOrigin = TransformOrigin(0.5f, 0f)
-                        clip = homePushProgress > 0.001f
+                        clip = push > 0.001f
                         shape = SquircleCornerShape(
                             topStart = 0.dp,
                             topEnd = 0.dp,
-                            bottomEnd = 16.dp * homePushProgress,
-                            bottomStart = 16.dp * homePushProgress,
+                            bottomEnd = 16.dp * push,
+                            bottomStart = 16.dp * push,
                         )
                     }
-                    .homeScrollBlur(blurAmount)
+                    .homeScrollBlur { blurAmount.value }
             ) {
                 Box(modifier = Modifier.fillMaxSize().weight(1f).background(bgColor)) {
                     val isRefreshing by viewModel.isRefreshing.collectAsStateWithLifecycle()
@@ -584,69 +610,249 @@ fun HomeScreen(
                     // а НЕ его предок, поэтому не оборачивает layerBackdrop-список и не ломает стекло дока.
                     PullRefreshIndicator(controller = refreshController, revealMax = refreshRevealMax)
 
-                    CompositionLocalProvider(LocalOverscrollFactory provides null) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .nestedScroll(dockAutoHide.connection)
-                                // Верхнюю «резинку» отключаем — верхний пулл целиком у pull-to-refresh.
-                                .customOverscroll(listState, topEnabled = { false }) { overscrollAmount = it }
-                                // Сдвиг контента = overscroll + раскрытие pull-to-refresh. Тот же
-                                // СУЩЕСТВУЮЩИЙ offset-узел (не новая нода над layerBackdrop) — стекло
-                                // дока остаётся целым.
-                                .offset {
-                                    val reveal = (refreshController.revealFraction() * refreshRevealMax.toPx()).roundToInt()
-                                    IntOffset(0, overscrollAmount.roundToInt() + reveal)
-                                }
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .nestedScroll(dockAutoHide.connection)
+                            // Край списка — общая iOS-«резинка» (LocalOverscrollFactory в корне);
+                            // верхнюю протяжку первым забирает pull-to-refresh как родитель в
+                            // nested scroll, поэтому резинка сверху при обновлении не спорит с ним.
+                            // Сдвиг контента = overscroll + раскрытие pull-to-refresh. Тот же
+                            // СУЩЕСТВУЮЩИЙ offset-узел (не новая нода над layerBackdrop) — стекло
+                            // дока остаётся целым.
+                            .offset {
+                                val reveal = (refreshController.revealFraction() * refreshRevealMax.toPx()).roundToInt()
+                                IntOffset(0, reveal)
+                            }
+                    ) {
+                        PullToRefreshBox(
+                            isRefreshing = isRefreshing,
+                            onRefresh = {
+                                dismissCloudSyncPill()
+                                // Жест сработал → индикатор фиксируется в оттянутом положении
+                                // минимум на 2с (см. PullRefreshController).
+                                refreshController.notifyRefreshInvoked()
+                                viewModel.refreshList()
+                            },
+                            state = refreshPullState,
+                            // Свой визуал рисуем сами, стоковый индикатор выключаем.
+                            indicator = {},
+                            modifier = Modifier.fillMaxSize()
                         ) {
-                            PullToRefreshBox(
-                                isRefreshing = isRefreshing,
-                                onRefresh = {
-                                    dismissCloudSyncPill()
-                                    // Жест сработал → индикатор фиксируется в оттянутом положении
-                                    // минимум на 2с (см. PullRefreshController).
-                                    refreshController.notifyRefreshInvoked()
-                                    viewModel.refreshList()
-                                },
-                                state = refreshPullState,
-                                // Свой визуал рисуем сами, стоковый индикатор выключаем.
-                                indicator = {},
-                                modifier = Modifier.fillMaxSize()
+                            LazyColumn(
+                                flingBehavior = IosScroll.flingBehavior(),
+                                state = listState,
+                                contentPadding = PaddingValues(top = 0.dp, bottom = 0.dp, start = 0.dp, end = 0.dp),
+                                verticalArrangement = Arrangement.spacedBy(16.dp),
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    // Чтение в фазе отрисовки: инкремент перерисовывает этот узел,
+                                    // и layerBackdrop перезаписывает свою запись — без
+                                    // перемонтирования списка (см. GlassBackdropRecovery).
+                                    .drawBehind { backdropRedraw.intValue }
+                                    .layerBackdrop(backdrop)
                             ) {
-                                key(layerBackdropResetKey) {
-                                LazyColumn(
-                                    state = listState,
-                                    contentPadding = PaddingValues(top = 0.dp, bottom = 0.dp, start = 0.dp, end = 0.dp),
-                                    verticalArrangement = Arrangement.spacedBy(16.dp),
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .layerBackdrop(backdrop)
-                                ) {
-                                    item {
-                                        VetroWorkspaceTopBar(
-                                            strings = getStrings(currentLanguage),
+                                item {
+                                    VetroWorkspaceTopBar(
+                                        strings = getStrings(currentLanguage),
+                                    )
+                                }
+
+                                val recsReady = recsState as? RecommendationsUiState.Ready
+                                if (recsReady != null && recsReady.items.isNotEmpty() && uiState.searchQuery.isEmpty()) {
+                                    item(key = "discovery_card", contentType = "discovery_card") {
+                                        DiscoveryCard(
+                                            state = recsReady,
+                                            strings = recsStrings,
+                                            onClick = {
+                                                performHaptic(view, Haptic.Light)
+                                                dismissCloudSyncPill()
+                                                showRecsSheet = true
+                                            },
+                                            modifier = Modifier.padding(horizontal = 16.dp),
                                         )
                                     }
+                                }
 
-                                    val recsReady = recsState as? RecommendationsUiState.Ready
-                                    if (recsReady != null && recsReady.items.isNotEmpty() && uiState.searchQuery.isEmpty()) {
-                                        item(key = "discovery_card", contentType = "discovery_card") {
-                                            DiscoveryCard(
-                                                state = recsReady,
-                                                strings = recsStrings,
-                                                onClick = {
-                                                    performHaptic(view, "light")
-                                                    dismissCloudSyncPill()
-                                                    showRecsSheet = true
-                                                },
-                                                modifier = Modifier.padding(horizontal = 16.dp),
-                                            )
+                                val showApiFirst = list.isEmpty() && uiState.searchQuery.isNotEmpty()
+
+                                if (showApiFirst) {
+                                    apiSearchResultsSection(
+                                        strings = strings,
+                                        apiSearchModels = apiSearchModels,
+                                        uiState = uiState,
+                                        currentLanguage = currentLanguage,
+                                        genreRepository = genreRepository,
+                                        view = view,
+                                        viewModel = viewModel,
+                                        topPadding = 8.dp
+                                    )
+                                    when {
+                                        uiState.apiSearchLoading -> Unit
+                                        uiState.apiSearchError != null -> Unit
+                                        apiSearchModels.isNotEmpty() -> item {
+                                            Box(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .padding(vertical = 24.dp, horizontal = 16.dp),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                Text(
+                                                    text = strings.noResultsInLibrary,
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                    textAlign = TextAlign.Center
+                                                )
+                                            }
+                                        }
+                                        else -> item {
+                                            Box(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .padding(vertical = 32.dp),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                EmptyStateView(
+                                                    title = strings.noResults,
+                                                    subtitle = ""
+                                                )
+                                            }
                                         }
                                     }
+                                } else if (list.isNotEmpty()) {
+                                    items(
+                                        items = list,
+                                        key = { it.id },
+                                        contentType = { "anime_card" }
+                                    ) { anime ->
+                                        val webLinksEntry = webLinksMap[anime.id]
+                                            val airingEntry = airingMap[anime.id]
+                                            val cardProgress = rememberCardProgress(
+                                                totalEpisodes = franchiseEpisodeTotal(
+                                                    layout = seasonLayoutMap[anime.id],
+                                                    storedEpisodes = anime.episodes,
+                                                ),
+                                                watched = watchedMap[anime.id],
+                                                airing = airingEntry,
+                                                reading = mangaReadingMap[anime.id],
+                                            )
+                                            val cardState = remember(anime, currentLanguage, webLinksEntry, cardProgress) {
+                                                // Название по выбранному языку: EN → английское, RU → русское.
+                                                // Замена, а не вторая строка; при отсутствии перевода — исходный title.
+                                                val displayTitle = when (currentLanguage) {
+                                                    AppLanguage.EN -> anime.titleEn?.takeIf { it.isNotBlank() } ?: anime.title
+                                                    AppLanguage.RU -> anime.titleRu?.takeIf { it.isNotBlank() } ?: anime.title
+                                                }
+                                                val links = when (currentLanguage) {
+                                                    AppLanguage.EN -> webLinksEntry?.enLinks
+                                                    AppLanguage.RU -> webLinksEntry?.ruLinks
+                                                }.orEmpty()
+                                                AnimeCardState(
+                                                    id = anime.id,
+                                                    title = displayTitle,
+                                                    titleEn = null,
+                                                    rating = anime.rating,
+                                                    genres = persistentListOf(
+                                                        *anime.tags.take(3)
+                                                            .mapNotNull { genreRepository.getLabel(it, currentLanguage).takeIf { n -> n.isNotBlank() } }
+                                                            .toTypedArray()
+                                                    ),
+                                                    episodesCount = anime.episodes,
+                                                    // У манги счёт идёт по главам — иначе на
+                                                    // одной карточке соседствовали бы
+                                                    // «12 / 60 ch.» и «60 eps.».
+                                                    episodesUnit = when (anime.mediaType) {
+                                                        com.example.myapplication.data.models.MediaType.MANGA -> "ch."
+                                                        else -> "eps."
+                                                    },
+                                                    webLinks = links,
+                                                    language = currentLanguage,
+                                                    imagePath = viewModel.getImgPath(anime.imageFileName),
+                                                    mediaTypeLabel = when (anime.mediaType) {
+                                                        com.example.myapplication.data.models.MediaType.ANIME -> strings.typeAnime
+                                                        com.example.myapplication.data.models.MediaType.MANGA -> strings.typeManga
+                                                        com.example.myapplication.data.models.MediaType.MOVIE -> strings.typeMovie
+                                                        com.example.myapplication.data.models.MediaType.SERIES -> strings.typeSeries
+                                                    },
+                                                    airing = cardProgress,
+                                                    isFavorite = anime.isFavorite,
+                                                )
+                                            }
 
-                                    val showApiFirst = list.isEmpty() && uiState.searchQuery.isNotEmpty()
+                                        // Тап по карточке — полноэкранные детали; кнопка справа-внизу — редактирование.
+                                        val openDetails: () -> Unit = {
+                                            performHaptic(view, Haptic.Light)
+                                            collapseUpdatesToBell()
+                                            navController.navigateToDetails(anime.id)
+                                        }
+                                        val openEdit: () -> Unit = {
+                                            performHaptic(view, Haptic.Light)
+                                            navController.navigateToAddEdit(anime.id)
+                                        }
+                                        val rowModifier = Modifier.padding(horizontal = 16.dp)
+                                        // .animateItem() не добавляем: конфликт с SharedTransition при возврате.
 
-                                    if (showApiFirst) {
+                                        if (hostedInWorkspace) {
+                                            // Горизонтальная ось отдана навигации: действия — по удержанию.
+                                            val placement = remember { PlacedCoordinates() }
+                                            Box(
+                                                modifier = rowModifier.trackPlacement(placement),
+                                            ) {
+                                                with(sharedTransitionScope) {
+                                                    OneUiAnimeCard(
+                                                        state = cardState,
+                                                        animatedVisibilityScope = animatedVisibilityScope,
+                                                        onClick = openDetails,
+                                                        onEditClick = openEdit,
+                                                        onLongClick = {
+                                                            val bounds = placement.boundsInRoot() ?: return@OneUiAnimeCard
+                                                            performHaptic(view, Haptic.Light)
+                                                            cardMenuTarget = CardMenuTarget(
+                                                                state = cardState,
+                                                                isFavorite = anime.isFavorite,
+                                                                boundsInRoot = bounds,
+                                                            )
+                                                            cardMenuVisible = true
+                                                        },
+                                                    )
+                                                }
+                                            }
+                                        } else {
+                                            val dismissState = rememberSwipeToDismissBoxState(
+                                                positionalThreshold = { totalDistance -> totalDistance * 0.4f }
+                                            )
+                                            LaunchedEffect(dismissState.currentValue) {
+                                                when (dismissState.currentValue) {
+                                                    SwipeToDismissBoxValue.StartToEnd -> {
+                                                        performHaptic(view, Haptic.Success)
+                                                        animeToFavorite = anime
+                                                        pendingSwipeReset = { dismissState.reset() }
+                                                    }
+                                                    SwipeToDismissBoxValue.EndToStart -> {
+                                                        performHaptic(view, Haptic.Warning)
+                                                        animeToDelete = anime
+                                                        pendingSwipeReset = { dismissState.reset() }
+                                                    }
+                                                    SwipeToDismissBoxValue.Settled -> Unit
+                                                }
+                                            }
+                                            SwipeToDismissBox(
+                                                state = dismissState,
+                                                backgroundContent = { SwipeBackground(dismissState) },
+                                                modifier = rowModifier
+                                            ) {
+                                                with(sharedTransitionScope) {
+                                                    OneUiAnimeCard(
+                                                        state = cardState,
+                                                        animatedVisibilityScope = animatedVisibilityScope,
+                                                        onClick = openDetails,
+                                                        onEditClick = openEdit,
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+                                    if (uiState.searchQuery.isNotEmpty()) {
                                         apiSearchResultsSection(
                                             strings = strings,
                                             apiSearchModels = apiSearchModels,
@@ -655,204 +861,27 @@ fun HomeScreen(
                                             genreRepository = genreRepository,
                                             view = view,
                                             viewModel = viewModel,
-                                            topPadding = 8.dp
+                                            topPadding = 24.dp
                                         )
-                                        when {
-                                            uiState.apiSearchLoading -> Unit
-                                            uiState.apiSearchError != null -> Unit
-                                            apiSearchModels.isNotEmpty() -> item {
-                                                Box(
-                                                    modifier = Modifier
-                                                        .fillMaxWidth()
-                                                        .padding(vertical = 24.dp, horizontal = 16.dp),
-                                                    contentAlignment = Alignment.Center
-                                                ) {
-                                                    Text(
-                                                        text = strings.noResultsInLibrary,
-                                                        style = MaterialTheme.typography.bodySmall,
-                                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                        textAlign = TextAlign.Center
-                                                    )
-                                                }
-                                            }
-                                            else -> item {
-                                                Box(
-                                                    modifier = Modifier
-                                                        .fillMaxWidth()
-                                                        .padding(vertical = 32.dp),
-                                                    contentAlignment = Alignment.Center
-                                                ) {
-                                                    EmptyStateView(
-                                                        title = strings.noResults,
-                                                        subtitle = ""
-                                                    )
-                                                }
-                                            }
-                                        }
-                                    } else if (list.isNotEmpty()) {
-                                        items(
-                                            items = list,
-                                            key = { it.id },
-                                            contentType = { "anime_card" }
-                                        ) { anime ->
-                                            val webLinksEntry = webLinksMap[anime.id]
-                                                val airingEntry = airingMap[anime.id]
-                                                val cardProgress = rememberCardProgress(
-                                                    totalEpisodes = franchiseEpisodeTotal(
-                                                        layout = seasonLayoutMap[anime.id],
-                                                        storedEpisodes = anime.episodes,
-                                                    ),
-                                                    watched = watchedMap[anime.id],
-                                                    airing = airingEntry,
-                                                    reading = mangaReadingMap[anime.id],
-                                                )
-                                                val cardState = remember(anime, currentLanguage, webLinksEntry, cardProgress) {
-                                                    // Название по выбранному языку: EN → английское, RU → русское.
-                                                    // Замена, а не вторая строка; при отсутствии перевода — исходный title.
-                                                    val displayTitle = when (currentLanguage) {
-                                                        AppLanguage.EN -> anime.titleEn?.takeIf { it.isNotBlank() } ?: anime.title
-                                                        AppLanguage.RU -> anime.titleRu?.takeIf { it.isNotBlank() } ?: anime.title
-                                                    }
-                                                    val links = when (currentLanguage) {
-                                                        AppLanguage.EN -> webLinksEntry?.enLinks
-                                                        AppLanguage.RU -> webLinksEntry?.ruLinks
-                                                    }.orEmpty()
-                                                    AnimeCardState(
-                                                        id = anime.id,
-                                                        title = displayTitle,
-                                                        titleEn = null,
-                                                        rating = anime.rating,
-                                                        genres = persistentListOf(
-                                                            *anime.tags.take(3)
-                                                                .mapNotNull { genreRepository.getLabel(it, currentLanguage).takeIf { n -> n.isNotBlank() } }
-                                                                .toTypedArray()
-                                                        ),
-                                                        episodesCount = anime.episodes,
-                                                        // У манги счёт идёт по главам — иначе на
-                                                        // одной карточке соседствовали бы
-                                                        // «12 / 60 ch.» и «60 eps.».
-                                                        episodesUnit = when (anime.mediaType) {
-                                                            com.example.myapplication.data.models.MediaType.MANGA -> "ch."
-                                                            else -> "eps."
-                                                        },
-                                                        webLinks = links,
-                                                        language = currentLanguage,
-                                                        imagePath = viewModel.getImgPath(anime.imageFileName),
-                                                        mediaTypeLabel = when (anime.mediaType) {
-                                                            com.example.myapplication.data.models.MediaType.ANIME -> strings.typeAnime
-                                                            com.example.myapplication.data.models.MediaType.MANGA -> strings.typeManga
-                                                            com.example.myapplication.data.models.MediaType.MOVIE -> strings.typeMovie
-                                                            com.example.myapplication.data.models.MediaType.SERIES -> strings.typeSeries
-                                                        },
-                                                        airing = cardProgress,
-                                                        isFavorite = anime.isFavorite,
-                                                    )
-                                                }
-
-                                            // Тап по карточке — полноэкранные детали; кнопка справа-внизу — редактирование.
-                                            val openDetails: () -> Unit = {
-                                                performHaptic(view, "light")
-                                                navController.navigateToDetails(anime.id)
-                                            }
-                                            val openEdit: () -> Unit = {
-                                                performHaptic(view, "light")
-                                                navController.navigateToAddEdit(anime.id)
-                                            }
-                                            val rowModifier = Modifier.padding(horizontal = 16.dp)
-                                            // .animateItem() не добавляем: конфликт с SharedTransition при возврате.
-
-                                            if (hostedInWorkspace) {
-                                                // Горизонтальная ось отдана навигации: действия — по удержанию.
-                                                var coords by remember { mutableStateOf<LayoutCoordinates?>(null) }
-                                                Box(
-                                                    modifier = rowModifier.onGloballyPositioned { coords = it },
-                                                ) {
-                                                    with(sharedTransitionScope) {
-                                                        OneUiAnimeCard(
-                                                            state = cardState,
-                                                            animatedVisibilityScope = animatedVisibilityScope,
-                                                            onClick = openDetails,
-                                                            onEditClick = openEdit,
-                                                            onLongClick = {
-                                                                val bounds = coords?.boundsInRoot() ?: return@OneUiAnimeCard
-                                                                performHaptic(view, "light")
-                                                                cardMenuTarget = CardMenuTarget(
-                                                                    state = cardState,
-                                                                    isFavorite = anime.isFavorite,
-                                                                    boundsInRoot = bounds,
-                                                                )
-                                                                cardMenuVisible = true
-                                                            },
-                                                        )
-                                                    }
-                                                }
-                                            } else {
-                                                val dismissState = rememberSwipeToDismissBoxState(
-                                                    positionalThreshold = { totalDistance -> totalDistance * 0.4f }
-                                                )
-                                                LaunchedEffect(dismissState.currentValue) {
-                                                    when (dismissState.currentValue) {
-                                                        SwipeToDismissBoxValue.StartToEnd -> {
-                                                            performHaptic(view, "success")
-                                                            animeToFavorite = anime
-                                                            pendingSwipeReset = { dismissState.reset() }
-                                                        }
-                                                        SwipeToDismissBoxValue.EndToStart -> {
-                                                            performHaptic(view, "warning")
-                                                            animeToDelete = anime
-                                                            pendingSwipeReset = { dismissState.reset() }
-                                                        }
-                                                        SwipeToDismissBoxValue.Settled -> Unit
-                                                    }
-                                                }
-                                                SwipeToDismissBox(
-                                                    state = dismissState,
-                                                    backgroundContent = { SwipeBackground(dismissState) },
-                                                    modifier = rowModifier
-                                                ) {
-                                                    with(sharedTransitionScope) {
-                                                        OneUiAnimeCard(
-                                                            state = cardState,
-                                                            animatedVisibilityScope = animatedVisibilityScope,
-                                                            onClick = openDetails,
-                                                            onEditClick = openEdit,
-                                                        )
-                                                    }
-                                                }
-                                            }
-                                        }
-                                        if (uiState.searchQuery.isNotEmpty()) {
-                                            apiSearchResultsSection(
-                                                strings = strings,
-                                                apiSearchModels = apiSearchModels,
-                                                uiState = uiState,
-                                                currentLanguage = currentLanguage,
-                                                genreRepository = genreRepository,
-                                                view = view,
-                                                viewModel = viewModel,
-                                                topPadding = 24.dp
+                                    }
+                                } else {
+                                    item {
+                                        Box(
+                                            modifier = Modifier
+                                                .fillParentMaxSize()
+                                                .padding(bottom = 120.dp),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            EmptyStateView(
+                                                title = strings.emptyTitle,
+                                                subtitle = strings.emptySubtitle
                                             )
                                         }
-                                    } else {
-                                        item {
-                                            Box(
-                                                modifier = Modifier
-                                                    .fillParentMaxSize()
-                                                    .padding(bottom = 120.dp),
-                                                contentAlignment = Alignment.Center
-                                            ) {
-                                                EmptyStateView(
-                                                    title = strings.emptyTitle,
-                                                    subtitle = strings.emptySubtitle
-                                                )
-                                            }
-                                        }
-                                    }
-                                    item(key = "home_bottom_dock_spacer") {
-                                        Spacer(Modifier.height(220.dp))
                                     }
                                 }
-                                } // key(layerBackdropResetKey)
+                                item(key = "home_bottom_dock_spacer") {
+                                    Spacer(Modifier.height(220.dp))
+                                }
                             }
                         }
                     }
@@ -896,12 +925,12 @@ fun HomeScreen(
                             },
                             onShowNotifs = {},
                             onInspectClick = {
-                                performHaptic(view, "light")
+                                performHaptic(view, Haptic.Light)
                                 dismissCloudSyncPill()
                                 navController.navigateToInspect()
                             },
                             onSearchClick = {
-                                performHaptic(view, "light")
+                                performHaptic(view, Haptic.Light)
                                 dismissCloudSyncPill()
                                 isSearchVisible = !isSearchVisible
                                 if (!isSearchVisible) {
@@ -961,9 +990,15 @@ fun HomeScreen(
                                     modifier = Modifier.matchParentSize()
                                 ) {}
                                 Box(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+                                    // Цвет от темы, как у поля поиска под чипами: матовое стекло в
+                                    // светлой теме почти белое, и белые подписи на нём пропадали.
                                     Text(
                                         text = label,
-                                        color = if (isSelected) Color.White else Color.White.copy(alpha = 0.8f),
+                                        color = if (isSelected) {
+                                            MaterialTheme.colorScheme.onSurface
+                                        } else {
+                                            MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                                        },
                                         fontSize = 13.sp,
                                         fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                                         fontFamily = SnProFamily
@@ -977,15 +1012,15 @@ fun HomeScreen(
                             value = uiState.searchQuery,
                             onValueChange = {
                                 viewModel.updateSearchQuery(it)
-                                if (it.isNotEmpty()) performHaptic(view, "light")
+                                if (it.isNotEmpty()) performHaptic(view, Haptic.Light)
                             },
                             modifier = Modifier.fillMaxSize().focusRequester(searchFocusRequester).padding(horizontal = 20.dp),
                             singleLine = true,
                             textStyle = TextStyle(fontSize = 16.sp, color = MaterialTheme.colorScheme.onSurface, fontFamily = SnProFamily),
-                            cursorBrush = SolidColor(BrandBlue),
+                            cursorBrush = SolidColor(BrandOrange),
                             decorationBox = { innerTextField ->
                                 Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Icon(imageVector = Icons.Default.Search, contentDescription = null, tint = BrandBlue)
+                                    Icon(imageVector = Icons.Default.Search, contentDescription = null, tint = BrandOrange)
                                     Spacer(Modifier.width(12.dp))
                                     Box {
                                         if (uiState.searchQuery.isEmpty()) {
@@ -1070,29 +1105,57 @@ fun HomeScreen(
                 )
             }
 
+            // Появление и уход по спеке движения: оболочка — пружиной из 0.92 (точка исхода — сама
+            // кнопка), свет — короткими кривыми; уход быстрее входа и без отскока.
             AnimatedVisibility(
                 visible = showScrollToTop && !isSearchVisible && animeToDelete == null && animeToFavorite == null,
-                enter = fadeIn() + scaleIn(),
-                exit = fadeOut() + scaleOut(),
+                enter = fadeIn(tween(MotionTokens.EaseEnterMillis, easing = MotionTokens.EaseEnter)) +
+                    scaleIn(MotionTokens.springSurface(), initialScale = 0.92f),
+                exit = fadeOut(tween(MotionTokens.EaseExitMillis, easing = MotionTokens.EaseExit)) +
+                    scaleOut(MotionTokens.springExit(), targetScale = 0.92f),
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
                     .navigationBarsPadding()
-                    .padding(bottom = scrollToTopBottomPadding, end = 24.dp)
+                    .padding(end = 24.dp)
+                    // Подъём вслед за доком — сдвигом в раскладке, а не отступом: отступ читался
+                    // в композиции и пересобирал главную на каждом кадре анимации дока.
+                    .offset { IntOffset(0, -scrollToTopLift.value.roundToPx()) }
                     .zIndex(1f)
             ) {
-                SimpGlassCard(
-                    backdrop = backdrop,
-                    shape = CircleShape,
-                    modifier = Modifier.size(44.dp).clickable {
-                        performHaptic(view, "light")
-                        scope.launch { listState.animateScrollToItem(0) }
+                val onScrollToTop = {
+                    performHaptic(view, Haptic.Light)
+                    scope.launch { listState.animateScrollToItem(0) }
+                    Unit
+                }
+                if (LocalModernUi.current) {
+                    // Тот же матовый материал, что у дока и круглой кнопки поиска рядом с ним:
+                    // жидкое стекло с бликом здесь выглядело чужим среди матовых поверхностей.
+                    Box(
+                        modifier = Modifier
+                            .size(44.dp)
+                            .clip(CircleShape)
+                            .frostedGlass(backdrop = backdrop, shape = CircleShape, material = FrostedMaterials.dock())
+                            .clickable(onClick = onScrollToTop),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.KeyboardArrowUp,
+                            contentDescription = "Up",
+                            tint = MaterialTheme.colorScheme.onSurface
+                        )
                     }
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.KeyboardArrowUp,
-                        contentDescription = "Up",
-                        tint = MaterialTheme.colorScheme.onSurface
-                    )
+                } else {
+                    SimpGlassCard(
+                        backdrop = backdrop,
+                        shape = CircleShape,
+                        modifier = Modifier.size(44.dp).clickable(onClick = onScrollToTop)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.KeyboardArrowUp,
+                            contentDescription = "Up",
+                            tint = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
                 }
             }
 
@@ -1106,6 +1169,21 @@ fun HomeScreen(
                             .padding(top = 20.dp, bottom = 8.dp)
                             .padding(horizontal = 24.dp)
                     ) {
+                        if (hostedInWorkspace) {
+                            // Колокольчик в развёрнутой шапке — обычная кнопка, как его соседи.
+                            NotificationBellButton(
+                                count = uiState.updates.size,
+                                glass = false,
+                                backdrop = backdrop,
+                                anchor = bellAnchor,
+                                contentDescription = notificationStrings.bell,
+                                onClick = openNotificationCenter,
+                                size = 48.dp,
+                                modifier = Modifier
+                                    .align(Alignment.CenterEnd)
+                                    .padding(end = 96.dp),
+                            )
+                        }
                         WorkspaceSortNotificationActions(
                             strings = strings,
                             filterSelectedTags = uiState.filterTags,
@@ -1125,7 +1203,7 @@ fun HomeScreen(
                                 TopDockMiddleAction.SYNC_PANEL
                             },
                             onOpenStats = {
-                                performHaptic(view, "light")
+                                performHaptic(view, Haptic.Light)
                                 dismissCloudSyncPill()
                                 showCSheet = true
                             },
@@ -1154,29 +1232,46 @@ fun HomeScreen(
                             TopDockMiddleAction.SYNC_PANEL
                         },
                         onOpenStats = {
-                            performHaptic(view, "light")
+                            performHaptic(view, Haptic.Light)
                             dismissCloudSyncPill()
                             showCSheet = true
                         },
                         showMiddleAction = !mergedDockMode,
+                        // Колокольчик — отдельной каплей слева от капсулы, не внутри неё.
+                        leading = if (hostedInWorkspace) {
+                            {
+                                NotificationBellButton(
+                                    count = uiState.updates.size,
+                                    glass = true,
+                                    backdrop = backdrop,
+                                    anchor = bellAnchor,
+                                    contentDescription = notificationStrings.bell,
+                                    onClick = openNotificationCenter,
+                                )
+                            }
+                        } else {
+                            null
+                        },
                     )
                 }
             }
 
             // iOS-стиль: пуш-стопка обновлений серий у верхней кромки главного экрана,
-            // поверх всего. Пропадает, когда пользователь разобрал все карточки.
-            if (uiState.updates.isNotEmpty()) {
+            // поверх всего. Пропадает, когда пользователь разобрал все карточки. В новом
+            // интерфейсе — ещё и когда схлопнулась в колокольчик.
+            if (uiState.updates.isNotEmpty() && !(hostedInWorkspace && updateStackGone)) {
                 EpisodeUpdateStack(
                     updates = uiState.updates,
                     coverPathFor = { animeId ->
                         viewModel.getImgPath(viewModel.getAnimeById(animeId)?.imageFileName)
                     },
                     onOpen = { update ->
-                        performHaptic(view, "light")
+                        performHaptic(view, Haptic.Light)
+                        collapseUpdatesToBell()
                         navController.navigateToDetails(update.animeId)
                     },
                     onDismiss = { update ->
-                        performHaptic(view, "light")
+                        performHaptic(view, Haptic.Light)
                         viewModel.dismissUpdate(update, ctx)
                     },
                     backdrop = backdrop,
@@ -1184,7 +1279,39 @@ fun HomeScreen(
                         .align(Alignment.TopCenter)
                         .zIndex(40f)
                         .statusBarsPadding()
-                        .padding(top = 8.dp, start = 12.dp, end = 12.dp)
+                        .padding(top = 8.dp, start = 12.dp, end = 12.dp),
+                    collapsing = hostedInWorkspace && notificationTray.collapsed,
+                    collapseTarget = { bellAnchor.center },
+                    onCollapsed = { updateStackGone = true },
+                )
+            }
+
+            if (hostedInWorkspace) {
+                NotificationCenter(
+                    open = notificationCenterOpen,
+                    updates = uiState.updates,
+                    coverPathFor = { animeId ->
+                        viewModel.getImgPath(viewModel.getAnimeById(animeId)?.imageFileName)
+                    },
+                    bellCenter = { bellAnchor.center },
+                    backdrop = backdrop,
+                    strings = notificationStrings,
+                    onOpenUpdate = { update ->
+                        performHaptic(view, Haptic.Light)
+                        notificationCenterOpen = false
+                        navController.navigateToDetails(update.animeId)
+                    },
+                    onDismissUpdate = { update ->
+                        performHaptic(view, Haptic.Light)
+                        viewModel.dismissUpdate(update, ctx)
+                    },
+                    onClearAll = {
+                        performHaptic(view, Haptic.Success)
+                        viewModel.markAllUpdatesRead(uiState.updates, ctx)
+                        notificationCenterOpen = false
+                    },
+                    onClose = { notificationCenterOpen = false },
+                    modifier = Modifier.zIndex(45f),
                 )
             }
 
@@ -1203,22 +1330,22 @@ fun HomeScreen(
                     onDismiss = { cardMenuVisible = false },
                     onClosed = { cardMenuTarget = null },
                     onToggleFavorite = {
-                        performHaptic(view, "light")
+                        performHaptic(view, Haptic.Light)
                         animeToFavorite = list.firstOrNull { it.id == target.state.id }
                         cardMenuVisible = false
                     },
                     onDelete = {
-                        performHaptic(view, "warning")
+                        performHaptic(view, Haptic.Warning)
                         animeToDelete = list.firstOrNull { it.id == target.state.id }
                         cardMenuVisible = false
                     },
                     onEdit = {
-                        performHaptic(view, "light")
+                        performHaptic(view, Haptic.Light)
                         cardMenuVisible = false
                         navController.navigateToAddEdit(target.state.id)
                     },
                     onDetails = {
-                        performHaptic(view, "light")
+                        performHaptic(view, Haptic.Light)
                         cardMenuVisible = false
                         navController.navigateToDetails(target.state.id)
                     },
@@ -1246,9 +1373,8 @@ fun HomeScreen(
                 animeToDelete != null || animeToFavorite != null || isSearchVisible,
             // Обе анимации живут на ПРЕДКАХ layerBackdrop (homeScrollBlur и graphicsLayer со
             // «вдавливанием»), поэтому перезаписывать стекло раньше их конца бессмысленно.
-            effectsSettled = blurAmount <= 0.dp && homePushProgress <= 0.001f,
-            listState = listState,
-            onRemount = { layerBackdropResetKey++ },
+            effectsSettled = effectsSettled,
+            onRedraw = { backdropRedraw.intValue++ },
         )
 
         if (showCSheet) {
@@ -1273,10 +1399,10 @@ fun HomeScreen(
  * `layerBackdrop` (тот, что сэмплит док), и док заливается сплошным фоном вместо стекла до
  * первого скролла. Держим узел стабильным и просто гасим renderEffect в null.
  */
-private fun Modifier.homeScrollBlur(blur: Dp): Modifier =
+private fun Modifier.homeScrollBlur(blur: () -> Dp): Modifier =
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
         this.graphicsLayer {
-            val px = blur.toPx()
+            val px = blur().toPx()
             renderEffect = if (px > 0f) {
                 RenderEffect.createBlurEffect(px, px, Shader.TileMode.CLAMP).asComposeRenderEffect()
             } else {
@@ -1284,8 +1410,8 @@ private fun Modifier.homeScrollBlur(blur: Dp): Modifier =
             }
             clip = px > 0f
         }
-    } else if (blur > 0.dp) {
-        this.then(Modifier.blur(blur))
+    } else if (blur() > 0.dp) {
+        this.then(Modifier.blur(blur()))
     } else {
         this
     }
@@ -1381,7 +1507,7 @@ private fun LazyListScope.apiSearchResultsSection(
             isAdded = uiModel.isAdded,
             isLoading = isLoading,
             onAddClick = {
-                performHaptic(view, "light")
+                performHaptic(view, Haptic.Light)
                 viewModel.addFromApi(result)
             },
             modifier = Modifier.padding(horizontal = 16.dp),

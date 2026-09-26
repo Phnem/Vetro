@@ -27,10 +27,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.myapplication.HeroiconsRectangleStack
 import com.example.myapplication.data.models.UiStrings
-import com.example.myapplication.isAppInDarkTheme
-import com.example.myapplication.ui.shared.stagedMorphOrigin
-import com.example.myapplication.ui.shared.theme.BrandBlue
-import com.example.myapplication.ui.shared.theme.BrandRed
+import com.example.myapplication.ui.shared.theme.isAppInDarkTheme
+import com.example.myapplication.ui.shared.theme.BrandOrange
+import com.example.myapplication.ui.shared.theme.BrandDeepRed
 
 /** Что делает средняя кнопка верхнего дока. */
 enum class TopDockMiddleAction {
@@ -91,7 +90,7 @@ fun WorkspaceSortNotificationActions(
             modifier = sortModifier,
         ) {
             val icon = if (filterSelectedTags.isNotEmpty()) Icons.Outlined.FilterList else Icons.AutoMirrored.Filled.Sort
-            val tint = if (filterSelectedTags.isNotEmpty()) BrandBlue else iconTint
+            val tint = if (filterSelectedTags.isNotEmpty()) BrandOrange else iconTint
             Icon(icon, contentDescription = strings.cdSort, tint = tint)
         }
         val notifModifier = if (useDockSizing) {
@@ -104,21 +103,12 @@ fun WorkspaceSortNotificationActions(
         }
         if (showMiddleAction) {
         BadgedBox(
-            modifier = notifModifier.then(
-                // Морф панели идёт ИЗ этой кнопки (см. StagedSheetMotion.kt). В рабочей области
-                // нижний док переключает страницы, поэтому единственная точка входа в
-                // статистику — здесь, и расти панель обязана отсюда.
-                if (middleAction == TopDockMiddleAction.STATS) {
-                    Modifier.stagedMorphOrigin()
-                } else {
-                    Modifier
-                },
-            ),
+            modifier = notifModifier,
             badge = {
                 // Счётчик обновлений относится к панели подключения; у статистики его нет.
                 if (middleAction == TopDockMiddleAction.SYNC_PANEL && updatesCount > 0) {
                     Badge(
-                        containerColor = BrandRed,
+                        containerColor = BrandDeepRed,
                         contentColor = Color.White,
                     ) {
                         Text(

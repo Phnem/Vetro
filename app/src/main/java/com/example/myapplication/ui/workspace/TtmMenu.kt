@@ -1,7 +1,10 @@
 package com.example.myapplication.ui.workspace
 
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.layout.layout
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -11,12 +14,10 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -35,10 +36,9 @@ import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
-import com.example.myapplication.isAppInDarkTheme
+import com.example.myapplication.ui.shared.theme.isAppInDarkTheme
 import com.example.myapplication.ui.shared.FrostedMaterials
 import com.example.myapplication.ui.shared.MorphPath
 import com.example.myapplication.ui.shared.frostedGlass
@@ -98,8 +98,9 @@ fun TtmMenu(
     var containerBounds by remember { mutableStateOf<Rect?>(null) }
 
     // Полностью свёрнутое и невидимое меню не должно перехватывать касания по экрану.
-    val interactive = expanded || morph.shell > 0.01f
-    if (!interactive) {
+    // Через derivedStateOf: сам прогресс меняется каждый кадр, а композиция нужна только на пороге.
+    val interactive by remember { derivedStateOf { morph.shell > 0.01f } }
+    if (!expanded && !interactive) {
         // Узел всё равно остаётся в дереве: измеритель контейнера обязан пережить закрытие,
         // иначе следующее открытие первым кадром не знает, куда расти.
         Box(
@@ -118,14 +119,14 @@ fun TtmMenu(
     ) {
         // Затемнение под меню: оно же закрывает меню тапом мимо. Прозрачность — свойство света,
         // поэтому едет своей дорожкой, не пружиной.
-        val scrimAlpha by animateFloatAsState(
+        val scrimAlpha = animateFloatAsState(
             targetValue = if (expanded) if (isDark) 0.42f else 0.22f else 0f,
             label = "ttmScrim",
         )
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color.Black.copy(alpha = scrimAlpha))
+                .drawBehind { drawRect(Color.Black, alpha = scrimAlpha.value) }
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null,
@@ -150,17 +151,23 @@ fun TtmMenu(
             )
             // Координаты источника и цели — абсолютные (boundsInRoot), а рисуем внутри своего
             // контейнера: переводим в его систему, иначе меню уедет на величину отступов.
-            val bounds = stagedMorphBounds(morph.shell, origin, target, MorphPath.DIRECT)
+            // Считается в фазе раскладки: прогресс морфа меняется каждый кадр, и чтение в
+            // композиции пересобирало бы меню целиком на каждом кадре раскрытия.
+            fun bounds(): Rect = stagedMorphBounds(morph.shell, origin, target, MorphPath.DIRECT)
                 .translate(-container.left, -container.top)
             val menuShape = RoundedCornerShape(MENU_CORNER)
 
             Box(
                 modifier = Modifier
-                    .offset { IntOffset(bounds.left.roundToInt(), bounds.top.roundToInt()) }
-                    .size(
-                        width = with(density) { bounds.width.toDp() },
-                        height = with(density) { bounds.height.toDp() },
-                    )
+                    .layout { measurable, _ ->
+                        val b = bounds()
+                        val w = b.width.roundToInt().coerceAtLeast(0)
+                        val h = b.height.roundToInt().coerceAtLeast(0)
+                        val placeable = measurable.measure(Constraints.fixed(w, h))
+                        layout(w, h) {
+                            placeable.place(b.left.roundToInt(), b.top.roundToInt())
+                        }
+                    }
                     .clip(menuShape)
                     .frostedGlass(backdrop = backdrop, shape = menuShape, material = material),
                 // Содержимое прижато к тому же углу, из которого растёт оболочка. С выравниванием
@@ -187,10 +194,9 @@ fun TtmMenu(
                         TtmMenuRow(
                             item = item,
                             // Каскад: нижние строки ближе к кнопке, поэтому и проявляются первыми.
-                            revealProgress = rowReveal(
-                                shell = morph.shell,
-                                indexFromBottom = items.lastIndex - index,
-                            ),
+                            revealProgress = {
+                                rowReveal(shell = morph.shell, indexFromBottom = items.lastIndex - index)
+                            },
                             isDark = isDark,
                             onClick = {
                                 onDismiss()
@@ -220,7 +226,7 @@ internal fun rowReveal(shell: Float, indexFromBottom: Int): Float {
 @Composable
 private fun TtmMenuRow(
     item: TtmMenuItem,
-    revealProgress: Float,
+    revealProgress: () -> Float,
     isDark: Boolean,
     onClick: () -> Unit,
 ) {
@@ -238,10 +244,11 @@ private fun TtmMenuRow(
             )
             .padding(horizontal = 16.dp)
             .graphicsLayer {
-                alpha = revealProgress
+                val reveal = revealProgress()
+                alpha = reveal
                 // Небольшой подъезд снизу — строка приезжает вместе с оболочкой, а не проявляется
                 // на месте. Величина маленькая: это акцент на порядке, а не отдельное движение.
-                translationY = (1f - revealProgress) * 10.dp.toPx()
+                translationY = (1f - reveal) * 10.dp.toPx()
             },
         verticalAlignment = Alignment.CenterVertically,
     ) {

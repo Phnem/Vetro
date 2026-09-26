@@ -1,5 +1,8 @@
 package com.example.myapplication
 
+import com.example.myapplication.ui.shared.theme.isAppInDarkTheme
+import com.example.myapplication.ui.shared.theme.BrandDeepRed
+import com.example.myapplication.ui.shared.theme.IosScroll
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
@@ -98,6 +101,7 @@ import com.example.myapplication.ui.shared.theme.OverlayThemeTokens
 import com.example.myapplication.ui.shared.theme.glassEdge
 import com.example.myapplication.ui.shared.theme.glassFill
 import com.example.myapplication.ui.shared.theme.softPlateShadowForLightSheet
+import com.example.myapplication.utils.Haptic
 import com.example.myapplication.utils.performHaptic
 import com.example.myapplication.sync.ExternalListService
 import com.example.myapplication.sync.ExternalListSyncCoordinator
@@ -253,7 +257,7 @@ fun NotificationSyncOverlay(
                     Column(
                         modifier = Modifier
                             .padding(horizontal = 16.dp)
-                            .verticalScroll(rememberScrollState())
+                            .verticalScroll(rememberScrollState(), flingBehavior = IosScroll.flingBehavior())
                     ) {
                         // —— Header (Close button only) —— //
                         Row(
@@ -262,7 +266,7 @@ fun NotificationSyncOverlay(
                         ) {
                             IconButton(
                                 onClick = {
-                                    performHaptic(view, "light")
+                                    performHaptic(view, Haptic.Light)
                                     onDismiss()
                                 },
                                 modifier = Modifier.size(32.dp)
@@ -301,20 +305,20 @@ fun NotificationSyncOverlay(
                             hasToken = hasToken,
                             syncState = syncState,
                             onSyncNow = {
-                                performHaptic(view, "light")
+                                performHaptic(view, Haptic.Light)
                                 scope.launch { syncCoordinator.syncNow() }
                             },
                             onCheckUpdates = {
-                                performHaptic(view, "light")
+                                performHaptic(view, Haptic.Light)
                                 onCheckUpdates()
                             },
                             onLogoutClick = {
-                                performHaptic(view, "light")
+                                performHaptic(view, Haptic.Light)
                                 showLogoutDialog = true
                             },
                             onServiceAction = { service, action ->
                                 if (listSyncUi.isRunning) return@NottifSyncServiceGrid
-                                performHaptic(view, "light")
+                                performHaptic(view, Haptic.Light)
                                 if (service == ExternalListService.MYANIMELIST) {
                                     showMalPlaceholderDialog = true
                                 } else {
@@ -374,7 +378,7 @@ fun NotificationSyncOverlay(
                             showLogoutDialog = false
                             onLogout()
                         },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFC10801))
+                        colors = ButtonDefaults.buttonColors(containerColor = BrandDeepRed)
                     ) { Text(strings.deleteConfirm) }
                 },
                 dismissButton = {

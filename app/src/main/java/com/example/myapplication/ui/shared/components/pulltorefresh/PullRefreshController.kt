@@ -17,6 +17,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.snapshotFlow
+import com.example.myapplication.utils.Haptic
 import com.example.myapplication.utils.performHaptic
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collect
@@ -149,7 +150,7 @@ fun rememberPullRefreshController(
     LaunchedEffect(pullState) {
         snapshotFlow { pullState.distanceFraction >= 1f }
             .distinctUntilChanged()
-            .collect { above -> if (above) performHaptic(view, "light") }
+            .collect { above -> if (above) performHaptic(view, Haptic.Light) }
     }
 
     return controller

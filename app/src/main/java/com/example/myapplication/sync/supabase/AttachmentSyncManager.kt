@@ -1,5 +1,6 @@
 package com.example.myapplication.sync.supabase
 
+import com.example.myapplication.network.AppJson
 import android.content.Context
 import android.net.Uri
 import com.example.myapplication.data.local.AnimeDatabase
@@ -374,7 +375,7 @@ class AttachmentSyncManager(
 
     private companion object {
         private const val TAG = "AttachmentSync"
-        val json = Json { ignoreUnknownKeys = true }
+        val json = AppJson
 
         /** Сетевые таймауты для R2/CDN: без них зависший коннект блокировал синк навсегда. */
         private fun java.net.HttpURLConnection.applyTimeouts(): java.net.HttpURLConnection = apply {

@@ -1,10 +1,11 @@
 package com.example.myapplication.ui.addedit
 
+import com.example.myapplication.ui.shared.theme.IosScroll
+import com.example.myapplication.ui.shared.glassControl
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -36,10 +37,11 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
-import com.example.myapplication.isAppInDarkTheme
+import com.example.myapplication.ui.shared.theme.isAppInDarkTheme
 import com.example.myapplication.ui.shared.theme.MotionTokens
 import com.example.myapplication.utils.getAddEditCommentStrings
 import com.example.myapplication.utils.getStrings
+import com.example.myapplication.utils.Haptic
 import com.example.myapplication.utils.performHaptic
 import com.example.myapplication.network.AppLanguage
 import com.example.myapplication.ui.shared.components.rating.RatingOverlayHost
@@ -224,7 +226,7 @@ fun AddEditScreen(
                                 .imePadding()
                                 .navigationBarsPadding()
                                 .padding(horizontal = 24.dp)
-                                .verticalScroll(scrollState),
+                                .verticalScroll(scrollState, flingBehavior = IosScroll.flingBehavior()),
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
                             Spacer(Modifier.height(contentTopInset))
@@ -243,7 +245,7 @@ fun AddEditScreen(
                             animeId = animeId,
                             animatedVisibilityScope = animatedVisibilityScope,
                             onClick = {
-                                performHaptic(view, "light")
+                                performHaptic(view, Haptic.Light)
                                 launcher.launch("image/*")
                             }
                         )
@@ -323,7 +325,7 @@ fun AddEditScreen(
                         AddEditEpisodeQuickSelect(
                             selectedEpisodes = uiState.episodes,
                             onSelect = { selectedEp ->
-                                performHaptic(view, "light")
+                                performHaptic(view, Haptic.Light)
                                 viewModel.onEvent(AddEditEvent.OnEpisodesChanged(selectedEp))
                             }
                         )
@@ -335,6 +337,8 @@ fun AddEditScreen(
                     AnimatedFormRow(index = 8, collisionState = collisionState) {
                         AddEditSectionLabel(strings.addEditSectionFormat)
                     }
+                    val selectedTags = uiState.selectedTags
+                    val activeCategoryType = uiState.categoryType
                     AnimatedFormRow(index = 9, collisionState = collisionState) {
                         AddEditFormatCategorySection(
                             strings = strings,
@@ -342,7 +346,7 @@ fun AddEditScreen(
                             selectedTags = uiState.selectedTags,
                             activeCategory = uiState.categoryType,
                             onTagToggle = { tag, categoryType ->
-                                val currentTags = uiState.selectedTags.toMutableList()
+                                val currentTags = selectedTags.toMutableList()
                                 if (currentTags.contains(tag)) {
                                     currentTags.remove(tag)
                                     if (currentTags.isEmpty()) {
@@ -353,13 +357,13 @@ fun AddEditScreen(
                                         viewModel.onEvent(
                                             AddEditEvent.OnTagsChanged(
                                                 currentTags,
-                                                uiState.categoryType
+                                                activeCategoryType
                                             )
                                         )
                                     }
                                 } else {
-                                    val categoryMatches = uiState.categoryType.isEmpty() ||
-                                            uiState.categoryType.equals(
+                                    val categoryMatches = activeCategoryType.isEmpty() ||
+                                            activeCategoryType.equals(
                                                 categoryType,
                                                 ignoreCase = true
                                             )
@@ -370,7 +374,7 @@ fun AddEditScreen(
                                         )
                                     }
                                 }
-                                performHaptic(view, "light")
+                                performHaptic(view, Haptic.Light)
                             }
                         )
                     }
@@ -405,7 +409,8 @@ fun AddEditScreen(
                     }
                     AnimatedFormRow(index = 13, collisionState = collisionState) {
                         CommentMorphingContainer(
-                            state = uiState,
+                            comment = uiState.comment,
+                            commentMode = uiState.commentMode,
                             addCommentLabel = commentStrings.addButton,
                             commentPlaceholder = commentStrings.placeholder,
                             onModeChange = {
@@ -437,21 +442,23 @@ fun AddEditScreen(
                             .size(48.dp)
                             .addEditMenuTileShadow(isDark, CircleShape)
                             .clip(CircleShape)
-                            .drawBackdrop(
-                                backdrop = backdrop,
-                                shape = { CircleShape },
-                                effects = {
-                                    vibrancy()
-                                    blur(12f.dp.toPx())
-                                    lens(8f.dp.toPx(), 40f.dp.toPx())
-                                }
-                            )
-                            .border(0.5.dp, Color.White.copy(alpha = 0.2f), CircleShape)
+                            .glassControl(backdrop, CircleShape) {
+                                drawBackdrop(
+                                    backdrop = backdrop,
+                                    shape = { CircleShape },
+                                    effects = {
+                                        vibrancy()
+                                        blur(12f.dp.toPx())
+                                        lens(8f.dp.toPx(), 40f.dp.toPx())
+                                    }
+                                )
+                                    .border(0.5.dp, Color.White.copy(alpha = 0.2f), CircleShape)
+                            }
                             .clickable(
                                 interactionSource = remember { MutableInteractionSource() },
                                 indication = null,
                                 onClick = {
-                                    performHaptic(view, "light")
+                                    performHaptic(view, Haptic.Light)
                                     navController.popBackStack()
                                 }
                             ),
@@ -479,16 +486,18 @@ fun AddEditScreen(
                             .height(48.dp)
                             .addEditMenuTileShadow(isDark, RoundedCornerShape(100.dp))
                             .clip(RoundedCornerShape(100.dp))
-                            .drawBackdrop(
-                                backdrop = backdrop,
-                                shape = { RoundedCornerShape(100.dp) },
-                                effects = {
-                                    vibrancy()
-                                    blur(12f.dp.toPx())
-                                    lens(8f.dp.toPx(), 40f.dp.toPx())
-                                }
-                            )
-                            .border(0.5.dp, Color.White.copy(alpha = 0.2f), RoundedCornerShape(100.dp))
+                            .glassControl(backdrop, RoundedCornerShape(100.dp)) {
+                                drawBackdrop(
+                                    backdrop = backdrop,
+                                    shape = { RoundedCornerShape(100.dp) },
+                                    effects = {
+                                        vibrancy()
+                                        blur(12f.dp.toPx())
+                                        lens(8f.dp.toPx(), 40f.dp.toPx())
+                                    }
+                                )
+                                    .border(0.5.dp, Color.White.copy(alpha = 0.2f), RoundedCornerShape(100.dp))
+                            }
                             .padding(horizontal = 24.dp),
                         contentAlignment = Alignment.Center
                     ) {
@@ -516,21 +525,23 @@ fun AddEditScreen(
                         modifier = Modifier
                             .size(64.dp)
                             .addEditMenuTileShadow(isDark, CircleShape)
-                            .drawBackdrop(
-                                backdrop = backdrop,
-                                shape = { CircleShape },
-                                effects = {
-                                    vibrancy()
-                                    blur(28f.dp.toPx())
-                                    lens(16f.dp.toPx(), 48f.dp.toPx())
-                                },
-                                onDrawSurface = { drawRect(Color.White.copy(alpha = 0.12f)) }
-                            )
+                            .glassControl(backdrop, CircleShape) {
+                                drawBackdrop(
+                                    backdrop = backdrop,
+                                    shape = { CircleShape },
+                                    effects = {
+                                        vibrancy()
+                                        blur(28f.dp.toPx())
+                                        lens(16f.dp.toPx(), 48f.dp.toPx())
+                                    },
+                                    onDrawSurface = { drawRect(Color.White.copy(alpha = 0.12f)) }
+                                )
+                            }
                             .clip(CircleShape)
                             .border(0.5.dp, Color.White.copy(alpha = 0.2f), CircleShape)
                             .clickable {
                                 if (uiState.isLoading) return@clickable
-                                performHaptic(view, "success")
+                                performHaptic(view, Haptic.Success)
                                 if (uiState.isValid) {
                                     viewModel.onEvent(AddEditEvent.OnSave)
                                 } else {

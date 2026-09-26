@@ -101,7 +101,9 @@ class SourceEngine(
         val jutKnown = links.firstOrNull { it.siteKey == WebLinkSites.JUTSU }?.url
 
         // Exact stored links are the most reliable title disambiguation and avoid a search roundtrip.
-        val exact = runCalls(
+        // They run in the same parallel batch as the other sources: as a separate first batch they
+        // added up to EXACT_SOURCE_TIMEOUT_MS before any other source even started.
+        val attempts = runCalls(
             buildList {
                 if (seasonSpecificAniUrl != null) {
                     add(
@@ -114,12 +116,7 @@ class SourceEngine(
                         }
                     )
                 }
-            }
-        )
-        // Keep resolving: exact links are fast, but they must not hide other studios.
-
-        val native = runCalls(
-            buildList {
+                // Keep resolving: exact links are fast, but they must not hide other studios.
                 if (seasonSpecificAniUrl == null) {
                     add(
                         PlaybackProviderCall("AniLiberty", SOURCE_TIMEOUT_MS) {
@@ -155,7 +152,6 @@ class SourceEngine(
                 )
             }
         )
-        val attempts = exact + native
         val resolved = attempts.flatMap { it.value.orEmpty() }
         if (resolved.hasPlayableVideo()) {
             return SourceBatch(resolved, attempts.any { it.failed })

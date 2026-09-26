@@ -1,16 +1,16 @@
 package com.example.myapplication.sync.supabase
 
+import com.example.myapplication.domain.BackgroundSchedule
+import com.example.myapplication.AppScope
 import android.content.Context
 import androidx.work.Constraints
 import androidx.work.ExistingPeriodicWorkPolicy
-import androidx.work.ExistingWorkPolicy
 import androidx.work.NetworkType
-import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
@@ -28,25 +28,31 @@ class SupabaseSyncCoordinator(
     private val collectionImageRestoreCoordinator: CollectionImageRestoreCoordinator,
     private val apiKeySyncRepository: ApiKeySyncRepository,
     private val progressSyncRepository: ProgressSyncRepository,
+    appScope: AppScope,
 ) {
     private val workManager = WorkManager.getInstance(context)
     private val _isSyncing = MutableStateFlow(false)
     val isSyncing: StateFlow<Boolean> get() = _isSyncing
     private val _lastSyncMessage = MutableStateFlow<String?>(null)
     val lastSyncMessage: StateFlow<String?> get() = _lastSyncMessage
-    private val scope = CoroutineScope(Dispatchers.IO)
+    // SupervisorJob: без него первое необработанное исключение в любом из launch'ей отменяло
+    // весь scope, и подписка на вход/выход пользователя молча умирала до перезапуска процесса.
+    // Общая область процесса (AppScope) вместо своей CoroutineScope(SupervisorJob() + IO).
+    private val scope: CoroutineScope = appScope
     private var realtimeSyncJob: kotlinx.coroutines.Job? = null
     private var realtimeChannelJob: kotlinx.coroutines.Job? = null
 
     init {
-        schedulePeriodicSync()
-
         scope.launch {
             authRepository.isUserSignedIn.collect { signedIn ->
                 if (signedIn && !authRepository.isGuest) {
+                    schedulePeriodicSync()
                     syncNow(includeCloudImageRestore = true)
                     ensureRealtimeSubscription()
                 } else {
+                    // Гостю синхронизировать нечего: раньше периодика всё равно будила воркер
+                    // каждые 15 минут, и тот выходил с «не вошёл».
+                    workManager.cancelUniqueWork(PERIODIC_SYNC_WORK)
                     realtimeChannelJob?.cancel()
                     realtimeChannelJob = null
                 }
@@ -90,13 +96,16 @@ class SupabaseSyncCoordinator(
             .setRequiredNetworkType(NetworkType.CONNECTED)
             .build()
 
-        val syncRequest = PeriodicWorkRequestBuilder<SyncWorker>(15, TimeUnit.MINUTES)
+        // Час, а не 15 минут: изменения с других устройств и так приходят через Realtime, пока
+        // приложение открыто; периодика — страховка для фона. UPDATE переводит на новый период
+        // и уже поставленную работу (KEEP оставил бы у всех старые 15 минут).
+        val syncRequest = PeriodicWorkRequestBuilder<SyncWorker>(BackgroundSchedule.CLOUD_SYNC_HOURS, TimeUnit.HOURS)
             .setConstraints(constraints)
             .build()
 
         workManager.enqueueUniquePeriodicWork(
-            "SupabasePeriodicSync",
-            ExistingPeriodicWorkPolicy.KEEP,
+            PERIODIC_SYNC_WORK,
+            ExistingPeriodicWorkPolicy.UPDATE,
             syncRequest
         )
     }
@@ -151,5 +160,6 @@ class SupabaseSyncCoordinator(
 
     private companion object {
         const val TAG = "SupabaseSync"
+        const val PERIODIC_SYNC_WORK = "SupabasePeriodicSync"
     }
 }

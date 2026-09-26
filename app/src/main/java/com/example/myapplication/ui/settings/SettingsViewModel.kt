@@ -1,5 +1,8 @@
 package com.example.myapplication.ui.settings
 
+import com.example.myapplication.localplayer.ui.PlayerSettingsKeys
+import com.example.myapplication.data.local.AppLanguagePrefs
+import com.example.myapplication.data.local.AppThemePrefs
 import android.app.Application
 import android.app.DownloadManager
 import android.content.BroadcastReceiver
@@ -23,7 +26,6 @@ import androidx.lifecycle.viewModelScope
 import com.example.myapplication.network.AppContentType
 import com.example.myapplication.network.AppLanguage
 import com.example.myapplication.data.models.AppTheme
-import com.example.myapplication.localplayer.ui.LocalPlayerViewModel
 import com.example.myapplication.data.models.AppUpdateSnapshot
 import com.example.myapplication.data.models.AppUpdateStatus
 import com.example.myapplication.data.models.toUiStatus
@@ -57,8 +59,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 
-private val KEY_LANG = stringPreferencesKey("lang")
-private val KEY_THEME = stringPreferencesKey("theme")
 private val KEY_CONTENT_TYPE = stringPreferencesKey("contentType")
 private val KEY_DEV_MIRROR_DB = booleanPreferencesKey("dev_mirror_db_to_documents")
 private val KEY_DEV_HIDE_SHARE = booleanPreferencesKey("dev_hide_share_button")
@@ -104,18 +104,16 @@ private fun mergeSettingsUi(
         else snap.persistedKind.toUiStatus()
 
     return SettingsUiState(
-        language = AppLanguage.valueOf(prefs[KEY_LANG] ?: "EN"),
-        theme = runCatching { AppTheme.valueOf(prefs[KEY_THEME] ?: "SYSTEM") }.getOrElse { AppTheme.SYSTEM },
+        language = AppLanguagePrefs.from(prefs),
+        theme = AppThemePrefs.from(prefs),
         contentType = runCatching { AppContentType.valueOf(prefs[KEY_CONTENT_TYPE] ?: "ANIME") }.getOrElse { AppContentType.ANIME },
         devMirrorDbToDocuments = prefs[KEY_DEV_MIRROR_DB] ?: false,
         devHideShareButton = prefs[KEY_DEV_HIDE_SHARE] ?: false,
         devFpsOverlay = prefs[KEY_DEV_FPS_OVERLAY] ?: false,
-        autoSkipSegments = prefs[LocalPlayerViewModel.AUTO_SKIP_KEY] ?: false,
-        autoNextEpisode = prefs[LocalPlayerViewModel.AUTO_NEXT_KEY] ?: true,
+        autoSkipSegments = prefs[PlayerSettingsKeys.AUTO_SKIP] ?: false,
+        autoNextEpisode = prefs[PlayerSettingsKeys.AUTO_NEXT] ?: true,
         devAdaptiveGlassScroll = prefs[DevPreferencesKeys.ADAPTIVE_GLASS_SCROLL] ?: false,
-        devSelectDockNavigation = prefs[DevPreferencesKeys.SELECT_DOCK_NAVIGATION] ?: false,
-        devGlassCapsuleDock = prefs[DevPreferencesKeys.GLASS_CAPSULE_DOCK] ?: false,
-        devStagedSheetMotion = prefs[DevPreferencesKeys.STAGED_SHEET_MOTION] ?: false,
+        devLegacyUi = prefs[DevPreferencesKeys.LEGACY_UI] ?: false,
         devGithubUpdatesEnabled = githubUpdatesEnabled,
         isExportingLogs = t.isExportingLogs,
         isExportingPdf = t.isExportingPdf,
@@ -167,7 +165,9 @@ class SettingsViewModel(
         appUpdateRepository.appUpdateSnapshot,
         _transient,
     ) { prefs, snap, tr -> mergeSettingsUi(prefs, snap, tr) }
-        .stateIn(viewModelScope, SharingStarted.Eagerly, SettingsUiState())
+        // Подписка на файл настроек живёт, пока экран на виду (+5 с на поворот): в фоне её
+        // будила каждая запись прогресса плеера. Последнее значение stateIn сохраняет.
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SettingsUiState())
 
     /** When true, [MainActivity] may show the global update sheet (not on splash, not deduped by settings). */
     val startupUpdateOverlayEligible: StateFlow<Boolean> = combine(
@@ -177,7 +177,7 @@ class SettingsViewModel(
     ) { snap, prefs, tr ->
         val githubEnabled = prefs[DevPreferencesKeys.GITHUB_UPDATES_ENABLED] == true
         githubEnabled && snap.startupOverlayEligible && !tr.updateSheetShownFromSettingsThisSession
-    }.stateIn(viewModelScope, SharingStarted.Eagerly, false)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
 
     private var downloadReceiverRegistered = false
     private var activeDownloadId: Long = -1L
@@ -202,6 +202,7 @@ class SettingsViewModel(
     }
 
     init {
+        dropRetiredUiFlags()
         viewModelScope.launch {
             val v = runCatching {
                 val pInfo = app.packageManager.getPackageInfo(app.packageName, 0)
@@ -272,13 +273,13 @@ class SettingsViewModel(
 
     fun setLanguage(language: AppLanguage) {
         viewModelScope.launch {
-            settingsDataStore.edit { it[KEY_LANG] = language.name }
+            settingsDataStore.edit { it[AppLanguagePrefs.KEY] = language.name }
         }
     }
 
     fun setTheme(theme: AppTheme) {
         viewModelScope.launch {
-            settingsDataStore.edit { it[KEY_THEME] = theme.name }
+            settingsDataStore.edit { it[AppThemePrefs.KEY] = theme.name }
         }
     }
 
@@ -301,23 +302,22 @@ class SettingsViewModel(
     }
 
     /**
-     * Единственный писатель [LocalPlayerViewModel.AUTO_SKIP_KEY].
+     * Единственный писатель [PlayerSettingsKeys.AUTO_SKIP].
      *
-     * Ключ берётся напрямую из `LocalPlayerViewModel`, а не объявляется здесь второй строкой:
-     * у него три читателя (`LocalPlayerViewModel`, `StreamPlayerActivity`,
-     * `DownloadedPlayerActivity`), и разъехавшееся имя оставило бы автопропуск таким же
-     * недостижимым, как до этой правки, — только с переключателем, который внешне работает.
+     * Ключ берётся из [PlayerSettingsKeys], а не объявляется здесь второй строкой: его читают
+     * оба плеера (`StreamPlayerActivity`, `DownloadedPlayerActivity`), и разъехавшееся имя
+     * оставило бы автопропуск недостижимым — с переключателем, который внешне работает.
      */
     fun setAutoSkipSegments(enabled: Boolean) {
         viewModelScope.launch {
-            settingsDataStore.edit { it[LocalPlayerViewModel.AUTO_SKIP_KEY] = enabled }
+            settingsDataStore.edit { it[PlayerSettingsKeys.AUTO_SKIP] = enabled }
         }
     }
 
-    /** Единственный писатель [LocalPlayerViewModel.AUTO_NEXT_KEY] — по тем же причинам. */
+    /** Единственный писатель [PlayerSettingsKeys.AUTO_NEXT] — по тем же причинам. */
     fun setAutoNextEpisode(enabled: Boolean) {
         viewModelScope.launch {
-            settingsDataStore.edit { it[LocalPlayerViewModel.AUTO_NEXT_KEY] = enabled }
+            settingsDataStore.edit { it[PlayerSettingsKeys.AUTO_NEXT] = enabled }
         }
     }
 
@@ -333,21 +333,24 @@ class SettingsViewModel(
         }
     }
 
-    fun setDevSelectDockNavigation(enabled: Boolean) {
+    /**
+     * Переключение классического интерфейса. [onApplied] вызывается после записи — экран
+     * пересоздаёт активити: смена режима меняет структуру дерева над `layerBackdrop`, и живое
+     * переключение могло бы на кадр оставить стекло плоским.
+     */
+    fun setDevLegacyUi(enabled: Boolean, onApplied: () -> Unit) {
         viewModelScope.launch {
-            settingsDataStore.edit { it[DevPreferencesKeys.SELECT_DOCK_NAVIGATION] = enabled }
+            settingsDataStore.edit { it[DevPreferencesKeys.LEGACY_UI] = enabled }
+            onApplied()
         }
     }
 
-    fun setDevGlassCapsuleDock(enabled: Boolean) {
+    /** Три прежних флага интерфейса больше ничего не значат — вычищаем их из настроек. */
+    private fun dropRetiredUiFlags() {
         viewModelScope.launch {
-            settingsDataStore.edit { it[DevPreferencesKeys.GLASS_CAPSULE_DOCK] = enabled }
-        }
-    }
-
-    fun setDevStagedSheetMotion(enabled: Boolean) {
-        viewModelScope.launch {
-            settingsDataStore.edit { it[DevPreferencesKeys.STAGED_SHEET_MOTION] = enabled }
+            settingsDataStore.edit { prefs ->
+                DevPreferencesKeys.RETIRED_UI_FLAGS.forEach { key -> prefs.remove(key) }
+            }
         }
     }
 
@@ -382,7 +385,7 @@ class SettingsViewModel(
                 settingsDataStore.data.first()[DevPreferencesKeys.GITHUB_UPDATES_ENABLED] == true
             if (!githubEnabled) return@launch
             ensureCurrentVersionFromPackage(context)
-            val lang = AppLanguage.valueOf(settingsDataStore.data.first()[KEY_LANG] ?: "EN")
+            val lang = AppLanguagePrefs.current(settingsDataStore)
             val strings = getStrings(lang)
             _transient.update {
                 it.copy(
@@ -442,12 +445,8 @@ class SettingsViewModel(
     }
 
     fun manageUnknownAppSourcesIntent(context: Context): Intent =
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES)
-                .setData(Uri.parse("package:${context.packageName}"))
-        } else {
-            Intent(Settings.ACTION_SECURITY_SETTINGS)
-        }
+        Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES)
+            .setData(Uri.parse("package:${context.packageName}"))
 
     fun onReturnedFromInstallSettings(context: Context) {
         val path = _transient.value.pendingApkPathForInstall ?: return
@@ -456,9 +455,7 @@ class SettingsViewModel(
             _transient.update { it.copy(pendingApkPathForInstall = null) }
             return
         }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
-            !context.packageManager.canRequestPackageInstalls()
-        ) {
+        if (!context.packageManager.canRequestPackageInstalls()) {
             return
         }
         if (launchPackageInstaller(context, file)) {
@@ -488,30 +485,25 @@ class SettingsViewModel(
         progressJob?.cancel()
         progressJob = viewModelScope.launch {
             val dm = appCtx.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
+            var lastPercent = -1
             while (isActive) {
-                dm.query(DownloadManager.Query().setFilterById(downloadId))?.use { c ->
-                    if (!c.moveToFirst()) return@launch
-                    val status = c.getInt(c.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS))
-                    when (status) {
-                        DownloadManager.STATUS_SUCCESSFUL, DownloadManager.STATUS_FAILED -> {
-                            if (status == DownloadManager.STATUS_FAILED) {
-                                onDownloadFailedCleanup()
-                            }
-                            return@launch
-                        }
-                        else -> {
-                            val soFar = c.getLong(
-                                c.getColumnIndexOrThrow(DownloadManager.COLUMN_BYTES_DOWNLOADED_SO_FAR)
-                            )
-                            val total = c.getLong(
-                                c.getColumnIndexOrThrow(DownloadManager.COLUMN_TOTAL_SIZE_BYTES)
-                            )
-                            val frac = if (total > 0L) {
-                                (soFar.toFloat() / total.toFloat()).coerceIn(0f, 1f)
-                            } else {
-                                0f
-                            }
-                            _transient.update { it.copy(apkDownloadProgress = frac) }
+                // Запрос к провайдеру загрузок — это IPC и курсор, главному потоку он ни к чему.
+                val poll = withContext(Dispatchers.IO) { queryApkDownload(dm, downloadId) }
+                when (poll) {
+                    // Провайдер не ответил курсором — как и раньше, спрашиваем снова.
+                    null -> Unit
+                    ApkDownloadPoll.Gone, ApkDownloadPoll.Succeeded -> return@launch
+                    ApkDownloadPoll.Failed -> {
+                        onDownloadFailedCleanup()
+                        return@launch
+                    }
+                    is ApkDownloadPoll.Running -> {
+                        // Стейт настроек обновляется только при смене процента, а не 4 раза в
+                        // секунду одним и тем же значением.
+                        val percent = (poll.fraction * 100).toInt()
+                        if (percent != lastPercent) {
+                            lastPercent = percent
+                            _transient.update { it.copy(apkDownloadProgress = poll.fraction) }
                         }
                     }
                 }
@@ -552,9 +544,7 @@ class SettingsViewModel(
     }
 
     private fun launchPackageInstaller(context: Context, file: File): Boolean {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
-            !context.packageManager.canRequestPackageInstalls()
-        ) {
+        if (!context.packageManager.canRequestPackageInstalls()) {
             _transient.update { it.copy(pendingApkPathForInstall = file.absolutePath) }
             return false
         }
@@ -760,7 +750,6 @@ class SettingsViewModel(
     fun runTitleDubbing() {
         if (_transient.value.isTitleDubbing) return
         viewModelScope.launch {
-            settingsDataStore.edit { it[DevPreferencesKeys.TITLE_DUBBING_EVER_ENABLED] = true }
             val hasAi = aiCredentialsStore.getAllConnectedProviders().isNotEmpty()
             if (!hasAi) {
                 _transient.update { it.copy(showTitleDubbingNoAiDialog = true) }
@@ -862,3 +851,26 @@ private fun filterSystemViewFrameRateSpam(log: String): String =
             "setRequestedFrameRate" in line && "frameRate=NaN" in line
         }
         .joinToString("\n")
+
+private sealed interface ApkDownloadPoll {
+    data object Gone : ApkDownloadPoll
+    data object Succeeded : ApkDownloadPoll
+    data object Failed : ApkDownloadPoll
+    data class Running(val fraction: Float) : ApkDownloadPoll
+}
+
+private fun queryApkDownload(dm: DownloadManager, downloadId: Long): ApkDownloadPoll? =
+    dm.query(DownloadManager.Query().setFilterById(downloadId))?.use { c ->
+        if (!c.moveToFirst()) return@use ApkDownloadPoll.Gone
+        when (c.getInt(c.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS))) {
+            DownloadManager.STATUS_SUCCESSFUL -> ApkDownloadPoll.Succeeded
+            DownloadManager.STATUS_FAILED -> ApkDownloadPoll.Failed
+            else -> {
+                val soFar = c.getLong(c.getColumnIndexOrThrow(DownloadManager.COLUMN_BYTES_DOWNLOADED_SO_FAR))
+                val total = c.getLong(c.getColumnIndexOrThrow(DownloadManager.COLUMN_TOTAL_SIZE_BYTES))
+                ApkDownloadPoll.Running(
+                    if (total > 0L) (soFar.toFloat() / total.toFloat()).coerceIn(0f, 1f) else 0f,
+                )
+            }
+        }
+    }

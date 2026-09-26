@@ -21,11 +21,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Color
@@ -36,7 +38,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.util.lerp
-import com.example.myapplication.isAppInDarkTheme
+import com.example.myapplication.ui.shared.theme.isAppInDarkTheme
 import com.example.myapplication.ui.shared.theme.IosDesign
 import com.example.myapplication.ui.shared.theme.MotionTokens
 import com.example.myapplication.ui.shared.theme.OverlayThemeTokens
@@ -97,16 +99,25 @@ fun IosSheetScaffold(
     Box(modifier = modifier.fillMaxSize().drawBehind { if (progress.value > 0.001f) drawRect(Color.Black) }) {
         BoxWithConstraints(Modifier.fillMaxSize()) {
             val screenPx = with(density) { maxHeight.toPx() }
-            val panelHeightPx = if (measuredPanelPx > 0f) measuredPanelPx
+            // Прогресс шторки читается только в фазах слоя и отрисовки: раньше он считался прямо
+            // в композиции, и каждый кадр анимации/драга пересобирал весь экран под шторкой.
+            fun panelHeightPx(): Float = if (measuredPanelPx > 0f) measuredPanelPx
                 else screenPx * (sheetHeightFraction ?: 0.9f)
-            val dragFraction = if (panelHeightPx > 0f) (dragPx / panelHeightPx).coerceIn(0f, 1f) else 0f
-            val eff = (progress.value * (1f - dragFraction)).coerceIn(0f, 1f)
+            fun eff(): Float {
+                val panelHeightPx = panelHeightPx()
+                val dragFraction =
+                    if (panelHeightPx > 0f) (dragPx / panelHeightPx).coerceIn(0f, 1f) else 0f
+                return (progress.value * (1f - dragFraction)).coerceIn(0f, 1f)
+            }
+            val sheetShown by remember { derivedStateOf { progress.value > 0.001f } }
+            val scrim = scrimMaxAlpha ?: OverlayThemeTokens.scrimAlpha(isDark)
 
             // --- Фон: scale от верхнего края, скругление только снизу ---
             Box(
                 modifier = Modifier
                     .fillMaxSize()
                     .graphicsLayer {
+                        val eff = eff()
                         val s = lerp(1f, backgroundScaleTarget, eff)
                         scaleX = s
                         scaleY = s
@@ -119,18 +130,19 @@ fun IosSheetScaffold(
                             bottomEnd = bottomR,
                             bottomStart = bottomR,
                         )
+                    }
+                    // iOS затемняет фон по-разному: тёмная тема — сильно, светлая — деликатно.
+                    .drawWithContent {
+                        drawContent()
+                        val eff = eff()
+                        if (eff > 0f) drawRect(Color.Black, alpha = eff * scrim)
                     },
             ) {
                 content()
-                if (eff > 0f) {
-                    // iOS затемняет фон по-разному: тёмная тема — сильно, светлая — деликатно.
-                    val scrim = scrimMaxAlpha ?: OverlayThemeTokens.scrimAlpha(isDark)
-                    Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = eff * scrim)))
-                }
             }
 
             // Слой-ловушка тапа по фону → закрыть.
-            if (progress.value > 0.001f) {
+            if (sheetShown) {
                 Box(
                     Modifier
                         .fillMaxSize()
@@ -187,7 +199,7 @@ fun IosSheetScaffold(
                             onDragStopped = { velocity ->
                                 val dismiss = MotionTokens.willDismiss(
                                     offset = dragPx,
-                                    containerSize = panelHeightPx,
+                                    containerSize = panelHeightPx(),
                                     velocity = velocity / density.density,
                                 )
                                 if (dismiss) {

@@ -1,12 +1,12 @@
 package com.example.myapplication.media.source
 
+import com.example.myapplication.network.AppJson
 import android.util.Log
 import io.ktor.client.HttpClient
 import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.client.request.parameter
 import io.ktor.client.statement.bodyAsText
-import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
@@ -25,7 +25,7 @@ import kotlinx.serialization.json.jsonObject
 class CvhResolver(
     private val client: HttpClient,
 ) {
-    private val json = Json { ignoreUnknownKeys = true }
+    private val json = AppJson
 
     /** Элемент плейлиста CVH: одна серия в одной озвучке. */
     data class PlaylistItem(
@@ -147,6 +147,7 @@ class CvhResolver(
             )
         ),
         isPreferred = preferred,
+        downloadAllowed = true,
     )
 
     companion object {

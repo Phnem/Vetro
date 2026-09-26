@@ -4,12 +4,8 @@ import androidx.navigation.NavBackStackEntry
 import androidx.navigation.NavDestination
 import androidx.navigation.toRoute
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.serializer
 
 /** Type-safe маршруты (Navigation Compose 2.8+). ID аниме — String. */
-@Serializable
-data object SplashRoute
-
 @Serializable
 data object WelcomeRoute
 
@@ -29,24 +25,13 @@ data object SettingsRoute
 data object InspectRoute
 
 /**
- * Определяет, что текущий destination — [SplashRoute], независимо от формата строки route
- * (kotlinx.serialization + Navigation Compose).
- */
-fun NavDestination?.isSplashDestination(): Boolean {
-    val route = this?.route ?: return false
-    val serialName = SplashRoute.serializer().descriptor.serialName
-    return route == serialName ||
-        route.endsWith(".SplashRoute") ||
-        route.contains("SplashRoute")
-}
-
-/**
  * Граф дошёл до основного экрана и на него можно push'ить [DetailsRoute]
- * (тап по пушу о новой серии). На сплэше и логине навигация ещё бессмысленна.
+ * (тап по пушу о новой серии). На логине навигация ещё бессмысленна; сплэш — не маршрут,
+ * его ждёт вызывающий (StartupSplashState.visible).
  */
 fun NavDestination?.isDeepLinkReady(): Boolean {
     val route = this?.route ?: return false
-    return !isSplashDestination() && !route.contains("WelcomeRoute")
+    return !route.contains("WelcomeRoute")
 }
 
 /** Определяет, что destination — [DetailsRoute] (для эффекта «вдавливания» Home под деталями). */

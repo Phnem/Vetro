@@ -1,5 +1,6 @@
 package com.example.myapplication.ui.settings
 
+import com.example.myapplication.ui.shared.theme.IosScroll
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -66,7 +67,7 @@ fun PlaybackSourcesSettingsSheet(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .verticalScroll(rememberScrollState())
+            .verticalScroll(rememberScrollState(), flingBehavior = IosScroll.flingBehavior())
             .padding(horizontal = 20.dp, vertical = 12.dp)
             .navigationBarsPadding(),
         verticalArrangement = Arrangement.spacedBy(14.dp),

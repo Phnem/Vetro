@@ -1,5 +1,6 @@
 package com.example.myapplication.ui.inspect
 
+import com.example.myapplication.ui.shared.theme.IosScroll
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
@@ -66,6 +67,7 @@ import com.example.myapplication.ui.shared.theme.InspectVisualSearchTheme
 import com.example.myapplication.ui.shared.theme.MotionTokens
 import com.example.myapplication.utils.getAiConnectStrings
 import com.example.myapplication.utils.getStrings
+import com.example.myapplication.utils.Haptic
 import com.example.myapplication.utils.performHaptic
 import kotlinx.coroutines.launch
 
@@ -100,7 +102,7 @@ fun InspectScreen(
     val hasVisionProvider by viewModel.hasVisionProvider.collectAsStateWithLifecycle()
     val aiConnectStrings = getAiConnectStrings(lang)
     val onSelectMode: (Int) -> Unit = { index ->
-        performHaptic(view, "light")
+        performHaptic(view, Haptic.Light)
         when (index) {
             0 -> viewModel.setContentMode(InspectContentMode.Anime)
             1 -> viewModel.setContentMode(InspectContentMode.MoviesSeries)
@@ -209,7 +211,7 @@ fun InspectScreen(
                             brandLabel = strings.appName.uppercase(),
                             onBack = onBack?.let { back ->
                                 {
-                                    performHaptic(view, "light")
+                                    performHaptic(view, Haptic.Light)
                                     back()
                                 }
                             },
@@ -230,6 +232,7 @@ fun InspectScreen(
                         // тянет контент за собой. Раньше свайп просто подменял режим на месте,
                         // без всякого движения, поэтому перехода не читалось вовсе.
                         HorizontalPager(
+                            flingBehavior = IosScroll.pagerFlingBehavior(pagerState),
                             state = pagerState,
                             modifier = Modifier.fillMaxSize(),
                             beyondViewportPageCount = 1,
@@ -245,7 +248,7 @@ fun InspectScreen(
                                 body = strings.inspectGeminiRequiredMovies,
                                 buttonLabel = aiConnectStrings.connectButton,
                                 onOpenAiConnect = {
-                                    performHaptic(view, "light")
+                                    performHaptic(view, Haptic.Light)
                                     // В рабочей области настройки — соседняя страница, а не
                                     // маршрут: push поверх пейджера увёл бы из области целиком.
                                     onOpenSettings?.invoke() ?: navController.navigateToSettings()
@@ -264,7 +267,7 @@ fun InspectScreen(
                                     .border(1.dp, outlineMuted, cardShape)
                                     .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.38f))
                                     .clickable {
-                                        performHaptic(view, "light")
+                                        performHaptic(view, Haptic.Light)
                                         pickLauncher.launch("image/*")
                                     }
                             ) {
@@ -278,7 +281,7 @@ fun InspectScreen(
                                         )
                                         IconButton(
                                             onClick = {
-                                                performHaptic(view, "light")
+                                                performHaptic(view, Haptic.Light)
                                                 viewModel.clearPreviewAndResults()
                                             },
                                             modifier = Modifier
@@ -402,6 +405,7 @@ fun InspectScreen(
                                         is InspectUiState.Idle -> { /* empty */ }
                                         is InspectUiState.Success -> {
                                             LazyColumn(
+                                                flingBehavior = IosScroll.flingBehavior(),
                                                 modifier = Modifier.fillMaxSize(),
                                                 contentPadding = PaddingValues(16.dp, 16.dp, 16.dp, 116.dp),
                                                 verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -421,7 +425,7 @@ fun InspectScreen(
                                                         addLabel = strings.addButton,
                                                         addedLabel = strings.addedButton,
                                                         onAddClick = {
-                                                            performHaptic(view, "light")
+                                                            performHaptic(view, Haptic.Light)
                                                             viewModel.addFromApi(r)
                                                         },
                                                         modifier = Modifier.fillMaxWidth(),
@@ -442,7 +446,7 @@ fun InspectScreen(
                         moviesLabel = strings.inspectSegmentMoviesTv,
                         selectedIndex = pagerState.targetPage,
                         onSelect = { page ->
-                            performHaptic(view, "light")
+                            performHaptic(view, Haptic.Light)
                             scope.launch {
                                 pagerState.animateScrollToPage(
                                     page,

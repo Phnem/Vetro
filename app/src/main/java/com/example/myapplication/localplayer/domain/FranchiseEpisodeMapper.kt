@@ -1,6 +1,10 @@
 package com.example.myapplication.localplayer.domain
 
+import com.example.myapplication.network.seasonNeighbors
+import com.example.myapplication.network.orderByRelations
 import android.util.Log
+import com.example.myapplication.data.local.SeasonEpisodesStore
+import com.example.myapplication.domain.seasons.SeasonInfo
 import com.example.myapplication.network.AniListRemoteDataSource
 import com.example.myapplication.network.EpisodeCheckMedia
 import kotlinx.coroutines.sync.Mutex
@@ -26,6 +30,31 @@ internal fun offsetAbsoluteEpisode(chain: List<FranchiseSeason>, absoluteEpisode
     return null
 }
 
+/** Цепочка сезонов из сохранённого расклада и сезон, к которому относятся запрошенные id. */
+internal data class StoredChain(val self: FranchiseSeason, val chain: List<FranchiseSeason>)
+
+/**
+ * Цепочка из уже сохранённого расклада сезонов ([com.example.myapplication.data.local.SeasonEpisodesStore]).
+ *
+ * Раскладку франшизы резолвер сезонов уже собрал обходом PREQUEL/SEQUEL — тем же, что делает
+ * маппер. Годится она, только если у каждого обычного сезона есть MAL id и число серий: иначе
+ * сдвиг посчитать нечем, и маппер идёт в сеть как раньше.
+ */
+internal fun chainFromLayout(seasons: List<SeasonInfo>, anilistId: Int?, malId: Int?): StoredChain? {
+    val regular = seasons.filterNot { it.isSpecial }.sortedBy { it.seasonNumber }
+    if (regular.isEmpty()) return null
+    val chain = regular.map { season ->
+        val mid = season.malId?.takeIf { it > 0 } ?: return null
+        val eps = (season.totalEpisodes ?: season.episodes).takeIf { it > 0 } ?: return null
+        FranchiseSeason(mid, eps)
+    }
+    val selfIndex = regular.indexOfFirst { season ->
+        (anilistId != null && season.anilistId == anilistId) || (malId != null && season.malId == malId)
+    }
+    if (selfIndex < 0) return null
+    return StoredChain(chain[selfIndex], chain)
+}
+
 /**
  * Сопоставляет абсолютный номер локальной серии конкретной записи MAL внутри франшизы — чтобы
  * AniSkip (который знает только id сезона + внутрисезонный номер) нашёл тайминги для мультисезонных
@@ -41,6 +70,7 @@ internal fun offsetAbsoluteEpisode(chain: List<FranchiseSeason>, absoluteEpisode
  */
 class FranchiseEpisodeMapper(
     private val aniList: AniListRemoteDataSource,
+    private val seasonStore: SeasonEpisodesStore,
 ) {
     data class Mapped(val malId: Int, val episode: Int)
 
@@ -49,6 +79,14 @@ class FranchiseEpisodeMapper(
 
     suspend fun resolve(anilistId: Int?, malId: Int?, absoluteEpisode: Int): Mapped? {
         if (absoluteEpisode <= 0) return null
+        // Сначала — сохранённый расклад сезонов: франшизу уже обошёл резолвер сезонов, и второй
+        // обход AniList (плюс запрос самого тайтла) ради той же цепочки не нужен.
+        storedChain(anilistId, malId)?.let { stored ->
+            if (absoluteEpisode <= stored.self.episodes) {
+                return Mapped(stored.self.malId, absoluteEpisode)
+            }
+            offsetAbsoluteEpisode(stored.chain, absoluteEpisode)?.let { (mid, ep) -> return Mapped(mid, ep) }
+        }
         val self = fetchSelf(anilistId, malId) ?: return null
         val selfMal = self.malId
         val e0 = self.totalEpisodes ?: self.airedEpisodes.takeIf { it > 0 }
@@ -60,6 +98,14 @@ class FranchiseEpisodeMapper(
 
         val chain = orderedChain(self) ?: return null
         return offsetAbsoluteEpisode(chain, absoluteEpisode)?.let { (mid, ep) -> Mapped(mid, ep) }
+    }
+
+    private suspend fun storedChain(anilistId: Int?, malId: Int?): StoredChain? {
+        if (anilistId == null && malId == null) return null
+        runCatching { seasonStore.ensureLoaded() }.getOrElse { return null }
+        return seasonStore.flow.value.values.firstNotNullOfOrNull { entry ->
+            chainFromLayout(entry.seasons, anilistId, malId)
+        }
     }
 
     private suspend fun fetchSelf(anilistId: Int?, malId: Int?): EpisodeCheckMedia? {
@@ -108,37 +154,7 @@ class FranchiseEpisodeMapper(
         return result
     }
 
-    /** Восстанавливаем порядок сезонов по рёбрам PREQUEL/SEQUEL внутри собранного множества. */
-    private fun orderByRelations(nodes: Map<Int, EpisodeCheckMedia>): List<EpisodeCheckMedia> {
-        val next = HashMap<Int, Int>()
-        val prev = HashMap<Int, Int>()
-        for (m in nodes.values) {
-            for (r in m.relations) {
-                if (r.anilistId !in nodes) continue
-                when (r.relationType) {
-                    "SEQUEL" -> { next[m.anilistId] = r.anilistId; prev[r.anilistId] = m.anilistId }
-                    "PREQUEL" -> { prev[m.anilistId] = r.anilistId; next[r.anilistId] = m.anilistId }
-                }
-            }
-        }
-        val root = nodes.keys.firstOrNull { it !in prev } ?: nodes.keys.first()
-        val ordered = ArrayList<EpisodeCheckMedia>()
-        val seen = HashSet<Int>()
-        var cur: Int? = root
-        while (cur != null && cur !in seen) {
-            seen += cur
-            nodes[cur]?.let { ordered += it }
-            cur = next[cur]
-        }
-        // На всякий случай добавим не попавшие в цепочку (ветвления) — в конец, по anilistId.
-        nodes.values.filter { it.anilistId !in seen }.sortedBy { it.anilistId }.forEach { ordered += it }
-        return ordered
-    }
 
-    private fun EpisodeCheckMedia.seasonNeighbors(): Set<Int> =
-        relations.filter { it.relationType == "PREQUEL" || it.relationType == "SEQUEL" }
-            .map { it.anilistId }
-            .toSet()
 
     private fun EpisodeCheckMedia.isSeasonFormat(): Boolean =
         format == null || format in SEASON_FORMATS

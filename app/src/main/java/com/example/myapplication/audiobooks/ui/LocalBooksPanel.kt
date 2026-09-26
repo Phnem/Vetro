@@ -1,5 +1,6 @@
 package com.example.myapplication.audiobooks.ui
 
+import com.example.myapplication.ui.shared.theme.IosScroll
 import android.content.ComponentName
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -137,7 +138,7 @@ fun LocalBooksPanel(strings: AudiobookStrings, modifier: Modifier = Modifier, au
         }
     }
 
-    Column(modifier.verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(top = 24.dp, bottom = 24.dp),
+    Column(modifier.verticalScroll(rememberScrollState(), flingBehavior = IosScroll.flingBehavior()).padding(horizontal = 20.dp).padding(top = 24.dp, bottom = 24.dp),
         verticalArrangement = Arrangement.spacedBy(18.dp)) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically) {

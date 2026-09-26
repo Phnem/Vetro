@@ -4,11 +4,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
 
 // ============================================================
-// Брендовая палитра Vetro: чёрный/белый + оттенки серого + фирменный оранжевый.
+// Брендовая палитра Vetro: чёрный/белый + оттенки серого + фирменные оранжевый и зелёный.
 // Источник — брендовый color palette sheet:
 //   Branding orange #E85002, Primary #000000, White #F9F9F9,
 //   Gray #646464, Light Gray #A7A7A7, Dark Gray #333333,
 //   Gradient: #000000 → #C10801 → #F16001 → #D9C3AB.
+//   Brand green #34C759 (v3.3.5) — отдельный цвет «успеха».
 // Все смысловые роли (акценты, метрики, рейтинги) выражаются через эти тона.
 // ============================================================
 
@@ -18,14 +19,24 @@ val BrandOrange = Color(0xFFE85002)
 val BrandOrangeBright = Color(0xFFF16001)
 /** Глубокий красный из брендового градиента (#C10801) — destructive / ошибки / низкие оценки. */
 val BrandDeepRed = Color(0xFFC10801)
-/** Тёплый песочный из хвоста градиента (#D9C3AB) — мягкий тёплый акцент. */
-val BrandTan = Color(0xFFE85002)
+/** Фирменный зелёный (#34C759) — второй брендовый цвет, рядом с оранжевым. */
+val BrandGreen = Color(0xFF34C759)
+/** Песочный из хвоста брендового градиента (#D9C3AB). */
+val BrandSand = Color(0xFFD9C3AB)
 
-// Легаси-алиасы: имена сохранены, значения перенесены на бренд-палитру,
-// чтобы не трогать все точки использования.
-val BrandBlue = BrandOrange
-val BrandBlueSoft = BrandOrangeBright
-val BrandRed = BrandDeepRed
+/** Нейтрали брендового листа — для мест, где нужен сам тон, а не роль (фон/текст/рамка). */
+val BrandGray = Color(0xFF646464)
+val BrandLightGray = Color(0xFFA7A7A7)
+val BrandDarkGray = Color(0xFF333333)
+
+/**
+ * «Успех» — один цвет для всех состояний «готово»: просмотрено, скачано, подтверждено. Раньше
+ * их было три разных зелёных (#20C997, #34C759, #4CAF50).
+ */
+val StatusSuccess = BrandGreen
+/** Тёплый песочный из хвоста градиента (#D9C3AB) — мягкий тёплый акцент. */
+val BrandTan = BrandOrange
+
 
 /** Акценты плиток настроек — оттенки одной тёплой монохромной гаммы. */
 /** Язык — фирменный оранжевый для слайдера */
@@ -34,45 +45,45 @@ val SettingsAccentLangDarkBlue = BrandOrange
 val SettingsAccentThemeDarkGreen = BrandOrangeBright
 val SettingsAccentCloudLightBlue = BrandTan
 /** Контент — приглушённая обожжённая глина */
-val SettingsAccentContentOrange = Color(0xFFE85002)
-val SettingsAccentContactLightGreen = Color(0xFFA7A7A7)
+val SettingsAccentContentOrange = BrandOrange
+val SettingsAccentContactLightGreen = BrandLightGray
 /** Акцент плитки доната (кофейный / тёплый) */
-val SettingsAccentDonationCoffee = Color(0xFFE85002)
+val SettingsAccentDonationCoffee = BrandOrange
 
 // M3 Accent — тёплый тонально-оранжевый контейнер (заменил mauve),
 // как у FilledTonalButton / secondaryContainer
-val AccentMauveDark = Color(0xFFE85002)
+val AccentMauveDark = BrandOrange
 val AccentOnMauveDark = Color(0xFFFFD9C4)
 val AccentMauveLight = Color(0xFFFFDCC7)
 val AccentOnMauveLight = Color(0xFF3A1800)
 
 // Рейтинг: от глухого серого (плохо) через глубокий красный к яркому оранжевому
 // и песочному — луминансная лестница вдоль брендового градиента.
-val RateColor1 = Color(0xFF646464) // Gray — слабо
-val RateColor2 = Color(0xFFC10801) // Deep red
-val RateColor3 = Color(0xFFE85002) // Branding orange
+val RateColor1 = BrandGray // Gray — слабо
+val RateColor2 = BrandDeepRed // Deep red
+val RateColor3 = BrandOrange // Branding orange
 val RateColor4 = Color(0xFFFF8A3D) // Light orange
-val RateColor5 = Color(0xFFE85002) // Tan — вершина градиента
+val RateColor5 = BrandOrange // Tan — вершина градиента
 
 val RateColorEmpty = Color(0xFFE0E0E0)
 val EpisodesColor = BrandOrangeBright
-val TimeColor = Color(0xFFA7A7A7)
+val TimeColor = BrandLightGray
 val RatingColor = BrandOrange
 val RankColor = BrandTan
 
 /** Тёмная тема: чистый чёрный базовый фон + нейтральные серые ступени. */
-val DarkBackground = Color(0xFF000000)
+val DarkBackground = Color.Black
 val DarkSurface = Color(0xFF262626)
-val DarkSurfaceVariant = Color(0xFF333333)
+val DarkSurfaceVariant = BrandDarkGray
 val DarkTextPrimary = Color(0xFFF9F9F9)
-val DarkTextSecondary = Color(0xFFA7A7A7)
-val DarkBorder = Color(0xFFFFFFFF).copy(alpha = 0.08f)
+val DarkTextSecondary = BrandLightGray
+val DarkBorder = Color.White.copy(alpha = 0.08f)
 /** Нейтральная «чистая» светлая палитра (без тёплого крема). */
 val LightBackground = Color(0xFFF9F9F9)
-val LightSurface = Color(0xFFFFFFFF)
+val LightSurface = Color.White
 val LightSurfaceVariant = Color(0xFFF0F0F0)
 val LightTextPrimary = Color(0xFF1A1A1A)
-val LightTextSecondary = Color(0xFF646464)
+val LightTextSecondary = BrandGray
 val LightBorder = Color(0xFFE2E2E2)
 
 /** Пастельная подложка иконки + tint с достаточным контрастом на светлой теме. */

@@ -1,5 +1,6 @@
 package com.example.myapplication.ui.shared.components
 
+import com.example.myapplication.ui.shared.theme.BrandOrange
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
@@ -33,7 +34,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.myapplication.isAppInDarkTheme
+import com.example.myapplication.ui.shared.theme.isAppInDarkTheme
 import com.example.myapplication.data.models.GenreCategory
 import com.example.myapplication.data.models.RatingScale
 import com.example.myapplication.data.models.UiStrings
@@ -58,7 +59,7 @@ fun AnimatedOneUiTextField(
 ) {
     var isFocused by remember { mutableStateOf(false) }
     val borderColor by animateColorAsState(
-        targetValue = if (isFocused) BrandBlue else MaterialTheme.colorScheme.outline.copy(alpha = 0.3f),
+        targetValue = if (isFocused) BrandOrange else MaterialTheme.colorScheme.outline.copy(alpha = 0.3f),
         label = "border"
     )
 
@@ -76,7 +77,7 @@ fun AnimatedOneUiTextField(
             fontSize = 16.sp,
             color = MaterialTheme.colorScheme.onSurface
         ),
-        cursorBrush = SolidColor(BrandBlue),
+        cursorBrush = SolidColor(BrandOrange),
         keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
         decorationBox = { innerTextField ->
             Box {

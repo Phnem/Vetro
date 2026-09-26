@@ -50,15 +50,26 @@ val appModule = module {
     single<AnimeRepository> { AnimeRepository(apiService = get(), localDataSource = get()) }
     single { AppUpdateRepository(settingsDataStore = get(named("settings")), animeRepository = get()) }
     single<GenreRepository> { GenreRepository() }
-    single { GeminiStructuredClient(get()) }
-    single { AiLlmEndpoint(get()) }
+    // Стопка обновлений → колокольчик: живёт до смерти процесса, то есть до холодного старта.
+    single { com.example.myapplication.ui.home.updates.EpisodeNotificationTray() }
+    // Одна область корутин уровня процесса (см. AppScope).
+    single { com.example.myapplication.AppScope() }
+    single { GeminiStructuredClient(get(com.example.myapplication.network.di.AI_HTTP_CLIENT)) }
+    single { AiLlmEndpoint(get(com.example.myapplication.network.di.AI_HTTP_CLIENT)) }
     single { AiProviderLatencyProber(get(), get()) }
     single { AiLlmFallbackRouter(get(), get(), get()) }
     single { InspectImageUseCase(get(), get(), get(), get()) }
     single { AddFromApiUseCase(get(), get(), get(), get(), get()) }
     single { BatchEpisodeCheckUseCase(repository = get(), localDataSource = get()) }
     single { SeriesEpisodeCheckUseCase(repository = get(), localDataSource = get()) }
-    single { EpisodeUpdateCheckCoordinator(animeCheck = get(), seriesCheck = get()) }
+    single {
+        EpisodeUpdateCheckCoordinator(
+            animeCheck = get(),
+            seriesCheck = get(),
+            seasonCatchUp = get(),
+            appScope = get<com.example.myapplication.AppScope>(),
+        )
+    }
     single { TitleEnrichmentUseCase(repository = get(), localDataSource = get()) }
     single { RussianTitleEnrichmentUseCase(repository = get(), localDataSource = get()) }
     single { AiTitleTranslationUseCase(router = get(), localDataSource = get()) }
@@ -71,10 +82,6 @@ val appModule = module {
     single { CollectionGapDetector(localDataSource = get(), repairUseCase = get(), journal = get()) }
     single { WebLinksStore(androidContext()) }
     single { WebLinkEnrichmentUseCase(resolver = get(), store = get()) }
-    // File-based IPC мост к внешнему воркеру скачивания (Vetro_Queue: input.json/output.json).
-    single<com.example.myapplication.download.FileIpcManager> {
-        com.example.myapplication.download.FileIpcManagerImpl(context = androidContext())
-    }
     // Серии по сезонам: файловый стор + фоновый резолвер (AniList → Shikimori → MAL).
     single { com.example.myapplication.data.local.SeasonEpisodesStore(androidContext()) }
     single {
@@ -105,16 +112,7 @@ val appModule = module {
             discovery = get(),
         )
     }
-    // Local player (isolated feature — remove these lines to unwire it).
-    single { com.example.myapplication.localplayer.data.LocalSourceStore(androidContext()) }
-    single {
-        com.example.myapplication.localplayer.domain.LocalLibraryUseCase(
-            context = androidContext(),
-            store = get(),
-            aiRouter = get(),
-        )
-    }
-    single { com.example.myapplication.localplayer.domain.FranchiseEpisodeMapper(get()) }
+    single { com.example.myapplication.localplayer.domain.FranchiseEpisodeMapper(get(), get()) }
     single {
         com.example.myapplication.localplayer.domain.AniSkipSegmentProvider(
             httpClient = get<io.ktor.client.HttpClient>(),
@@ -150,13 +148,6 @@ val appModule = module {
             pageResolver = get(),
         )
     }
-    single(named("manga_rate")) {
-        // MangaDex: 5 req/s на IP; держимся вдвое ниже потолка — главы всё равно грузим пачками.
-        com.example.myapplication.network.TokenBucketRateLimiter(
-            maxTokens = 2.0,
-            refillTokensPerSecond = 2.0,
-        )
-    }
     single(named("remanga_rate")) {
         // Remanga лимиты не публикует: оглавление грузится страницами по 100, идём спокойно.
         com.example.myapplication.network.TokenBucketRateLimiter(
@@ -167,7 +158,8 @@ val appModule = module {
     single {
         com.example.myapplication.manga.source.MangaDexSource(
             client = get(),
-            rateLimiter = get(named("manga_rate")),
+            // Тот же лимитер, что у каталога MangaDex в core: хост один.
+            rateLimiter = get(com.example.myapplication.network.di.RATE_MANGADEX),
         )
     }
     single {
@@ -195,7 +187,7 @@ val appModule = module {
     }
 
     // Media engine (stream + download)
-    single { okhttp3.OkHttpClient.Builder().build() }
+    // OkHttp медиа-движка — корневой из coreNetworkModule (общий пул соединений).
     single { com.example.myapplication.media.source.AniLibriaSource(client = get()) }
     single { com.example.myapplication.media.source.AnimeGoSource(client = get()) }
     single {
@@ -226,8 +218,13 @@ val appModule = module {
     }
     // Browser-UA client without the cookie plugin: gate.php is selected by a per-request `key` cookie.
     single {
+        val seasonStore = get<com.example.myapplication.data.local.SeasonEpisodesStore>()
         com.example.myapplication.media.source.AnimeHeavenSource(
             client = get(org.koin.core.qualifier.named("weblink")),
+            seasonTitles = { animeId ->
+                seasonStore.ensureLoaded()
+                seasonStore.entryFor(animeId)?.seasons.orEmpty().mapNotNull { it.title }
+            },
         )
     }
     single { com.example.myapplication.media.source.UrlSource(context = androidContext()) }
@@ -243,11 +240,13 @@ val appModule = module {
     }
     single(named("webdav")) {
         io.ktor.client.HttpClient(io.ktor.client.engine.okhttp.OkHttp) {
+            engine { preconfigured = get<okhttp3.OkHttpClient>() }
             followRedirects = false
         }
     }
     single(named("personal-media")) {
         io.ktor.client.HttpClient(io.ktor.client.engine.okhttp.OkHttp) {
+            engine { preconfigured = get<okhttp3.OkHttpClient>() }
             followRedirects = false
         }
     }
@@ -341,17 +340,22 @@ val appModule = module {
         com.example.myapplication.media.MediaGatewayImpl(
             context = androidContext(),
             sourceEngine = get(),
-            fileIpcManager = get(),
             settingsDataStore = get(named("settings")),
         )
     }
     single { com.example.myapplication.media.download.SeasonBatchDownloader(get()) }
     single { com.example.myapplication.media.metadata.EpisodeArtworkRepository(get()) }
-    single { com.example.myapplication.media.progress.EpisodePlaybackStore(get(named("settings"))) }
+    single {
+        com.example.myapplication.media.progress.EpisodePlaybackStore(
+            store = get(named("playback")),
+            legacySettings = get(named("settings")),
+        )
+    }
     single {
         CollectionEnrichmentCoordinator(
             context = androidContext(),
             settingsDataStore = get(named("settings")),
+            appScope = get(),
         )
     }
     single { CollectionPdfGenerator(androidContext()) }
@@ -376,6 +380,7 @@ val appModule = module {
             credentialsStore = get(),
             cacheStore = get(),
             settingsDataStore = get(named("settings")),
+            appScope = get<com.example.myapplication.AppScope>(),
         )
     }
     single {

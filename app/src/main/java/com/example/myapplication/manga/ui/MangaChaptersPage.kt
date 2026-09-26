@@ -1,5 +1,6 @@
 package com.example.myapplication.manga.ui
 
+import com.example.myapplication.ui.shared.theme.IosScroll
 import android.content.Intent
 import androidx.core.net.toUri
 import androidx.compose.animation.AnimatedVisibility
@@ -69,7 +70,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
-import com.example.myapplication.isAppInDarkTheme
+import com.example.myapplication.ui.shared.theme.isAppInDarkTheme
 import com.example.myapplication.manga.data.DownloadProgress
 import com.example.myapplication.manga.domain.MangaChapter
 import com.example.myapplication.manga.domain.MangaItem
@@ -81,6 +82,7 @@ import com.example.myapplication.ui.shared.theme.SnProFamily
 import com.example.myapplication.ui.shared.theme.IosDesign
 import com.example.myapplication.ui.shared.theme.SquircleCornerShape
 import com.example.myapplication.ui.shared.theme.SquircleShape
+import com.example.myapplication.utils.Haptic
 import com.example.myapplication.utils.performHaptic
 import java.time.Instant
 import java.time.ZoneId
@@ -259,6 +261,7 @@ private fun SourcePickerContent(
         }
 
         LazyColumn(
+            flingBehavior = IosScroll.flingBehavior(),
             contentPadding = PaddingValues(
                 start = 16.dp,
                 end = 16.dp,
@@ -445,7 +448,7 @@ private fun ChaptersContent(
             Row(
                 modifier = Modifier
                     .weight(1f)
-                    .horizontalScroll(rememberScrollState())
+                    .horizontalScroll(rememberScrollState(), flingBehavior = IosScroll.flingBehavior())
                     .padding(horizontal = 16.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
@@ -485,7 +488,7 @@ private fun ChaptersContent(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState())
+                    .horizontalScroll(rememberScrollState(), flingBehavior = IosScroll.flingBehavior())
                     .padding(horizontal = 16.dp, vertical = 8.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
@@ -520,6 +523,7 @@ private fun ChaptersContent(
         }
 
         LazyColumn(
+            flingBehavior = IosScroll.flingBehavior(),
             contentPadding = PaddingValues(
                 start = 16.dp,
                 end = 16.dp,
@@ -939,7 +943,7 @@ private fun VolumeHeader(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null,
                 ) {
-                    performHaptic(view, "light")
+                    performHaptic(view, Haptic.Light)
                     onDownloadAll()
                 },
             contentAlignment = Alignment.Center,

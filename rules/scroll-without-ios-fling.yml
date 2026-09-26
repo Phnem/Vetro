@@ -1,0 +1,20 @@
+id: scroll-without-ios-fling
+language: kotlin
+severity: error
+message: Scroll container without flingBehavior — use IosScroll.flingBehavior() (or pagerFlingBehavior for pagers).
+note: |
+  Since v3.3.5 every scroll container uses the iOS decay (IosScroll). A container without
+  flingBehavior falls back to Android's default fling and feels different from the rest of the app.
+rule:
+  kind: call_expression
+  all:
+    - has:
+        kind: simple_identifier
+        regex: ^(LazyColumn|LazyRow|LazyVerticalGrid|LazyHorizontalGrid|LazyVerticalStaggeredGrid|HorizontalPager|VerticalPager)$
+    - not:
+        has:
+          kind: value_argument
+          stopBy: end
+          has:
+            kind: simple_identifier
+            regex: ^flingBehavior$

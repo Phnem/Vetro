@@ -23,7 +23,9 @@ import com.example.myapplication.media.source.PlaybackResolution
 import com.example.myapplication.media.source.movieseries.MovieSeriesSourceOptions
 import com.example.myapplication.media.source.movieseries.SourceOption
 import com.example.myapplication.media.source.PlaybackIdentity
+import com.example.myapplication.media.isDownloadable
 import com.example.myapplication.media.source.rankVideosForResolution
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -38,8 +40,8 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
+import kotlinx.coroutines.withContext
 import java.io.File
-import kotlin.math.abs
 
 data class EpisodeKey(
     val season: Int,
@@ -161,6 +163,7 @@ class EpisodeMenuViewModel(
     private var seasons: List<SeasonInfo> = emptyList()
     private val artworkLoaded = mutableSetOf<Int>()
     private val episodeJobs = mutableMapOf<EpisodeKey, Job>()
+    private var scanJob: Job? = null
     private val downloadSlots = Semaphore(2)
     private var seasonDiscoveryRequested = false
 
@@ -547,9 +550,17 @@ class EpisodeMenuViewModel(
                         }
                         flattenVideosWithSource(hosters)
                     }
-                    val candidates = rankVideosForResolution(videos, preferredResolution)
-                    val video = candidates.firstOrNull()
-                        ?: error("No downloadable stream")
+                    // Ранжируем только то, что можно скачать: раньше первым мог встать поток
+                    // «только для просмотра», и загрузка падала на нём, хотя рядом был годный.
+                    val downloadable = videos.filter { it.isDownloadable() }
+                    val candidates = rankVideosForResolution(downloadable, preferredResolution)
+                    val video = candidates.firstOrNull() ?: error(
+                        if (videos.isNotEmpty()) {
+                            "Источники этой серии разрешают только просмотр / These sources are stream-only"
+                        } else {
+                            "Поток для загрузки не найден / No downloadable stream"
+                        }
+                    )
                     val jobId = mediaGateway.enqueueDownload(
                         video = video,
                         fallbackVideos = candidates.drop(1),
@@ -562,10 +573,12 @@ class EpisodeMenuViewModel(
                         .onEach { progress ->
                             when (progress.status) {
                                 "queued" -> setAction(key, EpisodeActionState.Resolving)
-                                "downloading" -> setAction(
-                                    key,
-                                    EpisodeActionState.Downloading(progress.progressPct),
-                                )
+                                // Строка серии рисует бесконечный спиннер, процент ей не нужен.
+                                // Раньше каждый процент заново собирал стейт — и весь список
+                                // серий перерисовывался ~100 раз за загрузку.
+                                "downloading" -> if (currentAction(key) !is EpisodeActionState.Downloading) {
+                                    setAction(key, EpisodeActionState.Downloading(progress.progressPct))
+                                }
                             }
                         }
                         .first { it.status in TERMINAL_DOWNLOAD_STATES }
@@ -588,10 +601,10 @@ class EpisodeMenuViewModel(
                         )
                     }
                 }.onFailure {
-                    setAction(
-                        key,
-                        EpisodeActionState.Failed(it.message ?: "Download failed"),
-                    )
+                    val message = it.message ?: "Download failed"
+                    setAction(key, EpisodeActionState.Failed(message))
+                    // Раньше кнопка просто краснела без объяснений.
+                    _events.emit(EpisodeMenuEvent.Message(message))
                 }
             }
             episodeJobs.remove(key)
@@ -613,20 +626,45 @@ class EpisodeMenuViewModel(
         setAction(key, EpisodeActionState.Available)
     }
 
+    /**
+     * Какие серии уже лежат на диске.
+     *
+     * Раньше скан шёл на главном потоке и для КАЖДОЙ серии каждого сезона открывал файл и читал
+     * заголовок MP4 — на длинных тайтлах это сотни открытий файлов на входе в Details. Теперь:
+     * на IO, один листинг папки на сезон, и заголовок проверяется только у файлов, которые есть.
+     * Найденное не перетирает активные статусы: серия, которая прямо сейчас качается или только
+     * что докачалась, важнее того, что скан увидел на диске.
+     */
     private fun scanExistingDownloads() {
-        val found = buildMap {
-            seasons.forEach { season ->
-                (1..season.episodes.coerceAtLeast(0)).forEach { episode ->
-                    val key = EpisodeKey(season.seasonNumber, episode)
-                    val file = episodeFile(key)
-                    if (MediaFileValidator.isPlayableMp4(file)) {
-                        put(key, EpisodeActionState.Downloaded(file.absolutePath))
+        val snapshot = seasons
+        scanJob?.cancel()
+        scanJob = viewModelScope.launch {
+            val found = withContext(Dispatchers.IO) {
+                buildMap {
+                    snapshot.forEach { season ->
+                        val names = seasonDirectory(season.seasonNumber).list()?.toHashSet()
+                            ?: return@forEach
+                        (1..season.episodes.coerceAtLeast(0)).forEach { episode ->
+                            val key = EpisodeKey(season.seasonNumber, episode)
+                            val file = episodeFile(key)
+                            if (file.name in names && MediaFileValidator.isPlayableMp4(file)) {
+                                put(key, EpisodeActionState.Downloaded(file.absolutePath))
+                            }
+                        }
                     }
                 }
             }
-        }
-        _state.update { current ->
-            current.copy(actions = current.actions + found)
+            if (found.isEmpty()) return@launch
+            _state.update { current ->
+                val merged = current.actions.toMutableMap()
+                found.forEach { (key, downloaded) ->
+                    val existing = merged[key]
+                    if (existing == null || existing == EpisodeActionState.Available) {
+                        merged[key] = downloaded
+                    }
+                }
+                current.copy(actions = merged)
+            }
         }
     }
 
@@ -745,7 +783,7 @@ class EpisodeMenuViewModel(
         File(seasonDirectory(key.season), "E${key.episode.toString().padStart(3, '0')}.mp4")
 
     private fun String.sanitizeForPath(): String =
-        replace(Regex("[\\\\/:*?\"<>|]"), "_").trim().ifBlank { "Title" }
+        replace(UNSAFE_PATH_CHARS, "_").trim().ifBlank { "Title" }
 
     override fun onCleared() {
         episodeJobs.values.forEach { it.cancel() }
@@ -755,6 +793,8 @@ class EpisodeMenuViewModel(
     private companion object {
         const val TAG = "EpisodeMenu"
         val TERMINAL_DOWNLOAD_STATES = setOf("success", "failed", "cancelled")
+        /** Раньше компилировался заново на каждый путь серии — то есть на каждую серию скана. */
+        val UNSAFE_PATH_CHARS = Regex("[\\\\/:*?\"<>|]")
     }
 }
 

@@ -20,7 +20,7 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import com.example.myapplication.isAppInDarkTheme
+import com.example.myapplication.ui.shared.theme.isAppInDarkTheme
 import com.kyant.backdrop.Backdrop
 import com.kyant.backdrop.drawBackdrop
 import com.kyant.backdrop.effects.blur
@@ -162,6 +162,9 @@ object FrostedMaterials {
                 tint = if (isDark) Color(0xFF1C1C1E) else Color.White,
                 noiseAlpha = 0f,
                 highlight = null,
+                // Тень задней карточки лежит под верхней и не видна, а слой под неё стоил бы
+                // на каждом кадре драга стопки.
+                shadow = null,
             )
         }
     }
@@ -234,34 +237,39 @@ fun Modifier.frostedGlass(
     // пикселя, и «волосок» превращается в жирную рамку.
     val hairline = with(density) { 1f.toDp() }
     val noiseBrush = rememberNoiseBrush()
+    val source = rememberPinnableBackdrop(backdrop)
 
-    val body = if (SystemBlurAvailable) {
-        Modifier.drawBackdrop(
-            backdrop = backdrop,
-            shape = { shape },
-            effects = {
-                // Порядок важен: сначала размываем, потом правим цвет. Обратный порядок
-                // размазывает уже усиленную насыщенность и даёт грязный ореол.
-                blur(blurPx)
-                colorControls(
-                    contrast = material.contrast,
-                    saturation = material.saturation,
-                )
-            },
-            highlight = { material.highlight },
-            shadow = { material.shadow },
-            // Тинт — поверх обработанного бэкдропа, а не примешан к нему фоном: «размытие до
-            // тинта» из документа на практике означает именно это.
-            onDrawSurface = { drawRect(material.tint) },
-            onDrawFront = { drawNoise(noiseBrush, material.noiseAlpha) },
-        )
-    } else {
-        Modifier
-            .background(material.fallbackFill, shape)
-            .drawWithContent {
-                drawContent()
-                drawNoise(noiseBrush, material.noiseAlpha)
-            }
+    // Цепочка запоминается: `drawBackdrop` каждый раз создаёт новый ShapeProvider без `equals`, и
+    // любая рекомпозиция вызывающего пересобирала бы RenderEffect и перерисовывала тень.
+    val body = remember(source, shape, material, blurPx, noiseBrush) {
+        if (SystemBlurAvailable) {
+            Modifier.drawBackdrop(
+                backdrop = source,
+                shape = { shape },
+                effects = {
+                    // Порядок важен: сначала размываем, потом правим цвет. Обратный порядок
+                    // размазывает уже усиленную насыщенность и даёт грязный ореол.
+                    blur(blurPx)
+                    colorControls(
+                        contrast = material.contrast,
+                        saturation = material.saturation,
+                    )
+                },
+                highlight = { material.highlight },
+                shadow = { material.shadow },
+                // Тинт — поверх обработанного бэкдропа, а не примешан к нему фоном: «размытие до
+                // тинта» из документа на практике означает именно это.
+                onDrawSurface = { drawRect(material.tint) },
+                onDrawFront = { drawNoise(noiseBrush, material.noiseAlpha) },
+            )
+        } else {
+            Modifier
+                .background(material.fallbackFill, shape)
+                .drawWithContent {
+                    drawContent()
+                    drawNoise(noiseBrush, material.noiseAlpha)
+                }
+        }
     }
 
     // Кант отдельным узлом: `border` сам строит обводку по контуру формы, поэтому капсула и
@@ -270,6 +278,26 @@ fun Modifier.frostedGlass(
         .then(body)
         .border(hairline, material.rim, shape)
 }
+
+/**
+ * Стеклянная кнопка (круглая «назад», кнопка действия, шапка): в новом интерфейсе — матовый
+ * материал дока, как у всех стеклянных поверхностей рядом; в классическом — прежний «жидкий»
+ * рецепт вызывающего, [classic] целиком (бэкдроп, линза, блик, кант).
+ *
+ * Развилка по режиму статична на время жизни экрана: режим меняется только пересозданием
+ * активити, поэтому набор узлов над бэкдропом на живом экране не меняется.
+ */
+@Composable
+fun Modifier.glassControl(
+    backdrop: Backdrop,
+    shape: Shape,
+    classic: Modifier.() -> Modifier,
+): Modifier =
+    if (LocalModernUi.current) {
+        this.frostedGlass(backdrop = backdrop, shape = shape, material = FrostedMaterials.dock())
+    } else {
+        this.classic()
+    }
 
 private fun DrawScope.drawNoise(noiseBrush: ShaderBrush, alpha: Float) {
     if (alpha > 0f) drawRect(brush = noiseBrush, alpha = alpha)

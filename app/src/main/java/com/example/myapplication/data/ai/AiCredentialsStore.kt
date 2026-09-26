@@ -98,6 +98,18 @@ class AiCredentialsStore(
      * `secure_gemini_prefs` и переносим ключ под провайдера [AiProvider.GEMINI].
      */
     private fun migrateLegacyGeminiKey(context: Context) {
+        // Флаг в обычных настройках: без него у всех, кто не подключал Gemini, КАЖДОЕ создание
+        // хранилища открывало второе шифрованное хранилище (инициализация Tink-ключей) впустую.
+        val flags = context.getSharedPreferences(MIGRATION_FLAGS_FILE, Context.MODE_PRIVATE)
+        if (flags.getBoolean(LEGACY_GEMINI_CHECKED, false)) return
+        try {
+            migrateLegacyGeminiKeyOnce(context)
+        } finally {
+            flags.edit().putBoolean(LEGACY_GEMINI_CHECKED, true).apply()
+        }
+    }
+
+    private fun migrateLegacyGeminiKeyOnce(context: Context) {
         if (!getApiKey(AiProvider.GEMINI).isNullOrBlank()) return
         val legacy = runCatching {
             val legacyPrefs = EncryptedSharedPreferences.create(
@@ -130,6 +142,8 @@ class AiCredentialsStore(
         const val PREF_FILE = "secure_ai_keys"
         const val KEY_PREFIX = "ai_key_"
         const val LEGACY_GEMINI_PREF_FILE = "secure_gemini_prefs"
+        const val MIGRATION_FLAGS_FILE = "ai_credentials_migration"
+        const val LEGACY_GEMINI_CHECKED = "legacy_gemini_checked_v1"
         const val LEGACY_GEMINI_KEY = "gemini_api_key"
     }
 }

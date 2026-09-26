@@ -8,6 +8,7 @@ import com.example.myapplication.data.local.ImageCompressionMigrator
 import com.example.myapplication.data.local.LegacyCollectionSafMigrator
 import com.example.myapplication.data.local.LegacyStorageMigrator
 import com.example.myapplication.data.local.MigrationManager
+import com.example.myapplication.data.local.StartupSweeps
 import com.example.myapplication.data.repository.AppUpdateRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -33,6 +34,7 @@ class SplashViewModel(
     private val authRepository: AuthRepository,
     private val appUpdateRepository: AppUpdateRepository,
     private val imageCompressionMigrator: ImageCompressionMigrator,
+    private val startupSweeps: StartupSweeps,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow<SplashState>(SplashState.Loading)
@@ -72,14 +74,30 @@ class SplashViewModel(
     }
 
     private fun startAppInitialization() {
-        viewModelScope.launch {
+        // Весь старт — на IO: проверки ниже листают папки и считают строки в БД, а раньше шли
+        // прямо на главном потоке, пока тот рисовал первый кадр сплэша.
+        viewModelScope.launch(Dispatchers.IO) {
+            // Полный проход по хранилищу уже был — сплэш его не ждёт, проверка уходит в фон.
+            // JSON-миграция остаётся блокирующей: это данные коллекции, а не картинки.
+            if (startupSweeps.isDone()) {
+                val pendingJsonMigration = migrationManager.needsJsonMigration()
+                if (pendingJsonMigration) {
+                    _uiState.update { SplashState.MigratingJson }
+                    migrationManager.runMigration()
+                    isLegacyUpgrade = true
+                    runFullSweeps()
+                    return@launch
+                }
+                startupSweeps.scheduleBackgroundRecheck()
+                finishStartup()
+                return@launch
+            }
+
             val pendingStorageMigration = legacyStorageMigrator.isPendingMigration()
             if (pendingStorageMigration) {
                 _uiState.update { SplashState.MigratingStorage }
             }
-            withContext(Dispatchers.IO) {
-                legacyStorageMigrator.migrateIfNeeded()
-            }
+            legacyStorageMigrator.migrateIfNeeded()
 
             val pendingJsonMigration = migrationManager.needsJsonMigration()
             if (pendingJsonMigration) {
@@ -89,22 +107,22 @@ class SplashViewModel(
 
             // Апгрейд со старой версии = была миграция storage или JSON в этом запуске.
             isLegacyUpgrade = pendingStorageMigration || pendingJsonMigration
-
-            withContext(Dispatchers.IO) {
-                legacyCollectionSafMigrator.migrateAllAvailableSources()
-            }
-
-            if (shouldPromptLegacyFolder()) {
-                _uiState.update { SplashState.AwaitingLegacyFolder }
-                return@launch
-            }
-
-            withContext(Dispatchers.IO) {
-                imageCompressionMigrator.compressExistingImages()
-            }
-
-            finishStartup()
+            runFullSweeps()
         }
+    }
+
+    /** Полный проход по хранилищу со сплэшем в ожидании — один раз на версию проходов. */
+    private suspend fun runFullSweeps() {
+        legacyCollectionSafMigrator.migrateAllAvailableSources()
+
+        if (shouldPromptLegacyFolder()) {
+            _uiState.update { SplashState.AwaitingLegacyFolder }
+            return
+        }
+
+        imageCompressionMigrator.compressExistingImages()
+        startupSweeps.markDone()
+        finishStartup()
     }
 
     /**
@@ -133,7 +151,7 @@ class SplashViewModel(
             runCatching { appUpdateRepository.refreshAppUpdate(force = false) }
         }
 
-        val route = if (authRepository.hasToken() || authRepository.isGuest) "home" else "welcome"
+        val route = if (authRepository.isGuest || authRepository.awaitSessionRestored()) "home" else "welcome"
         _uiState.update { SplashState.Completed(route) }
     }
 }

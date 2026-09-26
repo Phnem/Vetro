@@ -1,5 +1,6 @@
 package com.example.myapplication.manga.ui
 
+import com.example.myapplication.ui.shared.theme.IosScroll
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -100,6 +101,7 @@ import com.example.myapplication.ui.shared.components.IosSheetScaffold
 import com.example.myapplication.ui.shared.components.LiquidGlassTrack
 import com.example.myapplication.ui.shared.loading.BubbleClusterLoader
 import com.example.myapplication.ui.shared.theme.BrandOrange
+import com.example.myapplication.utils.Haptic
 import com.example.myapplication.utils.performHaptic
 import com.kyant.backdrop.Backdrop
 import com.kyant.backdrop.backdrops.layerBackdrop
@@ -294,6 +296,7 @@ private fun ReaderContent(
                             }
                             val forward = if (direction == PageDirection.Rtl) 1 else -1
                             HorizontalPager(
+                                flingBehavior = IosScroll.pagerFlingBehavior(pagerState),
                                 state = pagerState,
                                 modifier = Modifier.fillMaxSize(),
                                 beyondViewportPageCount = 1,
@@ -336,6 +339,7 @@ private fun ReaderContent(
                             onToggleChrome = { chromeVisible = !chromeVisible },
                         ) { zoomModifier ->
                             LazyColumn(
+                                flingBehavior = IosScroll.flingBehavior(),
                                 state = listState,
                                 modifier = zoomModifier.fillMaxSize(),
                             ) {
@@ -456,7 +460,7 @@ private fun ZoomablePage(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .verticalScroll(rememberScrollState())
+                    .verticalScroll(rememberScrollState(), flingBehavior = IosScroll.flingBehavior())
                     .pageTurnTaps(page.url, onToggleChrome, onTapLeft, onTapRight),
             ) {
                 PageImage(
@@ -772,6 +776,7 @@ private fun PageImage(
         AsyncImage(
             model = model,
             contentDescription = null,
+            imageLoader = MangaImageLoader.get(context),
             contentScale = contentScale,
             onState = { state ->
                 loading = state is AsyncImagePainter.State.Loading
@@ -1001,13 +1006,13 @@ private fun ReaderPageSlider(
             val target = (fraction * lastIndex).roundToInt().coerceIn(0, lastIndex)
             if (target != lastSnap) {
                 lastSnap = target
-                performHaptic(view, "tick")
+                performHaptic(view, Haptic.Tick)
                 onSeek(target)
             }
         },
         onScrubEnd = { fraction ->
             val target = (fraction * lastIndex).roundToInt().coerceIn(0, lastIndex)
-            performHaptic(view, "light")
+            performHaptic(view, Haptic.Light)
             onSeek(target)
         },
         thumbContent = {

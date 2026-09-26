@@ -1,5 +1,7 @@
 package com.example.myapplication.ui.shared.components
 
+import com.example.myapplication.ui.shared.glassControl
+import com.example.myapplication.ui.shared.rememberPinnableBackdrop
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -30,8 +32,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.example.myapplication.isAppInDarkTheme
+import com.example.myapplication.ui.shared.theme.isAppInDarkTheme
 import com.example.myapplication.ui.shared.theme.SnProFamily
+import com.example.myapplication.utils.Haptic
 import com.example.myapplication.utils.performHaptic
 import com.kyant.backdrop.Backdrop
 import com.kyant.backdrop.drawBackdrop
@@ -63,6 +66,9 @@ fun GlassMenuHeader(
     iconModifier: Modifier = Modifier,
 ) {
     val view = LocalView.current
+    // Шапка стоит внутри страниц рабочей области — во время свайпа её стекло не должно
+    // пересчитываться на каждом кадре (см. PinnableBackdrop).
+    val source = rememberPinnableBackdrop(backdrop)
     // Лёгкий фрост поверх линзы, чтобы капсула читалась и на плоском (не-hero) фоне списка.
     val surfaceTint = if (isDark) Color.White.copy(alpha = 0.08f) else Color.White.copy(alpha = 0.55f)
     val borderColor = if (isDark) Color.White.copy(alpha = 0.20f) else Color.Black.copy(alpha = 0.08f)
@@ -81,21 +87,22 @@ fun GlassMenuHeader(
                 .align(Alignment.CenterStart)
                 .size(48.dp)
                 .clip(CircleShape)
-                .drawBackdrop(
-                    backdrop = backdrop,
-                    shape = { CircleShape },
-                    effects = {
-                        vibrancy()
-                        blur(12f.dp.toPx())
-                        lens(8f.dp.toPx(), 40f.dp.toPx())
-                    },
-                    onDrawSurface = { drawRect(surfaceTint) },
-                )
-                .border(0.5.dp, borderColor, CircleShape)
+                .glassControl(source, CircleShape) {
+                    drawBackdrop(
+                        backdrop = source,
+                        shape = { CircleShape },
+                        effects = {
+                            vibrancy()
+                            blur(12f.dp.toPx())
+                            lens(8f.dp.toPx(), 40f.dp.toPx())
+                        },
+                        onDrawSurface = { drawRect(surfaceTint) },
+                    ).border(0.5.dp, borderColor, CircleShape)
+                }
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null,
-                    onClick = { performHaptic(view, "light"); onBack() },
+                    onClick = { performHaptic(view, Haptic.Light); onBack() },
                 ),
             contentAlignment = Alignment.Center,
         ) {
@@ -115,17 +122,18 @@ fun GlassMenuHeader(
                 .widthIn(max = 240.dp)
                 .height(48.dp)
                 .clip(RoundedCornerShape(100.dp))
-                .drawBackdrop(
-                    backdrop = backdrop,
-                    shape = { RoundedCornerShape(100.dp) },
-                    effects = {
-                        vibrancy()
-                        blur(12f.dp.toPx())
-                        lens(8f.dp.toPx(), 40f.dp.toPx())
-                    },
-                    onDrawSurface = { drawRect(surfaceTint) },
-                )
-                .border(0.5.dp, borderColor, RoundedCornerShape(100.dp))
+                .glassControl(source, RoundedCornerShape(100.dp)) {
+                    drawBackdrop(
+                        backdrop = source,
+                        shape = { RoundedCornerShape(100.dp) },
+                        effects = {
+                            vibrancy()
+                            blur(12f.dp.toPx())
+                            lens(8f.dp.toPx(), 40f.dp.toPx())
+                        },
+                        onDrawSurface = { drawRect(surfaceTint) },
+                    ).border(0.5.dp, borderColor, RoundedCornerShape(100.dp))
+                }
                 .padding(horizontal = 24.dp),
             contentAlignment = Alignment.Center,
         ) {

@@ -35,6 +35,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.myapplication.ui.shared.theme.BrandOrangeBright
 import com.example.myapplication.ui.shared.theme.SnProFamily
+import com.example.myapplication.utils.Haptic
 import com.example.myapplication.utils.performHaptic
 import kotlinx.coroutines.launch
 import kotlin.math.abs
@@ -112,7 +113,7 @@ fun ArcCapsuleMenu(
                         val nearest = rawIndex.roundToInt()
                         if (nearest != lastNearest) {
                             lastNearest = nearest
-                            performHaptic(view, "light")
+                            performHaptic(view, Haptic.Light)
                         }
                     },
                 )
@@ -150,7 +151,7 @@ fun ArcCapsuleMenu(
                     previewed = previewed,
                     committed = isCommitted,
                     onClick = {
-                        performHaptic(view, "light")
+                        performHaptic(view, Haptic.Light)
                         committed = index
                         rawIndex = index.toFloat()
                         onCommit(index)

@@ -40,6 +40,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.myapplication.ui.shared.theme.SnProFamily
+import com.example.myapplication.utils.Haptic
 import com.example.myapplication.utils.performHaptic
 import com.kyant.backdrop.backdrops.layerBackdrop
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
@@ -118,7 +119,7 @@ fun RatingTrackWidget(
                                 while (true) {
                                     val down = awaitFirstDown()
                                     down.consume()
-                                    performHaptic(view, "light")
+                                    performHaptic(view, Haptic.Light)
                                     state.beginDrag()
                                     var lastWhole = floor(state.liveT.value)
                                     fun xToT(x: Float): Float {
@@ -132,7 +133,7 @@ fun RatingTrackWidget(
                                             ?: event.changes.first()
                                         if (!change.pressed) {
                                             change.consume()
-                                            performHaptic(view, "heavy")
+                                            performHaptic(view, Haptic.Heavy)
                                             scope.launch {
                                                 state.settle { snapped -> onCommitted(snapped) }
                                             }
@@ -145,7 +146,7 @@ fun RatingTrackWidget(
                                         val whole = floor(t)
                                         if (whole != lastWhole) {
                                             lastWhole = whole
-                                            performHaptic(view, "tick")
+                                            performHaptic(view, Haptic.Tick)
                                         }
                                         scope.launch { state.onDrag(t) }
                                     }

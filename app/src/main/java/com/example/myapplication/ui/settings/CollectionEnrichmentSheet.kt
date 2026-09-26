@@ -1,5 +1,7 @@
 package com.example.myapplication.ui.settings
 
+import com.example.myapplication.ui.shared.theme.StatusSuccess
+import com.example.myapplication.ui.shared.theme.BrandOrange
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -44,7 +46,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.example.myapplication.isAppInDarkTheme
+import com.example.myapplication.ui.shared.theme.isAppInDarkTheme
 import com.example.myapplication.ui.shared.components.IosIconWell
 import com.example.myapplication.ui.shared.components.IosSwitch
 import com.example.myapplication.ui.shared.theme.IosDesign
@@ -53,8 +55,6 @@ import com.example.myapplication.ui.shared.theme.SnProFamily
 import com.example.myapplication.utils.getCollectionEnrichmentStrings
 import kotlinx.coroutines.delay
 
-private val BrandOrange = Color(0xFFE85002)
-private val ConfirmGreen = Color(0xFF34C759)
 
 /**
  * «Обогащение коллекции» — модуль 1 (кнопка «Полное обогащение») и модуль 2 (тумблер
@@ -113,7 +113,7 @@ fun CollectionEnrichmentSheet(
 
         // Модуль 2: фоновое обновление (тумблер).
         EnrichmentModuleRow(
-            icon = { IosIconWell(icon = Icons.Filled.Autorenew, background = ConfirmGreen) },
+            icon = { IosIconWell(icon = Icons.Filled.Autorenew, background = StatusSuccess) },
             title = strings.liveTitle,
             subtitle = strings.liveSubtitle,
             onClick = null,
@@ -198,7 +198,7 @@ fun FullEnrichmentPromptDialog(
             modifier = Modifier
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(28.dp))
-                .background(if (sheetInDark) OverlayThemeTokens.TileBackgroundDark else Color(0xFFFFFFFF))
+                .background(if (sheetInDark) OverlayThemeTokens.TileBackgroundDark else Color.White)
                 .padding(24.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
@@ -225,7 +225,7 @@ fun FullEnrichmentPromptDialog(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(14.dp))
-                            .background(ConfirmGreen)
+                            .background(StatusSuccess)
                             .padding(vertical = 12.dp),
                         horizontalArrangement = Arrangement.Center,
                         verticalAlignment = Alignment.CenterVertically,

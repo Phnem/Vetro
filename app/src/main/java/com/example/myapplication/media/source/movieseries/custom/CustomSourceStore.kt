@@ -1,5 +1,6 @@
 package com.example.myapplication.media.source.movieseries.custom
 
+import com.example.myapplication.network.AppStoreJson
 import android.content.Context
 import android.util.Log
 import kotlinx.coroutines.Dispatchers
@@ -11,7 +12,6 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.ListSerializer
-import kotlinx.serialization.json.Json
 import java.io.File
 
 /** How a user-installed source was described. */
@@ -60,7 +60,7 @@ class CustomSourceStore(
     private val clock: () -> Long = System::currentTimeMillis,
 ) : InstalledSourceStore {
     private val file = File(context.filesDir, CACHE_FILE)
-    private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
+    private val json = AppStoreJson
     private val mutex = Mutex()
     private val serializer = ListSerializer(InstalledSource.serializer())
 

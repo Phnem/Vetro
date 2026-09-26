@@ -1,5 +1,8 @@
 package com.example.myapplication.domain.seasons
 
+import com.example.myapplication.network.seasonNeighbors
+import com.example.myapplication.network.orderByRelations
+import com.example.myapplication.network.retryOn429
 import android.util.Log
 import com.example.myapplication.data.local.AnimeLocalDataSource
 import com.example.myapplication.data.local.SeasonEpisodesStore
@@ -44,21 +47,34 @@ class SeasonEpisodesResolver(
      * Фоновый проход: перерезолвить протухшие записи коллекции (бюджет [budget] тайтлов
      * за проход, чтобы не душить API). Заодно чистит записи удалённых тайтлов.
      */
+    /** Когда резолв тайтла последний раз сорвался (в пределах процесса) — см. refreshStale. */
+    private val recentFailures = java.util.concurrent.ConcurrentHashMap<String, Long>()
+
     suspend fun refreshStale(budget: Int = DEFAULT_BUDGET) {
         store.ensureLoaded()
         val animeOnly = localDataSource.getAllAnimeList().filter { it.mediaType == MediaType.ANIME }
         runCatching { store.retainOnly(animeOnly.map { it.id }.toSet()) }
 
-        var resolved = 0
+        // Бюджет — это ПОПЫТКИ, а не успехи. Раньше неудачный резолв бюджет не тратил: тайтл,
+        // которого нет в каталогах, стоил полный каскад запросов на каждом прогоне, и прогон мог
+        // пройти по сети всю коллекцию. Недавно сорвавшиеся тайтлы пропускаются, чтобы бюджет
+        // доставался остальным.
+        val now = System.currentTimeMillis()
+        var attempts = 0
         for (anime in animeOnly) {
-            if (resolved >= budget) break
+            if (attempts >= budget) break
             if (store.isFresh(anime.id)) continue
+            val failedAt = recentFailures[anime.id]
+            if (failedAt != null && now - failedAt < FAILURE_COOLDOWN_MILLIS) continue
+            attempts++
             val entry = runCatching { resolve(anime) }
                 .onFailure { Log.w(TAG, "resolve failed for \"${anime.title}\": ${it.message}") }
                 .getOrNull()
-            if (entry != null) {
+            if (entry == null) {
+                recentFailures[anime.id] = now
+            } else {
+                recentFailures.remove(anime.id)
                 store.put(entry)
-                resolved++
                 // Провенанс строки виден в логе: источник и наличие сезонного названия решают,
                 // сможет ли SourceEngine сузить поиск до сезона.
                 val rows = entry.seasons.map {
@@ -238,11 +254,11 @@ class SeasonEpisodesResolver(
 
     private suspend fun findSeedNode(anime: Anime): EpisodeCheckMedia? {
         anime.anilistId?.let { id ->
-            retry429 { repository.episodeCheckByAnilistIds(listOf(id)) }
+            retryOn429(MAX_ATTEMPTS, RETRY_BASE_DELAY_MS) { repository.episodeCheckByAnilistIds(listOf(id)) }
                 .getOrNull()?.firstOrNull()?.let { return it }
         }
         (anime.malId ?: anime.shikimoriId)?.let { mal ->
-            retry429 { repository.episodeCheckByMalIds(listOf(mal)) }
+            retryOn429(MAX_ATTEMPTS, RETRY_BASE_DELAY_MS) { repository.episodeCheckByMalIds(listOf(mal)) }
                 .getOrNull()?.firstOrNull()?.let {
                     persistIds(anime, it)
                     return it
@@ -262,20 +278,20 @@ class SeasonEpisodesResolver(
 
         // AniList: латиница.
         for (q in queries.filter { it.hasLatin() }) {
-            val found = retry429 { repository.searchAnimeAniListOnly(q, AppLanguage.EN, limit = 5) }
+            val found = retryOn429(MAX_ATTEMPTS, RETRY_BASE_DELAY_MS) { repository.searchAnimeAniListOnly(q, AppLanguage.EN, limit = 5) }
                 .getOrNull()?.let { pickMatch(anime, it) } ?: continue
             val anilistId = found.externalId?.toIntOrNull() ?: continue
             delay(ITEM_DELAY_MS)
-            return retry429 { repository.episodeCheckByAnilistIds(listOf(anilistId)) }
+            return retryOn429(MAX_ATTEMPTS, RETRY_BASE_DELAY_MS) { repository.episodeCheckByAnilistIds(listOf(anilistId)) }
                 .getOrNull()?.firstOrNull()?.also { persistIds(anime, it) }
         }
         // Shikimori: понимает кириллицу; отдаёт malId.
         for (q in queries) {
-            val found = retry429 { repository.searchAnimeShikimoriOnly(q, AppLanguage.RU, allowZeroEpisodes = true) }
+            val found = retryOn429(MAX_ATTEMPTS, RETRY_BASE_DELAY_MS) { repository.searchAnimeShikimoriOnly(q, AppLanguage.RU, allowZeroEpisodes = true) }
                 .getOrNull()?.let { pickMatch(anime, it) } ?: continue
             val mal = found.malId ?: found.externalId?.toIntOrNull() ?: continue
             delay(ITEM_DELAY_MS)
-            retry429 { repository.episodeCheckByMalIds(listOf(mal)) }
+            retryOn429(MAX_ATTEMPTS, RETRY_BASE_DELAY_MS) { repository.episodeCheckByMalIds(listOf(mal)) }
                 .getOrNull()?.firstOrNull()?.let {
                     persistIds(anime, it)
                     return it
@@ -283,11 +299,11 @@ class SeasonEpisodesResolver(
         }
         // MAL (Jikan): латиница.
         for (q in queries.filter { it.hasLatin() }) {
-            val found = retry429 { repository.searchAnimeMalOnly(q, AppLanguage.EN, limit = 5) }
+            val found = retryOn429(MAX_ATTEMPTS, RETRY_BASE_DELAY_MS) { repository.searchAnimeMalOnly(q, AppLanguage.EN, limit = 5) }
                 .getOrNull()?.let { pickMatch(anime, it) } ?: continue
             val mal = found.externalId?.toIntOrNull() ?: continue
             delay(ITEM_DELAY_MS)
-            retry429 { repository.episodeCheckByMalIds(listOf(mal)) }
+            retryOn429(MAX_ATTEMPTS, RETRY_BASE_DELAY_MS) { repository.episodeCheckByMalIds(listOf(mal)) }
                 .getOrNull()?.firstOrNull()?.let {
                     persistIds(anime, it)
                     return it
@@ -319,7 +335,7 @@ class SeasonEpisodesResolver(
             anime.titleEn?.takeIf { it.isNotBlank() },
         ).distinctBy { it.lowercase() }
         for (q in queries) {
-            val found = retry429 { repository.searchAnimeShikimoriOnly(q, AppLanguage.RU, allowZeroEpisodes = true) }
+            val found = retryOn429(MAX_ATTEMPTS, RETRY_BASE_DELAY_MS) { repository.searchAnimeShikimoriOnly(q, AppLanguage.RU, allowZeroEpisodes = true) }
                 .getOrNull()?.let { pickMatch(anime, it) } ?: continue
             val ongoing = found.isOngoing == true
             val total = found.totalEpisodes?.takeIf { it > 0 }
@@ -366,11 +382,11 @@ class SeasonEpisodesResolver(
 
     private suspend fun fillFromShikimoriOrMal(malId: Int): EpisodeCounts? {
         delay(ITEM_DELAY_MS)
-        retry429 { repository.shikimoriById(malId, AppLanguage.RU) }.getOrNull()?.let { r ->
+        retryOn429(MAX_ATTEMPTS, RETRY_BASE_DELAY_MS) { repository.shikimoriById(malId, AppLanguage.RU) }.getOrNull()?.let { r ->
             counts(r.airedEpisodes, r.totalEpisodes ?: r.episodes, "Shikimori")?.let { return it }
         }
         delay(ITEM_DELAY_MS)
-        retry429 { repository.malById(malId, AppLanguage.EN) }.getOrNull()?.let { r ->
+        retryOn429(MAX_ATTEMPTS, RETRY_BASE_DELAY_MS) { repository.malById(malId, AppLanguage.EN) }.getOrNull()?.let { r ->
             counts(r.airedEpisodes, r.totalEpisodes ?: r.episodes, "MAL")?.let { return it }
         }
         return null
@@ -414,7 +430,7 @@ class SeasonEpisodesResolver(
                 break
             }
             level++
-            val fetched = retry429 { repository.episodeCheckByAnilistIds(frontier.toList()) }
+            val fetched = retryOn429(MAX_ATTEMPTS, RETRY_BASE_DELAY_MS) { repository.episodeCheckByAnilistIds(frontier.toList()) }
                 .getOrNull()
             if (fetched == null) {
                 Log.w(TAG, "franchise batch failed (${frontier.size} ids) — entry stays incomplete")
@@ -431,36 +447,7 @@ class SeasonEpisodesResolver(
         return FranchiseGraph(result, complete)
     }
 
-    private fun orderByRelations(nodes: Map<Int, EpisodeCheckMedia>): List<EpisodeCheckMedia> {
-        if (nodes.isEmpty()) return emptyList()
-        val next = HashMap<Int, Int>()
-        val prev = HashMap<Int, Int>()
-        for (m in nodes.values) {
-            for (r in m.relations) {
-                if (r.anilistId !in nodes) continue
-                when (r.relationType) {
-                    "SEQUEL" -> { next[m.anilistId] = r.anilistId; prev[r.anilistId] = m.anilistId }
-                    "PREQUEL" -> { prev[m.anilistId] = r.anilistId; next[r.anilistId] = m.anilistId }
-                }
-            }
-        }
-        val root = nodes.keys.firstOrNull { it !in prev } ?: nodes.keys.first()
-        val ordered = ArrayList<EpisodeCheckMedia>()
-        val seen = HashSet<Int>()
-        var cur: Int? = root
-        while (cur != null && cur !in seen) {
-            seen += cur
-            nodes[cur]?.let { ordered += it }
-            cur = next[cur]
-        }
-        nodes.values.filter { it.anilistId !in seen }.sortedBy { it.anilistId }.forEach { ordered += it }
-        return ordered
-    }
 
-    private fun EpisodeCheckMedia.seasonNeighbors(): Set<Int> =
-        relations.filter { it.relationType == "PREQUEL" || it.relationType == "SEQUEL" }
-            .map { it.anilistId }
-            .toSet()
 
     private fun EpisodeCheckMedia.isSeasonFormat(): Boolean =
         format == null || format in SEASON_FORMATS
@@ -499,24 +486,6 @@ class SeasonEpisodesResolver(
         }
     }
 
-    private suspend fun <T> retry429(
-        maxAttempts: Int = MAX_ATTEMPTS,
-        block: suspend () -> Result<T>,
-    ): Result<T> {
-        var delayMs = RETRY_BASE_DELAY_MS
-        var attempt = 1
-        var last: Result<T> = Result.failure(IllegalStateException("No attempts executed"))
-        while (attempt <= maxAttempts) {
-            last = block()
-            if (last.isSuccess) return last
-            val is429 = last.exceptionOrNull()?.message?.contains("429", ignoreCase = true) == true
-            if (!is429 || attempt == maxAttempts) return last
-            delay(delayMs)
-            delayMs *= 2
-            attempt++
-        }
-        return last
-    }
 
     private fun String.hasLatin(): Boolean = any { it in 'a'..'z' || it in 'A'..'Z' }
 
@@ -524,6 +493,8 @@ class SeasonEpisodesResolver(
         const val TAG = "SeasonEpisodes"
         const val DEFAULT_BUDGET = 8
         const val ITEM_DELAY_MS = 350L
+        /** Сорвавшийся тайтл не пробуем снова раньше — его место в бюджете получают другие. */
+        const val FAILURE_COOLDOWN_MILLIS = 6L * 60 * 60 * 1000
         const val MATCH_SCORE = 0.91
         const val MAX_ATTEMPTS = 3
         const val RETRY_BASE_DELAY_MS = 800L

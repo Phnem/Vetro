@@ -17,7 +17,7 @@
 
 Vetro is an Android media library with a local-first core. Build a personal collection, discover titles, track progress, then watch episodes or read chapters without leaving the app. An account and cloud features are optional: the collection remains useful offline.
 
-> **Current development build:** `V3.3.4-Beta`. It is actively evolving; source availability and individual media providers can vary by region.
+> **Current development build:** `v3.3.5-Beta`. It is actively evolving; source availability and individual media providers can vary by region.
 
 ## What Vetro does now
 

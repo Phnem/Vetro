@@ -1,5 +1,6 @@
 package com.example.myapplication.manga.ui
 
+import com.example.myapplication.ui.shared.theme.IosScroll
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -51,6 +52,7 @@ import com.example.myapplication.manga.domain.MangaChapter
 import com.example.myapplication.ui.shared.components.GrabberReservedTop
 import com.example.myapplication.ui.shared.theme.BrandOrange
 import com.example.myapplication.ui.shared.theme.SquircleShape
+import com.example.myapplication.utils.Haptic
 import com.example.myapplication.utils.performHaptic
 import com.kyant.backdrop.Backdrop
 import com.kyant.backdrop.drawBackdrop
@@ -146,7 +148,7 @@ private fun DockButton(
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
-                onClick = { performHaptic(view, "light"); onClick() },
+                onClick = { performHaptic(view, Haptic.Light); onClick() },
             ),
         contentAlignment = Alignment.Center,
     ) {
@@ -197,6 +199,7 @@ fun ReaderChaptersSheet(
             ),
         )
         LazyColumn(
+            flingBehavior = IosScroll.flingBehavior(),
             state = listState,
             contentPadding = PaddingValues(start = 12.dp, end = 12.dp, bottom = 32.dp),
             verticalArrangement = Arrangement.spacedBy(2.dp),
