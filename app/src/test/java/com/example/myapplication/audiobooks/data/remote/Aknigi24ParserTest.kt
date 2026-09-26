@@ -38,6 +38,8 @@ class Aknigi24ParserTest {
         assertEquals(listOf("Герасимов Вячеслав"), book.narrators)
         assertEquals(2013, book.year)
         assertTrue(parsed.details.description!!.contains("Кельвин"))
+        assertEquals(4.3, parsed.details.rating!!, 0.001)
+        assertEquals("author:lem-stanislav", parsed.details.authorShelfId)
     }
 
     @Test

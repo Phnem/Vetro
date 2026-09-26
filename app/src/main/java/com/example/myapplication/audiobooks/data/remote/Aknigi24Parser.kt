@@ -70,8 +70,18 @@ internal object Aknigi24Parser {
             year = doc.select("span").firstOrNull { it.ownText().startsWith("📅") }
                 ?.ownText()?.filter(Char::isDigit)?.toIntOrNull(),
         )
+        val authorSlug = doc.select("a[href*=/author/]").firstNotNullOfOrNull { a ->
+            Regex("""/author/([a-z0-9-]+)""").find(a.attr("href"))?.groupValues?.get(1)
+        }
         return ParsedBook(
-            details = SourceBookDetails(book, description, durations),
+            details = SourceBookDetails(
+                book = book,
+                description = description,
+                chapterDurationsSec = durations,
+                rating = doc.selectFirst("#rating-stars")?.attr("data-initial-rating")?.toDoubleOrNull()?.takeIf { it > 0 },
+                series = (linksAfter("Серия") + linksAfter("Цикл")).firstOrNull(),
+                authorShelfId = authorSlug?.let { "author:$it" },
+            ),
             chapterUrls = data.chapters.map { chapterBase + it.n },
         )
     }

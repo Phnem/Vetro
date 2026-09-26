@@ -15,6 +15,14 @@ data object HomeRoute
 @Serializable
 data class DetailsRoute(val animeId: String, val openEpisodes: Boolean = false)
 
+/**
+ * Страница аудиокниги у источника. Название и обложка едут в маршруте, чтобы hero был готов с
+ * первого кадра перехода, пока детали грузятся. «DetailsRoute» в имени — не случайность:
+ * [isDetailsDestination] даёт ей то же «вдавливание» главной, что у деталей аниме.
+ */
+@Serializable
+data class BookDetailsRoute(val source: String, val key: String, val title: String, val cover: String? = null)
+
 @Serializable
 data class AddEditRoute(val animeId: String? = null)
 

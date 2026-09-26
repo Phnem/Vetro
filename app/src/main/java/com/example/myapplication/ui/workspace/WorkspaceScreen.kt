@@ -5,6 +5,7 @@ import com.example.myapplication.ui.shared.theme.IosScroll
 import kotlinx.coroutines.flow.first
 import androidx.compose.runtime.snapshotFlow
 import com.example.myapplication.ui.home.updates.EpisodeNotificationTray
+import com.example.myapplication.ui.navigation.navigateToBook
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.ExperimentalSharedTransitionApi
@@ -200,6 +201,7 @@ fun WorkspaceScreen(
                     language = language,
                     bottomInset = dockInset,
                     onOverlayVisibleChange = { booksOverlayVisible = it },
+                    onOpenBook = { source, key, title, cover -> navController.navigateToBook(source, key, title, cover) },
                 )
 
                 WorkspacePage.SETTINGS -> SettingsScreen(

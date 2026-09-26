@@ -677,7 +677,7 @@ private fun DetailsInfoPage(
 
 /** Заголовок секции с оранжевой засечкой слева — секции читаются как разделы, а не как подписи. */
 @Composable
-private fun SectionHeader(text: String, color: Color) {
+internal fun SectionHeader(text: String, color: Color) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Box(
             modifier = Modifier
@@ -860,7 +860,7 @@ private fun MetaChip(text: String, chipBg: Color, fg: Color) {
 
 /** Крупная пилюля-действие («Смотреть» / «Скачать») — референс-стиль, высота 52dp. */
 @Composable
-private fun ActionButton(
+internal fun ActionButton(
     label: String,
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     bg: Color,
@@ -905,7 +905,7 @@ private fun ActionButton(
 // ==========================================
 
 @Composable
-private fun DetailsGlassBackButton(
+internal fun DetailsGlassBackButton(
     backdrop: Backdrop,
     isDark: Boolean,
     onClick: () -> Unit,
@@ -1002,7 +1002,7 @@ private fun DetailsMiniDock(
  * expandHorizontally); неактивная — только приглушённая иконка. Всё на пружинах MotionTokens.
  */
 @Composable
-private fun MiniDockItem(
+internal fun MiniDockItem(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     label: String,
     selected: Boolean,

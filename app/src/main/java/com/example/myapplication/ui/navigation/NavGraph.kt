@@ -26,6 +26,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.platform.LocalContext
 import com.example.myapplication.ui.details.DetailsScreen
+import com.example.myapplication.audiobooks.ui.details.BookDetailsScreen
 import com.example.myapplication.ui.shared.theme.MotionTokens
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -303,6 +304,35 @@ fun AppNavGraph(
                     navController = navController,
                     animeId = route.animeId,
                     openEpisodes = route.openEpisodes,
+                    modifier = Modifier.graphicsLayer {
+                        shape = RoundedCornerShape(windowCorner.value)
+                        clip = true
+                    },
+                )
+            }
+
+            // Страница аудиокниги: тот же push, что у деталей аниме (сдвиг справа, «назад» — вправо).
+            composable<BookDetailsRoute>(
+                enterTransition = {
+                    slideInHorizontally(initialOffsetX = { it }, animationSpec = MotionTokens.sheetOffset)
+                },
+                popExitTransition = {
+                    slideOutHorizontally(targetOffsetX = { it }, animationSpec = MotionTokens.tweenStandard())
+                },
+            ) { backStackEntry ->
+                val route = backStackEntry.toRoute<BookDetailsRoute>()
+                val bookLanguage by homeViewModel.uiLanguage.collectAsStateWithLifecycle()
+                val windowCorner = transition.animateDp(label = "bookWindowCorner") { state ->
+                    if (state == EnterExitState.Visible) 0.dp else 42.dp
+                }
+                BookDetailsScreen(
+                    source = route.source,
+                    key = route.key,
+                    title = route.title,
+                    cover = route.cover,
+                    language = bookLanguage,
+                    onBack = { navController.popBackStack() },
+                    onOpenBook = { b -> navController.navigateToBook(b.ref.source.value, b.ref.key, b.title, b.coverUrl) },
                     modifier = Modifier.graphicsLayer {
                         shape = RoundedCornerShape(windowCorner.value)
                         clip = true

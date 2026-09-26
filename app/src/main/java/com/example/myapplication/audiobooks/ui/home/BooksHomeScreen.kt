@@ -105,6 +105,7 @@ fun BooksHomeScreen(
     language: AppLanguage,
     bottomInset: Dp,
     onOverlayVisibleChange: (Boolean) -> Unit,
+    onOpenBook: (source: String, key: String, title: String, cover: String?) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val vm: BooksHomeViewModel = koinViewModel()
@@ -178,7 +179,9 @@ fun BooksHomeScreen(
                 strings = strings,
                 isDark = isDark,
                 morph = morph,
-                onBook = { sheetBook = it },
+                // Книга с источником — полноценная страница книги; без источника (витрина) — лист
+                // с честным «пока не нашли».
+                onBook = { b -> if (b.playable) onOpenBook(b.source, b.key, b.title, b.coverUrl) else sheetBook = b },
                 onClose = { morph.collapse(scope, reducedMotion) },
             )
             FlyingCovers(morph, shelf)

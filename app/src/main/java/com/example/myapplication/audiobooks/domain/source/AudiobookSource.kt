@@ -53,6 +53,11 @@ data class SourceBookDetails(
     val description: String?,
     /** Длительности глав в секундах; null — источник не знает. */
     val chapterDurationsSec: List<Long?>,
+    /** Оценка слушателей на источнике, 0–5. */
+    val rating: Double? = null,
+    val series: String? = null,
+    /** Полка «другие книги автора» этого источника ([AudiobookSource.shelf]); null — нет. */
+    val authorShelfId: String? = null,
 )
 
 enum class FailureKind { NETWORK, TIMEOUT, BLOCKED, RATE_LIMITED, PARSE }

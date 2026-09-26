@@ -7,6 +7,7 @@ import com.example.myapplication.audiobooks.data.CachedShelf
 import com.example.myapplication.audiobooks.playback.AudiobookLauncher
 import com.example.myapplication.audiobooks.ui.AudiobookPlayerState
 import com.example.myapplication.audiobooks.ui.home.BooksHomeViewModel
+import com.example.myapplication.audiobooks.ui.details.BookDetailsViewModel
 import com.example.myapplication.data.local.JsonMapFileStore
 import java.io.File
 import org.koin.android.ext.koin.androidContext
@@ -49,4 +50,7 @@ val audiobookModule = module {
     single { AudiobookPlayerState() }
     single { AudiobookLauncher(androidContext(), getAll<AudiobookSource>(), get(), get(), get()) }
     viewModel { BooksHomeViewModel(get(), get(), get()) }
+    viewModel { (source: String, key: String) ->
+        BookDetailsViewModel(source, key, getAll<AudiobookSource>(), get(), get())
+    }
 }

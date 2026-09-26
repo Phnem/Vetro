@@ -43,6 +43,8 @@ fun BooksScreen(
     modifier: Modifier = Modifier,
     /** Страница полки, лист книги или папки поверх дома: хозяин прячет док. */
     onOverlayVisibleChange: (Boolean) -> Unit = {},
+    /** Страница книги — маршрут приложения, его открывает хозяин с NavController. */
+    onOpenBook: (source: String, key: String, title: String, cover: String?) -> Unit = { _, _, _, _ -> },
 ) {
     val strings = getAudiobookStrings(language)
     val gate: AudiobookFeatureGate = koinInject()
@@ -51,6 +53,7 @@ fun BooksScreen(
             language = language,
             bottomInset = bottomInset,
             onOverlayVisibleChange = onOverlayVisibleChange,
+            onOpenBook = onOpenBook,
             modifier = modifier,
         )
         return

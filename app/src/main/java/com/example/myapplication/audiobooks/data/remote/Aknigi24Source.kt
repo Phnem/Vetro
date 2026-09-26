@@ -49,6 +49,7 @@ class Aknigi24Source(
             id == "new" -> "/?sort=new"
             id == "top" -> "/?sort=rating"
             id.startsWith("genre:") -> "/genre/${id.removePrefix("genre:")}?sort=rating"
+            id.startsWith("author:") -> "/author/${id.removePrefix("author:")}?sort=rating"
             else -> return SourceResult.Failed(FailureKind.PARSE, IllegalArgumentException(id))
         }
         val pageParam = if (page > 0) "&page=${page + 1}" else ""

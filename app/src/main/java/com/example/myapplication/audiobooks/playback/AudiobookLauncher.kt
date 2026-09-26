@@ -41,7 +41,13 @@ class AudiobookLauncher(
      * @param startFraction доля книги, с которой начать, если у этой озвучки ещё нет своей позиции
      *   (смена чтеца: разметка глав у разных озвучек разная, переносим по доле — spec/03 случай 4).
      */
-    suspend fun play(book: SourceBook, startFraction: Float? = null, expand: Boolean = true): Result {
+    suspend fun play(
+        book: SourceBook,
+        startFraction: Float? = null,
+        expand: Boolean = true,
+        /** Точное место на шкале книги (глава со страницы книги) — важнее сохранённой позиции. */
+        startGlobalMs: Long? = null,
+    ): Result {
         val source = sources.firstOrNull { it.id == book.ref.source } ?: return Result.Unavailable
         val details = when (val r = source.details(book.ref)) {
             is SourceResult.Ok -> r.value
@@ -51,7 +57,7 @@ class AudiobookLauncher(
         val opened = repository.saveOpened(source, details)
         val manifest = runCatching { resolver.manifest(opened.variantId) }.getOrElse { return Result.Unavailable }
         val d = details.book
-        start(opened, manifest, d.title, d.authors.joinToString(", "), d.narrators.joinToString(", "), d.coverUrl, startFraction)
+        start(opened, manifest, d.title, d.authors.joinToString(", "), d.narrators.joinToString(", "), d.coverUrl, startFraction, startGlobalMs)
         // «Слушать» открывает полный плеер, а не мини: пользователь пришёл слушать эту книгу.
         // У карточки «Продолжить» свои контролы — там плеер остаётся свёрнутым.
         if (expand) playerState.requestExpand()
@@ -66,12 +72,14 @@ class AudiobookLauncher(
         narrator: String,
         cover: String?,
         startFraction: Float?,
+        startGlobalMs: Long?,
     ) {
         val items = PlaybackQueueBuilder.build(manifest, book.workId, book.narrationId, title, author, narrator, cover)
         // Продолжаем с места, где остановились в этой озвучке; шкала книги → (трек, смещение).
         val saved = repository.progress(book.narrationId)
         val timeline = runCatching { BookTimeline(manifest.tracks, manifest.chapters) }.getOrNull()
-        val startGlobal = saved?.takeIf { !it.finished }?.globalMs
+        val startGlobal = startGlobalMs
+            ?: saved?.takeIf { !it.finished }?.globalMs
             ?: startFraction?.let { f -> timeline?.totalMs?.let { (it * f).toLong() } }
         val (index, offset) = startGlobal?.let { timeline?.toTrack(it) } ?: (0 to 0L)
         val token = SessionToken(context, ComponentName(context, AudiobookPlaybackService::class.java))

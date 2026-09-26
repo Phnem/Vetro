@@ -27,6 +27,10 @@ fun NavController.navigateToInspect() {
     navigate(InspectRoute)
 }
 
+fun NavController.navigateToBook(source: String, key: String, title: String, cover: String?) {
+    navigate(BookDetailsRoute(source = source, key = key, title = title, cover = cover))
+}
+
 fun NavController.navigateToDetails(animeId: String, openEpisodes: Boolean = false) {
     navigate(DetailsRoute(animeId = animeId, openEpisodes = openEpisodes))
 }
