@@ -27,6 +27,8 @@ import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.node.DelegatableNode
 import androidx.compose.ui.node.DrawModifierNode
 import androidx.compose.ui.unit.Velocity
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
 import kotlin.math.abs
 import kotlin.math.ln
 import kotlin.math.sign
@@ -65,14 +67,20 @@ object IosScroll {
     @Composable
     fun flingBehavior(): FlingBehavior = remember { IosFlingBehavior(decay()) }
 
-    /** Пейджер: то же затухание, доводка до страницы — пружиной без перелёта. */
+    /**
+     * Пейджер — штатное сплайн-затухание Compose, НЕ [decay], и доводка той же пружиной, что у
+     * шторок ([MotionTokens.largeSurfaceEnter]): мягкий ход без видимого отскока.
+     *
+     * Экспоненциальное iOS-затухание здесь ломается: пейджер доезжает затуханием до соседней
+     * страницы, а у экспоненты с малым трением предел пути почти совпадает с шириной страницы —
+     * страница полсекунды ползла к цели асимптотой, а потом пружина её дёргала.
+     *
+     * Резинку на краях пейджеру не подключать (`overscrollEffect = null`): у перехода «наезд»
+     * отскок читается как дёрганье.
+     */
     @Composable
     fun pagerFlingBehavior(state: PagerState): TargetedFlingBehavior =
-        PagerDefaults.flingBehavior(
-            state = state,
-            decayAnimationSpec = remember { decay() },
-            snapAnimationSpec = MotionTokens.springObject(),
-        )
+        PagerDefaults.flingBehavior(state = state, snapAnimationSpec = MotionTokens.largeSurfaceEnter())
 }
 
 private class IosFlingBehavior(private val decay: DecayAnimationSpec<Float>) : FlingBehavior {
@@ -113,6 +121,12 @@ private class IosOverscrollEffect(private val reducedMotion: Boolean) : Overscro
     private val spring = Animatable(Offset.Zero, Offset.VectorConverter)
     private var springRunning by mutableStateOf(false)
 
+    /**
+     * Номер текущего отскока. Палец, поймавший отскок, увеличивает его: старая пружина доигрывает
+     * вхолостую и больше не пишет в [raw], а её `finally` не сбрасывает новую протяжку.
+     */
+    private var bounceGeneration = 0
+
     /** Размер вьюпорта для асимптоты `rubberBand`; обновляется узлом отрисовки. */
     private var viewport = Offset(1f, 1f)
 
@@ -124,6 +138,13 @@ private class IosOverscrollEffect(private val reducedMotion: Boolean) : Overscro
         performScroll: (Offset) -> Offset,
     ): Offset {
         if (reducedMotion) return performScroll(delta)
+        if (springRunning && source == NestedScrollSource.UserInput) {
+            // Палец поймал отскок: резинка остаётся там, где её застали, и дальше это обычная
+            // протяжка. Раньше отскок продолжал владеть краем, и на отпускании флинг не
+            // запускался вовсе — список вставал, пейджер зависал между страницами.
+            bounceGeneration++
+            springRunning = false
+        }
         var remaining = delta
         var unwound = Offset.Zero
         // Палец идёт обратно, а резинка оттянута: сначала сматываем её, список — потом.
@@ -155,9 +176,15 @@ private class IosOverscrollEffect(private val reducedMotion: Boolean) : Overscro
             performFling(velocity)
             return
         }
+        // performFling вызывается ВСЕГДА: внутри него родители в nested scroll получают
+        // onPreFling. Раньше при оттянутой резинке он пропускался — свайп «назад» из Details не
+        // узнавал об отпускании и окно зависало на полпути, пейджер оставался между страницами.
         if (raw != Offset.Zero) {
             // Отпустили оттянутым — резинка возвращается, как в iOS, куда бы ни летел палец.
-            bounce(start = raw, velocity = Offset.Zero)
+            coroutineScope {
+                launch { bounce(start = raw, velocity = Offset.Zero) }
+                performFling(velocity)
+            }
             return
         }
         val left = performFling(velocity)
@@ -168,6 +195,7 @@ private class IosOverscrollEffect(private val reducedMotion: Boolean) : Overscro
     }
 
     private suspend fun bounce(start: Offset, velocity: Offset) {
+        val generation = ++bounceGeneration
         springRunning = true
         try {
             spring.snapTo(start)
@@ -175,10 +203,12 @@ private class IosOverscrollEffect(private val reducedMotion: Boolean) : Overscro
                 targetValue = Offset.Zero,
                 animationSpec = MotionTokens.overscrollReturn(),
                 initialVelocity = velocity,
-            ) { raw = value }
+            ) { if (generation == bounceGeneration) raw = value }
         } finally {
-            raw = Offset.Zero
-            springRunning = false
+            if (generation == bounceGeneration) {
+                raw = Offset.Zero
+                springRunning = false
+            }
         }
     }
 

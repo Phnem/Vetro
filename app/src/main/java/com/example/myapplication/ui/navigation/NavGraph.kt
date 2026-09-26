@@ -9,7 +9,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.animation.core.animateDp
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -78,32 +78,36 @@ private fun homeDimExit() =
 private fun homeDimPopEnter() =
     fadeIn(animationSpec = MotionTokens.easeEnter(MotionTokens.DurationStandardMillis), initialAlpha = 0.55f)
 
-/** «Вдавливание» главной под экраном поверх неё (физика IosSheetScaffold). */
+/**
+ * «Вдавливание» главной под экраном поверх неё (физика IosSheetScaffold). Только масштаб, без
+ * fade: прозрачность всей главной (стекло, блюр, offscreen-слои страниц) — это полноэкранный
+ * буфер на каждом кадре перехода, от него и «назад», и открытие Details теряли кадры.
+ */
 private fun homeDepressExit() =
     scaleOut(
         targetScale = 0.92f,
         animationSpec = MotionTokens.sheetPresent(),
-    ) + fadeOut(animationSpec = MotionTokens.tweenEmphasized(), targetAlpha = 0.55f)
+    )
 
 private fun homeDepressPopEnter() =
     if (SwipeBackGesture.active) {
         // Свайп «назад» по экрану деталей ведёт переход за пальцем — нужна линейная кривая.
-        scaleIn(initialScale = 0.92f, animationSpec = MotionTokens.gestureLinear(SWIPE_BACK_LINEAR_MS)) +
-            fadeIn(animationSpec = MotionTokens.gestureLinear(SWIPE_BACK_LINEAR_MS), initialAlpha = 0.55f)
+        scaleIn(initialScale = 0.92f, animationSpec = MotionTokens.gestureLinear(SWIPE_BACK_LINEAR_MS))
     } else {
+        // Без fade — см. homeDepressExit. Кривая, а не пружина: системный жест «назад» ведёт
+        // переход по времени, и у пружины остаток после отпускания полз её хвостом.
         scaleIn(
             initialScale = 0.92f,
-            animationSpec = MotionTokens.sheetDismissForced(),
-        ) + fadeIn(animationSpec = MotionTokens.tweenStandard(), initialAlpha = 0.55f)
+            animationSpec = MotionTokens.tweenStandard(),
+        )
     }
 
-/**
- * Длительность линейного перехода «назад» при свайпе по экрану: на жесте она не видна (переход
- * едет за пальцем), а после отпускания — это время доезда оставшейся доли.
- */
-private const val SWIPE_BACK_LINEAR_MS = 320
+/** См. [SwipeBackGesture.LINEAR_MS]. */
+private const val SWIPE_BACK_LINEAR_MS = SwipeBackGesture.LINEAR_MS
 
-@OptIn(ExperimentalSharedTransitionApi::class, UnstableApi::class)
+@OptIn(ExperimentalSharedTransitionApi::class)
+// UnstableApi у media3 — маркер lint, а не Kotlin @RequiresOptIn: снимается androidx-аннотацией.
+@androidx.annotation.OptIn(markerClass = [UnstableApi::class])
 @Composable
 fun AppNavGraph(
     navController: NavHostController,
@@ -264,10 +268,12 @@ fun AppNavGraph(
             // Полноэкранные детали (iOS push): въезжают справа, назад — уезжают вправо.
             composable<DetailsRoute>(
                 enterTransition = {
+                    // Только сдвиг: окно деталей непрозрачное и наезжает поверх, fade лишь
+                    // заставлял рисовать его через полноэкранный буфер.
                     slideInHorizontally(
                         initialOffsetX = { it },
                         animationSpec = MotionTokens.sheetOffset,
-                    ) + fadeIn(animationSpec = MotionTokens.tweenStandard())
+                    )
                 },
                 popExitTransition = {
                     if (SwipeBackGesture.active) {
@@ -275,26 +281,32 @@ fun AppNavGraph(
                         slideOutHorizontally(
                             targetOffsetX = { it },
                             animationSpec = MotionTokens.gestureLinear(SWIPE_BACK_LINEAR_MS),
-                        ) + fadeOut(animationSpec = MotionTokens.gestureLinear(SWIPE_BACK_LINEAR_MS))
+                        )
                     } else {
+                        // Кривая, а не пружина — см. homeDepressPopEnter.
                         slideOutHorizontally(
                             targetOffsetX = { it },
-                            animationSpec = MotionTokens.dismissOffset,
-                        ) + fadeOut(animationSpec = MotionTokens.tweenStandard())
+                            animationSpec = MotionTokens.tweenStandard(),
+                        )
                     }
                 },
             ) { backStackEntry ->
                 val route = backStackEntry.toRoute<DetailsRoute>()
                 // Скругление краёв уезжающего окна (референс — Telegram): радиус растёт
                 // по прогрессу перехода, predictive back сикает его вместе с жестом.
-                val windowCorner by transition.animateDp(label = "detailsWindowCorner") { state ->
+                // Читается в слое, а не в композиции: иначе весь Details пересобирался на каждом
+                // кадре жеста «назад».
+                val windowCorner = transition.animateDp(label = "detailsWindowCorner") { state ->
                     if (state == EnterExitState.Visible) 0.dp else 42.dp
                 }
                 DetailsScreen(
                     navController = navController,
                     animeId = route.animeId,
                     openEpisodes = route.openEpisodes,
-                    modifier = Modifier.clip(RoundedCornerShape(windowCorner)),
+                    modifier = Modifier.graphicsLayer {
+                        shape = RoundedCornerShape(windowCorner.value)
+                        clip = true
+                    },
                 )
             }
 

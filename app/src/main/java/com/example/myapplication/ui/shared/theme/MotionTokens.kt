@@ -2,6 +2,7 @@ package com.example.myapplication.ui.shared.theme
 
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.Easing
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.FiniteAnimationSpec
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.Spring
@@ -198,6 +199,15 @@ object MotionTokens {
 
     /** Каскад появления пунктов меню (§5.1): delay = index * этого. */
     const val MenuItemCascadeStaggerMillis: Int = 30
+
+    /**
+     * Фон под всплывающей поверхностью — затемнение и размытие главной одной кривой. Мягкий
+     * ease-in-out, а не `EaseEnter`/`EaseExit`: у тех почти весь ход в первых кадрах, и на полный
+     * экран это читается как вспышка. Уход короче входа (закон 5), но не обрывом.
+     */
+    const val BackdropExitMillis: Int = 220
+    fun <T> backdropEnter(): FiniteAnimationSpec<T> = tween(ScrimFadeMillis, easing = FastOutSlowInEasing)
+    fun <T> backdropExit(): FiniteAnimationSpec<T> = tween(BackdropExitMillis, easing = FastOutSlowInEasing)
 
     fun <T> dialogExit(): FiniteAnimationSpec<T> = tween(150)
     fun <T> scrimFade(): FiniteAnimationSpec<T> = tween(ScrimFadeMillis)

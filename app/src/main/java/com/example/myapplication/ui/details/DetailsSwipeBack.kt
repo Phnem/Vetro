@@ -23,6 +23,7 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.Velocity
 import com.example.myapplication.ui.shared.theme.MotionTokens
+import kotlinx.coroutines.delay
 import kotlin.math.abs
 import kotlin.math.min
 
@@ -34,6 +35,14 @@ import kotlin.math.min
 object SwipeBackGesture {
     var active: Boolean by mutableStateOf(false)
         internal set
+
+    /**
+     * Длительность линейного перехода «назад» при свайпе: на жесте она не видна (переход едет за
+     * пальцем), после отпускания это время доезда оставшейся доли. Флаг [active] держится, пока
+     * переход не доиграл: сброс сразу после отпускания менял кривые на полпути, и остаток
+     * доигрывался медленным хвостом пружины.
+     */
+    const val LINEAR_MS: Int = 320
 }
 
 /**
@@ -124,6 +133,8 @@ private class DetailsSwipeBackConnection(
                 velocity = velocityDp.coerceAtLeast(0f),
             ) && velocityDp > -MotionTokens.DismissVelocityThresholdDpPerSec
             if (commit) dispatcher.onBackPressed() else dispatcher.dispatchOnBackCancelled()
+            // Переход доигрывает на тех же линейных кривых — флаг снимаем, когда он закончился.
+            delay(SwipeBackGesture.LINEAR_MS.toLong() + SETTLE_MARGIN_MS)
         }
         reset()
         // Скорость жеста «назад» пейджеру не отдаём: иначе он доводил бы страницу по инерции.
@@ -146,6 +157,11 @@ private class DetailsSwipeBackConnection(
         progress = progress,
         swipeEdge = if (rtl) BackEventCompat.EDGE_RIGHT else BackEventCompat.EDGE_LEFT,
     )
+
+    private companion object {
+        /** Запас на кадр композиции после отпускания, пока NavHost переключает цель. */
+        const val SETTLE_MARGIN_MS = 48L
+    }
 
     private fun reset() {
         armed = null

@@ -14,6 +14,12 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import kotlinx.coroutines.delay
+import androidx.compose.ui.graphics.GraphicsLayerScope
+import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -64,10 +70,14 @@ import kotlin.math.sign
 // уведомлений смартфона. Открывается колокольчиком и вырастает ИЗ него (UNIVERSAL_MOTION_SPEC,
 // закон 1 — у появления есть точка исхода).
 //
-// Хореография (§5): оболочки карточек — пружина `springSurface` из точки колокольчика в свой слот
-// с каскадом `StaggerMillis` (не больше `StaggerMaxItems` в очереди), содержимое и скрим — короткое
-// `EaseEnter`, стартует на `ContentRevealDelayMillis`. Закрытие — `springExit` + `EaseExit`, быстрее
-// входа и без отскока. Блюр фона не анимируется (§8): только затемнение.
+// Хореография (§5): у стекла карточки и её содержимого разные траектории. Оболочка раскрывается
+// пружиной `springSurface` с 0.92 и 8 dp выше слота, опорная точка масштаба — под колокольчиком по
+// горизонтали и у верхней кромки по вертикали: стопка разворачивается вниз из колокольчика и не
+// вылезает за клип списка. Каскад — время, `StaggerMillis` на карточку (очередь до
+// `StaggerMaxItems`), у каждой своя пружина: хвост не сжимается и перелёт не обрезается. Текст и
+// обложка не масштабируются отдельно и проявляются `EaseEnter` через `ContentRevealDelayMillis`,
+// когда оболочка уже почти на месте. Закрытие — без каскада: содержимое гаснет `EaseExit`, оболочка
+// уходит `springExit` (закон 5). Блюр фона не анимируется (§8): только затемнение.
 //
 // Цена стекла: пока центр открыт, фон под скримом неподвижен, поэтому стекло карточек
 // пересчитывается только на кадрах анимации и при прокрутке самого центра.
@@ -88,28 +98,41 @@ fun NotificationCenter(
     modifier: Modifier = Modifier,
 ) {
     val reducedMotion = rememberReducedMotion()
+    // Общая оболочка держит узел живым до конца закрытия; карточки ведут свои пружины сами.
     val shell = remember { Animatable(0f) }
-    val light = remember { Animatable(0f) }
+    // Затемнение живёт на своей кривой, общей с размытием главной (backdropEnter/Exit): стартует
+    // сразу, идёт дольше содержимого и так же плавно уходит.
+    val scrim = remember { Animatable(0f) }
+    // Заголовок и «Очистить всё» — часть той же панели: прозрачность как у стекла карточек
+    // (появляется сразу, уходит за 160 мс), движение — общая пружина [shell].
+    val chrome = remember { Animatable(0f) }
     LaunchedEffect(open) {
-        if (open) {
-            launch {
-                if (reducedMotion) shell.snapTo(1f)
-                else shell.animateTo(1f, MotionTokens.springSurface())
-            }
-            launch {
-                if (!reducedMotion) kotlinx.coroutines.delay(MotionTokens.ContentRevealDelayMillis.toLong())
-                light.animateTo(1f, tween(MotionTokens.EaseEnterMillis, easing = MotionTokens.EaseEnter))
-            }
-        } else {
-            launch { light.animateTo(0f, tween(MotionTokens.EaseExitMillis, easing = MotionTokens.EaseExit)) }
-            launch {
-                if (reducedMotion) shell.snapTo(0f)
-                else shell.animateTo(0f, MotionTokens.springExit())
-            }
+        launch {
+            scrim.animateTo(
+                if (open) 1f else 0f,
+                if (open) MotionTokens.backdropEnter() else MotionTokens.backdropExit(),
+            )
+        }
+        launch {
+            chrome.animateTo(
+                if (open) 1f else 0f,
+                if (open) {
+                    tween(MotionTokens.EaseEnterMillis, easing = MotionTokens.EaseEnter)
+                } else {
+                    tween(MotionTokens.DurationFastMillis, easing = MotionTokens.EaseExit)
+                },
+            )
+        }
+        when {
+            reducedMotion -> shell.snapTo(if (open) 1f else 0f)
+            open -> shell.animateTo(1f, MotionTokens.springSurface())
+            else -> shell.animateTo(0f, MotionTokens.springExit())
         }
     }
     // Узел живёт, пока доигрывает закрытие: иначе обратный ход обрывался бы на первом кадре.
-    val animating by remember { derivedStateOf { shell.value > 0.001f || light.value > 0.001f } }
+    val animating by remember {
+        derivedStateOf { shell.value > 0.001f || scrim.value > 0.001f || chrome.value > 0.001f }
+    }
     if (!open && !animating) return
 
     BackHandler(enabled = open, onBack = onClose)
@@ -124,8 +147,8 @@ fun NotificationCenter(
     Box(
         modifier = modifier
             .fillMaxSize()
-            // Затемнение — свет, поэтому короткая кривая, а не пружина; тап мимо закрывает центр.
-            .drawBehind { drawRect(Color.Black, alpha = SCRIM_ALPHA * light.value) }
+            // Затемнение — свет, поэтому кривая, а не пружина; тап мимо закрывает центр.
+            .drawBehind { drawRect(Color.Black, alpha = SCRIM_ALPHA * scrim.value) }
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
@@ -140,12 +163,12 @@ fun NotificationCenter(
                 .padding(top = PANEL_TOP, start = 12.dp, end = 12.dp),
         ) {
             val maxListHeight = maxHeight * 0.62f
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Column {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 8.dp)
-                        .graphicsLayer { alpha = light.value },
+                        .graphicsLayer { panelChrome(shell.value, chrome.value) },
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
@@ -176,6 +199,7 @@ fun NotificationCenter(
                 }
 
                 if (visible.isEmpty()) {
+                    Spacer(Modifier.height(HEADER_GAP))
                     Text(
                         text = strings.empty,
                         style = MaterialTheme.typography.bodyLarge,
@@ -183,20 +207,24 @@ fun NotificationCenter(
                         color = Color.White.copy(alpha = 0.7f),
                         modifier = Modifier
                             .padding(horizontal = 8.dp, vertical = 12.dp)
-                            .graphicsLayer { alpha = light.value },
+                            .graphicsLayer { panelChrome(shell.value, chrome.value) },
                     )
                 } else {
+                    // Верхний отступ списка — место для стартового сдвига первой карточки: список
+                    // клипует содержимое, и без запаса она выезжала бы из-под ровной линии.
+                    Spacer(Modifier.height(HEADER_GAP - ENTER_LIFT))
                     LazyColumn(
                         flingBehavior = IosScroll.flingBehavior(),
                         modifier = Modifier.heightIn(max = maxListHeight),
+                        contentPadding = PaddingValues(top = ENTER_LIFT),
                         verticalArrangement = Arrangement.spacedBy(CARD_GAP),
                     ) {
                         itemsIndexed(visible, key = { _, u -> u.animeId }) { index, update ->
                             NotificationCenterCard(
                                 update = update,
                                 index = index,
-                                shell = { shell.value },
-                                light = { light.value },
+                                open = open,
+                                reducedMotion = reducedMotion,
                                 bellCenter = bellCenter,
                                 coverPath = remember(update.animeId) { coverPathFor(update.animeId) },
                                 backdrop = backdrop,
@@ -219,15 +247,16 @@ fun NotificationCenter(
 }
 
 /**
- * Одна карточка центра. Вырастает из колокольчика: сдвиг из его центра в свой слот и масштаб —
- * пространство (пружина общей оболочки со сдвигом по каскаду), прозрачность — свет.
+ * Одна карточка центра. Пространство (масштаб, сдвиг) — своя пружина с каскадным стартом,
+ * свет (прозрачность стекла и содержимого) — короткие кривые. Сдвиг идёт через `offset {}`, а не
+ * через `graphicsLayer`: стекло сэмплирует бэкдроп по позиции раскладки.
  */
 @Composable
 private fun NotificationCenterCard(
     update: AnimeUpdate,
     index: Int,
-    shell: () -> Float,
-    light: () -> Float,
+    open: Boolean,
+    reducedMotion: Boolean,
     bellCenter: () -> Offset?,
     coverPath: String?,
     backdrop: Backdrop,
@@ -241,14 +270,40 @@ private fun NotificationCenterCard(
     val scope = rememberCoroutineScope()
     val density = LocalDensity.current
     val offsetX = remember { Animatable(0f) }
+    val reveal = remember { Animatable(0f) }
+    val shellAlpha = remember { Animatable(0f) }
+    val contentAlpha = remember { Animatable(0f) }
     var departing by remember { mutableStateOf(false) }
-    // Центр слота в координатах корня — от него считается путь из колокольчика.
-    var slotCenter by remember { mutableStateOf<Offset?>(null) }
+    // Левая кромка и ширина слота в координатах корня — от них считается опорная точка под колокольчиком.
+    var slotLeft by remember { mutableStateOf(0f) }
     var widthPx by remember { mutableStateOf(1f) }
-    // Каскад: каждая следующая карточка отстаёт на долю пути, очередь ограничена.
-    val lag = (index.coerceAtMost(MotionTokens.StaggerMaxItems) * STAGGER_FRACTION)
 
-    fun progress(): Float = ((shell() - lag) / (1f - lag)).coerceIn(0f, 1f)
+    LaunchedEffect(open) {
+        if (open) {
+            if (reducedMotion) {
+                reveal.snapTo(1f)
+                launch { shellAlpha.animateTo(1f, tween(MotionTokens.EaseExitMillis)) }
+                contentAlpha.animateTo(1f, tween(MotionTokens.EaseExitMillis))
+                return@LaunchedEffect
+            }
+            delay(index.coerceAtMost(MotionTokens.StaggerMaxItems) * MotionTokens.StaggerMillis.toLong())
+            launch { reveal.animateTo(1f, MotionTokens.springSurface()) }
+            launch {
+                shellAlpha.animateTo(1f, tween(MotionTokens.EaseEnterMillis, easing = MotionTokens.EaseEnter))
+            }
+            delay(MotionTokens.ContentRevealDelayMillis.toLong())
+            contentAlpha.animateTo(1f, tween(MotionTokens.EaseEnterMillis, easing = MotionTokens.EaseEnter))
+        } else {
+            // Уход без каскада: закрытие освобождает дорогу, а не прощается очередью.
+            launch {
+                contentAlpha.animateTo(0f, tween(MotionTokens.EaseExitMillis, easing = MotionTokens.EaseExit))
+            }
+            launch {
+                shellAlpha.animateTo(0f, tween(MotionTokens.DurationFastMillis, easing = MotionTokens.EaseExit))
+            }
+            if (reducedMotion) reveal.snapTo(0f) else reveal.animateTo(0f, MotionTokens.springExit())
+        }
+    }
 
     fun flyOut(direction: Float) {
         if (departing) return
@@ -264,25 +319,19 @@ private fun NotificationCenterCard(
             .fillMaxWidth()
             .onPlaced { coordinates ->
                 widthPx = coordinates.size.width.toFloat().coerceAtLeast(1f)
-                slotCenter = coordinates.boundsInRoot().center
+                slotLeft = coordinates.boundsInRoot().left
             }
             .offset {
-                val p = progress()
-                val from = bellCenter()
-                val slot = slotCenter
-                val (dx, dy) = if (from != null && slot != null) {
-                    (from.x - slot.x) * (1f - p) to (from.y - slot.y) * (1f - p)
-                } else {
-                    0f to 0f
-                }
-                IntOffset((dx + offsetX.value).roundToInt(), dy.roundToInt())
+                val lift = ENTER_LIFT.toPx() * (1f - reveal.value)
+                IntOffset(offsetX.value.roundToInt(), (-lift).roundToInt())
             }
             .graphicsLayer {
-                val p = progress()
-                val s = lerp(ENTER_SCALE, 1f, p)
+                val s = lerp(ENTER_SCALE, 1f, reveal.value)
                 scaleX = s
                 scaleY = s
-                alpha = light() * (1f - (abs(offsetX.value) / (widthPx * 0.9f)).coerceIn(0f, 1f))
+                val pivotX = bellCenter()?.let { ((it.x - slotLeft) / widthPx).coerceIn(0f, 1f) } ?: 0.5f
+                transformOrigin = TransformOrigin(pivotX, 0f)
+                alpha = shellAlpha.value * (1f - (abs(offsetX.value) / (widthPx * 0.9f)).coerceIn(0f, 1f))
             }
             .draggable(
                 orientation = Orientation.Horizontal,
@@ -317,13 +366,30 @@ private fun NotificationCenterCard(
             dimmed = false,
             clickEnabled = enabled && !departing,
             onClick = onOpen,
+            contentAlpha = { contentAlpha.value },
         )
     }
 }
 
+/**
+ * Подписи панели едут вместе с карточками: масштаб 0.92 → 1 и подъём к колокольчику по той же
+ * пружине, опора масштаба — правый верх (колокольчик над правым краем).
+ */
+private fun GraphicsLayerScope.panelChrome(reveal: Float, alphaValue: Float) {
+    val s = lerp(ENTER_SCALE, 1f, reveal)
+    scaleX = s
+    scaleY = s
+    transformOrigin = TransformOrigin(1f, 0f)
+    translationY = -ENTER_LIFT.toPx() * (1f - reveal)
+    alpha = alphaValue
+}
+
 private const val SCRIM_ALPHA = 0.42f
-private const val STAGGER_FRACTION = 0.1f
-private const val ENTER_SCALE = 0.55f
+/** Стартовый масштаб оболочки (спека §5.3). */
+private const val ENTER_SCALE = 0.92f
 private const val SWIPE_DISMISS_FRACTION = 0.32f
 private val PANEL_TOP = 76.dp
+private val HEADER_GAP = 10.dp
+/** Стартовый сдвиг оболочки к колокольчику (спека §5.3, 8 px). */
+private val ENTER_LIFT = 8.dp
 private val CARD_GAP = 8.dp

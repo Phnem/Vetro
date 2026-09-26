@@ -343,6 +343,8 @@ internal fun EpisodeUpdateCard(
     dimmed: Boolean,
     clickEnabled: Boolean,
     onClick: () -> Unit,
+    /** Прозрачность содержимого отдельно от стекла: у оболочки и текста разные траектории (спека §5). */
+    contentAlpha: () -> Float = { 1f },
 ) {
     val tileShape = RoundedCornerShape(22.dp)
 
@@ -363,6 +365,7 @@ internal fun EpisodeUpdateCard(
         Row(
             modifier = Modifier
                 .fillMaxSize()
+                .graphicsLayer { alpha = contentAlpha() }
                 .padding(horizontal = 12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
