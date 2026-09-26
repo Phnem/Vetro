@@ -19,7 +19,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.example.myapplication.network.AppLanguage
 import com.example.myapplication.audiobooks.ui.getAudiobookStrings
-import com.example.myapplication.audiobooks.ui.LocalBooksPanel
+import com.example.myapplication.audiobooks.ui.home.BooksHomeScreen
 import com.example.myapplication.audiobooks.AudiobookFeatureGate
 import com.phnem.vetro.BuildConfig
 import org.koin.compose.koinInject
@@ -41,19 +41,26 @@ fun BooksScreen(
     language: AppLanguage,
     bottomInset: Dp,
     modifier: Modifier = Modifier,
+    /** Страница полки, лист книги или папки поверх дома: хозяин прячет док. */
+    onOverlayVisibleChange: (Boolean) -> Unit = {},
 ) {
     val strings = getAudiobookStrings(language)
     val gate: AudiobookFeatureGate = koinInject()
+    if (gate.enabled || BuildConfig.DEBUG) {
+        BooksHomeScreen(
+            language = language,
+            bottomInset = bottomInset,
+            onOverlayVisibleChange = onOverlayVisibleChange,
+            modifier = modifier,
+        )
+        return
+    }
     Box(
         modifier = modifier
             .fillMaxSize()
             .padding(bottom = bottomInset),
         contentAlignment = Alignment.Center,
     ) {
-        if (gate.enabled || BuildConfig.DEBUG) {
-            LocalBooksPanel(strings, Modifier.fillMaxSize())
-            return@Box
-        }
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(12.dp),

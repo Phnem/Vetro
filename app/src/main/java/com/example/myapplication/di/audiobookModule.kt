@@ -2,6 +2,14 @@ package com.example.myapplication.di
 
 import com.example.myapplication.audiobooks.AudiobookFeatureGate
 import com.example.myapplication.audiobooks.data.AudiobookRepository
+import com.example.myapplication.audiobooks.data.BooksCatalog
+import com.example.myapplication.audiobooks.data.CachedShelf
+import com.example.myapplication.audiobooks.playback.AudiobookLauncher
+import com.example.myapplication.audiobooks.ui.home.BooksHomeViewModel
+import com.example.myapplication.data.local.JsonMapFileStore
+import java.io.File
+import org.koin.android.ext.koin.androidContext
+import org.koin.core.module.dsl.viewModel
 import com.example.myapplication.audiobooks.data.local.LocalFolderSource
 import com.example.myapplication.audiobooks.data.remote.Aknigi24Source
 import com.example.myapplication.audiobooks.domain.source.AudiobookSource
@@ -24,4 +32,16 @@ val audiobookModule = module {
     single { Aknigi24Source(get(), get(named("rate_aknigi24"))) } bind AudiobookSource::class bind ManifestSource::class
     single { ManifestResolver(sources = getAll<ManifestSource>()) }
     single { AudiobookRepository(get()) }
+    single {
+        BooksCatalog(
+            sources = getAll<AudiobookSource>(),
+            store = JsonMapFileStore(
+                File(androidContext().filesDir, "audiobooks/catalog.json"),
+                CachedShelf.serializer(),
+                "BooksCatalog",
+            ),
+        )
+    }
+    single { AudiobookLauncher(androidContext(), getAll<AudiobookSource>(), get(), get()) }
+    viewModel { BooksHomeViewModel(get(), get(), get()) }
 }

@@ -45,7 +45,7 @@ android {
 
         buildConfigField("String", "GITHUB_OWNER", "\"Phnem\"")
         buildConfigField("String", "GITHUB_REPO", "\"Vetro-Collection\"")
-        buildConfigField("boolean", "AUDIOBOOKS_ENABLED", "false")
+        buildConfigField("boolean", "AUDIOBOOKS_ENABLED", "true")
         buildConfigField(
             "String",
             "SHIKIMORI_CLIENT_ID",

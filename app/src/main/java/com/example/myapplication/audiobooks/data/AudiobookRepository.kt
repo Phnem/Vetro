@@ -155,6 +155,12 @@ class AudiobookRepository(
         )
     }
 
+    suspend fun progress(narrationId: NarrationId): SavedProgress? = io {
+        q.progressByNarration(narrationId.value).executeAsOneOrNull()?.let {
+            SavedProgress(globalMs = it.global_ms, finished = it.finished != 0L)
+        }
+    }
+
     fun continueListening(limit: Long = 5): Flow<List<ContinueItem>> =
         q.continueListening(limit).asFlow().mapToList(Dispatchers.IO).map { rows ->
             rows.map { r ->
@@ -222,6 +228,8 @@ data class ProgressSnapshot(
     val speed: Float,
     val finished: Boolean,
 )
+
+data class SavedProgress(val globalMs: Long, val finished: Boolean)
 
 data class ContinueItem(
     val workId: WorkId,

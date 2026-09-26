@@ -12,6 +12,7 @@ import com.example.myapplication.audiobooks.domain.source.SourceBook
 import com.example.myapplication.audiobooks.domain.source.SourceBookDetails
 import com.example.myapplication.audiobooks.domain.source.SourceBookRef
 import com.example.myapplication.audiobooks.domain.source.SourceResult
+import com.example.myapplication.audiobooks.domain.source.SourceShelf
 import com.example.myapplication.network.TokenBucketRateLimiter
 import java.io.IOException
 import java.net.SocketTimeoutException
@@ -39,6 +40,19 @@ class Aknigi24Source(
         val q = URLEncoder.encode(query.trim(), "UTF-8")
         val pageParam = if (page > 0) "&page=${page + 1}" else ""
         return fetch("${Aknigi24Parser.BASE}/search?q=$q$pageParam").map(Aknigi24Parser::parseList)
+    }
+
+    override val shelves = SHELVES
+
+    override suspend fun shelf(id: String, page: Int): SourceResult<List<SourceBook>> {
+        val path = when {
+            id == "new" -> "/?sort=new"
+            id == "top" -> "/?sort=rating"
+            id.startsWith("genre:") -> "/genre/${id.removePrefix("genre:")}?sort=rating"
+            else -> return SourceResult.Failed(FailureKind.PARSE, IllegalArgumentException(id))
+        }
+        val pageParam = if (page > 0) "&page=${page + 1}" else ""
+        return fetch("${Aknigi24Parser.BASE}$path$pageParam").map(Aknigi24Parser::parseList)
     }
 
     override suspend fun details(ref: SourceBookRef): SourceResult<SourceBookDetails> =
@@ -103,6 +117,18 @@ class Aknigi24Source(
     }
 
     private companion object {
+        /** Полки дома: свежее, лучшее и жанры с самым «книжным» выбором (по рейтингу сайта). */
+        val SHELVES = listOf(
+            SourceShelf("new", "Новинки", "Только что на сайте"),
+            SourceShelf("top", "Лучшее", "По оценкам слушателей"),
+            SourceShelf("genre:fantastika-fentezi", "Фантастика и фэнтези", "Другие миры"),
+            SourceShelf("genre:detektivy-trillery", "Детективы и триллеры", "Не оторваться"),
+            SourceShelf("genre:klassika", "Классика", "Проверено временем"),
+            SourceShelf("genre:prikliuceniia", "Приключения", "В дорогу"),
+            SourceShelf("genre:naucno-populiarnoe", "Научпоп", "Понять, как устроен мир"),
+            SourceShelf("genre:audiospektakli", "Аудиоспектакли", "С актёрами и музыкой"),
+        )
+
         const val USER_AGENT =
             "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0 Mobile Safari/537.36"
 

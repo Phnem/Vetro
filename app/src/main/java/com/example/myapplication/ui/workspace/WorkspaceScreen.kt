@@ -100,6 +100,7 @@ fun WorkspaceScreen(
     // колбэком: док им сосед, а не потомок, и сам про их состояние не знает.
     var homeOverlayVisible by remember { mutableStateOf(false) }
     var settingsOverlayVisible by remember { mutableStateOf(false) }
+    var booksOverlayVisible by remember { mutableStateOf(false) }
     // Автоскрытие дока (D9) живёт здесь по той же причине: страницы доку не родители.
     var pageDockVisible by remember { mutableStateOf(true) }
     var showSyncPanel by remember { mutableStateOf(false) }
@@ -119,7 +120,7 @@ fun WorkspaceScreen(
     var menuWindowKey by rememberSaveable { mutableStateOf<String?>(null) }
     val syncPanelState = remember { MutableTransitionState(false) }
     syncPanelState.targetState = showSyncPanel
-    val dockHidden = homeOverlayVisible || settingsOverlayVisible || showSyncPanel || !pageDockVisible
+    val dockHidden = homeOverlayVisible || settingsOverlayVisible || booksOverlayVisible || showSyncPanel || !pageDockVisible
 
     // Страницы резервируют место под док сами — ровно под капсулу, без запаса на всякий случай.
     val dockInset = CapsuleDockInset
@@ -196,6 +197,7 @@ fun WorkspaceScreen(
                 WorkspacePage.BOOKS -> BooksScreen(
                     language = language,
                     bottomInset = dockInset,
+                    onOverlayVisibleChange = { booksOverlayVisible = it },
                 )
 
                 WorkspacePage.SETTINGS -> SettingsScreen(

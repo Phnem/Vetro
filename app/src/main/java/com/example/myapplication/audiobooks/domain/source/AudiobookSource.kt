@@ -16,9 +16,18 @@ interface AudiobookSource : ManifestSource {
     suspend fun search(query: String, page: Int = 0): SourceResult<List<SourceBook>>
     suspend fun details(ref: SourceBookRef): SourceResult<SourceBookDetails>
 
+    /** Подборки источника для полок дома «Книги» (решение Q10); пусто — источник их не даёт. */
+    val shelves: List<SourceShelf> get() = emptyList()
+
+    suspend fun shelf(id: String, page: Int = 0): SourceResult<List<SourceBook>> =
+        SourceResult.Failed(FailureKind.PARSE, UnsupportedOperationException("no shelves"))
+
     /** Вариант озвучки на этом источнике — ключ манифеста и позиции. */
     fun variantOf(ref: SourceBookRef): VariantId = VariantId("${id.value}:${ref.key}")
 }
+
+/** Подборка источника: «Новинки», «Лучшее», жанр. [id] понимает только сам источник. */
+data class SourceShelf(val id: String, val title: String, val subtitle: String)
 
 @JvmInline
 value class SourceId(val value: String)
