@@ -6,6 +6,9 @@ import androidx.test.platform.app.InstrumentationRegistry
 import com.example.myapplication.data.models.Anime
 import com.example.myapplication.data.models.MediaType
 import com.example.myapplication.domain.enrichment.title.TitleEnrichmentRepository
+import com.example.myapplication.localplayer.domain.SkipKind
+import com.example.myapplication.localplayer.domain.SkipSegmentRequest
+import com.example.myapplication.localplayer.domain.SkipSegmentResolver
 import com.example.myapplication.network.AppLanguage
 import com.example.myapplication.network.LookupResult
 import com.example.myapplication.network.enrichment.AnimeSkipClient
@@ -98,6 +101,21 @@ class EnrichmentDeviceTest {
             else -> log("anime-skip frieren: $animeSkip")
         }
         assertTrue(intro is LookupResult.Found || intro is LookupResult.NoMatch)
+    }
+
+    @Test fun skipResolverUsesExternalSources() = runBlocking<Unit> {
+        val resolver = koin.get<SkipSegmentResolver>()
+        // Frieren, серия 6, длина версии Anime-Skip 1 439 800 мс: AniSkip основной, рекап/превью — Anime-Skip.
+        val frieren = resolver.resolve(SkipSegmentRequest(anilistId = 154587, malId = 52991, episodeNumber = 6, durationMs = 1_439_800L))
+        log("resolver frieren e6: origin=${frieren.origin} ${frieren.segments}")
+        assertTrue(frieren.segments.any { it.kind == SkipKind.OPENING })
+        // Во Breaking Bad нет аниме-id: только IntroDB по IMDb + сезон/серия.
+        val bb = resolver.resolve(
+            SkipSegmentRequest(null, null, 1, 3_480_000L, imdbId = "tt0903747", seasonNumber = 1),
+        )
+        log("resolver BB s1e1: origin=${bb.origin} ${bb.segments}")
+        assertEquals("IntroDB", bb.origin)
+        assertTrue(bb.segments.any { it.kind == SkipKind.ENDING })
     }
 
     @Test fun tvMazeSchedule() = runBlocking<Unit> {

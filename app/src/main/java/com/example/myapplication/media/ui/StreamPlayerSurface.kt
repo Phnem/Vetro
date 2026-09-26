@@ -53,6 +53,10 @@ fun StreamPlayerSurface(
     episodeNumber: Int,
     malId: Int?,
     anilistId: Int?,
+    /** Для IntroDB у кино и сериалов; у аниме разметку дают AniSkip/Anime-Skip. */
+    imdbId: String? = null,
+    seasonNumber: Int? = null,
+    isMovie: Boolean = false,
     autoSkipEnabled: Boolean,
     isInPip: Boolean,
     onEnterPip: () -> Unit,
@@ -131,6 +135,9 @@ fun StreamPlayerSurface(
         exactTimestamps = video.timestamps,
         exactOrigin = video.sourceName,
         reference = video.skipReference,
+        imdbId = imdbId,
+        seasonNumber = seasonNumber,
+        isMovie = isMovie,
     )
     val activeSegment = skipPlayback.activeSegment
 

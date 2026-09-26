@@ -74,6 +74,10 @@ fun rememberMediaSkipPlayback(
     exactTimestamps: List<VetroTimestamp> = emptyList(),
     exactOrigin: String? = null,
     reference: VetroSkipReference? = null,
+    /** Для IntroDB: IMDb id, сезон и признак фильма (кино и сериалы). */
+    imdbId: String? = null,
+    seasonNumber: Int? = null,
+    isMovie: Boolean = false,
 ): MediaSkipPlaybackState {
     val resolver = koinInject<SkipSegmentResolver>()
     val coordinator = remember { MediaSkipCoordinator() }
@@ -92,6 +96,9 @@ fun rememberMediaSkipPlayback(
         exactTimestamps,
         exactOrigin,
         reference,
+        imdbId,
+        seasonNumber,
+        isMovie,
     ) {
         SkipSegmentRequest(
             anilistId = anilistId,
@@ -101,6 +108,9 @@ fun rememberMediaSkipPlayback(
             exactTimestamps = exactTimestamps,
             exactOrigin = exactOrigin,
             reference = reference,
+            imdbId = imdbId,
+            seasonNumber = seasonNumber,
+            isMovie = isMovie,
         )
     }
     var resolved by remember {

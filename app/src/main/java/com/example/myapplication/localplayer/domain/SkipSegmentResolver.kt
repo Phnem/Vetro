@@ -12,6 +12,10 @@ data class SkipSegmentRequest(
     val exactTimestamps: List<VetroTimestamp> = emptyList(),
     val exactOrigin: String? = null,
     val reference: VetroSkipReference? = null,
+    /** Для IntroDB (кино и сериалы): канонический IMDb id, сезон и признак фильма. */
+    val imdbId: String? = null,
+    val seasonNumber: Int? = null,
+    val isMovie: Boolean = false,
 )
 
 data class SkipSegmentResolution(
@@ -22,10 +26,12 @@ data class SkipSegmentResolution(
 
 /**
  * Single priority resolver for every player:
- * exact current-video timestamps → compatible episode reference → AniSkip.
+ * exact current-video timestamps → compatible episode reference → AniSkip (+ recap/preview from
+ * Anime-Skip) → Anime-Skip / IntroDB when AniSkip has nothing.
  */
 class SkipSegmentResolver internal constructor(
     private val aniSkip: AniSkipLookup,
+    private val external: ExternalSkipLookup? = null,
 ) {
 
     suspend fun resolve(request: SkipSegmentRequest): SkipSegmentResolution {
@@ -61,18 +67,49 @@ class SkipSegmentResolver internal constructor(
             }
         }
 
-        val fallback = aniSkip.fetch(
-            request.anilistId,
-            request.malId,
-            request.episodeNumber,
-            request.durationMs,
-        )
+        val fallback = if (request.anilistId != null || request.malId != null) {
+            aniSkip.fetch(
+                request.anilistId,
+                request.malId,
+                request.episodeNumber,
+                request.durationMs,
+            )
+        } else {
+            null
+        }
+        if (fallback != null && fallback.segments.isNotEmpty()) {
+            val extra = externalOrNull { it.supplement(request) }
+                ?.segments
+                ?.filter { candidate -> fallback.segments.none { it.overlaps(candidate) } }
+                .orEmpty()
+            return SkipSegmentResolution(
+                segments = (fallback.segments + extra).sortedBy(SkipSegment::startMs),
+                origin = if (extra.isEmpty()) ANISKIP_ORIGIN else "$ANISKIP_ORIGIN+${ExternalSkipMatching.ANIME_SKIP_ORIGIN}",
+                referenceDurationMs = fallback.referenceDurationMs,
+            )
+        }
+        val external = externalOrNull { it.fallback(request) }
         return SkipSegmentResolution(
-            segments = fallback.segments,
-            origin = ANISKIP_ORIGIN.takeIf { fallback.segments.isNotEmpty() },
-            referenceDurationMs = fallback.referenceDurationMs,
+            segments = external?.segments.orEmpty().sortedBy(SkipSegment::startMs),
+            origin = external?.origin,
+            referenceDurationMs = external?.referenceDurationMs ?: fallback?.referenceDurationMs,
         )
     }
+
+    /** Внешние базы — дополнение: их отказ не должен ронять уже найденную разметку. */
+    private suspend fun externalOrNull(block: suspend (ExternalSkipLookup) -> ExternalSkipSelection?): ExternalSkipSelection? {
+        val lookup = external ?: return null
+        return try {
+            block(lookup)
+        } catch (cancelled: kotlinx.coroutines.CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    private fun SkipSegment.overlaps(other: SkipSegment): Boolean =
+        startMs < other.endMs && other.startMs < endMs
 
     private fun List<VetroTimestamp>.toSegments(durationMs: Long): List<SkipSegment> =
         mapNotNull { timestamp ->

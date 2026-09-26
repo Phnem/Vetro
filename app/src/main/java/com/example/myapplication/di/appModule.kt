@@ -123,6 +123,10 @@ val appModule = module {
     single {
         com.example.myapplication.localplayer.domain.SkipSegmentResolver(
             aniSkip = get<com.example.myapplication.localplayer.domain.AniSkipSegmentProvider>(),
+            external = com.example.myapplication.localplayer.domain.ExternalSkipSegmentProvider(
+                animeSkip = get(),
+                introDb = get(),
+            ),
         )
     }
     // Manga engine (isolated feature — remove these lines + манифест-запись ридера, чтобы отключить).
