@@ -57,12 +57,14 @@ class OpenLibraryClient(
             if (!author.isNullOrBlank()) append("&author=").append(enc(author))
         }
         val fields = "key,title,author_name,first_publish_year,edition_count,cover_i,subject,language"
-        return http.text("Open Library", "$BASE/search.json?$q&fields=$fields&limit=$limit", rate)
+        return http.text("Open Library", "$BASE/search.json?$q&fields=$fields&limit=$limit", rate,
+            policy = CachePolicy("openlibrary:search:$q:$limit", 30 * CacheTtl.DAY, 7 * CacheTtl.DAY))
             .parse { OpenLibraryParser.works(it).takeIf(List<BookWork>::isNotEmpty) }
     }
 
     suspend fun editions(workKey: String, limit: Int = 50): LookupResult<List<BookEdition>> =
-        http.text("Open Library", "$BASE${workKey.ensureWorksPath()}/editions.json?limit=$limit", rate, notFoundById = true)
+        http.text("Open Library", "$BASE${workKey.ensureWorksPath()}/editions.json?limit=$limit", rate, notFoundById = true,
+            policy = CachePolicy("openlibrary:editions:$workKey:$limit", 30 * CacheTtl.DAY, 7 * CacheTtl.DAY))
             .parse(OpenLibraryParser::editions)
 
     private fun String.ensureWorksPath() = if (startsWith("/works/")) this else "/works/$this"
@@ -133,7 +135,8 @@ class GoogleBooksClient(
 ) {
     suspend fun byIsbn(isbn: String): LookupResult<GoogleVolume> {
         val key = apiKey().takeIf { it.isNotBlank() }?.let { "&key=$it" }.orEmpty()
-        return http.text("Google Books", "https://www.googleapis.com/books/v1/volumes?q=isbn:${enc(isbn)}$key", rate)
+        return http.text("Google Books", "https://www.googleapis.com/books/v1/volumes?q=isbn:${enc(isbn)}$key", rate,
+            policy = CachePolicy("googlebooks:isbn:$isbn", 30 * CacheTtl.DAY, 7 * CacheTtl.DAY))
             .parse { GoogleBooksParser.volumes(it).firstOrNull() }
     }
 }
@@ -168,7 +171,8 @@ class BookBrainzClient(
     private val rate: TokenBucketRateLimiter,
 ) {
     suspend fun searchWorks(title: String): LookupResult<List<BookBrainzEntity>> =
-        http.text("BookBrainz", "https://api.bookbrainz.org/1/search?q=${enc(title)}&type=work", rate)
+        http.text("BookBrainz", "https://api.bookbrainz.org/1/search?q=${enc(title)}&type=work", rate,
+            policy = CachePolicy("bookbrainz:work:${title.lowercase()}", 30 * CacheTtl.DAY, 7 * CacheTtl.DAY))
             .parse { BookBrainzParser.search(it).takeIf(List<BookBrainzEntity>::isNotEmpty) }
 }
 
@@ -209,7 +213,8 @@ class ITunesClient(
     suspend fun ebooks(term: String, country: String): LookupResult<List<StoreBook>> = search(term, "ebook", country)
 
     private suspend fun search(term: String, media: String, country: String): LookupResult<List<StoreBook>> =
-        http.text("iTunes", "https://itunes.apple.com/search?term=${enc(term)}&media=$media&limit=10&country=$country", rate)
+        http.text("iTunes", "https://itunes.apple.com/search?term=${enc(term)}&media=$media&limit=10&country=$country", rate,
+            policy = CachePolicy("itunes:$media:$country:${term.lowercase()}", 7 * CacheTtl.DAY, 2 * CacheTtl.DAY))
             .parse { ITunesParser.results(it).takeIf(List<StoreBook>::isNotEmpty) }
 }
 
@@ -257,7 +262,8 @@ class NytBooksClient(
     /** Все текущие списки одним запросом (`overview`) — экономит квоту. */
     suspend fun overview(): LookupResult<List<BestsellerList>> {
         val key = apiKey().takeIf { it.isNotBlank() } ?: return disabled()
-        return http.text("NYT Books", "https://api.nytimes.com/svc/books/v3/lists/overview.json?api-key=$key", rate)
+        return http.text("NYT Books", "https://api.nytimes.com/svc/books/v3/lists/overview.json?api-key=$key", rate,
+            policy = CachePolicy("nyt:overview", 12 * CacheTtl.HOUR))
             .parse(NytParser::overview)
     }
 }
@@ -305,7 +311,8 @@ class TasteDiveClient(
         val key = apiKey().takeIf { it.isNotBlank() } ?: return disabled()
         val q = enc("${of.param}:$name")
         val type = want?.let { "&type=${it.param}" }.orEmpty()
-        return http.text("TasteDive", "https://tastedive.com/api/similar?q=$q$type&info=1&limit=$limit&k=$key", rate)
+        return http.text("TasteDive", "https://tastedive.com/api/similar?q=$q$type&info=1&limit=$limit&k=$key", rate,
+            policy = CachePolicy("tastedive:$q:$type:$limit", 30 * CacheTtl.DAY, 7 * CacheTtl.DAY))
             .parse { TasteDiveParser.results(it).takeIf(List<TasteItem>::isNotEmpty) }
     }
 }

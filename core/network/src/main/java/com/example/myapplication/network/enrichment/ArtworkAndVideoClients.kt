@@ -69,7 +69,8 @@ class TmdbEnrichmentClient(
             "&language=${if (lang == "ru") "ru-RU" else "en-US"}" +
             "&append_to_response=images,videos,external_ids" +
             "&include_image_language=$lang,en,null&include_video_language=$lang,en"
-        return http.text("TMDB", url, rate, notFoundById = true).parse(TmdbEnrichmentParser::parse)
+        val policy = CachePolicy("tmdb:bundle:${kind.path}:$id:$lang", 3 * CacheTtl.DAY)
+        return http.text("TMDB", url, rate, notFoundById = true, policy = policy).parse(TmdbEnrichmentParser::parse)
     }
 }
 
@@ -147,7 +148,8 @@ class FanartClient(
 
     private suspend fun fetch(path: String, movie: Boolean): LookupResult<FanartArtwork> {
         val key = apiKey().takeIf { it.isNotBlank() } ?: return disabled()
-        return http.text("Fanart.tv", "https://webservice.fanart.tv/v3/$path?api_key=$key", rate, notFoundById = true)
+        return http.text("Fanart.tv", "https://webservice.fanart.tv/v3/$path?api_key=$key", rate, notFoundById = true,
+            policy = CachePolicy("fanart:$path", 14 * CacheTtl.DAY, 3 * CacheTtl.DAY))
             .parse { FanartParser.parse(it, movie) }
     }
 }
@@ -195,7 +197,8 @@ class OmdbClient(
 
     suspend fun byImdb(imdbId: String): LookupResult<OmdbRatings> {
         val key = apiKey().takeIf { it.isNotBlank() } ?: return disabled()
-        return http.text("OMDb", "https://www.omdbapi.com/?i=$imdbId&apikey=$key", rate).parse(OmdbParser::parse)
+        return http.text("OMDb", "https://www.omdbapi.com/?i=$imdbId&apikey=$key", rate,
+            policy = CachePolicy("omdb:$imdbId", 7 * CacheTtl.DAY)).parse(OmdbParser::parse)
     }
 }
 
@@ -245,7 +248,8 @@ class YouTubeClient(
         val key = apiKey().takeIf { it.isNotBlank() } ?: return disabled()
         if (ids.isEmpty()) return LookupResult.NoMatch
         val url = "https://www.googleapis.com/youtube/v3/videos?part=snippet,status&id=${ids.take(50).joinToString(",")}&key=$key"
-        return http.text("YouTube", url, rate).parse(YouTubeParser::videos)
+        return http.text("YouTube", url, rate, policy = CachePolicy("youtube:videos:${ids.sorted().joinToString(",")}", 7 * CacheTtl.DAY))
+            .parse(YouTubeParser::videos)
     }
 
     suspend fun search(query: String, maxResults: Int = 5): LookupResult<List<YouTubeVideo>> {

@@ -52,7 +52,7 @@ class IntroDbClient(
     suspend fun movie(imdbId: String): LookupResult<List<ExternalSkipSegment>> = fetch("imdb_id=$imdbId&is_movie=true")
 
     private suspend fun fetch(query: String): LookupResult<List<ExternalSkipSegment>> =
-        http.text("IntroDB", "https://api.introdb.app/segments?$query", rate)
+        http.text("IntroDB", "https://api.introdb.app/segments?$query", rate, policy = CachePolicy("introdb:$query", 30 * CacheTtl.DAY, 3 * CacheTtl.DAY))
             .parse { IntroDbParser.segments(it).takeIf(List<ExternalSkipSegment>::isNotEmpty) }
 }
 
@@ -111,7 +111,10 @@ class AnimeSkipClient(
     }
 
     private suspend fun graphql(clientId: String, query: String, variable: Pair<String, String>): LookupResult<String> =
-        http.text("Anime-Skip", "https://api.anime-skip.com/graphql", rate, HttpMethod.Post) {
+        http.text(
+            "Anime-Skip", "https://api.anime-skip.com/graphql", rate, HttpMethod.Post,
+            policy = CachePolicy("animeskip:${query.hashCode()}:${variable.second}", 7 * CacheTtl.DAY, 3 * CacheTtl.DAY),
+        ) {
             header("X-Client-ID", clientId)
             contentType(ContentType.Application.Json)
             setBody(

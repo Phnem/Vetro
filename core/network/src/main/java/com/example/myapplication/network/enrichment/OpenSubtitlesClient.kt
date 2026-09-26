@@ -44,7 +44,8 @@ class OpenSubtitlesClient(
             if (query.languages.isNotEmpty()) add("languages=${query.languages.map(String::lowercase).distinct().sorted().joinToString(",")}")
             add("order_by=download_count")
         }.sorted()
-        return http.text("OpenSubtitles", "$BASE/subtitles?${params.joinToString("&")}", rate) {
+        val path = "subtitles?${params.joinToString("&")}"
+        return http.text("OpenSubtitles", "$BASE/$path", rate, policy = CachePolicy("opensubtitles:$path", CacheTtl.DAY)) {
             header("Api-Key", key)
             header("User-Agent", userAgent)
         }.parse { OpenSubtitlesParser.candidates(it).takeIf(List<SubtitleCandidate>::isNotEmpty) }

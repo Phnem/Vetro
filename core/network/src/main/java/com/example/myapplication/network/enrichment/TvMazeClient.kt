@@ -22,18 +22,18 @@ class TvMazeClient(
             else -> return LookupResult.NoMatch
         }
         // lookup отвечает редиректом на /shows/{id}; embed передаём в итоговый адрес сами.
-        val id = when (val r = http.text("TVmaze", "$BASE/lookup/shows?$query", rate, notFoundById = true).parse(TvMazeParser::showId)) {
+        val id = when (val r = http.text("TVmaze", "$BASE/lookup/shows?$query", rate, notFoundById = true, policy = CachePolicy("tvmaze:lookup:$query", 30 * CacheTtl.DAY, 3 * CacheTtl.DAY)).parse(TvMazeParser::showId)) {
             is LookupResult.Found -> r.value
             is LookupResult.NoMatch, is LookupResult.NotFoundById -> return LookupResult.NoMatch
             is LookupResult.Failure -> return r
         }
-        return http.text("TVmaze", "$BASE/shows/$id?embed[]=nextepisode&embed[]=previousepisode", rate)
+        return http.text("TVmaze", "$BASE/shows/$id?embed[]=nextepisode&embed[]=previousepisode", rate, policy = CachePolicy("tvmaze:show:$id", 6 * CacheTtl.HOUR))
             .parse(TvMazeParser::show)
     }
 
     /** Все серии шоу — для оценки ритма выхода и дат по сезонам. */
     suspend fun episodes(showId: Int): LookupResult<List<TvMazeEpisode>> =
-        http.text("TVmaze", "$BASE/shows/$showId/episodes", rate).parse(TvMazeParser::episodes)
+        http.text("TVmaze", "$BASE/shows/$showId/episodes", rate, policy = CachePolicy("tvmaze:episodes:$showId", CacheTtl.DAY)).parse(TvMazeParser::episodes)
 
     private companion object {
         const val BASE = "https://api.tvmaze.com"
