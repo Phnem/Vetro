@@ -51,6 +51,8 @@ val enrichmentModule = module {
     single { NytBooksClient(get(), rate(perSecond = 5.0 / 60.0, burst = 2.0)) }
     single { TasteDiveClient(get(), rate(perSecond = 1.0, burst = 3.0)) }
 
+    single { com.example.myapplication.audiobooks.domain.enrichment.BookWorkEnrichment(get(), get()) }
+
     single {
         TitleEnrichmentRepository(
             tmdb = get(),

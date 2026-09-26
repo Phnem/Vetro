@@ -1,5 +1,6 @@
 package com.example.myapplication.audiobooks.ui.details
 
+import com.example.myapplication.audiobooks.domain.enrichment.BookWorkInfo
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.background
@@ -133,7 +134,7 @@ fun BookDetailsScreen(
 
     val book = state.details?.book
     val shownTitle = book?.title ?: title
-    val shownCover = book?.coverUrl ?: cover
+    val shownCover = book?.coverUrl ?: cover ?: state.work?.coverUrl
 
     Box(modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         Box(Modifier.fillMaxSize().layerBackdrop(backdrop)) {
@@ -332,7 +333,7 @@ private fun InfoPage(
 
                 when {
                     details != null -> {
-                        val facts = buildFacts(details, state.narrations.size, state.sourceName, strings)
+                        val facts = buildFacts(details, state.work, state.narrations.size, state.sourceName, strings)
                         SectionHeader(strings.information, onBg)
                         Spacer(Modifier.height(12.dp))
                         DetailFactGrid(facts, isDark)
@@ -356,7 +357,7 @@ private fun InfoPage(
                             Spacer(Modifier.height(24.dp))
                         }
 
-                        details.description?.let { text ->
+                        (details.description?.takeIf { it.isNotBlank() } ?: state.work?.description)?.let { text ->
                             var expanded by remember(state.key) { mutableStateOf(false) }
                             SectionHeader(strings.description, onBg)
                             Spacer(Modifier.height(10.dp))
@@ -408,7 +409,13 @@ private fun InfoPage(
 
 /** Сетка фактов: только те, что источник действительно знает — без «—» (как у аниме). */
 @Composable
-private fun buildFacts(details: SourceBookDetails, narrations: Int, sourceName: String, s: BookDetailsStrings): List<DetailFact> {
+private fun buildFacts(
+    details: SourceBookDetails,
+    work: BookWorkInfo?,
+    narrations: Int,
+    sourceName: String,
+    s: BookDetailsStrings,
+): List<DetailFact> {
     val b = details.book
     val icons = mapOf(
         "rating" to ImageVector.vectorResource(R.drawable.ph_star),
@@ -432,6 +439,11 @@ private fun buildFacts(details: SourceBookDetails, narrations: Int, sourceName: 
         b.narrators.takeIf { it.isNotEmpty() }?.let { DetailFact("narrator", icons.getValue("narrator"), s.narrator, it.joinToString(", ")) },
         b.authors.takeIf { it.isNotEmpty() }?.let { DetailFact("author", icons.getValue("author"), s.author, it.joinToString(", ")) },
         details.series?.let { DetailFact("series", icons.getValue("series"), s.series, it) },
+        // Произведение за озвучкой: как оно называется в оригинале и когда вышло впервые.
+        work?.originalTitle?.let { DetailFact("original", icons.getValue("series"), s.original, it) },
+        work?.firstPublishYear?.takeIf { it != b.year }?.let {
+            DetailFact("firstPublished", icons.getValue("year"), s.firstPublished, it.toString())
+        },
         narrations.takeIf { it > 1 }?.let { DetailFact("narrations", icons.getValue("narrations"), s.narrationCount, s.narrationsN(it)) },
         sourceName.takeIf { it.isNotBlank() }?.let { DetailFact("source", icons.getValue("source"), s.source, it) },
     )

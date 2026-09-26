@@ -5,6 +5,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.example.myapplication.data.models.Anime
 import com.example.myapplication.data.models.MediaType
+import com.example.myapplication.audiobooks.domain.enrichment.BookWorkEnrichment
 import com.example.myapplication.domain.enrichment.title.TitleEnrichmentRepository
 import com.example.myapplication.localplayer.domain.SkipKind
 import com.example.myapplication.localplayer.domain.SkipSegmentRequest
@@ -125,12 +126,21 @@ class EnrichmentDeviceTest {
     }
 
     @Test fun books() = runBlocking<Unit> {
-        val works = koin.get<OpenLibraryClient>().searchWorks("The Three-Body Problem", "Liu Cixin").found()
-        val work = works.first()
-        log("openlibrary: ${work.key} ${work.title} editions=${work.editionCount}")
-        val editions = koin.get<OpenLibraryClient>().editions(work.key).found()
-        log("openlibrary editions: ${editions.size}, rus=${editions.filter { "rus" in it.languages }.map { it.title to it.isbn13 }}")
-        assertTrue(editions.isNotEmpty())
+        // Work → Edition: русская озвучка «Задачи трёх тел» ведёт к произведению «三体» и русскому изданию.
+        val enrichment = koin.get<BookWorkEnrichment>()
+        val threeBody = enrichment.lookup("Задача трёх тел", listOf("Лю Цысинь"), sourceDescription = null, AppLanguage.RU)
+        log("book work RU: $threeBody")
+        assertEquals("/works/OL17267881W", threeBody?.workKey)
+        assertEquals("三体", threeBody?.originalTitle)
+        assertEquals(2008, threeBody?.firstPublishYear)
+        assertTrue(threeBody?.edition?.isbn13.orEmpty().contains("9785041619015"))
+        val master = enrichment.lookup("Мастер и Маргарита", listOf("Михаил Булгаков"), sourceDescription = "есть", AppLanguage.RU)
+        log("book work master: $master")
+        assertEquals("/works/OL676009W", master?.workKey)
+        assertEquals(null, master?.originalTitle)
+        val en = enrichment.lookup("The Three-Body Problem", listOf("Cixin Liu"), sourceDescription = null, AppLanguage.EN)
+        log("book work EN: key=${en?.workKey} desc=${en?.description?.take(80)}")
+        assertEquals("/works/OL17267881W", en?.workKey)
 
         val itunes = koin.get<ITunesClient>().audiobooks("Project Hail Mary", "us").found()
         log("itunes: ${itunes.take(2).map { "${it.title} / ${it.author} / ${it.artworkUrl}" }}")

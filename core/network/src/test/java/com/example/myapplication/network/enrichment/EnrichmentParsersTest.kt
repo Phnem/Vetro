@@ -99,6 +99,23 @@ class EnrichmentParsersTest {
     }
 
     @Test
+    fun `open library q search returns the work with the matched edition`() {
+        val ru = OpenLibraryParser.works(fixture("openlibrary_q_three_body_ru.json")).first()
+        assertEquals("/works/OL17267881W", ru.key)
+        assertEquals("三体", ru.title)
+        val edition = ru.matchedEdition!!
+        assertEquals("Задача трёх тел", edition.title)
+        assertEquals(listOf("9785041619015"), edition.isbn13)
+        assertEquals(listOf("rus"), edition.languages)
+        assertTrue(edition.coverIds.isNotEmpty())
+        val en = OpenLibraryParser.works(fixture("openlibrary_q_three_body_en.json")).first()
+        assertEquals("The Three-Body Problem", en.matchedEdition!!.title)
+        val details = OpenLibraryParser.work("""{"description":{"type":"/type/text","value":"Line one.\r\nLine two."},"subjects":["Hugo Award Winner"]}""")
+        assertEquals("Line one.\nLine two.", details.description)
+        assertEquals(null, OpenLibraryParser.work("""{"title":"x"}""").description)
+    }
+
+    @Test
     fun `bookbrainz and itunes`() {
         assertTrue(BookBrainzParser.search(fixture("bookbrainz_search_three_body.json")).any { it.name.contains("Three") })
         val books = ITunesParser.results(fixture("itunes_audiobook_three_body.json"))

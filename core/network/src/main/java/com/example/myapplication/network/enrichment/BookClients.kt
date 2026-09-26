@@ -7,6 +7,7 @@ import java.net.URLEncoder
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonObject
 
@@ -32,7 +33,15 @@ data class BookWork(
     val coverId: Int?,
     val subjects: List<String>,
     val languages: List<String>,
+    /**
+     * Издание, по которому совпал запрос (поиск `q=` отдаёт его вместе с произведением): у «Задача
+     * трёх тел» — русское издание с ISBN и обложкой, у самого произведения название «三体».
+     */
+    val matchedEdition: BookEdition? = null,
 )
+
+/** Описание и темы произведения (`/works/{id}.json`). */
+data class BookWorkDetails(val description: String?, val subjects: List<String>)
 
 /** Издание: ISBN, язык, издатель, дата. */
 data class BookEdition(
@@ -51,16 +60,23 @@ class OpenLibraryClient(
     private val http: EnrichmentHttp,
     private val rate: TokenBucketRateLimiter,
 ) {
-    suspend fun searchWorks(title: String, author: String?, limit: Int = 5): LookupResult<List<BookWork>> {
-        val q = buildString {
-            append("title=").append(enc(title))
-            if (!author.isNullOrBlank()) append("&author=").append(enc(author))
-        }
-        val fields = "key,title,author_name,first_publish_year,edition_count,cover_i,subject,language"
-        return http.text("Open Library", "$BASE/search.json?$q&fields=$fields&limit=$limit", rate,
-            policy = CachePolicy("openlibrary:search:$q:$limit", 30 * CacheTtl.DAY, 7 * CacheTtl.DAY))
+    /**
+     * Поиск произведения по названию любого его издания. Общий `q=` индексирует названия изданий:
+     * «Задача трёх тел» находит «三体», а `title=`+`author=` — нет (автор записан «刘慈欣»). Автор в
+     * запрос не идёт — транслитерации расходятся; по нему ранжирует вызывающий. В ответе у каждого
+     * произведения — совпавшее издание (`editions.*`).
+     */
+    suspend fun searchWorks(title: String, limit: Int = 5): LookupResult<List<BookWork>> {
+        val q = "q=" + enc(title)
+        return http.text("Open Library", "$BASE/search.json?$q&fields=$SEARCH_FIELDS&limit=$limit", rate,
+            policy = CachePolicy("openlibrary:q:$q:$limit", 30 * CacheTtl.DAY, 7 * CacheTtl.DAY))
             .parse { OpenLibraryParser.works(it).takeIf(List<BookWork>::isNotEmpty) }
     }
+
+    suspend fun work(workKey: String): LookupResult<BookWorkDetails> =
+        http.text("Open Library", "$BASE${workKey.ensureWorksPath()}.json", rate, notFoundById = true,
+            policy = CachePolicy("openlibrary:work:$workKey", 30 * CacheTtl.DAY, 7 * CacheTtl.DAY))
+            .parse(OpenLibraryParser::work)
 
     suspend fun editions(workKey: String, limit: Int = 50): LookupResult<List<BookEdition>> =
         http.text("Open Library", "$BASE${workKey.ensureWorksPath()}/editions.json?limit=$limit", rate, notFoundById = true,
@@ -71,6 +87,9 @@ class OpenLibraryClient(
 
     companion object {
         private const val BASE = "https://openlibrary.org"
+        private const val SEARCH_FIELDS = "key,title,author_name,first_publish_year,edition_count,cover_i,subject,language," +
+            "editions,editions.key,editions.title,editions.isbn,editions.language,editions.cover_i," +
+            "editions.publisher,editions.publish_date"
 
         fun coverUrl(coverId: Int, size: Char = 'L') = "https://covers.openlibrary.org/b/id/$coverId-$size.jpg"
     }
@@ -89,8 +108,36 @@ internal object OpenLibraryParser {
                 coverId = o.int("cover_i"),
                 subjects = o.strings("subject").take(12),
                 languages = o.strings("language"),
+                matchedEdition = ((o["editions"] as? JsonObject)?.get("docs") as? JsonArray)
+                    ?.firstOrNull()?.let { it as? JsonObject }?.let(::searchEdition),
             )
         }
+
+    /** Издание из ответа поиска: ISBN там одним списком (10 и 13 вперемешку), даты — списком. */
+    private fun searchEdition(o: JsonObject): BookEdition? {
+        val isbns = o.strings("isbn")
+        return BookEdition(
+            key = o.str("key") ?: return null,
+            title = o.str("title").orEmpty(),
+            isbn13 = isbns.filter { it.length == 13 },
+            isbn10 = isbns.filter { it.length == 10 },
+            languages = o.strings("language"),
+            publishers = o.strings("publisher"),
+            publishDate = o.strings("publish_date").firstOrNull(),
+            coverIds = listOfNotNull(o.int("cover_i")?.takeIf { it > 0 }),
+        )
+    }
+
+    fun work(body: String): BookWorkDetails {
+        val o = EnrichmentJson.parseToJsonElement(body).jsonObject
+        // description бывает строкой или объектом {type, value}.
+        val description = when (val d = o["description"]) {
+            is JsonPrimitive -> d.contentOrNull
+            is JsonObject -> d.str("value")
+            else -> null
+        }?.replace("\r\n", "\n")?.trim()?.takeIf { it.isNotEmpty() }
+        return BookWorkDetails(description, o.strings("subjects").take(12))
+    }
 
     fun editions(body: String): List<BookEdition> =
         ((EnrichmentJson.parseToJsonElement(body).jsonObject["entries"]) as? JsonArray).orEmpty().mapNotNull { e ->

@@ -97,7 +97,11 @@ val audiobookModule = module {
     single { AudiobookLauncher(androidContext(), get(named(SOURCES)), get(), get(), get(), get(), get()) }
     viewModel { BooksHomeViewModel(get(), get(), get()) }
     viewModel { (source: String, key: String, title: String) ->
-        BookDetailsViewModel(source, key, title, get(named(SOURCES)), get(), get(), get())
+        BookDetailsViewModel(
+            source, key, title, get(named(SOURCES)), get(), get(), get(),
+            workEnrichment = get(),
+            language = { com.example.myapplication.data.local.AppLanguagePrefs.current(get(named("settings"))) },
+        )
     }
 }
 

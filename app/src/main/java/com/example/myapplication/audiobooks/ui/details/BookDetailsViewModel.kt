@@ -1,5 +1,8 @@
 package com.example.myapplication.audiobooks.ui.details
 
+import com.example.myapplication.network.AppLanguage
+import com.example.myapplication.audiobooks.domain.enrichment.BookWorkEnrichment
+import com.example.myapplication.audiobooks.domain.enrichment.BookWorkInfo
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.media3.common.util.UnstableApi
@@ -44,6 +47,9 @@ class BookDetailsViewModel(
     private val repository: AudiobookRepository,
     private val launcher: AudiobookLauncher,
     private val search: AudiobookSearch,
+    /** Произведение за озвучкой (Open Library): оригинал, год, обложка и описание, если их нет у сайта. */
+    private val workEnrichment: BookWorkEnrichment? = null,
+    private val language: suspend () -> AppLanguage = { AppLanguage.RU },
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(BookDetailsState(source = sourceId, key = key))
@@ -116,6 +122,13 @@ class BookDetailsViewModel(
             _state.update { it.copy(loading = false, details = details, opened = opened, progress = progress) }
             // Остальное — после основной карточки и независимо: не нашлось — секции просто нет.
             val narrations = async { narrationsOf(details) }
+            val work = async {
+                workEnrichment?.let { enrichment ->
+                    runCatching {
+                        enrichment.lookup(details.book.title, details.book.authors, details.description, language())
+                    }.getOrNull()
+                }
+            }
             val byAuthor = async {
                 details.authorShelfId?.let { id ->
                     (source.shelf(id) as? SourceResult.Ok)?.value.orEmpty()
@@ -124,7 +137,7 @@ class BookDetailsViewModel(
                         .take(AUTHOR_BOOKS)
                 }.orEmpty()
             }
-            _state.update { it.copy(narrations = narrations.await(), authorBooks = byAuthor.await()) }
+            _state.update { it.copy(narrations = narrations.await(), authorBooks = byAuthor.await(), work = work.await()) }
         }
     }
 
@@ -173,4 +186,5 @@ data class BookDetailsState(
     val authorBooks: List<SourceBook> = emptyList(),
     val launching: Boolean = false,
     val launchFailed: Boolean = false,
+    val work: BookWorkInfo? = null,
 )
