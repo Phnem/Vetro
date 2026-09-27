@@ -28,6 +28,13 @@ class PlaybackResumptionStore(context: Context) {
                 put("title", queued.mediaMetadata.title?.toString())
                 put("album", queued.mediaMetadata.albumTitle?.toString())
                 put("artist", queued.mediaMetadata.artist?.toString())
+                put("displayTitle", queued.mediaMetadata.displayTitle?.toString())
+                // Без extras восстановленная из системы очередь теряла книгу: ни прогресса, ни автора.
+                queued.mediaMetadata.extras?.let { extras ->
+                    put("workId", extras.getString("workId"))
+                    put("narrationId", extras.getString("narrationId"))
+                    put("author", extras.getString(AudiobookMediaText.AUTHOR))
+                }
                 put("narrator", queued.mediaMetadata.albumArtist?.toString())
                 put("artwork", queued.mediaMetadata.artworkUri?.toString())
                 put("mime", queued.localConfiguration?.mimeType)
@@ -53,10 +60,17 @@ class PlaybackResumptionStore(context: Context) {
                     val entry = array.getJSONObject(index)
                     val uri = Uri.parse(entry.getString("uri"))
                     require(supported(uri))
+                    val extras = android.os.Bundle().apply {
+                        entry.optString("workId").takeIf(String::isNotBlank)?.let { putString("workId", it) }
+                        entry.optString("narrationId").takeIf(String::isNotBlank)?.let { putString("narrationId", it) }
+                        if (entry.has("author")) putString(AudiobookMediaText.AUTHOR, entry.optString("author"))
+                    }
                     val metadata = MediaMetadata.Builder()
                         .setTitle(entry.optString("title"))
+                        .setDisplayTitle(entry.optString("displayTitle").ifBlank { entry.optString("album") }.ifBlank { null })
                         .setAlbumTitle(entry.optString("album"))
                         .setArtist(entry.optString("artist"))
+                        .apply { if (!extras.isEmpty) setExtras(extras) }
                         .setAlbumArtist(entry.optString("narrator"))
                         .apply { entry.optString("artwork").takeIf(String::isNotBlank)?.let { setArtworkUri(Uri.parse(it)) } }
                         .build()

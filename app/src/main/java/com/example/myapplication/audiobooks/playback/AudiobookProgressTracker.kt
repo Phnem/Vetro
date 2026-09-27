@@ -46,7 +46,7 @@ class AudiobookProgressTracker(
             workId = workId,
             narrationId = narrationId,
             title = item.mediaMetadata.albumTitle?.toString().orEmpty(),
-            author = item.mediaMetadata.artist?.toString()?.takeIf { it.isNotBlank() },
+            author = AudiobookMediaText.author(item.mediaMetadata).takeIf { it.isNotBlank() },
             narrator = item.mediaMetadata.albumArtist?.toString()?.takeIf { it.isNotBlank() },
             coverUrl = item.mediaMetadata.artworkUri?.toString(),
         )

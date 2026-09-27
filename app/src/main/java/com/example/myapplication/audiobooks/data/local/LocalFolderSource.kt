@@ -214,6 +214,27 @@ class LocalFolderSource(private val context: Context) : ManifestSource {
         uri.path?.let { DocumentFile.fromFile(File(it)) }
     } else DocumentFile.fromTreeUri(context, uri)
 
+    /**
+     * Автор по тегам первого файла книги (исполнитель альбома → исполнитель → автор). У папки
+     * своего автора нет, а без него системная карточка медиа показывает одну главу.
+     */
+    fun author(manifest: MediaManifest): String? {
+        val uri = manifest.tracks.firstOrNull()?.url?.let(Uri::parse) ?: return null
+        return runCatching {
+            val retriever = MediaMetadataRetriever()
+            try {
+                retriever.setDataSource(context, uri)
+                listOf(
+                    MediaMetadataRetriever.METADATA_KEY_ALBUMARTIST,
+                    MediaMetadataRetriever.METADATA_KEY_ARTIST,
+                    MediaMetadataRetriever.METADATA_KEY_AUTHOR,
+                ).firstNotNullOfOrNull { key -> retriever.extractMetadata(key)?.trim()?.takeIf { it.isNotEmpty() } }
+            } finally {
+                retriever.release()
+            }
+        }.getOrNull()
+    }
+
     private fun readAudioMetadata(uri: Uri, name: String): AudioMetadata {
         var durationMs: Long? = null
         var title: String? = null

@@ -137,8 +137,9 @@ fun LocalBooksPanel(
             runCatching {
                 val manifest = source.refresh(book.variant)
                 resolver.put(manifest)
+                val author = withContext(Dispatchers.IO) { source.author(manifest) }.orEmpty()
                 val items = PlaybackQueueBuilder.build(
-                    manifest, book.workId, book.narrationId, book.title, "", "", book.artworkUri?.toString(),
+                    manifest, book.workId, book.narrationId, book.title, author, "", book.artworkUri?.toString(),
                 )
                 val token = SessionToken(context, ComponentName(context, AudiobookPlaybackService::class.java))
                 val future = MediaController.Builder(context, token).buildAsync()

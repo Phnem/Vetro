@@ -5,6 +5,7 @@ import android.content.Intent
 import android.os.Handler
 import android.os.Looper
 import android.os.Bundle
+import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.util.UnstableApi
@@ -16,6 +17,7 @@ import androidx.media3.session.MediaSession
 import androidx.media3.session.SessionCommand
 import androidx.media3.session.SessionResult
 import com.example.myapplication.audiobooks.domain.source.ManifestResolver
+import com.example.myapplication.audiobooks.data.AudiobookRepository
 import com.example.myapplication.audiobooks.data.NarrationChain
 import com.example.myapplication.audiobooks.domain.model.NarrationId
 import com.example.myapplication.audiobooks.domain.model.WorkId
@@ -30,6 +32,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.distinctUntilChanged
+import java.util.Locale
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import org.koin.android.ext.android.get
@@ -40,6 +44,11 @@ import org.koin.android.ext.android.inject
 class AudiobookPlaybackService : MediaLibraryService() {
     private val manifestResolver: ManifestResolver by inject()
     private val chain: NarrationChain by inject()
+    private val repository: AudiobookRepository by inject()
+    /** Книга, чьё «избранное» сейчас отражает сердце в системной карточке. */
+    private var favoriteWork: String? = null
+    private var favoriteJob: Job? = null
+    private var isFavorite = false
     // Своя область без отмены в onDestroy: последняя запись позиции должна дойти до БД.
     private val progressTracker by lazy {
         AudiobookProgressTracker(get(), CoroutineScope(SupervisorJob() + Dispatchers.IO))
@@ -83,12 +92,17 @@ class AudiobookPlaybackService : MediaLibraryService() {
             if (isPlaying) handler.post(updateChapter)
         }
 
+        override fun onPlaybackParametersChanged(playbackParameters: PlaybackParameters) {
+            publishMediaButtons()
+        }
+
         override fun onEvents(player: Player, events: Player.Events) {
             if (player.currentMediaItem != null) saveAll()
             if (events.contains(Player.EVENT_MEDIA_ITEM_TRANSITION) ||
                 events.contains(Player.EVENT_POSITION_DISCONTINUITY)) {
                 refreshChapterMetadata()
             }
+            if (events.contains(Player.EVENT_MEDIA_ITEM_TRANSITION)) watchFavorite()
             val currentId = player.currentMediaItem?.mediaId
             if (currentId != null && currentId != retryingMediaId) retryingMediaId = null
             handler.removeCallbacks(savePosition)
@@ -137,25 +151,99 @@ class AudiobookPlaybackService : MediaLibraryService() {
                 .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
+        // Системная карточка медиа: своя иконка уведомления и обложка-заглушка у книг без обложки.
+        setMediaNotificationProvider(AudiobookNotificationProvider(this))
         session = MediaLibrarySession.Builder(this, player, SessionCallback(resumptionStore))
             .setSessionActivity(launchApp)
             .setSessionExtras(sessionState())
-            .setMediaButtonPreferences(
-                listOf(
-                    CommandButton.Builder(CommandButton.ICON_SKIP_BACK_15)
-                        .setDisplayName("−15")
-                        .setPlayerCommand(Player.COMMAND_SEEK_BACK)
-                        .setSlots(CommandButton.SLOT_BACK)
-                        .build(),
-                    CommandButton.Builder(CommandButton.ICON_SKIP_FORWARD_30)
-                        .setDisplayName("+30")
-                        .setPlayerCommand(Player.COMMAND_SEEK_FORWARD)
-                        .setSlots(CommandButton.SLOT_FORWARD)
-                        .build(),
-                ),
-            )
+            .setBitmapLoader(AudiobookArtworkLoader(this))
+            .setMediaButtonPreferences(mediaButtons())
             .build()
         handler.post(updateChapter)
+        watchFavorite()
+    }
+
+    /**
+     * Кнопки системной карточки, как у музыкальных плееров: по краям — скорость и избранное, между
+     * ними −15 / ▶ / +30. Иконка скорости показывает текущую скорость, сердце — состояние книги.
+     */
+    private fun mediaButtons(): List<CommandButton> {
+        val ru = Locale.getDefault().language == "ru"
+        val speed = if (::player.isInitialized) player.playbackParameters.speed else 1f
+        return buildList {
+            add(
+                CommandButton.Builder(speedIcon(speed))
+                    .setDisplayName(if (ru) "Скорость ${formatSpeed(speed)}" else "Speed ${formatSpeed(speed)}")
+                    .setSessionCommand(AudiobookSessionCommands.cycleSpeed)
+                    .setSlots(CommandButton.SLOT_OVERFLOW)
+                    .build(),
+            )
+            add(
+                CommandButton.Builder(CommandButton.ICON_SKIP_BACK_15)
+                    .setDisplayName("−15")
+                    .setPlayerCommand(Player.COMMAND_SEEK_BACK)
+                    .setSlots(CommandButton.SLOT_BACK)
+                    .build(),
+            )
+            add(
+                CommandButton.Builder(CommandButton.ICON_SKIP_FORWARD_30)
+                    .setDisplayName("+30")
+                    .setPlayerCommand(Player.COMMAND_SEEK_FORWARD)
+                    .setSlots(CommandButton.SLOT_FORWARD)
+                    .build(),
+            )
+            // Без workId (очередь из старого снимка) избранное не к чему привязать — кнопки нет.
+            if (favoriteWork != null) {
+                add(
+                    CommandButton.Builder(if (isFavorite) CommandButton.ICON_HEART_FILLED else CommandButton.ICON_HEART_UNFILLED)
+                        .setDisplayName(
+                            when {
+                                ru && isFavorite -> "Убрать из избранного"
+                                ru -> "В избранное"
+                                isFavorite -> "Remove from favorites"
+                                else -> "Add to favorites"
+                            },
+                        )
+                        .setSessionCommand(AudiobookSessionCommands.toggleFavorite)
+                        .setSlots(CommandButton.SLOT_OVERFLOW)
+                        .build(),
+                )
+            }
+        }
+    }
+
+    private fun publishMediaButtons() {
+        if (::session.isInitialized) session.setMediaButtonPreferences(mediaButtons())
+    }
+
+    /** Следит за «избранным» текущей книги, чтобы сердце в карточке совпадало с приложением. */
+    private fun watchFavorite() {
+        val work = player.currentMediaItem?.mediaMetadata?.extras?.getString("workId")
+        if (work == favoriteWork && (work == null || favoriteJob?.isActive == true)) return
+        favoriteJob?.cancel()
+        favoriteWork = work
+        isFavorite = false
+        publishMediaButtons()
+        val id = work?.let { runCatching { WorkId(it) }.getOrNull() } ?: return
+        favoriteJob = recoveryScope.launch {
+            repository.isFavorite(id).distinctUntilChanged().collect { favorite ->
+                isFavorite = favorite
+                publishMediaButtons()
+            }
+        }
+    }
+
+    /** Следующая скорость по кругу 1.0 → 1.2 → 1.5 → 1.8 → 2.0 → 1.0 (ровно те, что есть у иконок). */
+    private fun cycleSpeed() {
+        val current = player.playbackParameters.speed
+        val next = SPEED_STEPS.firstOrNull { it > current + 0.01f } ?: SPEED_STEPS.first()
+        player.setPlaybackSpeed(next)
+    }
+
+    private fun toggleFavorite() {
+        val id = favoriteWork?.let { runCatching { WorkId(it) }.getOrNull() } ?: return
+        val target = !isFavorite
+        recoveryScope.launch { repository.setFavorite(id, target) }
     }
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaLibrarySession? =
@@ -169,6 +257,7 @@ class AudiobookPlaybackService : MediaLibraryService() {
         handler.removeCallbacks(savePosition)
         handler.removeCallbacks(updateChapter)
         chapterLoadJob?.cancel()
+        favoriteJob?.cancel()
         sleepTimer.cancel()
         failoverJob?.cancel()
         recoveryScope.cancel()
@@ -228,7 +317,7 @@ class AudiobookPlaybackService : MediaLibraryService() {
             triedVariants += next.link.variant
             val items = PlaybackQueueBuilder.build(
                 next.manifest, WorkId(work), NarrationId(narration),
-                meta.albumTitle?.toString().orEmpty(), meta.artist?.toString().orEmpty(),
+                meta.albumTitle?.toString().orEmpty(), AudiobookMediaText.author(meta),
                 meta.albumArtist?.toString().orEmpty(), meta.artworkUri?.toString(),
             )
             val nextTimeline = runCatching { BookTimeline(next.manifest.tracks, next.manifest.chapters) }.getOrNull()
@@ -282,8 +371,14 @@ class AudiobookPlaybackService : MediaLibraryService() {
         val previousIndex = item.mediaMetadata.extras?.getInt("chapterIndex", -1) ?: -1
         if (previousIndex == chapter.index && item.mediaMetadata.title?.toString() == chapter.title) return
         val extras = Bundle(item.mediaMetadata.extras ?: Bundle.EMPTY).apply { putInt("chapterIndex", chapter.index) }
+        // Строка системной карточки несёт главу — меняется вместе с ней.
+        val systemLine = AudiobookMediaText.systemLine(
+            chapter.title,
+            AudiobookMediaText.author(item.mediaMetadata),
+            item.mediaMetadata.albumArtist?.toString().orEmpty(),
+        )
         val updated = item.buildUpon().setMediaMetadata(
-            item.mediaMetadata.buildUpon().setTitle(chapter.title).setExtras(extras).build(),
+            item.mediaMetadata.buildUpon().setTitle(chapter.title).setArtist(systemLine).setExtras(extras).build(),
         ).build()
         player.replaceMediaItem(player.currentMediaItemIndex, updated)
     }
@@ -296,13 +391,23 @@ class AudiobookPlaybackService : MediaLibraryService() {
             controller: MediaSession.ControllerInfo,
         ): MediaSession.ConnectionResult {
             val default = super.onConnect(session, controller)
-            if (!default.isAccepted || controller.packageName != packageName) return default
-            val commands = default.availableSessionCommands.buildUpon()
+            if (!default.isAccepted) return default
+            // Скорость и избранное — кнопки системной карточки: они нужны контроллеру уведомления
+            // и системному интерфейсу, а не только приложению.
+            val systemCommands = default.availableSessionCommands.buildUpon()
+                .add(AudiobookSessionCommands.cycleSpeed)
+                .add(AudiobookSessionCommands.toggleFavorite)
+            if (controller.packageName != packageName) {
+                return MediaSession.ConnectionResult.AcceptedResultBuilder(session)
+                    .setAvailableSessionCommands(systemCommands.build())
+                    .build()
+            }
+            val commands = systemCommands
                 .add(AudiobookSessionCommands.setSleepTimer)
                 .add(AudiobookSessionCommands.cancelSleepTimer)
                 .add(AudiobookSessionCommands.setSkipSilence)
                 .build()
-            return MediaSession.ConnectionResult.AcceptedResultBuilder(session, controller)
+            return MediaSession.ConnectionResult.AcceptedResultBuilder(session)
                 .setAvailableSessionCommands(commands)
                 .build()
         }
@@ -313,6 +418,16 @@ class AudiobookPlaybackService : MediaLibraryService() {
             customCommand: SessionCommand,
             args: Bundle,
         ): ListenableFuture<SessionResult> {
+            when (customCommand.customAction) {
+                AudiobookSessionCommands.cycleSpeed.customAction -> {
+                    cycleSpeed()
+                    return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
+                }
+                AudiobookSessionCommands.toggleFavorite.customAction -> {
+                    toggleFavorite()
+                    return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
+                }
+            }
             if (controller.packageName != packageName) {
                 return Futures.immediateFuture(SessionResult(SessionResult.RESULT_ERROR_PERMISSION_DENIED))
             }
@@ -367,6 +482,26 @@ class AudiobookPlaybackService : MediaLibraryService() {
             PlaybackException.ERROR_CODE_PARSING_CONTAINER_UNSUPPORTED,
             PlaybackException.ERROR_CODE_DECODING_FAILED,
         )
+
+        val SPEED_STEPS = listOf(1f, 1.2f, 1.5f, 1.8f, 2f)
+
+        /** Иконка с цифрой текущей скорости; промежуточные (1.25 из приложения) — общей иконкой. */
+        fun speedIcon(speed: Float): Int {
+            val steps = mapOf(
+                0.5f to CommandButton.ICON_PLAYBACK_SPEED_0_5,
+                0.8f to CommandButton.ICON_PLAYBACK_SPEED_0_8,
+                1f to CommandButton.ICON_PLAYBACK_SPEED_1_0,
+                1.2f to CommandButton.ICON_PLAYBACK_SPEED_1_2,
+                1.5f to CommandButton.ICON_PLAYBACK_SPEED_1_5,
+                1.8f to CommandButton.ICON_PLAYBACK_SPEED_1_8,
+                2f to CommandButton.ICON_PLAYBACK_SPEED_2_0,
+            )
+            return steps.entries.firstOrNull { kotlin.math.abs(it.key - speed) < 0.01f }?.value
+                ?: CommandButton.ICON_PLAYBACK_SPEED
+        }
+
+        fun formatSpeed(speed: Float): String =
+            String.format(Locale.US, "%.2f", speed).trimEnd('0').trimEnd('.') + "×"
 
         const val POSITION_SAVE_INTERVAL_MS = 5_000L
         const val CHAPTER_UPDATE_INTERVAL_MS = 1_000L

@@ -29,11 +29,15 @@ object PlaybackQueueBuilder {
                 putString("workId", workId.value)
                 putString("narrationId", narrationId.value)
                 putInt("chapterIndex", chapter?.index ?: -1)
+                putString(AudiobookMediaText.AUTHOR, author)
             }
+            val chapterTitle = chapter?.title ?: "Part ${track.index + 1}"
+            // Строки системной карточки — см. AudiobookMediaText.
             val metadata = MediaMetadata.Builder()
-                .setTitle(chapter?.title ?: "Part ${track.index + 1}")
+                .setTitle(chapterTitle)
+                .setDisplayTitle(workTitle.ifBlank { chapterTitle })
                 .setAlbumTitle(workTitle)
-                .setArtist(author)
+                .setArtist(AudiobookMediaText.systemLine(chapterTitle, author, narrator))
                 .setAlbumArtist(narrator)
                 .setExtras(extras)
                 .apply { artworkUri?.let { setArtworkUri(Uri.parse(it)) } }

@@ -94,7 +94,7 @@ internal fun MediaController.snapshot(): PlayingBook? {
         narrationId = extras?.getString("narrationId")?.let { runCatching { NarrationId(it) }.getOrNull() },
         title = item.mediaMetadata.albumTitle?.toString().orEmpty().ifBlank { item.mediaMetadata.title?.toString().orEmpty() },
         chapterTitle = item.mediaMetadata.title?.toString().orEmpty(),
-        author = item.mediaMetadata.artist?.toString().orEmpty(),
+        author = com.example.myapplication.audiobooks.playback.AudiobookMediaText.author(item.mediaMetadata),
         narrator = item.mediaMetadata.albumArtist?.toString().orEmpty(),
         artworkUri = item.mediaMetadata.artworkUri?.toString(),
         durationMs = duration.takeIf { it != C.TIME_UNSET && it > 0L },
