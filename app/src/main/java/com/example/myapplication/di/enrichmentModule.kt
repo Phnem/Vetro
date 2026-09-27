@@ -8,6 +8,7 @@ import com.example.myapplication.network.enrichment.BookBrainzClient
 import com.example.myapplication.network.enrichment.EnrichmentCache
 import com.example.myapplication.network.enrichment.EnrichmentHttp
 import com.example.myapplication.network.enrichment.FanartClient
+import com.example.myapplication.network.enrichment.GoogleApiIdentity
 import com.example.myapplication.network.enrichment.GoogleBooksClient
 import com.example.myapplication.network.enrichment.ITunesClient
 import com.example.myapplication.network.enrichment.IntroDbClient
@@ -33,6 +34,7 @@ import org.koin.dsl.module
 val enrichmentModule = module {
     single { EnrichmentCache(File(androidContext().cacheDir, "enrichment")) }
     single { ProviderGate() }
+    single<GoogleApiIdentity> { com.example.myapplication.data.remote.AndroidGoogleApiIdentity(androidContext()) }
     single { EnrichmentHttp(get<HttpClient>(), get(), get()) }
 
     single { TmdbEnrichmentClient(get(), rate(perSecond = 4.0, burst = 8.0)) }
@@ -43,9 +45,9 @@ val enrichmentModule = module {
     single { OpenSubtitlesClient(get(), rate(perSecond = 4.0, burst = 4.0)) }
     single { OmdbClient(get(), rate(perSecond = 2.0, burst = 4.0)) }
     single { FanartClient(get(), rate(perSecond = 2.0, burst = 4.0)) }
-    single { YouTubeClient(get(), rate(perSecond = 2.0, burst = 2.0)) }
+    single { YouTubeClient(get(), rate(perSecond = 2.0, burst = 2.0), identity = get()) }
     single { OpenLibraryClient(get(), rate(perSecond = 1.0, burst = 3.0)) }
-    single { GoogleBooksClient(get(), rate(perSecond = 1.0, burst = 2.0)) }
+    single { GoogleBooksClient(get(), rate(perSecond = 1.0, burst = 2.0), identity = get()) }
     single { BookBrainzClient(get(), rate(perSecond = 1.0, burst = 2.0)) }
     single { ITunesClient(get(), rate(perSecond = 0.3, burst = 3.0)) }
     // NYT: 5 запросов в минуту.

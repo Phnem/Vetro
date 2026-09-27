@@ -4,6 +4,7 @@ import com.example.myapplication.network.AppLanguage
 import com.example.myapplication.network.LookupResult
 import com.example.myapplication.network.TokenBucketRateLimiter
 import com.phnem.vetro.network.BuildConfig
+import io.ktor.client.request.header
 import java.time.LocalDate
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -240,10 +241,23 @@ internal object OmdbParser {
  * проверка уже известного ролика (`videos.list`, 1 единица): доступен ли, можно ли встраивать, чей
  * канал. Поиск — только запасной и под бюджетом приложения.
  */
+/**
+ * Ключ Google ограничен Android-приложением: к запросу прикладываются пакет и SHA-1 сертификата
+ * подписи (`X-Android-Package` / `X-Android-Cert`), иначе Google отвечает «requests … are blocked».
+ */
+fun interface GoogleApiIdentity {
+    fun headers(): Map<String, String>
+
+    companion object {
+        val None = GoogleApiIdentity { emptyMap() }
+    }
+}
+
 class YouTubeClient(
     private val http: EnrichmentHttp,
     private val rate: TokenBucketRateLimiter,
     private val apiKey: () -> String = { BuildConfig.YOUTUBE_API_KEY },
+    private val identity: GoogleApiIdentity = GoogleApiIdentity.None,
 ) {
     val isConfigured: Boolean get() = apiKey().isNotBlank()
 
@@ -251,15 +265,18 @@ class YouTubeClient(
         val key = apiKey().takeIf { it.isNotBlank() } ?: return disabled()
         if (ids.isEmpty()) return LookupResult.NoMatch
         val url = "https://www.googleapis.com/youtube/v3/videos?part=snippet,status&id=${ids.take(50).joinToString(",")}&key=$key"
-        return http.text("YouTube", url, rate, policy = CachePolicy("youtube:videos:${ids.sorted().joinToString(",")}", 7 * CacheTtl.DAY))
-            .parse(YouTubeParser::videos)
+        return http.text("YouTube", url, rate, policy = CachePolicy("youtube:videos:${ids.sorted().joinToString(",")}", 7 * CacheTtl.DAY)) {
+            identity.headers().forEach { (name, value) -> header(name, value) }
+        }.parse(YouTubeParser::videos)
     }
 
     suspend fun search(query: String, maxResults: Int = 5): LookupResult<List<YouTubeVideo>> {
         val key = apiKey().takeIf { it.isNotBlank() } ?: return disabled()
         val q = java.net.URLEncoder.encode(query, "UTF-8")
         val url = "https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&videoEmbeddable=true&maxResults=$maxResults&q=$q&key=$key"
-        return http.text("YouTube", url, rate).parse(YouTubeParser::search)
+        return http.text("YouTube", url, rate) {
+            identity.headers().forEach { (name, value) -> header(name, value) }
+        }.parse(YouTubeParser::search)
     }
 }
 

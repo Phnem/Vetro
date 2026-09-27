@@ -47,4 +47,11 @@ class BookWorkMatchingTest {
         assertNull(BookWorkMatching.best(listOf(work("x", "Summary of Project Hail Mary", listOf("Irb Media"), 1)), "Project Hail Mary", listOf("Andy Weir")))
         assertEquals("dune", BookWorkMatching.normalize("Dune: Deluxe Edition"))
     }
+
+    @Test
+    fun `google volume is trusted only when its title is the same book`() {
+        // Живой ответ Google Books на ISBN 9785041619015 — «Три раза. стихи», а не «Задача трёх тел».
+        assertEquals(false, BookWorkMatching.sameBook("Три раза. стихи", listOf("Задача трёх тел", "三体")))
+        assertEquals(true, BookWorkMatching.sameBook("Задача трех тел", listOf("Задача трёх тел", "三体")))
+    }
 }

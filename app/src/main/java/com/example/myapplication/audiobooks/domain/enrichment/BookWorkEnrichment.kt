@@ -62,6 +62,7 @@ class BookWorkEnrichment(
         val isbn = edition?.isbn13?.firstOrNull() ?: edition?.isbn10?.firstOrNull()
         if (isbn != null) {
             val volume = (googleBooks.byIsbn(isbn) as? LookupResult.Found)?.value
+                ?.takeIf { BookWorkMatching.sameBook(it.title, listOfNotNull(edition?.title, work.title)) }
             volume?.description?.takeIf { volume.language == null || volume.language == ui }?.let { return it }
         }
         if (ui != "en") return null
@@ -90,6 +91,15 @@ internal object BookWorkMatching {
      * двоеточия и скобки отбрасываются: «The Dark Forest (… Book 2)» не совпадёт с «The Three-Body
      * Problem», а «Dune: Deluxe Edition» — совпадёт с «Dune».
      */
+    /**
+     * Google Books по ISBN иногда отдаёт чужую книгу (на ISBN «Задачи трёх тел» — сборник стихов):
+     * описание берётся, только если название тома совпадает с изданием или произведением.
+     */
+    fun sameBook(volumeTitle: String, titles: List<String>): Boolean {
+        val volume = normalize(volumeTitle)
+        return volume.isNotBlank() && titles.any { normalize(it) == volume }
+    }
+
     fun normalize(text: String): String = text
         .lowercase(Locale.ROOT)
         .replace('ё', 'е')

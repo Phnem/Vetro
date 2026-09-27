@@ -3,6 +3,7 @@ package com.example.myapplication.network.enrichment
 import com.example.myapplication.network.LookupResult
 import com.example.myapplication.network.TokenBucketRateLimiter
 import com.phnem.vetro.network.BuildConfig
+import io.ktor.client.request.header
 import java.net.URLEncoder
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
@@ -179,12 +180,15 @@ class GoogleBooksClient(
     private val http: EnrichmentHttp,
     private val rate: TokenBucketRateLimiter,
     private val apiKey: () -> String = { BuildConfig.GOOGLE_BOOKS_API_KEY },
+    private val identity: GoogleApiIdentity = GoogleApiIdentity.None,
 ) {
     suspend fun byIsbn(isbn: String): LookupResult<GoogleVolume> {
         val key = apiKey().takeIf { it.isNotBlank() }?.let { "&key=$it" }.orEmpty()
         return http.text("Google Books", "https://www.googleapis.com/books/v1/volumes?q=isbn:${enc(isbn)}$key", rate,
-            policy = CachePolicy("googlebooks:isbn:$isbn", 30 * CacheTtl.DAY, 7 * CacheTtl.DAY))
-            .parse { GoogleBooksParser.volumes(it).firstOrNull() }
+            policy = CachePolicy("googlebooks:isbn:$isbn", 30 * CacheTtl.DAY, 7 * CacheTtl.DAY)) {
+            // Заголовки нужны только вместе с ключом: без ключа — общая квота без ограничения по приложению.
+            if (key.isNotEmpty()) identity.headers().forEach { (name, value) -> header(name, value) }
+        }.parse { GoogleBooksParser.volumes(it).firstOrNull() }
     }
 }
 
