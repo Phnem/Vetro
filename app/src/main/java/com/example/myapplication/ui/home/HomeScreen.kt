@@ -1340,7 +1340,9 @@ fun HomeScreen(
                         notificationCenterOpen = false
                     },
                     onClose = { notificationCenterOpen = false },
-                    modifier = Modifier.zIndex(45f),
+                    // ПОД слоем верхнего дока (zIndex 30): затемнение и размытие фона не должны
+                    // касаться дока и колокольчика — они остаются чёткими, колокольчик закрывает панель.
+                    modifier = Modifier.zIndex(29f),
                 )
             }
 
@@ -1601,8 +1603,9 @@ private fun rememberCardProgress(
         }
 
         airing != null -> AiringCardInfo(
-            // Источник без графа франшизы номера сезона не знает — берём его из расклада.
-            seasonNumber = airing.seasonNumber ?: layout.ongoingSeason()?.seasonNumber,
+            // Номер выходящего сезона — из расклада, если сезон там уже есть (см. latestSeasonEpisode):
+            // снимок выхода считает сезоны по приквелам и на франшизах со спешлами промахивается.
+            seasonNumber = latestSeasonEpisode(layout, airing)?.season ?: layout.ongoingSeason()?.seasonNumber,
             airedEpisodes = airing.airedEpisodes,
             totalEpisodes = airing.totalEpisodes,
             kind = CardProgressKind.AIRING,
