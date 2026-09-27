@@ -38,6 +38,7 @@ val viewModelModule = module {
             episodeUpdateCheckCoordinator = get(),
             webLinksStore = get(),
             seasonEpisodesStore = get(),
+            seriesSeasonsStore = get(),
             episodePlaybackStore = get(),
             mangaBindingStore = get(),
             mangaChapterCacheStore = get(),

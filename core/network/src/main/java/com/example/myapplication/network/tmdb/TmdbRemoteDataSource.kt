@@ -153,7 +153,8 @@ class TmdbRemoteDataSource(private val client: HttpClient) {
         }
 
         val released = TmdbEpisodeCalculator.releasedEpisodes(details.seasons, latestSeasonEpisodes, today)
-        return LookupResult.Found(SeriesEpisodeState(released, known, details.status))
+        val perSeason = TmdbEpisodeCalculator.releasedBySeason(details.seasons, latestSeasonEpisodes, today)
+        return LookupResult.Found(SeriesEpisodeState(released, known, details.status, perSeason))
     }
 
     private suspend fun runRequest(

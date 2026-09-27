@@ -1,14 +1,18 @@
 package com.example.myapplication.updates
 
 import com.example.myapplication.data.local.AnimeLocalDataSource
+import com.example.myapplication.data.local.SeriesSeasonsStore
 import com.example.myapplication.data.models.Anime
 import com.example.myapplication.data.models.AnimeUpdate
 import com.example.myapplication.data.models.MediaType
+import com.example.myapplication.domain.seasons.SeasonEpisodesEntry
+import com.example.myapplication.domain.seasons.SeasonInfo
 import com.example.myapplication.network.AppContentType
 import com.example.myapplication.network.ExternalIds
 import com.example.myapplication.network.LookupResult
 import com.example.myapplication.network.movie.MovieSeriesRepository
 import com.example.myapplication.network.tmdb.SeriesEpisodeState
+import com.example.myapplication.network.tmdb.SeriesStatus
 import java.time.Clock
 
 /** Tracks released TMDB episodes for SERIES without ever copying the known/planned count. */
@@ -20,9 +24,10 @@ class SeriesEpisodeCheckUseCase internal constructor(
     constructor(
         repository: MovieSeriesRepository,
         localDataSource: AnimeLocalDataSource,
+        seasonsStore: SeriesSeasonsStore,
         clock: Clock = Clock.systemUTC(),
     ) : this(
-        store = LocalSeriesEpisodeStore(localDataSource),
+        store = LocalSeriesEpisodeStore(localDataSource, seasonsStore),
         source = MovieSeriesEpisodeSource(repository),
         clock = clock,
     )
@@ -30,6 +35,7 @@ class SeriesEpisodeCheckUseCase internal constructor(
     /** Detects, auto-applies and merges new SERIES events into the shared anime_update feed. */
     suspend fun detectAndStore(): List<AnimeUpdate> {
         val series = store.getAllSeries()
+        store.retainSeasons(series.map { it.id }.toSet())
         if (series.isEmpty()) return emptyList()
 
         val detected = buildList {
@@ -45,6 +51,9 @@ class SeriesEpisodeCheckUseCase internal constructor(
                     is LookupResult.Found -> result.value
                     else -> continue
                 }
+                // Расклад по сезонам пишется при каждом успешном ответе, в том числе на проходе
+                // нормализации: карточка и уведомления показывают «S3 E5», а не сквозной счёт.
+                if (state.seasons.isNotEmpty()) store.setSeasons(seasonsEntry(anime.id, state))
 
                 if (!store.isNormalized(anime.id)) {
                     store.normalize(anime, state.releasedEpisodes)
@@ -72,6 +81,28 @@ class SeriesEpisodeCheckUseCase internal constructor(
         )
     }
 
+    private fun seasonsEntry(animeId: String, state: SeriesEpisodeState): SeasonEpisodesEntry {
+        val latest = state.seasons.maxOf { it.seasonNumber }
+        // Сезон «выходит», пока сериал продолжается и у последнего начавшегося сезона вышли не все
+        // заявленные серии. Перерыв между сезонами у продолжающегося сериала — уже не «выходит».
+        val continuing = state.status == SeriesStatus.ONGOING || state.status == SeriesStatus.UNKNOWN
+        val rows = state.seasons.filter { it.released > 0 }.map { season ->
+            SeasonInfo(
+                seasonNumber = season.seasonNumber,
+                episodes = season.released,
+                totalEpisodes = season.total.takeIf { it > 0 },
+                ongoing = continuing && season.seasonNumber == latest && season.released < season.total,
+                source = "TMDB",
+            )
+        }
+        return SeasonEpisodesEntry(
+            animeId = animeId,
+            seasons = rows,
+            complete = rows.none { it.ongoing },
+            resolvedAt = clock.millis(),
+            schema = SeasonEpisodesEntry.CURRENT_SCHEMA,
+        )
+    }
 }
 
 internal interface SeriesEpisodeStore {
@@ -82,6 +113,8 @@ internal interface SeriesEpisodeStore {
     suspend fun setTmdbId(animeId: String, tmdbId: Int)
     suspend fun applyEpisodes(animeId: String, releasedEpisodes: Int)
     suspend fun setUpdates(updates: List<AnimeUpdate>)
+    suspend fun setSeasons(entry: SeasonEpisodesEntry) {}
+    suspend fun retainSeasons(seriesIds: Set<String>) {}
 }
 
 internal interface SeriesEpisodeSource {
@@ -91,6 +124,7 @@ internal interface SeriesEpisodeSource {
 
 private class LocalSeriesEpisodeStore(
     private val localDataSource: AnimeLocalDataSource,
+    private val seasonsStore: SeriesSeasonsStore,
 ) : SeriesEpisodeStore {
     override fun getAllSeries(): List<Anime> =
         localDataSource.getAllAnimeList().filter { it.mediaType == MediaType.SERIES }
@@ -118,6 +152,15 @@ private class LocalSeriesEpisodeStore(
 
     override suspend fun setUpdates(updates: List<AnimeUpdate>) {
         localDataSource.setUpdates(updates)
+    }
+
+    override suspend fun setSeasons(entry: SeasonEpisodesEntry) {
+        seasonsStore.put(entry)
+    }
+
+    override suspend fun retainSeasons(seriesIds: Set<String>) {
+        seasonsStore.ensureLoaded()
+        seasonsStore.retainOnly(seriesIds)
     }
 }
 

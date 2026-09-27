@@ -44,6 +44,29 @@ object TmdbEpisodeCalculator {
         return closedTotal + latestSeasonReleased
     }
 
+    /**
+     * То же, что [releasedEpisodes], но по сезонам: сумма [SeriesSeasonProgress.released] всегда
+     * совпадает с [releasedEpisodes]. Ещё не начавшиеся сезоны в список не попадают.
+     */
+    fun releasedBySeason(
+        seasons: List<TmdbSeasonSummary>,
+        episodesOfLatestStartedSeason: List<TmdbEpisodeAirDate>?,
+        today: LocalDate,
+    ): List<SeriesSeasonProgress> {
+        val started = seasons
+            .filter { it.seasonNumber > 0 && it.airDate != null && !it.airDate.isAfter(today) }
+            .sortedBy { it.seasonNumber }
+        val latest = started.lastOrNull() ?: return emptyList()
+        return started.map { season ->
+            val released = if (season.seasonNumber < latest.seasonNumber) {
+                season.episodeCount
+            } else {
+                episodesOfLatestStartedSeason?.count { it.airDate != null && !it.airDate.isAfter(today) } ?: 0
+            }
+            SeriesSeasonProgress(season.seasonNumber, released, season.episodeCount)
+        }
+    }
+
     /** TMDB `status` → нормализованный статус; не полагается на голый `in_production`. */
     fun status(rawStatus: String?, inProduction: Boolean): SeriesStatus = when (rawStatus?.trim()?.lowercase()) {
         "ended" -> SeriesStatus.ENDED

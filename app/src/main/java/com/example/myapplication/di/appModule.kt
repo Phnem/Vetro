@@ -63,7 +63,15 @@ val appModule = module {
     single { InspectImageUseCase(get(), get(), get(), get()) }
     single { AddFromApiUseCase(get(), get(), get(), get(), get()) }
     single { BatchEpisodeCheckUseCase(repository = get(), localDataSource = get()) }
-    single { SeriesEpisodeCheckUseCase(repository = get(), localDataSource = get()) }
+    single { com.example.myapplication.data.local.SeriesSeasonsStore(androidContext()) }
+    single {
+        com.example.myapplication.domain.seasons.SeasonEpisodeLocator(
+            seasonEpisodesStore = get(),
+            seriesSeasonsStore = get(),
+            localDataSource = get(),
+        )
+    }
+    single { SeriesEpisodeCheckUseCase(repository = get(), localDataSource = get(), seasonsStore = get()) }
     single {
         EpisodeUpdateCheckCoordinator(
             animeCheck = get(),

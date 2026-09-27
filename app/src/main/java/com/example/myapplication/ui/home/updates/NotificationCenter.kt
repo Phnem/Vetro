@@ -88,6 +88,8 @@ fun NotificationCenter(
     open: Boolean,
     updates: List<AnimeUpdate>,
     coverPathFor: (animeId: String) -> String?,
+    /** «S3 E5» вместо сквозного «47 → 48»; null — у тайтла нет расклада по сезонам. */
+    episodeLabelFor: (AnimeUpdate) -> String?,
     bellCenter: () -> Offset?,
     backdrop: Backdrop,
     strings: NotificationStrings,
@@ -227,6 +229,7 @@ fun NotificationCenter(
                                 reducedMotion = reducedMotion,
                                 bellCenter = bellCenter,
                                 coverPath = remember(update.animeId) { coverPathFor(update.animeId) },
+                                episodeLabel = episodeLabelFor(update),
                                 backdrop = backdrop,
                                 material = material,
                                 onCard = onCard,
@@ -259,6 +262,7 @@ private fun NotificationCenterCard(
     reducedMotion: Boolean,
     bellCenter: () -> Offset?,
     coverPath: String?,
+    episodeLabel: String?,
     backdrop: Backdrop,
     material: com.example.myapplication.ui.shared.FrostedMaterial,
     onCard: Color,
@@ -358,6 +362,7 @@ private fun NotificationCenterCard(
         EpisodeUpdateCard(
             update = update,
             coverPath = coverPath,
+            episodeLabel = episodeLabel,
             isDark = isDark,
             backdrop = backdrop,
             material = material,

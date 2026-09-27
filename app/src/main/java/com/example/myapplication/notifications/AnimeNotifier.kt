@@ -29,8 +29,15 @@ interface AnimeNotifier {
      * Показать пуши «вышла новая серия» одной пачкой. Серии к этому моменту уже
      * проставлены в коллекции (авто-принятие) — уведомление только информирует,
      * кнопок действий у него нет; тап открывает Details тайтла.
+     *
+     * @param episodeLabels animeId → «S3 E5» (сезон и серия вместо сквозного счёта); у тайтлов
+     *   без расклада по сезонам остаётся прежний текст «было → стало».
      */
-    fun showUpdateNotifications(updates: List<AnimeUpdate>, language: AppLanguage)
+    fun showUpdateNotifications(
+        updates: List<AnimeUpdate>,
+        language: AppLanguage,
+        episodeLabels: Map<String, String> = emptyMap(),
+    )
 
     /**
      * Убрать из системной шторки ВСЕ пуши обновлений серий (+ групповую сводку).
@@ -63,26 +70,38 @@ class AnimeNotifierImpl(
         manager.createNotificationChannel(channel)
     }
 
-    override fun showUpdateNotifications(updates: List<AnimeUpdate>, language: AppLanguage) {
+    override fun showUpdateNotifications(
+        updates: List<AnimeUpdate>,
+        language: AppLanguage,
+        episodeLabels: Map<String, String>,
+    ) {
         if (updates.isEmpty()) return
-        updates.forEach { showOne(it, language) }
+        updates.forEach { showOne(it, language, episodeLabels[it.animeId]) }
         // Сводку вешаем только когда детей реально несколько. Снимать её отдельно
         // не пытаемся: cancel() сводки на многих прошивках уносит и все дочерние
         // уведомления разом (из-за этого раньше «пропадали все» после пары действий).
         if (updates.size >= 2) showSummary(updates.size, language)
     }
 
-    private fun showOne(update: AnimeUpdate, language: AppLanguage) {
+    private fun showOne(update: AnimeUpdate, language: AppLanguage, episodeLabel: String?) {
         val strings = getNotificationStrings(language)
         val notifId = animeUpdateNotificationId(update.animeId)
 
         val title = String.format(Locale.getDefault(), strings.notifUpdateTitleFormat, update.title)
-        val body = String.format(
-            Locale.getDefault(),
-            strings.notifUpdateBodyFormat,
-            update.currentEpisodes,
-            update.newEpisodes
-        )
+        // Строки не в UiStrings: у класса лимит параметров конструктора (см. UiStrings).
+        val body = if (episodeLabel != null) {
+            when (language) {
+                AppLanguage.RU -> "$episodeLabel — отмечено в коллекции"
+                AppLanguage.EN -> "$episodeLabel — marked in your collection"
+            }
+        } else {
+            String.format(
+                Locale.getDefault(),
+                strings.notifUpdateBodyFormat,
+                update.currentEpisodes,
+                update.newEpisodes
+            )
+        }
 
         val notification = NotificationCompat.Builder(context, channelId)
             .setSmallIcon(R.drawable.ic_launcher_monochrome)

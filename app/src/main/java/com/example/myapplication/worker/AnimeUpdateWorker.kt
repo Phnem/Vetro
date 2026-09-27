@@ -28,6 +28,7 @@ class AnimeUpdateWorker(
     private val episodeUpdateCheckCoordinator: EpisodeUpdateCheckCoordinator by inject()
     private val seasonEpisodesResolver: com.example.myapplication.domain.seasons.SeasonEpisodesResolver by inject()
     private val seasonCatchUp: com.example.myapplication.domain.seasons.SeasonCatchUp by inject()
+    private val seasonEpisodeLocator: com.example.myapplication.domain.seasons.SeasonEpisodeLocator by inject()
     private val mangaNotifier: MangaNotifier by inject()
     private val mangaUpdateCheck: MangaUpdateCheckUseCase by inject()
     private val settingsDataStore: DataStore<Preferences> by inject(named("settings"))
@@ -47,7 +48,9 @@ class AnimeUpdateWorker(
             // открыто — обновления уже показываются in-app стопкой, дублировать шторкой
             // не нужно (иначе уведомление «мигает» при каждом взаимодействии).
             if (newlyDetected.isNotEmpty() && !isAppInForeground()) {
-                notifier.showUpdateNotifications(newlyDetected, language)
+                // Подписи «S3 E5» — после догона расклада выше, чтобы сезон был актуальным.
+                val labels = runCatching { seasonEpisodeLocator.labelsFor(newlyDetected) }.getOrElse { emptyMap() }
+                notifier.showUpdateNotifications(newlyDetected, language, labels)
             }
             // Новые главы привязанной манги. Проверка СЪЕДАЕТ состояние: сравнив оглавление с
             // кэшем, она тут же кладёт свежее — то есть «новым» это уже не будет никогда. Поэтому

@@ -104,7 +104,10 @@ import com.example.myapplication.SimpGlassCard
 import com.example.myapplication.SortFilterOverlay
 import com.example.myapplication.data.models.*
 import com.example.myapplication.data.repository.GenreRepository
-import com.example.myapplication.domain.seasons.franchiseEpisodeTotal
+import com.example.myapplication.domain.seasons.latestSeasonEpisode
+import com.example.myapplication.domain.seasons.releasedEpisodesLabel
+import com.example.myapplication.domain.seasons.ongoingSeason
+import com.example.myapplication.domain.seasons.regularSeasons
 import com.example.myapplication.network.AppLanguage
 import com.example.myapplication.sync.ExternalListSyncCoordinator
 import com.example.myapplication.sync.supabase.CollectionImageRestoreCoordinator
@@ -185,9 +188,17 @@ fun HomeScreen(
     ReportDrawnWhen { uiState.isListLoaded }
     val webLinksMap by viewModel.webLinks.collectAsStateWithLifecycle()
     val airingMap by viewModel.airingProgress.collectAsStateWithLifecycle()
-    val watchedMap by viewModel.watchedEpisodes.collectAsStateWithLifecycle()
+    val watchedMap by viewModel.watchedMarks.collectAsStateWithLifecycle()
     val mangaReadingMap by viewModel.mangaReading.collectAsStateWithLifecycle()
     val seasonLayoutMap by viewModel.seasonLayouts.collectAsStateWithLifecycle()
+    // Подпись плашки «вышла серия»: «S3 E5» по тем же данным, что подпись на карточке. Лямбда
+    // читает состояние при вызове из композиции карточки — плашка перерисуется сама.
+    val updateEpisodeLabel: (com.example.myapplication.data.models.AnimeUpdate) -> String? = remember {
+        { update ->
+            latestSeasonEpisode(seasonLayoutMap[update.animeId], airingMap[update.animeId])
+                ?.let { releasedEpisodesLabel(update.currentEpisodes, update.newEpisodes, it) }
+        }
+    }
     var cloudSyncPillDismissed by remember { mutableStateOf(false) }
     val showCloudSyncPill =
         uiState.isListLoaded &&
@@ -737,16 +748,15 @@ fun HomeScreen(
                                     ) { anime ->
                                         val webLinksEntry = webLinksMap[anime.id]
                                             val airingEntry = airingMap[anime.id]
+                                            val seasonLayout = seasonLayoutMap[anime.id]
                                             val cardProgress = rememberCardProgress(
-                                                totalEpisodes = franchiseEpisodeTotal(
-                                                    layout = seasonLayoutMap[anime.id],
-                                                    storedEpisodes = anime.episodes,
-                                                ),
+                                                layout = seasonLayout,
+                                                storedEpisodes = anime.episodes,
                                                 watched = watchedMap[anime.id],
                                                 airing = airingEntry,
                                                 reading = mangaReadingMap[anime.id],
                                             )
-                                            val cardState = remember(anime, currentLanguage, webLinksEntry, cardProgress) {
+                                            val cardState = remember(anime, currentLanguage, webLinksEntry, cardProgress, seasonLayout, airingEntry) {
                                                 // Название по выбранному языку: EN → английское, RU → русское.
                                                 // Замена, а не вторая строка; при отсутствии перевода — исходный title.
                                                 val displayTitle = when (currentLanguage) {
@@ -767,14 +777,15 @@ fun HomeScreen(
                                                             .mapNotNull { genreRepository.getLabel(it, currentLanguage).takeIf { n -> n.isNotBlank() } }
                                                             .toTypedArray()
                                                     ),
-                                                    episodesCount = anime.episodes,
-                                                    // У манги счёт идёт по главам — иначе на
-                                                    // одной карточке соседствовали бы
-                                                    // «12 / 60 ch.» и «60 eps.».
-                                                    episodesUnit = when (anime.mediaType) {
-                                                        com.example.myapplication.data.models.MediaType.MANGA -> "ch."
-                                                        else -> "eps."
+                                                    // Сезон и серия вместо сквозного счёта: «S3 E12».
+                                                    // У манги счёт по главам, у тайтла без расклада
+                                                    // (фильм, односезонник без данных) — прежний.
+                                                    episodesLabel = when (anime.mediaType) {
+                                                        com.example.myapplication.data.models.MediaType.MANGA -> "${anime.episodes} ch."
+                                                        else -> latestSeasonEpisode(seasonLayout, airingEntry)?.label()
+                                                            ?: "${anime.episodes} eps."
                                                     },
+                                                    mediaType = anime.mediaType,
                                                     webLinks = links,
                                                     language = currentLanguage,
                                                     imagePath = viewModel.getImgPath(anime.imageFileName),
@@ -1281,6 +1292,7 @@ fun HomeScreen(
                     coverPathFor = { animeId ->
                         viewModel.getImgPath(viewModel.getAnimeById(animeId)?.imageFileName)
                     },
+                    episodeLabelFor = updateEpisodeLabel,
                     onOpen = { update ->
                         performHaptic(view, Haptic.Light)
                         collapseUpdatesToBell()
@@ -1309,6 +1321,7 @@ fun HomeScreen(
                     coverPathFor = { animeId ->
                         viewModel.getImgPath(viewModel.getAnimeById(animeId)?.imageFileName)
                     },
+                    episodeLabelFor = updateEpisodeLabel,
                     bellCenter = { bellAnchor.center },
                     backdrop = backdrop,
                     strings = notificationStrings,
@@ -1556,12 +1569,12 @@ private fun LazyListScope.apiSearchResultsSection(
  */
 @Composable
 private fun rememberCardProgress(
-    totalEpisodes: Int,
-    watched: Int?,
+    layout: com.example.myapplication.domain.seasons.SeasonEpisodesEntry?,
+    storedEpisodes: Int,
+    watched: com.example.myapplication.media.progress.PlaybackEpisodeKey?,
     airing: com.example.myapplication.data.models.AiringProgress?,
     reading: com.example.myapplication.manga.domain.MangaReadingSummary?,
-): AiringCardInfo? = remember(totalEpisodes, watched, airing, reading) {
-    val progress = watched?.takeIf { it > 0 }
+): AiringCardInfo? = remember(layout, storedEpisodes, watched, airing, reading) {
     when {
         reading != null -> AiringCardInfo(
             seasonNumber = null,
@@ -1571,18 +1584,25 @@ private fun rememberCardProgress(
             newItems = reading.newChapters,
         )
 
-        // Числитель не подрезается: знаменатель приходит уже в франшизной шкале
-        // (`franchiseEpisodeTotal`), а зажимать реальный прогресс под неразрешённый расклад —
-        // значит показывать пользователю не то, что он посмотрел.
-        progress != null -> AiringCardInfo(
-            seasonNumber = null,
-            airedEpisodes = progress,
-            totalEpisodes = totalEpisodes.takeIf { it > 0 },
-            kind = CardProgressKind.WATCHING,
-        )
+        // Прогресс внутри сезона: «S3 · 6 / 12». Знаменатель — серии этого сезона по раскладу;
+        // без расклада он известен только у первого сезона (это сохранённый счётчик). Числитель
+        // не подрезается: зажимать реальный прогресс под неразрешённый расклад — значит
+        // показывать пользователю не то, что он посмотрел.
+        watched != null -> {
+            val seasons = layout.regularSeasons()
+            val season = seasons.firstOrNull { it.seasonNumber == watched.season }
+            AiringCardInfo(
+                seasonNumber = watched.season.takeIf { seasons.isNotEmpty() || it > 1 },
+                airedEpisodes = watched.episode,
+                totalEpisodes = season?.let { it.totalEpisodes ?: it.episodes }
+                    ?: storedEpisodes.takeIf { seasons.isEmpty() && watched.season == 1 && it > 0 },
+                kind = CardProgressKind.WATCHING,
+            )
+        }
 
         airing != null -> AiringCardInfo(
-            seasonNumber = airing.seasonNumber,
+            // Источник без графа франшизы номера сезона не знает — берём его из расклада.
+            seasonNumber = airing.seasonNumber ?: layout.ongoingSeason()?.seasonNumber,
             airedEpisodes = airing.airedEpisodes,
             totalEpisodes = airing.totalEpisodes,
             kind = CardProgressKind.AIRING,

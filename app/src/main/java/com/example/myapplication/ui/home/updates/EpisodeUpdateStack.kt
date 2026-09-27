@@ -113,6 +113,8 @@ private const val SWIPE_DISMISS_FRACTION = 0.32f
 fun EpisodeUpdateStack(
     updates: List<AnimeUpdate>,
     coverPathFor: (animeId: String) -> String?,
+    /** «S3 E5» вместо сквозного «47 → 48»; null — у тайтла нет расклада по сезонам. */
+    episodeLabelFor: (AnimeUpdate) -> String?,
     onOpen: (AnimeUpdate) -> Unit,
     onDismiss: (AnimeUpdate) -> Unit,
     /** Живая запись сцены под плашкой — то, что матовое стекло размывает. */
@@ -309,6 +311,7 @@ fun EpisodeUpdateStack(
                             update = update,
                             // Memo: resolve пути идёт в БД, а стопка рекомпозируется каждый кадр драга.
                             coverPath = remember(update.animeId) { coverPathFor(update.animeId) },
+                            episodeLabel = episodeLabelFor(update),
                             isDark = isDark,
                             // Задней карточке бэкдроп не нужен: у её материала нет размытия, а под
                             // верхней её всё равно не видно. Узел тот же — меняется параметр.
@@ -335,6 +338,7 @@ fun EpisodeUpdateStack(
 internal fun EpisodeUpdateCard(
     update: AnimeUpdate,
     coverPath: String?,
+    episodeLabel: String?,
     isDark: Boolean,
     backdrop: Backdrop,
     material: FrostedMaterial,
@@ -407,7 +411,7 @@ internal fun EpisodeUpdateCard(
                 )
                 Spacer(Modifier.height(2.dp))
                 Text(
-                    text = String.format(
+                    text = episodeLabel ?: String.format(
                         Locale.getDefault(),
                         // Без единиц: регистр «ep./Ep.» гулял, а язык строке не передаётся.
                         "%d → %d",

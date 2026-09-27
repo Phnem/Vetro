@@ -33,6 +33,7 @@ import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -44,6 +45,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -58,7 +63,9 @@ import com.example.myapplication.ui.shared.theme.BrandOrangeBright
 import com.example.myapplication.ui.shared.theme.SnProFamily
 import com.example.myapplication.ui.shared.theme.LightBorder
 import com.example.myapplication.ui.shared.theme.OverlayThemeTokens
+import com.example.myapplication.data.models.MediaType
 import com.example.myapplication.data.models.RatingScale
+import com.phnem.vetro.R
 import com.example.myapplication.ui.shared.theme.getRatingColor
 import kotlinx.collections.immutable.PersistentList
 import kotlinx.collections.immutable.persistentListOf
@@ -67,7 +74,7 @@ import java.io.File
 /**
  * Что показывает бар на карточке:
  *  • [AIRING] — выход серий сезона («S5 4 / 14 ep.»), фиолетовый;
- *  • [WATCHING] — просмотр пользователя («62 / 80 ep.»), брендовый оранжевый;
+ *  • [WATCHING] — просмотр пользователя внутри сезона («S3 6 / 12 ep.»), брендовый оранжевый;
  *  • [READING] — чтение манги по главам («12 / 60 ch.»), брендовый оранжевый.
  */
 enum class CardProgressKind { AIRING, WATCHING, READING }
@@ -75,7 +82,7 @@ enum class CardProgressKind { AIRING, WATCHING, READING }
 /** Прогресс на карточке — выход сезона, просмотр либо чтение, см. [CardProgressKind]. */
 @Immutable
 data class AiringCardInfo(
-    /** null — источник без графа франшизы (Shikimori/AniLibria) либо прогресс просмотра. */
+    /** null — номер сезона неизвестен (источник без графа франшизы, тайтл без расклада) или манга. */
     val seasonNumber: Int?,
     val airedEpisodes: Int,
     /** null — число серий сезона ещё не анонсировано (бар не рисуем, только текст). */
@@ -94,11 +101,12 @@ data class AnimeCardState(
     /** 10-балльная шкала, 0 = не оценено. */
     val rating: Float,
     val genres: PersistentList<String>,
-    val episodesCount: Int,
-    /** Единица счёта в подписи внизу карточки: серии у аниме, главы у манги. */
-    val episodesUnit: String = "eps.",
+    /** Подпись внизу карточки: «S3 E12» по раскладу сезонов, иначе «12 eps.» / «60 ch.». */
+    val episodesLabel: String,
     val imagePath: String?,
     val mediaTypeLabel: String,
+    /** Тип контента — иконка в круге бейджа поверх постера. */
+    val mediaType: MediaType = MediaType.ANIME,
     /** Избранное: карточка поднята в начало списка и обведена рамкой, чтобы это было видно. */
     val isFavorite: Boolean = false,
     /** Найденные прямые ссылки по одобренным сайтам (для языка [language]). */
@@ -133,11 +141,8 @@ private fun AiringProgressSection(
         ?: courEstimatedTotal(airing.airedEpisodes).takeIf { airing.kind != CardProgressKind.READING }
     val unit = if (airing.kind == CardProgressKind.READING) "ch." else "ep."
     val counter = buildString {
-        // Префикс сезона осмыслен только для выхода серий: просмотр считается сквозной
-        // нумерацией по всей франшизе, номер сезона к нему не относится.
-        if (airing.kind == CardProgressKind.AIRING) {
-            airing.seasonNumber?.let { append("S").append(it).append(" ") }
-        }
+        // И выход, и просмотр считаются внутри сезона — номер сезона пишется всегда, когда известен.
+        airing.seasonNumber?.let { append("S").append(it).append(" ") }
         append(airing.airedEpisodes)
         if (total != null) append(" / ").append(total)
         append(" ").append(unit)
@@ -359,22 +364,16 @@ fun AnimeCardBody(
                         modifier = Modifier.fillMaxSize()
                     )
                 }
-                Box(
+                MediaTypePill(
+                    mediaType = state.mediaType,
+                    label = state.mediaTypeLabel,
+                    isDark = isDark,
                     modifier = Modifier
                         .align(Alignment.TopStart)
-                        .padding(4.dp)
-                        .clip(RoundedCornerShape(6.dp))
-                        .background(Color.Black.copy(alpha = 0.6f))
-                        .padding(horizontal = 6.dp, vertical = 2.dp)
-                ) {
-                    Text(
-                        text = state.mediaTypeLabel,
-                        color = Color.White,
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold,
-                        fontFamily = SnProFamily
-                    )
-                }
+                        // Угол карточки у избранного занят золотым вымпелом (до 18dp внутрь
+                        // постера) — пилюля встаёт справа от него, на той же высоте.
+                        .padding(start = if (state.isFavorite) 22.dp else 6.dp, top = 6.dp, end = 6.dp),
+                )
             }
 
             Spacer(Modifier.width(16.dp))
@@ -489,7 +488,7 @@ fun AnimeCardBody(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "${state.episodesCount} ${state.episodesUnit}",
+                        text = state.episodesLabel,
                         style = MaterialTheme.typography.labelLarge.copy(
                             fontSize = 13.sp,
                             fontFamily = SnProFamily
@@ -552,6 +551,74 @@ fun AnimeCardBody(
         // поэтому он садится в угол заподлицо, а не висит квадратом поверх скругления.
         if (state.isFavorite) {
             FavoriteCornerChip(modifier = Modifier.align(Alignment.TopStart))
+        }
+    }
+}
+
+/** Иконка типа контента для бейджа на постере (Phosphor, fill — читается на 12dp). */
+private fun MediaType.pillIcon(): Int = when (this) {
+    MediaType.ANIME -> R.drawable.ph_sparkle_fill
+    MediaType.MANGA -> R.drawable.ph_book_open_text_fill
+    MediaType.MOVIE -> R.drawable.ph_film_slate_fill
+    MediaType.SERIES -> R.drawable.ph_television_simple_fill
+}
+
+/**
+ * Бейдж типа контента — по принципу капсулы мини-плеера аудиокниг: круг с картинкой слева,
+ * дальше текст в той же капсуле. В круге — иконка типа (белый круг и чёрная иконка в тёмной теме,
+ * наоборот — в светлой), в капсуле — название типа.
+ */
+@Composable
+private fun MediaTypePill(
+    mediaType: MediaType,
+    label: String,
+    isDark: Boolean,
+    modifier: Modifier = Modifier,
+    height: Dp = 24.dp,
+) {
+    val circle = if (isDark) Color.White else Color.Black
+    val onCircle = if (isDark) Color.Black else Color.White
+    val capsule = if (isDark) Color.Black.copy(alpha = 0.6f) else Color.White.copy(alpha = 0.9f)
+    val text = if (isDark) Color.White else Color.Black
+    Row(
+        modifier = modifier
+            .height(height)
+            .clip(CircleShape)
+            .background(capsule)
+            .padding(start = 2.dp, end = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            modifier = Modifier
+                .size(height - 4.dp)
+                .clip(CircleShape)
+                .background(circle),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                painter = painterResource(mediaType.pillIcon()),
+                contentDescription = null,
+                tint = onCircle,
+                modifier = Modifier.size(12.dp),
+            )
+        }
+        Spacer(Modifier.width(5.dp))
+        // Строка обязана поместиться в капсулу фиксированной высоты при любом масштабе шрифта
+        // (как в капсуле мини-плеера): масштаб в крошечной капсуле ограничен.
+        val density = LocalDensity.current
+        CompositionLocalProvider(
+            LocalDensity provides Density(density.density, density.fontScale.coerceAtMost(1.1f)),
+        ) {
+            Text(
+                text = label,
+                color = text,
+                fontSize = 10.sp,
+                lineHeight = 12.sp,
+                fontWeight = FontWeight.SemiBold,
+                fontFamily = SnProFamily,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
         }
     }
 }

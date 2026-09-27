@@ -37,6 +37,9 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.flowOn
+import com.example.myapplication.domain.seasons.isAiringNow
+import com.example.myapplication.domain.seasons.ongoingSeason
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
@@ -64,6 +67,7 @@ class HomeViewModel(
     private val episodeUpdateCheckCoordinator: EpisodeUpdateCheckCoordinator,
     private val webLinksStore: com.example.myapplication.data.local.WebLinksStore,
     private val seasonEpisodesStore: com.example.myapplication.data.local.SeasonEpisodesStore,
+    private val seriesSeasonsStore: com.example.myapplication.data.local.SeriesSeasonsStore,
     private val episodePlaybackStore: com.example.myapplication.media.progress.EpisodePlaybackStore,
     private val mangaBindingStore: com.example.myapplication.manga.data.MangaBindingStore,
     private val mangaChapterCacheStore: com.example.myapplication.manga.data.MangaChapterCacheStore,
@@ -76,39 +80,32 @@ class HomeViewModel(
     init { viewModelScope.launch { webLinksStore.ensureLoaded() } }
 
     /**
-     * Сколько серий тайтла пользователь досмотрел, сквозной нумерацией по франшизе
-     * (animeId → число). Считаем от самой дальней серии, до которой он дошёл: серии всех
-     * предыдущих сезонов плюс номер текущей. Разбивка по сезонам берётся из
-     * [com.example.myapplication.data.local.SeasonEpisodesStore]; для первого сезона она не нужна,
-     * поэтому прогресс появляется даже без неё.
+     * Самая дальняя серия, до которой пользователь дошёл (animeId → сезон и серия в нём).
+     * Карточка показывает прогресс внутри сезона («S3 · 6 / 12 ep.»), а не сквозной счёт по
+     * франшизе, поэтому числитель берётся как есть, без пересчёта через расклад.
      */
-    val watchedEpisodes: StateFlow<Map<String, Int>> =
+    val watchedMarks: StateFlow<Map<String, com.example.myapplication.media.progress.PlaybackEpisodeKey>> =
         localDataSource.observeAllAnime()
             .map { list -> list.map { anime -> anime.id } }
             .distinctUntilChanged()
             .flatMapLatest { ids -> episodePlaybackStore.furthestEpisodeFlow(ids) }
-            .combine(seasonEpisodesStore.flow) { furthest, seasons ->
-                furthest.mapValues { (animeId, mark) ->
-                    val chain = seasons[animeId]?.seasons.orEmpty()
-                    val before = chain
-                        .filter { it.seasonNumber < mark.season }
-                        .sumOf { it.episodes }
-                    before + mark.episode
-                }.filterValues { it > 0 }
-            }
+            .map { furthest -> furthest.filterValues { it.episode > 0 } }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
 
     /**
-     * Разложение тайтлов по сезонам (animeId → расклад) для знаменателя прогресса на карточке.
-     *
-     * Тот же самый расклад, по которому считается [watchedEpisodes]: числитель и знаменатель
-     * обязаны жить в одной шкале, иначе на карточке снова выйдет «просмотрено 15 / 12».
-     * Сумму считает `franchiseEpisodeTotal`.
+     * Разложение тайтлов по сезонам (animeId → расклад): аниме — по графу франшизы AniList
+     * ([com.example.myapplication.data.local.SeasonEpisodesStore]), сериалы — по TMDB
+     * ([com.example.myapplication.data.local.SeriesSeasonsStore]). Ключи не пересекаются: у каждого
+     * тайтла ровно один тип.
      */
     val seasonLayouts: StateFlow<Map<String, com.example.myapplication.domain.seasons.SeasonEpisodesEntry>> =
-        seasonEpisodesStore.flow
+        combine(seasonEpisodesStore.flow, seriesSeasonsStore.flow) { anime, series -> series + anime }
+            .stateIn(viewModelScope, SharingStarted.Eagerly, emptyMap())
 
-    init { viewModelScope.launch { seasonEpisodesStore.ensureLoaded() } }
+    init {
+        viewModelScope.launch { seasonEpisodesStore.ensureLoaded() }
+        viewModelScope.launch { seriesSeasonsStore.ensureLoaded() }
+    }
 
     /**
      * Прогресс чтения манги (animeId → сводка) — то же место на карточке, что прогресс серий у
@@ -153,10 +150,32 @@ class HomeViewModel(
         }
     }
 
-    /** Выходящие сейчас сезоны (animeId → прогресс) — карточки «в процессе». */
+    /**
+     * Выходящие сейчас сезоны (animeId → прогресс) — карточки «в процессе».
+     *
+     * Аниме — снимок проверки серий (таблица airing_progress). У сериалов своего снимка нет: их
+     * выходящий сезон — последний сезон TMDB-расклада, у которого вышли ещё не все серии.
+     */
     val airingProgress: StateFlow<Map<String, com.example.myapplication.data.models.AiringProgress>> =
-        localDataSource.observeAiringProgress()
-            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
+        combine(localDataSource.observeAiringProgress(), seriesSeasonsStore.flow) { anime, series ->
+            val seriesAiring = series.mapNotNull { (animeId, entry) ->
+                val season = entry.ongoingSeason() ?: return@mapNotNull null
+                animeId to com.example.myapplication.data.models.AiringProgress(
+                    animeId = animeId,
+                    seasonNumber = season.seasonNumber,
+                    airedEpisodes = season.episodes,
+                    totalEpisodes = season.totalEpisodes,
+                    updatedAt = entry.resolvedAt,
+                )
+            }.toMap()
+            seriesAiring + anime
+        }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyMap())
+
+    /** Тайтлы, у которых сезон выходит прямо сейчас: закрытые строки «вышел полностью» не в счёт. */
+    private val airingNowIds: kotlinx.coroutines.flow.Flow<Set<String>> =
+        airingProgress
+            .map { map -> map.filterValues { it.isAiringNow() }.keys }
+            .distinctUntilChanged()
 
     private var apiSearchJob: Job? = null
     private var pullToRefreshJob: Job? = null
@@ -189,7 +208,16 @@ class HomeViewModel(
         sortAscending = _uiState.map { it.sortAscending },
         filterTags = _uiState.map { it.filterTags },
         mediaTypeFilter = _uiState.map { it.libraryMediaTypeFilter }
-    ).map { it.toImmutableList() }
+    ).combine(airingNowIds) { list, airing ->
+        // Порядок групп: избранное → выходящие сейчас → остальное. Сортировка стабильна, так что
+        // внутри групп сохраняется выбранная пользователем сортировка; избранное репозиторий уже
+        // поднял наверх, здесь достаточно не сломать это и поднять выходящие под ним.
+        if (airing.isEmpty()) list
+        else list.sortedWith(
+            compareByDescending<Anime> { it.isFavorite }.thenByDescending { it.id in airing }
+        )
+    }.flowOn(Dispatchers.Default)
+     .map { it.toImmutableList() }
      .onEach { if (!_uiState.value.isListLoaded) _uiState.update { s -> s.copy(isListLoaded = true) } }
      .stateIn(
         scope = viewModelScope,

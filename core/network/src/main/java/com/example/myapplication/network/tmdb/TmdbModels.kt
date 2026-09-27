@@ -23,4 +23,19 @@ data class SeriesEpisodeState(
     val releasedEpisodes: Int,
     val knownEpisodes: Int,
     val status: SeriesStatus,
+    /** Разбивка по начавшим выходить сезонам (без «Specials» = сезон 0), по возрастанию номера. */
+    val seasons: List<SeriesSeasonProgress> = emptyList(),
+)
+
+/**
+ * Один начавший выходить сезон сериала: сколько серий уже вышло и сколько заявлено.
+ *
+ * [released] считается по тем же правилам, что [SeriesEpisodeState.releasedEpisodes]: сезоны до
+ * последнего начавшегося засчитываются целиком, у последнего — только серии с прошедшей датой.
+ */
+data class SeriesSeasonProgress(
+    val seasonNumber: Int,
+    val released: Int,
+    /** Заявленное число серий сезона; 0 — TMDB ещё не знает. */
+    val total: Int,
 )
