@@ -32,6 +32,7 @@
         android:name="com.example.myapplication.MainActivity"
         android:exported="true"
         android:launchMode="singleTop"
+        android:screenOrientation="portrait"
         android:windowSoftInputMode="adjustResize">
         <intent-filter>
             <action android:name="android.intent.action.MAIN" />
@@ -68,6 +69,7 @@
              To remove the feature entirely, delete this activity + the manga package. -->
         <activity
             android:name="com.example.myapplication.manga.ui.MangaReaderActivity"
+            android:screenOrientation="portrait"
             android:exported="false"
             android:configChanges="orientation|screenSize|smallestScreenSize|keyboardHidden|screenLayout"
             android:theme="@style/Theme.MyApplication" />

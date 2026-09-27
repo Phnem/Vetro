@@ -605,7 +605,7 @@ private fun FullPlayerContent(
                 .statusBarsPadding()
                 .padding(horizontal = 20.dp, vertical = 8.dp),
         ) {
-            GlassCircleButton(backdrop, R.drawable.ph_arrow_left, strings.collapse, 52.dp, 22.dp, enabled = interactive, onClick = onCollapse)
+            GlassCircleButton(backdrop, R.drawable.ph_caret_down, strings.collapse, 52.dp, 22.dp, enabled = interactive, onClick = onCollapse)
             Spacer(Modifier.weight(1f))
             GlassCircleButton(backdrop, R.drawable.ph_dots_three_vertical, strings.more, 52.dp, 22.dp, enabled = interactive) {
                 onSheet(PlayerSheet.MORE)
