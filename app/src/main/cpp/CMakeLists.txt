@@ -18,4 +18,6 @@ add_subdirectory(whisper.cpp)
 
 add_library(vetro_whisper SHARED vetro_whisper.cpp)
 target_link_libraries(vetro_whisper PRIVATE whisper log)
-target_compile_options(vetro_whisper PRIVATE -O3)
+target_compile_options(vetro_whisper PRIVATE -O3 -fvisibility=hidden -ffunction-sections -fdata-sections)
+# Только JNI-символы наружу, неиспользуемое — вон: библиотека меньше.
+target_link_options(vetro_whisper PRIVATE -Wl,--gc-sections -Wl,--exclude-libs,ALL)

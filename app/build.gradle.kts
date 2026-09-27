@@ -43,6 +43,15 @@ android {
         versionName = "v3.3.5-Beta"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
+        // Whisper (whisper.cpp) — только arm64: там есть dotprod/fp16, на остальных ABI меню честно
+        // пишет «недоступно». Нативная часть всегда Release: в Debug ggml без оптимизаций медленнее в разы.
+        externalNativeBuild {
+            cmake {
+                abiFilters += "arm64-v8a"
+                arguments += listOf("-DCMAKE_BUILD_TYPE=Release", "-DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON")
+            }
+        }
+
         buildConfigField("String", "GITHUB_OWNER", "\"Phnem\"")
         buildConfigField("String", "GITHUB_REPO", "\"Vetro-Collection\"")
         buildConfigField("boolean", "AUDIOBOOKS_ENABLED", "true")
@@ -101,6 +110,13 @@ android {
             "SUPABASE_ANON_KEY",
             "\"${oauthProp("SUPABASE_ANON_KEY")}\""
         )
+    }
+
+    externalNativeBuild {
+        cmake {
+            path = file("src/main/cpp/CMakeLists.txt")
+            version = "3.22.1"
+        }
     }
 
     buildFeatures {
