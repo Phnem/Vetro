@@ -476,6 +476,9 @@ class AniListRemoteDataSource(
         withContext(Dispatchers.IO) {
             rateLimiter.acquire()
             val response = apolloClient.query(TitleEnrichmentQuery(id = Optional.present(id))).execute()
+            // Apollo 4 не бросает на сетевой ошибке и 429: ответ приходит с exception и пустыми data.
+            // Без этой проверки сбой выглядел как «тайтла нет», и вызывающий запоминал пустоту.
+            response.exception?.let { throw it }
             response.throwIfGraphQlErrors("TitleEnrichment")
             val media = response.data?.Media ?: return@withContext null
             AniListTitleEnrichment(

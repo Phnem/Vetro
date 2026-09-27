@@ -19,6 +19,11 @@ data class TitleEnrichment(
     /** Студии русской озвучки (Shikimori `fandubbers`). */
     val russianDubs: List<String> = emptyList(),
     val provenance: Map<String, EnrichmentSource> = emptyMap(),
+    /**
+     * Какой-то источник не ответил (чаще всего AniList с 429 сразу после старта) — карточка
+     * собрана не полностью, и экран перечитает её чуть позже.
+     */
+    val incomplete: Boolean = false,
 ) {
     val isEmpty: Boolean get() = logo == null && backdrop == null && trailer == null && ratings == null && nextRelease == null
 }

@@ -1,5 +1,6 @@
 package com.example.myapplication.domain.enrichment.title
 
+import com.example.myapplication.network.AniListTitleEnrichment
 import com.example.myapplication.network.AppLanguage
 import com.example.myapplication.network.enrichment.AniLibriaScheduleItem
 import com.example.myapplication.network.enrichment.EnrichmentSource
@@ -14,10 +15,11 @@ import java.time.ZoneId
 import java.time.temporal.TemporalAdjusters
 
 /**
- * Трек выхода — для кого выходит серия: русская версия (озвучка или русский оригинал) и английская
- * (английский оригинал). Язык интерфейса выбирает трек; эфир в Японии не заменяет ни один из них.
+ * Трек выхода — для кого выходит серия: русская версия (озвучка или русский оригинал), английская
+ * (английский оригинал) и эфир оригинала на другом языке ([ORIGINAL], например японский). Язык
+ * интерфейса выбирает трек; если у него данных нет, показывается эфир оригинала с пометкой.
  */
-enum class ReleaseTrack { RU, EN }
+enum class ReleaseTrack { RU, EN, ORIGINAL }
 
 /** Выход серии на треке: точный момент или только дата. */
 data class ReleasePoint(val at: Instant? = null, val date: LocalDate? = null) {
@@ -48,6 +50,11 @@ data class NextRelease(
     /** false — источник знал только дату, [at] = 12:00 по поясу устройства. */
     val exactTime: Boolean,
     val source: EnrichmentSource,
+    /**
+     * true — у трека языка интерфейса данных нет, это эфир оригинала (японский эфир аниме,
+     * английский эфир сериала при русском интерфейсе). Секция подписывает это явно.
+     */
+    val original: Boolean = false,
 )
 
 /**
@@ -62,20 +69,50 @@ object ReleaseCountdownRules {
     fun trackFor(language: AppLanguage): ReleaseTrack = if (language == AppLanguage.RU) ReleaseTrack.RU else ReleaseTrack.EN
 
     /**
-     * Секция есть, только если у трека языка интерфейса: сериал не закончен, следующая серия известна
-     * и ещё впереди, прошлая вышла не больше 14 дней назад. Расписания — в порядке точности; решает
-     * первое, в котором вообще есть данные о сериях трека, — менее точное его не перекрывает.
+     * Сначала трек языка интерфейса: сериал не закончен, следующая серия известна и ещё впереди,
+     * прошлая вышла не больше 14 дней назад. Расписания — в порядке точности; решает первое, в котором
+     * вообще есть данные о сериях трека, — менее точное его не перекрывает.
+     *
+     * Трек языка ничего не дал — эфир оригинала по тем же правилам, с пометкой [NextRelease.original]:
+     * у выходящего тайтла отсчёт есть всегда, когда хоть один источник знает дату серии.
      */
     fun select(language: AppLanguage, schedules: List<TrackSchedule>, now: Instant, zone: ZoneId): NextRelease? {
         val track = trackFor(language)
-        val schedule = schedules.firstOrNull { it.track == track && (it.next != null || it.previous != null) } ?: return null
+        return selectTrack(schedules.filter { it.track == track }, now, zone)
+            ?: selectTrack(schedules.filter { it.track != track }, now, zone)?.copy(original = true)
+    }
+
+    private fun selectTrack(schedules: List<TrackSchedule>, now: Instant, zone: ZoneId): NextRelease? {
+        val schedule = schedules.firstOrNull { it.next != null || it.previous != null } ?: return null
         if (schedule.finished) return null
         val next = schedule.next ?: return null
         val nextAt = next.instant(zone) ?: return null
         if (!nextAt.isAfter(now)) return null
         val previousAt = schedule.previous?.instant(zone) ?: return null
         if (previousAt.isAfter(now) || Duration.between(previousAt, now) > PREVIOUS_WINDOW) return null
-        return NextRelease(track, schedule.nextEpisode, nextAt, exactTime = next.at != null, schedule.source)
+        return NextRelease(schedule.track, schedule.nextEpisode, nextAt, exactTime = next.at != null, schedule.source)
+    }
+
+    /**
+     * Эфир выходящего сезона по AniList: точный момент следующей серии. Прошлой серии AniList в этом
+     * ответе не сообщает — у RELEASING-сезона с номером серии больше первого она вышла неделю назад
+     * (или раньше, если сейчас перерыв), поэтому берётся «за неделю до следующей, но не позже сейчас».
+     */
+    fun fromAniList(media: AniListTitleEnrichment, now: Instant): TrackSchedule? {
+        val nextSec = media.nextAiringAtEpochSec ?: return null
+        if (!media.status.equals("RELEASING", ignoreCase = true)) return null
+        val next = Instant.ofEpochSecond(nextSec)
+        val previous = (media.nextEpisode ?: 1).takeIf { it > 1 }?.let {
+            minOf(next.minus(Duration.ofDays(7)), now)
+        }
+        return TrackSchedule(
+            track = ReleaseTrack.ORIGINAL,
+            previous = previous?.let { ReleasePoint(at = it) },
+            next = ReleasePoint(at = next),
+            nextEpisode = media.nextEpisode,
+            finished = false,
+            source = EnrichmentSource.ANILIST,
+        )
     }
 
     /**
@@ -98,9 +135,9 @@ object ReleaseCountdownRules {
         )
     }
 
-    /** Эфир оригинала — это трек, только если оригинал на русском или английском. */
+    /** Эфир оригинала: русский или английский оригинал — свой трек, остальные — [ReleaseTrack.ORIGINAL]. */
     fun fromTvMaze(show: TvMazeShow): TrackSchedule? {
-        val track = originalTrack(show.language) ?: return null
+        val track = originalTrack(show.language) ?: ReleaseTrack.ORIGINAL
         return TrackSchedule(
             track = track,
             previous = show.previous?.point(),
@@ -112,7 +149,7 @@ object ReleaseCountdownRules {
     }
 
     fun fromTmdb(tmdb: TmdbEnrichment): TrackSchedule? {
-        val track = originalTrack(tmdb.originalLanguage) ?: return null
+        val track = originalTrack(tmdb.originalLanguage) ?: ReleaseTrack.ORIGINAL
         return TrackSchedule(
             track = track,
             previous = tmdb.lastEpisode?.airDate?.let { ReleasePoint(date = it) },

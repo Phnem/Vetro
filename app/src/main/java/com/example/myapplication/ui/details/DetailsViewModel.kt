@@ -24,6 +24,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
+import com.example.myapplication.domain.seasons.ongoingSeason
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -88,6 +89,13 @@ class DetailsViewModel(
             _currentLanguage.value = AppLanguagePrefs.from(prefs)
             _currentAnime.value?.let { loadDetails(it, _currentLanguage.value) }
             loadEnrichment(refresh = false)
+            // Источник не ответил (AniList сразу после старта отвечает 429, пока идёт проверка
+            // серий) — перечитываем позже, иначе у выходящего тайтла не было бы ни отсчёта, ни трейлера.
+            for (wait in ENRICHMENT_RETRY_DELAYS_MS) {
+                if (_enrichment.value?.incomplete != true) break
+                kotlinx.coroutines.delay(wait)
+                loadEnrichment(refresh = false)
+            }
         }
     }
 
@@ -105,9 +113,14 @@ class DetailsViewModel(
 
     private suspend fun loadEnrichment(refresh: Boolean) {
         val anime = _currentAnime.value ?: return
-        _enrichment.value = runCatching { titleEnrichment.load(anime, _currentLanguage.value, refresh) }
+        // Расписание — у выходящего сезона франшизы, а не у сезона, на который указывает запись.
+        seasonEpisodesStore.ensureLoaded()
+        val airing = seasonEpisodesStore.entryFor(animeId).ongoingSeason()?.let {
+            com.example.myapplication.domain.enrichment.title.AiringSeasonRef(it.anilistId, it.malId)
+        }
+        _enrichment.value = runCatching { titleEnrichment.load(anime, _currentLanguage.value, refresh, airing) }
             .onFailure { if (it is kotlinx.coroutines.CancellationException) throw it }
-            .getOrNull()?.takeUnless { it.isEmpty && it.russianDubs.isEmpty() }
+            .getOrNull()?.takeUnless { it.isEmpty && it.russianDubs.isEmpty() && !it.incomplete }
     }
 
     fun getImgPath(name: String?): String? {
@@ -151,3 +164,6 @@ class DetailsViewModel(
         }
     }
 }
+
+/** Когда перечитать неполную карточку: AniList после 429 просит подождать около минуты. */
+private val ENRICHMENT_RETRY_DELAYS_MS = listOf(20_000L, 60_000L)

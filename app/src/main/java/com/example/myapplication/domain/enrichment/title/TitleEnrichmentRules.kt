@@ -1,7 +1,11 @@
 package com.example.myapplication.domain.enrichment.title
 
+import com.example.myapplication.data.models.Anime
+import com.example.myapplication.data.models.MediaType
+import com.example.myapplication.network.AppLanguage
 import com.example.myapplication.network.enrichment.ArtworkImage
 import com.example.myapplication.network.enrichment.VideoClip
+import com.example.myapplication.network.enrichment.YouTubeVideo
 
 /**
  * Правила выбора полей обогащения — чистые функции, чтобы приоритеты источников проверялись
@@ -48,4 +52,48 @@ object TitleEnrichmentRules {
 
     /** Порядок языков картинки: язык UI, английский, без языка. */
     private fun languageOrder(uiLanguage: String): List<String?> = listOf(uiLanguage, "en", null).distinct()
+
+    /**
+     * Запрос трейлера на языке интерфейса: название на этом языке, первый сезон (у сериалов и аниме),
+     * слово «трейлер» и язык озвучки — иначе поиск отдаёт японский PV случайного сезона.
+     * RU: «Наруто 1 сезон трейлер на русском»; EN: «Naruto season 1 official trailer».
+     * Название на нужном языке неизвестно — берётся основное.
+     */
+    fun trailerQuery(anime: Anime, language: AppLanguage): String? {
+        val seasonal = anime.mediaType == MediaType.ANIME || anime.mediaType == MediaType.SERIES
+        return when (language) {
+            AppLanguage.RU -> {
+                val name = (anime.titleRu?.takeIf { it.isNotBlank() } ?: anime.title).trim()
+                if (name.isEmpty()) return null
+                if (seasonal) "$name 1 сезон трейлер на русском" else "$name трейлер на русском"
+            }
+            AppLanguage.EN -> {
+                val name = (anime.titleEn?.takeIf { it.isNotBlank() } ?: anime.title).trim()
+                if (name.isEmpty()) return null
+                if (seasonal) "$name season 1 official trailer" else "$name official trailer"
+            }
+        }
+    }
+
+    /**
+     * Лучший ролик из выдачи поиска: в названии есть «трейлер/тизер» (или trailer/teaser), а для
+     * русского интерфейса — ещё и кириллица. Порядок выдачи YouTube внутри равных сохраняется.
+     */
+    fun pickSearchedTrailer(results: List<YouTubeVideo>, language: AppLanguage): YouTubeVideo? {
+        val words = if (language == AppLanguage.RU) {
+            listOf("трейлер", "тизер", "trailer", "teaser")
+        } else {
+            listOf("trailer", "teaser")
+        }
+        fun score(v: YouTubeVideo): Int {
+            val title = v.title.lowercase()
+            var s = 0
+            if (words.any { it in title }) s += 2
+            if (language == AppLanguage.RU && title.any { it in 'а'..'я' || it == 'ё' }) s += 1
+            return s
+        }
+        return results.withIndex()
+            .maxWithOrNull(compareBy<IndexedValue<YouTubeVideo>> { score(it.value) }.thenByDescending { it.index })
+            ?.value
+    }
 }

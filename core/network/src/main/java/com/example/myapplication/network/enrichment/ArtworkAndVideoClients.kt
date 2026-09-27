@@ -270,11 +270,18 @@ class YouTubeClient(
         }.parse(YouTubeParser::videos)
     }
 
-    suspend fun search(query: String, maxResults: Int = 5): LookupResult<List<YouTubeVideo>> {
+    /**
+     * Поиск роликов. Один запрос стоит 100 единиц суточной квоты (из 10 000) — ответ кэшируется на
+     * неделю, иначе каждое открытие карточки съедало бы процент квоты.
+     *
+     * @param relevanceLanguage ISO 639-1: поднимает ролики на этом языке (русский трейлер вместо японского PV).
+     */
+    suspend fun search(query: String, maxResults: Int = 5, relevanceLanguage: String? = null): LookupResult<List<YouTubeVideo>> {
         val key = apiKey().takeIf { it.isNotBlank() } ?: return disabled()
         val q = java.net.URLEncoder.encode(query, "UTF-8")
-        val url = "https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&videoEmbeddable=true&maxResults=$maxResults&q=$q&key=$key"
-        return http.text("YouTube", url, rate) {
+        val lang = relevanceLanguage?.let { "&relevanceLanguage=$it" }.orEmpty()
+        val url = "https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&videoEmbeddable=true&maxResults=$maxResults$lang&q=$q&key=$key"
+        return http.text("YouTube", url, rate, policy = CachePolicy("youtube:search:${relevanceLanguage.orEmpty()}:$query", 7 * CacheTtl.DAY)) {
             identity.headers().forEach { (name, value) -> header(name, value) }
         }.parse(YouTubeParser::search)
     }

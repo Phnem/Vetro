@@ -61,16 +61,38 @@ class ReleaseCountdownTest {
         assertEquals(now.plus(Duration.ofDays(1)), r.at)
     }
 
-    // 4. Отсутствующий трек не заменяется эфиром оригинала на другом языке.
-    @Test fun `rule 4 - original broadcast never stands in for a missing track`() {
-        assertNull("есть только EN — русскому интерфейсу нечего показать", select(AppLanguage.RU, schedule(ReleaseTrack.EN)))
-        assertNull("есть только RU — английскому интерфейсу нечего показать", select(AppLanguage.EN, schedule(ReleaseTrack.RU)))
+    // 4. Трека языка нет — эфир оригинала, помеченный как оригинал; трек языка всегда важнее.
+    @Test fun `rule 4 - original broadcast stands in for a missing track, marked as original`() {
+        val onlyEn = select(AppLanguage.RU, schedule(ReleaseTrack.EN))!!
+        assertTrue("есть только EN — русский интерфейс видит эфир оригинала", onlyEn.original)
+        assertEquals(ReleaseTrack.EN, onlyEn.track)
+        assertTrue(select(AppLanguage.EN, schedule(ReleaseTrack.RU))!!.original)
+        val ru = select(AppLanguage.RU, schedule(ReleaseTrack.EN), schedule(ReleaseTrack.RU, source = EnrichmentSource.ANILIBRIA))!!
+        assertFalse("свой трек есть — он и показывается", ru.original)
+        assertEquals(ReleaseTrack.RU, ru.track)
         val japanese = TvMazeShow(1, "x", "Running", "Japanese", null, null, null, null,
             TvMazeEpisode(1, 4, null, null, now.minus(Duration.ofDays(3)), 24), TvMazeEpisode(1, 5, null, null, now.plus(Duration.ofDays(4)), 24))
-        assertNull("японский эфир — не RU и не EN трек", ReleaseCountdownRules.fromTvMaze(japanese))
-        assertNull(ReleaseCountdownRules.fromTmdb(tmdb("ja")))
+        assertEquals("японский эфир — трек оригинала", ReleaseTrack.ORIGINAL, ReleaseCountdownRules.fromTvMaze(japanese)!!.track)
+        assertEquals(ReleaseTrack.ORIGINAL, ReleaseCountdownRules.fromTmdb(tmdb("ja"))!!.track)
         assertEquals(ReleaseTrack.EN, ReleaseCountdownRules.fromTvMaze(japanese.copy(language = "English"))!!.track)
         assertEquals(ReleaseTrack.RU, ReleaseCountdownRules.fromTmdb(tmdb("ru"))!!.track)
+    }
+
+    @Test fun `anilist airing schedule is the original track with an exact time`() {
+        val next = now.plus(Duration.ofHours(30))
+        val media = com.example.myapplication.network.AniListTitleEnrichment(
+            anilistId = 1, malId = null, status = "RELEASING", episodes = 12, episodeDurationMin = 24,
+            nextEpisode = 5, nextAiringAtEpochSec = next.epochSecond,
+            trailerSite = null, trailerId = null, trailerThumbnail = null,
+        )
+        val r = select(AppLanguage.EN, ReleaseCountdownRules.fromAniList(media, now)!!)!!
+        assertEquals(next, r.at)
+        assertTrue(r.exactTime)
+        assertTrue(r.original)
+        assertEquals(5, r.episode)
+        assertNull("премьера: прошлой серии нет", ReleaseCountdownRules.fromAniList(media.copy(nextEpisode = 1), now)
+            ?.let { select(AppLanguage.EN, it) })
+        assertNull("сезон не выходит", ReleaseCountdownRules.fromAniList(media.copy(status = "FINISHED"), now))
     }
 
     // 5. Известны дата и время — берётся точный момент.

@@ -46,6 +46,7 @@ import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 import coil3.request.crossfade
 import com.example.myapplication.domain.enrichment.title.NextRelease
+import com.example.myapplication.network.enrichment.EnrichmentSource
 import com.example.myapplication.domain.enrichment.title.countdownText
 import com.example.myapplication.domain.enrichment.title.runCountdown
 import com.example.myapplication.network.enrichment.ArtworkImage
@@ -107,7 +108,12 @@ internal fun NextReleaseSection(release: NextRelease, ru: Boolean, onElapsed: ()
         elapsed()
     }
     val value = remaining?.let { countdownText(it, ru) } ?: return
-    val label = if (ru) "Следующий эпизод через:" else "Next episode in:"
+    // Эфир оригинала вместо трека языка — подписываем, чтобы «через 2 дня» не приняли за озвучку.
+    val label = when {
+        !release.original -> if (ru) "Следующий эпизод через:" else "Next episode in:"
+        release.source == EnrichmentSource.ANILIST -> if (ru) "Следующий эпизод в Японии через:" else "Next episode airs in Japan in:"
+        else -> if (ru) "Следующий эпизод в оригинале через:" else "Next episode (original airing) in:"
+    }
     Column(Modifier.fillMaxWidth().semantics(mergeDescendants = true) { contentDescription = "$label $value" }) {
         Text(
             text = label,
@@ -129,7 +135,28 @@ internal fun NextReleaseSection(release: NextRelease, ru: Boolean, onElapsed: ()
     }
 }
 
-/** Пилюля «Трейлер»: открывает ролик в YouTube (приложение или браузер). */
+/**
+ * Открыть ролик в приложении YouTube. Обычная https-ссылка на многих прошивках уходит в браузер
+ * (и тот открывает десктопную версию), поэтому сначала — схема приложения и явный пакет, затем
+ * мобильный сайт.
+ */
+internal fun openYouTubeVideo(context: android.content.Context, videoId: String) {
+    val attempts = listOf(
+        Intent(Intent.ACTION_VIEW, Uri.parse("vnd.youtube:$videoId")),
+        Intent(Intent.ACTION_VIEW, Uri.parse("https://www.youtube.com/watch?v=$videoId"))
+            .setPackage("com.google.android.youtube"),
+        Intent(Intent.ACTION_VIEW, Uri.parse("https://m.youtube.com/watch?v=$videoId")),
+    )
+    for (intent in attempts) {
+        val started = runCatching {
+            context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            true
+        }.getOrDefault(false)
+        if (started) return
+    }
+}
+
+/** Пилюля «Трейлер»: открывает ролик в приложении YouTube. */
 @Composable
 internal fun TrailerPill(trailer: VideoClip, ru: Boolean, isDark: Boolean) {
     val context = LocalContext.current
@@ -140,8 +167,7 @@ internal fun TrailerPill(trailer: VideoClip, ru: Boolean, isDark: Boolean) {
             .clip(CircleShape)
             .background(pillBg)
             .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {
-                val url = "https://www.youtube.com/watch?v=${trailer.key}"
-                runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
+                openYouTubeVideo(context, trailer.key)
             }
             .padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
