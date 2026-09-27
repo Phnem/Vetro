@@ -191,6 +191,7 @@ fun DetailsScreen(
                         webLinks = webLinks,
                         seasons = seasons,
                         enrichment = enrichment,
+                        onReleaseElapsed = viewModel::onReleaseElapsed,
                         onWatch = {
                             performHaptic(view, Haptic.Light)
                             openEpisodes()
@@ -324,6 +325,7 @@ private fun DetailsInfoPage(
     webLinks: List<com.example.myapplication.domain.enrichment.weblinks.ResolvedWebLink>,
     seasons: List<com.example.myapplication.domain.seasons.SeasonInfo>,
     enrichment: com.example.myapplication.domain.enrichment.title.TitleEnrichment?,
+    onReleaseElapsed: () -> Unit,
     onWatch: () -> Unit,
     onDownload: () -> Unit,
     onToggleFavorite: () -> Unit,
@@ -490,6 +492,12 @@ private fun DetailsInfoPage(
                 )
             }
 
+            // ——— Трейлер (слой обогащения) — рядом с действиями ———
+            enrichment?.trailer?.let { trailer ->
+                Spacer(Modifier.height(14.dp))
+                TrailerPill(trailer = trailer, ru = ru, isDark = isDark)
+            }
+
             // ——— Где смотреть: стопка иконок найденных сайтов ———
             if (webLinks.isNotEmpty()) {
                 Spacer(Modifier.height(16.dp))
@@ -502,14 +510,10 @@ private fun DetailsInfoPage(
                 )
             }
 
-            // ——— Трейлер и следующая серия (слой обогащения) ———
-            enrichment?.trailer?.let { trailer ->
-                Spacer(Modifier.height(14.dp))
-                TrailerPill(trailer = trailer, ru = ru, isDark = isDark)
-            }
+            // ——— Следующий эпизод через: трек языка интерфейса; время вышло — перечитать расписание ———
             enrichment?.nextRelease?.let { release ->
-                Spacer(Modifier.height(14.dp))
-                NextReleaseCard(release = release, ru = ru, isDark = isDark)
+                Spacer(Modifier.height(20.dp))
+                NextReleaseSection(release = release, ru = ru, onElapsed = onReleaseElapsed)
             }
 
             Spacer(Modifier.height(24.dp))

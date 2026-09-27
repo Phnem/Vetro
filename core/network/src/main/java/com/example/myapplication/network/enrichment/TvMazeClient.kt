@@ -15,7 +15,7 @@ class TvMazeClient(
     private val rate: TokenBucketRateLimiter,
 ) {
     /** Шоу по IMDb (`tt…`) или TVDB id с предыдущей и следующей серией в одном запросе. */
-    suspend fun show(imdbId: String?, tvdbId: Int?): LookupResult<TvMazeShow> {
+    suspend fun show(imdbId: String?, tvdbId: Int?, refresh: Boolean = false): LookupResult<TvMazeShow> {
         val query = when {
             !imdbId.isNullOrBlank() -> "imdb=$imdbId"
             tvdbId != null -> "thetvdb=$tvdbId"
@@ -27,7 +27,7 @@ class TvMazeClient(
             is LookupResult.NoMatch, is LookupResult.NotFoundById -> return LookupResult.NoMatch
             is LookupResult.Failure -> return r
         }
-        return http.text("TVmaze", "$BASE/shows/$id?embed[]=nextepisode&embed[]=previousepisode", rate, policy = CachePolicy("tvmaze:show:$id", 6 * CacheTtl.HOUR))
+        return http.text("TVmaze", "$BASE/shows/$id?embed[]=nextepisode&embed[]=previousepisode", rate, refresh = refresh, policy = CachePolicy("tvmaze:show:$id", 6 * CacheTtl.HOUR))
             .parse(TvMazeParser::show)
     }
 
@@ -44,6 +44,8 @@ data class TvMazeShow(
     val id: Int,
     val name: String,
     val status: String?,
+    /** Язык оригинала по TVmaze: «English», «Russian», «Japanese». */
+    val language: String? = null,
     val imdbId: String?,
     val tvdbId: Int?,
     val network: String?,
@@ -74,6 +76,7 @@ internal object TvMazeParser {
         val id: Int,
         val name: String,
         val status: String? = null,
+        val language: String? = null,
         val externals: ExternalsDto? = null,
         val network: ChannelDto? = null,
         val webChannel: ChannelDto? = null,
@@ -114,6 +117,7 @@ internal object TvMazeParser {
             id = d.id,
             name = d.name,
             status = d.status,
+            language = d.language,
             imdbId = d.externals?.imdb,
             tvdbId = d.externals?.thetvdb,
             network = channel?.name,

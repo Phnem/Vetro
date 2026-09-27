@@ -35,10 +35,12 @@ class EnrichmentHttp(
          * иначе опечатка в пароле закрыла бы провайдер до завтра.
          */
         userCredentials: Boolean = false,
+        /** Пропустить свежий кэш (расписание устарело на глазах); при сбое сети — всё равно отдать кэш. */
+        refresh: Boolean = false,
         configure: HttpRequestBuilder.() -> Unit = {},
     ): LookupResult<String> {
         val cached = policy?.let { cache?.get(it.key) }
-        if (cached != null && cache?.isFresh(cached) == true) return cached.toResult(notFoundById)
+        if (!refresh && cached != null && cache?.isFresh(cached) == true) return cached.toResult(notFoundById)
         // Провайдер выключен после сбоев или до завтра по квоте: сеть не трогаем, отдаём что есть.
         if (!gate.isOpen(provider)) return cached?.toResult(notFoundById) ?: paused(provider)
         rate?.acquire()
@@ -131,5 +133,5 @@ internal fun disabled(): LookupResult.Failure =
 /** Откуда пришло поле обогащения — для отладки, в UI не показывается. */
 enum class EnrichmentSource {
     TMDB, FANART, OMDB, TVMAZE, ANILIST, SHIKIMORI, JIKAN, YOUTUBE, INTRODB, ANIME_SKIP, ANISKIP,
-    OPENSUBTITLES, OPEN_LIBRARY, GOOGLE_BOOKS, BOOKBRAINZ, ITUNES, NYT, TASTEDIVE,
+    OPENSUBTITLES, OPEN_LIBRARY, GOOGLE_BOOKS, BOOKBRAINZ, ITUNES, NYT, TASTEDIVE, ANILIBRIA,
 }

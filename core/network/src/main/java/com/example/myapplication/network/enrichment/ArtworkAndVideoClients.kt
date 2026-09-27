@@ -47,6 +47,8 @@ data class TmdbEnrichment(
     val status: String?,
     val nextEpisode: TmdbEpisodeRef?,
     val lastEpisode: TmdbEpisodeRef?,
+    /** ISO 639-1 языка оригинала: `en`, `ru`, `ja`. */
+    val originalLanguage: String? = null,
 )
 
 data class TmdbEpisodeRef(val season: Int?, val number: Int?, val airDate: LocalDate?)
@@ -62,7 +64,7 @@ class TmdbEnrichmentClient(
     private val rate: TokenBucketRateLimiter,
     private val apiKey: () -> String = { BuildConfig.TMDB_API_KEY },
 ) {
-    suspend fun bundle(kind: TmdbKind, id: Int, language: AppLanguage): LookupResult<TmdbEnrichment> {
+    suspend fun bundle(kind: TmdbKind, id: Int, language: AppLanguage, refresh: Boolean = false): LookupResult<TmdbEnrichment> {
         val key = apiKey().takeIf { it.isNotBlank() } ?: return disabled()
         val lang = if (language == AppLanguage.RU) "ru" else "en"
         val url = "https://api.themoviedb.org/3/${kind.path}/$id?api_key=$key" +
@@ -70,7 +72,7 @@ class TmdbEnrichmentClient(
             "&append_to_response=images,videos,external_ids" +
             "&include_image_language=$lang,en,null&include_video_language=$lang,en"
         val policy = CachePolicy("tmdb:bundle:${kind.path}:$id:$lang", 3 * CacheTtl.DAY)
-        return http.text("TMDB", url, rate, notFoundById = true, policy = policy).parse(TmdbEnrichmentParser::parse)
+        return http.text("TMDB", url, rate, notFoundById = true, refresh = refresh, policy = policy).parse(TmdbEnrichmentParser::parse)
     }
 }
 
@@ -91,6 +93,7 @@ internal object TmdbEnrichmentParser {
             status = root.str("status"),
             nextEpisode = (root["next_episode_to_air"] as? JsonObject)?.episode(),
             lastEpisode = (root["last_episode_to_air"] as? JsonObject)?.episode(),
+            originalLanguage = root.str("original_language"),
         )
     }
 

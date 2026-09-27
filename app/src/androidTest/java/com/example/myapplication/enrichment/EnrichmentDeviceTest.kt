@@ -43,6 +43,32 @@ class EnrichmentDeviceTest {
         return (this as LookupResult.Found).value
     }
 
+    /**
+     * Отсчёт по живому расписанию: выходящая озвучка AniLibria даёт RU-трек; в английском интерфейсе
+     * у аниме трека нет — секции нет, японский эфир её не подменяет.
+     */
+    @Test fun countdownFollowsInterfaceLanguageTrack() = runBlocking<Unit> {
+        val repo = koin.get<TitleEnrichmentRepository>()
+        val week = koin.get<com.example.myapplication.network.enrichment.AniLibriaScheduleClient>().week().found()
+        val now = java.time.Instant.now()
+        val live = week.firstOrNull { it.ongoing && it.nextEpisode != null && it.shikimoriId != null &&
+            it.lastReleasedAt?.isAfter(now.minus(java.time.Duration.ofDays(13))) == true }
+        log("anilibria ongoing: ${week.count { it.ongoing }} of ${week.size}; pick=$live")
+        if (live != null) {
+            val anime = Anime(
+                id = "device-dub", title = "dub", episodes = 12, rating = 0f, imageFileName = null, orderIndex = 0,
+                dateAdded = 0, shikimoriId = live.shikimoriId, malId = live.malId, mediaType = MediaType.ANIME,
+            )
+            val ru = repo.load(anime, AppLanguage.RU).nextRelease
+            log("RU next: $ru local=${ru?.at?.atZone(java.time.ZoneId.systemDefault())}")
+            assertEquals(com.example.myapplication.domain.enrichment.title.ReleaseTrack.RU, ru?.track)
+            assertEquals(12, ru!!.at.atZone(java.time.ZoneId.systemDefault()).hour)
+            val en = repo.load(anime, AppLanguage.EN).nextRelease
+            log("EN next: $en")
+            assertEquals(null, en)
+        }
+    }
+
     @Test fun frierenAnimeEnrichment() = runBlocking<Unit> {
         val repo = koin.get<TitleEnrichmentRepository>()
         val frieren = Anime(

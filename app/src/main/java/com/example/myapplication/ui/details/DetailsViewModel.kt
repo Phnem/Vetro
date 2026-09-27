@@ -87,12 +87,27 @@ class DetailsViewModel(
             val prefs = settingsDataStore.data.first()
             _currentLanguage.value = AppLanguagePrefs.from(prefs)
             _currentAnime.value?.let { loadDetails(it, _currentLanguage.value) }
-            _currentAnime.value?.let { anime ->
-                _enrichment.value = runCatching { titleEnrichment.load(anime, _currentLanguage.value) }
-                    .onFailure { if (it is kotlinx.coroutines.CancellationException) throw it }
-                    .getOrNull()?.takeUnless { it.isEmpty && it.russianDubs.isEmpty() }
-            }
+            loadEnrichment(refresh = false)
         }
+    }
+
+    /** Отсчёт одной и той же серии перечитывается один раз: без этого сломанное расписание крутило бы запросы. */
+    private var refreshedReleaseAt: java.time.Instant? = null
+
+    /** Время вышло: секция уже скрыта, расписание перечитывается мимо свежего кэша. */
+    fun onReleaseElapsed() {
+        val at = _enrichment.value?.nextRelease?.at ?: return
+        if (refreshedReleaseAt == at) return
+        refreshedReleaseAt = at
+        _enrichment.value = _enrichment.value?.copy(nextRelease = null)
+        viewModelScope.launch { loadEnrichment(refresh = true) }
+    }
+
+    private suspend fun loadEnrichment(refresh: Boolean) {
+        val anime = _currentAnime.value ?: return
+        _enrichment.value = runCatching { titleEnrichment.load(anime, _currentLanguage.value, refresh) }
+            .onFailure { if (it is kotlinx.coroutines.CancellationException) throw it }
+            .getOrNull()?.takeUnless { it.isEmpty && it.russianDubs.isEmpty() }
     }
 
     fun getImgPath(name: String?): String? {

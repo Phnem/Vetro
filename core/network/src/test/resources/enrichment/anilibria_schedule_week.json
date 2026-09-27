@@ -1,0 +1,143 @@
+[
+ {
+  "release": {
+   "id": 8452,
+   "name": {
+    "main": "Блич",
+    "english": "Bleach",
+    "alternative": "отбеливатель, белизна, bleach"
+   },
+   "alias": "bleach",
+   "shikimori": {
+    "id": 269,
+    "url": "https://shikimori.io/animes/269",
+    "votes": 67229,
+    "rating": 8.26
+   },
+   "mal": {
+    "id": 269,
+    "url": "https://myanimelist.net/anime/269",
+    "votes": 1285415,
+    "rating": 8
+   },
+   "fresh_at": "2026-09-06T17:37:58+00:00",
+   "is_ongoing": false,
+   "publish_day": {
+    "value": 7,
+    "description": "Воскресенье"
+   },
+   "episodes_total": 366
+  },
+  "full_season_is_released": false,
+  "published_release_episode": null,
+  "next_release_episode_number": 355
+ },
+ {
+  "release": {
+   "id": 10171,
+   "name": {
+    "main": "Цугаи загробного мира",
+    "english": "Yomi no Tsugai",
+    "alternative": null
+   },
+   "alias": "yomi-no-tsugai",
+   "shikimori": {
+    "id": 62001,
+    "url": "https://shikimori.io/animes/62001",
+    "votes": 2143,
+    "rating": 7.73
+   },
+   "mal": {
+    "id": 62001,
+    "url": "https://myanimelist.net/anime/62001",
+    "votes": 63785,
+    "rating": 7.82
+   },
+   "fresh_at": "2026-09-23T21:31:51+00:00",
+   "is_ongoing": true,
+   "publish_day": {
+    "value": 7,
+    "description": "Воскресенье"
+   },
+   "episodes_total": 24
+  },
+  "full_season_is_released": true,
+  "published_release_episode": {
+   "ordinal": 24,
+   "updated_at": "2026-09-23T23:42:09+00:00"
+  },
+  "next_release_episode_number": null
+ },
+ {
+  "release": {
+   "id": 10187,
+   "name": {
+    "main": "Игра лжецов",
+    "english": "Liar Game",
+    "alternative": null
+   },
+   "alias": "liar-game",
+   "shikimori": {
+    "id": 62331,
+    "url": "https://shikimori.io/animes/62331",
+    "votes": 804,
+    "rating": 7.29
+   },
+   "mal": {
+    "id": 62331,
+    "url": "https://myanimelist.net/anime/62331",
+    "votes": 12920,
+    "rating": 6.42
+   },
+   "fresh_at": "2026-09-15T15:56:40+00:00",
+   "is_ongoing": true,
+   "publish_day": {
+    "value": 1,
+    "description": "Понедельник"
+   },
+   "episodes_total": 26
+  },
+  "full_season_is_released": false,
+  "published_release_episode": {
+   "ordinal": 25,
+   "updated_at": "2026-09-25T14:25:00+00:00"
+  },
+  "next_release_episode_number": 26
+ },
+ {
+  "release": {
+   "id": 10232,
+   "name": {
+    "main": "Клеватесс 2: Король демонических зверей и легенда о ложном герое",
+    "english": "Clevatess II: Majuu no Ou to Itsuwari no Yuusha Denshou",
+    "alternative": null
+   },
+   "alias": "clevatess-ii-majuu-no-ou-to-itsuwari-no-yuusha-denshou",
+   "shikimori": {
+    "id": 62513,
+    "url": "https://shikimori.io/animes/62513",
+    "votes": 749,
+    "rating": 7.77
+   },
+   "mal": {
+    "id": 62513,
+    "url": "https://myanimelist.net/anime/62513",
+    "votes": 12654,
+    "rating": 7.74
+   },
+   "fresh_at": "2026-09-22T14:25:52+00:00",
+   "is_ongoing": true,
+   "publish_day": {
+    "value": 1,
+    "description": "Понедельник"
+   },
+   "episodes_total": 13
+  },
+  "full_season_is_released": false,
+  "published_release_episode": {
+   "ordinal": 11,
+   "updated_at": "2026-09-22T14:43:12+00:00"
+  },
+  "next_release_episode_number": 12
+ }
+]

@@ -8,6 +8,7 @@ import com.example.myapplication.network.AniListTitleEnrichment
 import com.example.myapplication.network.AppLanguage
 import com.example.myapplication.network.LookupResult
 import com.example.myapplication.network.ShikimoriRemoteDataSource
+import com.example.myapplication.network.enrichment.AniLibriaScheduleClient
 import com.example.myapplication.network.enrichment.EnrichmentSource
 import com.example.myapplication.network.enrichment.FanartClient
 import com.example.myapplication.network.enrichment.OmdbClient
@@ -20,6 +21,7 @@ import com.example.myapplication.network.enrichment.TvMazeShow
 import com.example.myapplication.network.enrichment.VideoClip
 import com.example.myapplication.network.enrichment.YouTubeClient
 import java.time.Instant
+import java.time.ZoneId
 import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
@@ -28,9 +30,10 @@ import kotlinx.coroutines.coroutineScope
 /**
  * Сборка обогащения тайтла для Details (.scratch/sources-expansion/ARCHITECTURE.md, «Порядок
  * запросов»). Параллельно — то, что нужно экрану сразу: TMDb (картинки, ролики, внешние id одним
- * запросом), AniList и Shikimori для аниме. После внешних id — OMDb, TVmaze (только если время
- * серии ещё неизвестно) и Fanart.tv (только если у TMDb нет логотипа). Ответы кэшируются слоем
- * [com.example.myapplication.network.enrichment.EnrichmentHttp]; AniList/Shikimori — здесь, в памяти.
+ * запросом), AniList и Shikimori для аниме, расписание русской озвучки AniLibria (аниме, русский
+ * интерфейс). После внешних id — OMDb, TVmaze (сериалы) и Fanart.tv (только если у TMDb нет
+ * логотипа). Отсчёт до серии — по треку языка интерфейса ([ReleaseCountdownRules]). Ответы кэшируются
+ * слоем [com.example.myapplication.network.enrichment.EnrichmentHttp]; AniList/Shikimori — здесь, в памяти.
  */
 class TitleEnrichmentRepository(
     private val tmdb: TmdbEnrichmentClient,
@@ -40,14 +43,17 @@ class TitleEnrichmentRepository(
     private val omdb: OmdbClient,
     private val fanart: FanartClient,
     private val youTube: YouTubeClient,
+    private val aniLibria: AniLibriaScheduleClient,
     private val nowMs: () -> Long = System::currentTimeMillis,
+    private val zone: () -> ZoneId = ZoneId::systemDefault,
 ) {
     private data class Memo<T>(val value: T?, val at: Long)
 
     private val aniListMemo = ConcurrentHashMap<Int, Memo<AniListTitleEnrichment>>()
     private val shikimoriMemo = ConcurrentHashMap<Int, Memo<ShikimoriEnrichment>>()
 
-    suspend fun load(anime: Anime, language: AppLanguage): TitleEnrichment = coroutineScope {
+    /** [refresh] — отсчёт дошёл до нуля: расписание перечитывается мимо свежего кэша. */
+    suspend fun load(anime: Anime, language: AppLanguage, refresh: Boolean = false): TitleEnrichment = coroutineScope {
         val ui = if (language == AppLanguage.RU) "ru" else "en"
         val isAnime = anime.mediaType == MediaType.ANIME
         val tmdbKind = when (anime.mediaType) {
@@ -55,9 +61,17 @@ class TitleEnrichmentRepository(
             MediaType.SERIES, MediaType.ANIME -> TmdbKind.TV
             MediaType.MANGA -> null
         }
-        val tmdbD = async { if (tmdbKind != null && anime.tmdbId != null) tmdbBundle(tmdbKind, anime.tmdbId, language) else null }
+        val tmdbD = async { if (tmdbKind != null && anime.tmdbId != null) tmdbBundle(tmdbKind, anime.tmdbId, language, refresh) else null }
         val aniD = async { if (isAnime) anime.anilistId?.let { aniListEnrichment(it) } else null }
         val shikiD = async { if (isAnime) anime.shikimoriId?.let { shikimoriEnrichment(it) } else null }
+        // RU-трек аниме — расписание озвучки; для английского интерфейса у аниме трека нет.
+        val dubD = async {
+            if (!isAnime || language != AppLanguage.RU || (anime.shikimoriId == null && anime.malId == null)) return@async null
+            aniLibria.week(refresh).valueOrNull()?.firstOrNull { item ->
+                (anime.shikimoriId != null && item.shikimoriId == anime.shikimoriId) ||
+                    (anime.malId != null && item.malId == anime.malId)
+            }
+        }
 
         val tmdbR = tmdbD.await()
         val aniR = aniD.await()
@@ -69,12 +83,9 @@ class TitleEnrichmentRepository(
         val omdbD = async {
             if (anime.mediaType == MediaType.MOVIE || anime.mediaType == MediaType.SERIES) imdb?.let { omdb.byImdb(it).valueOrNull() } else null
         }
-        // TVmaze — только когда точного времени нет ни у AniList, ни у Shikimori: лишний запрос не делаем.
-        val knownExactly = aniR?.nextAiringAtEpochSec?.let { Instant.ofEpochSecond(it).isAfter(now) } == true ||
-            shikiR?.nextEpisodeAt?.isAfter(now) == true
+        // TVmaze — точное время серии для сериалов; у аниме эфир японский и трек языка не даёт.
         val tvMazeD = async {
-            val series = anime.mediaType == MediaType.SERIES || isAnime
-            if (series && !knownExactly && (imdb != null || tvdb != null)) tvMaze.show(imdb, tvdb).valueOrNull() else null
+            if (anime.mediaType == MediaType.SERIES && (imdb != null || tvdb != null)) tvMaze.show(imdb, tvdb, refresh).valueOrNull() else null
         }
         val tmdbLogo = TitleEnrichmentRules.pickLogo(tmdbR?.logos.orEmpty(), ui)
         val fanartD = async {
@@ -96,7 +107,12 @@ class TitleEnrichmentRepository(
         trailer?.let { provenance["trailer"] = it.source }
         val ratings = omdbD.await()
         if (ratings != null) provenance["ratings"] = EnrichmentSource.OMDB
-        val next = TitleEnrichmentRules.nextOriginalRelease(now, aniR, shikiR, tvMazeD.await(), tmdbR)
+        val schedules = listOfNotNull(
+            dubD.await()?.let { ReleaseCountdownRules.fromAniLibria(it, now.atZone(zone()).toLocalDate(), zone()) },
+            tvMazeD.await()?.let(ReleaseCountdownRules::fromTvMaze),
+            tmdbR?.let(ReleaseCountdownRules::fromTmdb),
+        )
+        val next = ReleaseCountdownRules.select(language, schedules, now, zone())
         next?.let { provenance["nextRelease"] = it.source }
         if (provenance.isNotEmpty()) Log.d(TAG, "${anime.id}: ${provenance.entries.joinToString { "${it.key}←${it.value}" }}")
 
@@ -139,11 +155,11 @@ class TitleEnrichmentRepository(
         return candidates.firstOrNull { it.key in alive }
     }
 
-    private suspend fun tmdbBundle(kind: TmdbKind, id: Int, language: AppLanguage): TmdbEnrichment? =
-        when (val r = tmdb.bundle(kind, id, language)) {
+    private suspend fun tmdbBundle(kind: TmdbKind, id: Int, language: AppLanguage, refresh: Boolean): TmdbEnrichment? =
+        when (val r = tmdb.bundle(kind, id, language, refresh)) {
             is LookupResult.Found -> r.value
             // У аниме-фильма tmdbId указывает на /movie, а тип записи — ANIME: пробуем второй вид.
-            is LookupResult.NotFoundById -> if (kind == TmdbKind.TV) tmdb.bundle(TmdbKind.MOVIE, id, language).valueOrNull() else null
+            is LookupResult.NotFoundById -> if (kind == TmdbKind.TV) tmdb.bundle(TmdbKind.MOVIE, id, language, refresh).valueOrNull() else null
             else -> null
         }
 

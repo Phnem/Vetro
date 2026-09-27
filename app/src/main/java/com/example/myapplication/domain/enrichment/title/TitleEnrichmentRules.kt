@@ -1,66 +1,13 @@
 package com.example.myapplication.domain.enrichment.title
 
-import com.example.myapplication.network.AniListTitleEnrichment
 import com.example.myapplication.network.enrichment.ArtworkImage
-import com.example.myapplication.network.enrichment.EnrichmentSource
-import com.example.myapplication.network.enrichment.ShikimoriEnrichment
-import com.example.myapplication.network.enrichment.TmdbEnrichment
-import com.example.myapplication.network.enrichment.TvMazeShow
 import com.example.myapplication.network.enrichment.VideoClip
-import java.time.Duration
-import java.time.Instant
-import java.time.ZoneOffset
 
 /**
  * Правила выбора полей обогащения — чистые функции, чтобы приоритеты источников проверялись
  * тестами, а не угадывались по коду загрузки.
  */
 object TitleEnrichmentRules {
-
-    /**
-     * Следующая серия в стране производства. Порядок: точное время AniList → TVmaze → Shikimori →
-     * дата TMDb → оценка по недельному ритму (прошлая серия + 7 дней, если выходящий сериал и
-     * прошлая серия была не больше двух недель назад).
-     */
-    fun nextOriginalRelease(
-        now: Instant,
-        aniList: AniListTitleEnrichment?,
-        shikimori: ShikimoriEnrichment?,
-        tvMaze: TvMazeShow?,
-        tmdb: TmdbEnrichment?,
-    ): NextRelease? {
-        aniList?.nextAiringAtEpochSec?.let { Instant.ofEpochSecond(it) }?.takeIf { it.isAfter(now) }?.let { at ->
-            return NextRelease(ReleaseTrack.ORIGINAL, null, aniList.nextEpisode, at, at.utcDate(), ReleaseConfidence.EXACT, EnrichmentSource.ANILIST)
-        }
-        tvMaze?.next?.let { next ->
-            val at = next.airstamp
-            if (at != null && at.isAfter(now)) {
-                return NextRelease(ReleaseTrack.ORIGINAL, next.season, next.number, at, next.airdate, ReleaseConfidence.EXACT, EnrichmentSource.TVMAZE)
-            }
-        }
-        shikimori?.nextEpisodeAt?.takeIf { it.isAfter(now) }?.let { at ->
-            return NextRelease(ReleaseTrack.ORIGINAL, null, null, at, at.utcDate(), ReleaseConfidence.EXACT, EnrichmentSource.SHIKIMORI)
-        }
-        tmdb?.nextEpisode?.let { next ->
-            val date = next.airDate
-            if (date != null && !date.isBefore(now.utcDate())) {
-                return NextRelease(ReleaseTrack.ORIGINAL, next.season, next.number, null, date, ReleaseConfidence.DATE_ONLY, EnrichmentSource.TMDB)
-            }
-        }
-        val running = tvMaze?.status.equals("Running", true) || aniList?.status == "RELEASING" || shikimori?.ongoing == true
-        val previous = tvMaze?.previous
-        val previousAt = previous?.airstamp
-        if (running && previousAt != null && Duration.between(previousAt, now) <= Duration.ofDays(14)) {
-            var at = previousAt.plus(Duration.ofDays(7))
-            while (!at.isAfter(now)) at = at.plus(Duration.ofDays(7))
-            val skipped = Duration.between(previousAt, at).toDays() / 7
-            return NextRelease(
-                ReleaseTrack.ORIGINAL, previous.season, previous.number?.plus(skipped.toInt()), at, at.utcDate(),
-                ReleaseConfidence.ESTIMATED, EnrichmentSource.TVMAZE,
-            )
-        }
-        return null
-    }
 
     /**
      * Логотип под язык интерфейса: сначала с надписью на языке UI, затем английский, затем без
@@ -101,6 +48,4 @@ object TitleEnrichmentRules {
 
     /** Порядок языков картинки: язык UI, английский, без языка. */
     private fun languageOrder(uiLanguage: String): List<String?> = listOf(uiLanguage, "en", null).distinct()
-
-    private fun Instant.utcDate() = atZone(ZoneOffset.UTC).toLocalDate()
 }

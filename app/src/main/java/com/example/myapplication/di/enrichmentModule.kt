@@ -2,6 +2,7 @@ package com.example.myapplication.di
 
 import com.example.myapplication.domain.enrichment.title.TitleEnrichmentRepository
 import com.example.myapplication.network.TokenBucketRateLimiter
+import com.example.myapplication.network.enrichment.AniLibriaScheduleClient
 import com.example.myapplication.network.enrichment.AnimeSkipClient
 import com.example.myapplication.network.enrichment.BookBrainzClient
 import com.example.myapplication.network.enrichment.EnrichmentCache
@@ -50,6 +51,7 @@ val enrichmentModule = module {
     // NYT: 5 запросов в минуту.
     single { NytBooksClient(get(), rate(perSecond = 5.0 / 60.0, burst = 2.0)) }
     single { TasteDiveClient(get(), rate(perSecond = 1.0, burst = 3.0)) }
+    single { AniLibriaScheduleClient(get(), rate(perSecond = 1.0, burst = 2.0)) }
 
     single { com.example.myapplication.audiobooks.domain.enrichment.BookWorkEnrichment(get(), get()) }
 
@@ -62,6 +64,7 @@ val enrichmentModule = module {
             omdb = get(),
             fanart = get(),
             youTube = get(),
+            aniLibria = get(),
         )
     }
 }
