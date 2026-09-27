@@ -37,6 +37,13 @@ class SeasonEpisodePositionTest {
     }
 
     @Test
+    fun `airing on the same season as the layout keeps its fresh episode count`() {
+        // Re:ZERO: расклад застыл на S4 E18, вышла 19-я — подпись не должна отставать и прыгать.
+        val l = layout(season(1, 25), season(2, 25), season(3, 16), season(4, 18))
+        assertEquals(SeasonEpisode(4, 19), latestSeasonEpisode(l, airing(4, 19, total = 19)))
+    }
+
+    @Test
     fun `nothing known gives null`() {
         assertNull(latestSeasonEpisode(null, null))
         assertNull(latestSeasonEpisode(null, airing(null, 5)))

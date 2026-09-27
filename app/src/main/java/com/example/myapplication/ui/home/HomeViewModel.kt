@@ -38,6 +38,8 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.first
 import com.example.myapplication.domain.seasons.isAiringNow
 import com.example.myapplication.domain.seasons.ongoingSeason
 import kotlinx.coroutines.flow.map
@@ -158,24 +160,46 @@ class HomeViewModel(
      */
     val airingProgress: StateFlow<Map<String, com.example.myapplication.data.models.AiringProgress>> =
         combine(localDataSource.observeAiringProgress(), seriesSeasonsStore.flow) { anime, series ->
-            val seriesAiring = series.mapNotNull { (animeId, entry) ->
-                val season = entry.ongoingSeason() ?: return@mapNotNull null
-                animeId to com.example.myapplication.data.models.AiringProgress(
-                    animeId = animeId,
-                    seasonNumber = season.seasonNumber,
-                    airedEpisodes = season.episodes,
-                    totalEpisodes = season.totalEpisodes,
-                    updatedAt = entry.resolvedAt,
-                )
-            }.toMap()
-            seriesAiring + anime
+            seriesAiring(series) + anime
         }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyMap())
 
-    /** Тайтлы, у которых сезон выходит прямо сейчас: закрытые строки «вышел полностью» не в счёт. */
-    private val airingNowIds: kotlinx.coroutines.flow.Flow<Set<String>> =
-        airingProgress
-            .map { map -> map.filterValues { it.isAiringNow() }.keys }
-            .distinctUntilChanged()
+    private fun seriesAiring(
+        series: Map<String, com.example.myapplication.domain.seasons.SeasonEpisodesEntry>,
+    ): Map<String, com.example.myapplication.data.models.AiringProgress> =
+        series.mapNotNull { (animeId, entry) ->
+            val season = entry.ongoingSeason() ?: return@mapNotNull null
+            animeId to com.example.myapplication.data.models.AiringProgress(
+                animeId = animeId,
+                seasonNumber = season.seasonNumber,
+                airedEpisodes = season.episodes,
+                totalEpisodes = season.totalEpisodes,
+                updatedAt = entry.resolvedAt,
+            )
+        }.toMap()
+
+    /**
+     * Кто «выходит сейчас» для ПОРЯДКА списка — снимок на сессию, а не живой поток.
+     *
+     * Живой поток переставлял карточки прямо под пальцем: сначала список приходил без этой группы
+     * (снимок ещё не прочитан), потом проверка серий при входе переписывала снимок, и несколько
+     * секунд карточки прыгали. Теперь порядок берётся из сохранённого снимка один раз, когда оба
+     * источника загружены (до этого список не показывается), а обновляется только по явному
+     * «потянуть, чтобы обновить» — и один раз, если снимка ещё не было вовсе (первый запуск).
+     * Полоски выхода и подписи на карточках при этом живые: они читают [airingProgress].
+     */
+    private val airingOrder = MutableStateFlow<Set<String>?>(null)
+
+    private suspend fun airingNowIds(): Set<String> {
+        seriesSeasonsStore.ensureLoaded()
+        val anime = localDataSource.observeAiringProgress().first()
+        return (seriesAiring(seriesSeasonsStore.flow.value) + anime).filterValues { it.isAiringNow() }.keys
+    }
+
+    init {
+        viewModelScope.launch {
+            airingOrder.value = runCatching { airingNowIds() }.getOrElse { emptySet() }
+        }
+    }
 
     private var apiSearchJob: Job? = null
     private var pullToRefreshJob: Job? = null
@@ -208,7 +232,7 @@ class HomeViewModel(
         sortAscending = _uiState.map { it.sortAscending },
         filterTags = _uiState.map { it.filterTags },
         mediaTypeFilter = _uiState.map { it.libraryMediaTypeFilter }
-    ).combine(airingNowIds) { list, airing ->
+    ).combine(airingOrder.filterNotNull()) { list, airing ->
         // Порядок групп: избранное → выходящие сейчас → остальное. Сортировка стабильна, так что
         // внутри групп сохраняется выбранная пользователем сортировка; избранное репозиторий уже
         // поднял наверх, здесь достаточно не сломать это и поднять выходящие под ним.
@@ -470,6 +494,10 @@ class HomeViewModel(
                 val language = readLanguageFromSettings()
                 episodeUpdateCheckCoordinator.detectAndStore(language, force = force)
                 _uiState.update { it.copy(isCheckingUpdates = false) }
+                // Порядок «выходящих» — только по явному обновлению или если его ещё не было.
+                if (force || airingOrder.value.isNullOrEmpty()) {
+                    airingOrder.value = runCatching { airingNowIds() }.getOrElse { airingOrder.value.orEmpty() }
+                }
                 // Приложение открыто → системные пуши не показываем: обновления живут
                 // in-app стопкой сверху. Убираем из шторки всё, что мог оставить
                 // фоновый воркер, чтобы уведомления не дублировали интерфейс.

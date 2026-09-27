@@ -169,7 +169,9 @@ class BatchEpisodeCheckUseCase(
                     val aired = res.airedNow ?: continue
                     airingById[anime.id] = AiringProgress(
                         animeId = anime.id,
-                        seasonNumber = null,
+                        // Номер сезона этот источник не знает, но прошлый проход (через AniList) знал:
+                        // без него карточка прыгала между «S5» и номером из расклада.
+                        seasonNumber = prev?.seasonNumber,
                         airedEpisodes = aired,
                         totalEpisodes = res.totalPlanned,
                         updatedAt = now,
@@ -186,7 +188,17 @@ class BatchEpisodeCheckUseCase(
             }
         }
 
-        fillAiringFromAnilibria(animeList, resolutions, airingById, now)
+        fillAiringFromAnilibria(animeList, resolutions, airingById, prevAiring, now)
+
+        // Тайтл в этот проход не разрешился вовсе (AniList ответил 429, поиск не нашёл) — это не
+        // «сезон закончился». Снимок перезаписывается целиком, и без переноса тайтл выпадал из
+        // «выходящих сейчас» до следующей удачной проверки: карточки на главной переставлялись.
+        for (anime in animeList) {
+            if (anime.id in airingById || resolutions[anime.id] != null) continue
+            val prev = prevAiring[anime.id] ?: continue
+            val closed = prev.totalEpisodes != null && prev.airedEpisodes >= prev.totalEpisodes
+            if (!closed || now - prev.updatedAt <= FINISHED_ROW_TTL_MS) airingById[anime.id] = prev
+        }
 
         return DetectResult(updates, airingById.values.toList())
     }
@@ -202,6 +214,7 @@ class BatchEpisodeCheckUseCase(
         animeList: List<Anime>,
         resolutions: Map<String, Resolution>,
         airingById: MutableMap<String, AiringProgress>,
+        prevAiring: Map<String, AiringProgress>,
         now: Long,
     ) {
         var lookups = 0
@@ -230,7 +243,7 @@ class BatchEpisodeCheckUseCase(
                     if (aired != null && aired > 0) {
                         airingById[anime.id] = AiringProgress(
                             animeId = anime.id,
-                            seasonNumber = null,
+                            seasonNumber = prevAiring[anime.id]?.seasonNumber,
                             airedEpisodes = aired,
                             totalEpisodes = match.totalEpisodes,
                             updatedAt = now,
@@ -607,23 +620,33 @@ class BatchEpisodeCheckUseCase(
     }
 
     /**
-     * Номер сезона = 1 + число ПРЕДШЕСТВУЮЩИХ сезонных узлов в цепочке PREQUEL.
+     * Номер сезона — официальный, а не длина цепочки узлов (см. [SeasonNumbering]):
+     *  • номер в названии («Season 4», «4th Season») берётся как есть — у самого узла или у
+     *    ближайшего приквела, от которого досчитываем;
+     *  • иначе 1 + число предшествующих сезонных узлов, где вторая половина сезона («Part 2»,
+     *    «2nd Cour», «2nd STAGE») новым сезоном не считается.
      *
      * Идём по любому приквелу, а увеличиваем счётчик только на сезонных форматах: раньше обход
      * обрывался на первом же фильме/спешле, и у франшизы с фильмом в середине номер сезона
      * схлопывался к 1. Приквел вне кэша засчитывается (нижняя оценка), дальше цепочка не идёт.
      */
     private fun seasonNumberOf(node: EpisodeCheckMedia, mediaCache: Map<Int, EpisodeCheckMedia>): Int {
-        var season = 1
+        SeasonNumbering.explicitSeason(node.titleEnglish, node.titleRomaji)?.let { return it }
+        var seasonsBefore = 0
         var current: EpisodeCheckMedia? = node
         val visited = mutableSetOf(node.anilistId)
         while (current != null) {
             val prequel = current.relations.firstOrNull { it.relationType == "PREQUEL" } ?: break
             if (!visited.add(prequel.anilistId)) break
-            if (isSeasonFormat(prequel.format)) season++
-            current = mediaCache[prequel.anilistId]
+            // Английское название надёжнее: в ромадзи «Part 5» у JoJo — часть манги, а не половина сезона.
+            val continuation = SeasonNumbering.isContinuation(current.titleEnglish ?: current.titleRomaji)
+            if (isSeasonFormat(prequel.format) && !continuation) seasonsBefore++
+            val prequelNode = mediaCache[prequel.anilistId]
+            prequelNode?.let { SeasonNumbering.explicitSeason(it.titleEnglish, it.titleRomaji) }
+                ?.let { return it + seasonsBefore }
+            current = prequelNode
         }
-        return season
+        return 1 + seasonsBefore
     }
 
     /** «Сезонные» форматы: полнометражки/спешлы в сумму серий не входят. */

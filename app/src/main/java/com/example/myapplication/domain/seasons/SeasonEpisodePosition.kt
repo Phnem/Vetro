@@ -24,8 +24,8 @@ fun SeasonEpisodesEntry?.regularSeasons(): List<SeasonInfo> =
  *    (у JoJo: «S8» при восьми сезонах до выходящего);
  *  • расклад собран по полному графу франшизы — у него верный НОМЕР, но он перерезолвится по TTL
  *    и может отстать на сезон.
- * Поэтому: выходящий сезон есть в раскладе — номер из расклада, серии — свежие из снимка; снимок
- * ушёл дальше расклада (новый сезон ещё не заведён) — целиком снимок.
+ * Поэтому: снимок не отстаёт от расклада (тот же сезон или новый, ещё не заведённый) — целиком
+ * снимок; выходящий сезон расклада дальше снимка — номер из расклада, серии — свежие из снимка.
  *
  * null — ни расклада, ни номера выходящего сезона: подпись остаётся прежней, «12 eps.».
  */
@@ -33,7 +33,7 @@ fun latestSeasonEpisode(layout: SeasonEpisodesEntry?, airing: AiringProgress?): 
     val last = layout.regularSeasons().lastOrNull()
     val airingSeason = airing?.seasonNumber?.takeIf { airing.airedEpisodes > 0 }
     return when {
-        airingSeason != null && (last == null || airingSeason > last.seasonNumber) ->
+        airingSeason != null && (last == null || airingSeason >= last.seasonNumber) ->
             SeasonEpisode(airingSeason, airing.airedEpisodes)
         last != null && last.ongoing && airing != null && airing.airedEpisodes > 0 ->
             SeasonEpisode(last.seasonNumber, airing.airedEpisodes)
