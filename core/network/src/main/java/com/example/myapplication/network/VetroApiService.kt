@@ -28,7 +28,9 @@ class VetroApiService(
     private val movieSeriesRepository: MovieSeriesRepository,
     private val heavyRate: TokenBucketRateLimiter,
     private val searchRate: TokenBucketRateLimiter,
-    private val burstRate: TokenBucketRateLimiter
+    private val burstRate: TokenBucketRateLimiter,
+    /** Jikan — только через выключатель: лежащий MAL не должен тормозить каскады. */
+    private val jikan: JikanGateway = JikanGateway(httpClient),
 ) : ApiService {
 
     private val json = AppJson
@@ -329,14 +331,7 @@ class VetroApiService(
 
     override suspend fun malRecommendations(id: Int): Result<List<ApiSearchResult>>  = runCatching {
         searchRate.acquire()
-        val response = httpClient.get {
-            url {
-                protocol = URLProtocol.HTTPS
-                host = "api.jikan.moe"
-                appendPathSegments("v4", "anime", id.toString(), "recommendations")
-            }
-        }.bodyAsText()
-        val root = json.parseToJsonElement(response).jsonObject
+        val root = jikan.get(listOf("anime", id.toString(), "recommendations")) ?: error("Jikan unavailable")
         val data = root["data"]?.jsonArray ?: return@runCatching emptyList()
         data.mapNotNull { el ->
             val entry = el.jsonObject["entry"]?.jsonObject ?: return@mapNotNull null
@@ -493,16 +488,7 @@ class VetroApiService(
     }
 
     private suspend fun searchJikan(query: String, language: AppLanguage): List<ApiSearchResult> = runCatching {
-        val response = httpClient.get {
-            url {
-                protocol = URLProtocol.HTTPS
-                host = "api.jikan.moe"
-                appendPathSegments("v4", "anime")
-                parameters.append("q", query)
-                parameters.append("limit", "20")
-            }
-        }.bodyAsText()
-        val root = json.parseToJsonElement(response).jsonObject
+        val root = jikan.get(listOf("anime"), mapOf("q" to query, "limit" to "20")) ?: error("Jikan unavailable")
         val data = root["data"]?.jsonArray ?: return@runCatching emptyList()
         data.mapNotNull { el ->
             val obj = el.jsonObject
@@ -598,16 +584,7 @@ class VetroApiService(
     }
 
     private suspend fun searchJikanManga(query: String, language: AppLanguage): List<ApiSearchResult> = runCatching {
-        val response = httpClient.get {
-            url {
-                protocol = URLProtocol.HTTPS
-                host = "api.jikan.moe"
-                appendPathSegments("v4", "manga")
-                parameters.append("q", query)
-                parameters.append("limit", "20")
-            }
-        }.bodyAsText()
-        val root = json.parseToJsonElement(response).jsonObject
+        val root = jikan.get(listOf("manga"), mapOf("q" to query, "limit" to "20")) ?: error("Jikan unavailable")
         val data = root["data"]?.jsonArray ?: return@runCatching emptyList()
         data.mapNotNull { el ->
             val obj = el.jsonObject
@@ -644,14 +621,7 @@ class VetroApiService(
     }.getOrElse { emptyList() }
 
     private suspend fun fetchJikanById(id: Int, language: AppLanguage): ApiSearchResult? = runCatching {
-        val response = httpClient.get {
-            url {
-                protocol = URLProtocol.HTTPS
-                host = "api.jikan.moe"
-                appendPathSegments("v4", "anime", id.toString())
-            }
-        }.bodyAsText()
-        val root = json.parseToJsonElement(response).jsonObject
+        val root = jikan.get(listOf("anime", id.toString())) ?: error("Jikan unavailable")
         val obj = root["data"]?.jsonObject ?: return@runCatching null
         val titleJp = obj["title"]?.jsonPrimitive?.content ?: return@runCatching null
         val titleEng = obj["title_english"]?.jsonPrimitive?.content ?: ""
@@ -725,29 +695,15 @@ class VetroApiService(
     }
 
     private suspend fun fetchJikanTitlesById(id: Int): EnrichedTitles? = runCatching {
-        val response = httpClient.get {
-            url {
-                protocol = URLProtocol.HTTPS
-                host = "api.jikan.moe"
-                appendPathSegments("v4", "anime", id.toString())
-            }
-        }.bodyAsText()
-        val obj = json.parseToJsonElement(response).jsonObject["data"]?.jsonObject ?: return@runCatching null
+        val root = jikan.get(listOf("anime", id.toString())) ?: error("Jikan unavailable")
+        val obj = root["data"]?.jsonObject ?: return@runCatching null
         parseJikanTitles(obj)
     }.getOrNull()
 
     private suspend fun searchJikanTitles(query: String, limit: Int): List<EnrichedTitles> = runCatching {
         if (query.isBlank()) return@runCatching emptyList()
-        val response = httpClient.get {
-            url {
-                protocol = URLProtocol.HTTPS
-                host = "api.jikan.moe"
-                appendPathSegments("v4", "anime")
-                parameters.append("q", query)
-                parameters.append("limit", limit.toString())
-            }
-        }.bodyAsText()
-        json.parseToJsonElement(response).jsonObject["data"]?.jsonArray
+        val root = jikan.get(listOf("anime"), mapOf("q" to query, "limit" to limit.toString())) ?: error("Jikan unavailable")
+        root["data"]?.jsonArray
             ?.mapNotNull { parseJikanTitles(it.jsonObject) }
             .orEmpty()
     }.getOrElse { emptyList() }
@@ -775,16 +731,7 @@ class VetroApiService(
 
     private suspend fun checkJikan(query: String): Pair<Int, String>? {
         return runCatching {
-            val response = httpClient.get {
-                url {
-                    protocol = URLProtocol.HTTPS
-                    host = "api.jikan.moe"
-                    appendPathSegments("v4", "anime")
-                    parameters.append("q", query)
-                    parameters.append("limit", "1")
-                }
-            }.bodyAsText()
-            val root = json.parseToJsonElement(response).jsonObject
+            val root = jikan.get(listOf("anime"), mapOf("q" to query, "limit" to "1")) ?: error("Jikan unavailable")
             val data = root["data"]?.jsonArray ?: return@runCatching null
             val first = data.firstOrNull()?.jsonObject ?: return@runCatching null
             val title = first["title"]?.jsonPrimitive?.content ?: return@runCatching null
