@@ -100,6 +100,9 @@ fun PlayerScreen(
     onRotate: () -> Unit,
     onBack: () -> Unit,
     onPlayerAvailable: (ExoPlayer?) -> Unit = {},
+    /** Название тайтла и его id — для системной карточки медиа (шторка, экран блокировки). */
+    mediaTitle: String = "",
+    mediaAnimeId: String = "",
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -223,12 +226,46 @@ fun PlayerScreen(
         }
     }
 
-    // Media session: аппаратные/BT-кнопки (пауза, next/prev) маршрутизируются в плеер.
+    // Media session: аппаратные/BT-кнопки (пауза, next/prev) маршрутизируются в плеер, а система
+    // рисует по ней карточку медиа — название, «S2 E5», постер (см. VideoMediaSession).
+    var videoSession by remember { mutableStateOf<com.example.myapplication.media.ui.VideoMediaSession?>(null) }
+    val posterUri by androidx.compose.runtime.produceState<Uri?>(null, mediaAnimeId) {
+        value = if (mediaAnimeId.isBlank()) null else com.example.myapplication.media.ui.collectionPosterUri(mediaAnimeId)
+    }
     DisposableEffect(exoPlayer) {
-        val session = androidx.media3.session.MediaSession.Builder(context, exoPlayer)
-            .setId("vetro-local-player-${System.currentTimeMillis()}")
-            .build()
-        onDispose { session.release() }
+        val activity = generateSequence(context) { (it as? android.content.ContextWrapper)?.baseContext }
+            .filterIsInstance<android.app.Activity>()
+            .firstOrNull()
+        val session = activity?.let {
+            com.example.myapplication.media.ui.VideoMediaSession(
+                context = context,
+                player = exoPlayer,
+                id = "vetro-local-player-${System.currentTimeMillis()}",
+                placeholderIcon = com.phnem.vetro.R.drawable.ph_television_simple_fill,
+                contentIntent = com.example.myapplication.media.ui.videoPlayerContentIntent(it),
+            )
+        }
+        videoSession = session
+        onDispose {
+            videoSession = null
+            session?.release()
+        }
+    }
+    androidx.compose.runtime.LaunchedEffect(videoSession, currentIndex, posterUri, mediaTitle) {
+        val episode = episodes.getOrNull(currentIndex)
+        videoSession?.update(
+            title = mediaTitle.ifBlank { episode?.displayName.orEmpty() },
+            line = com.example.myapplication.media.ui.VideoMediaSession.line(
+                season = episode?.season,
+                episode = episode?.episodeNumber ?: (currentIndex + 1),
+                isMovie = false,
+            ),
+            artwork = posterUri,
+            hasPrevious = currentIndex > 0,
+            hasNext = currentIndex < episodes.lastIndex,
+            onPrevious = { exoPlayer.seekToPreviousMediaItem() },
+            onNext = { exoPlayer.seekToNextMediaItem() },
+        )
     }
 
     // PiP: в окне «картинка в картинке» наш оверлей скрыт, поэтому перемотку по сериям и паузу

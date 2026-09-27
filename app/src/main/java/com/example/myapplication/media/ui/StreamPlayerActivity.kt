@@ -250,6 +250,11 @@ class StreamPlayerActivity : ComponentActivity(), PipHostActivity {
                     // Номер серии, которая сейчас резолвится. Он же — защёлка от гонки: пока не null,
                     // повторные нажатия ничего не запускают.
                     var switchingTo by remember { mutableStateOf<Int?>(null) }
+                    // Системная карточка медиа (экран блокировки, шторка) — см. VideoMediaSession.
+                    var videoSession by remember { mutableStateOf<VideoMediaSession?>(null) }
+                    val posterUri by produceState<android.net.Uri?>(null, animeId) {
+                        value = collectionPosterUri(animeId)
+                    }
                     var failedSwitchTarget by remember { mutableStateOf<Int?>(null) }
                     var switchError by remember { mutableStateOf<String?>(null) }
                     // Играет ли сейчас — только для иконки в PiP-окне; сама поверхность следит за этим
@@ -583,9 +588,18 @@ class StreamPlayerActivity : ComponentActivity(), PipHostActivity {
                         val listenerSessionUrl = current.url
                         val listenerSessionResolvedAt = current.resolvedAt
                         activePlayer = player
-                        val mediaSession = MediaSession.Builder(this@StreamPlayerActivity, player)
-                            .setId("vetro-stream-${System.currentTimeMillis()}")
-                            .build()
+                        val mediaSession = VideoMediaSession(
+                            context = this@StreamPlayerActivity,
+                            player = player,
+                            id = "vetro-stream-${System.currentTimeMillis()}",
+                            placeholderIcon = if (playbackIdentity.mediaType == MediaType.MOVIE) {
+                                com.phnem.vetro.R.drawable.ph_film_slate_fill
+                            } else {
+                                com.phnem.vetro.R.drawable.ph_television_simple_fill
+                            },
+                            contentIntent = videoPlayerContentIntent(this@StreamPlayerActivity),
+                        )
+                        videoSession = mediaSession
                         val listener = object : Player.Listener {
                             override fun onIsPlayingChanged(playing: Boolean) {
                                 pipPlaying = playing
@@ -662,10 +676,28 @@ class StreamPlayerActivity : ComponentActivity(), PipHostActivity {
                         player.addListener(listener)
                         onDispose {
                             player.removeListener(listener)
+                            if (videoSession === mediaSession) videoSession = null
                             mediaSession.release()
                             if (activePlayer === player) activePlayer = null
                             player.release()
                         }
+                    }
+
+                    LaunchedEffect(videoSession, episode, switchingTo, posterUri) {
+                        val canSwitch = switchingTo == null
+                        videoSession?.update(
+                            title = animeTitle,
+                            line = VideoMediaSession.line(
+                                season = season,
+                                episode = episode,
+                                isMovie = playbackIdentity.mediaType == MediaType.MOVIE,
+                            ),
+                            artwork = posterUri,
+                            hasPrevious = canSwitch && EpisodeRange.hasPrevious(episode),
+                            hasNext = canSwitch && EpisodeRange.hasNext(episode, availableEpisodes),
+                            onPrevious = { switchToEpisode(EpisodeRange.previousOf(episode)) },
+                            onNext = { switchToEpisode(EpisodeRange.nextOf(episode, availableEpisodes)) },
+                        )
                     }
 
                     // В PiP-окне нашего оверлея нет, а серия здесь не элемент плейлиста ExoPlayer —

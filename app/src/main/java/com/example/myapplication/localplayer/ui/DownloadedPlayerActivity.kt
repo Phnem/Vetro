@@ -136,6 +136,8 @@ class DownloadedPlayerActivity : ComponentActivity(), PipHostActivity {
                             onRotate = { landscape = !landscape },
                             onBack = { finish() },
                             onPlayerAvailable = { player = it },
+                            mediaTitle = title,
+                            mediaAnimeId = animeId,
                         )
                     }
                 }

@@ -62,7 +62,11 @@ internal object AudiobookMediaText {
  * Обложка, вшитая в сам файл, приходит в метаданных потока и выигрывает у заглушки.
  */
 @UnstableApi
-internal class AudiobookArtworkLoader(private val context: Context) : BitmapLoader {
+internal class AudiobookArtworkLoader(
+    private val context: Context,
+    /** Иконка в центре заглушки: наушники у книг, плёнка/экран у видео. */
+    private val placeholderIcon: Int = R.drawable.ph_headphones,
+) : BitmapLoader {
     private val delegate: BitmapLoader = CacheBitmapLoader(DataSourceBitmapLoader(context))
     private var placeholder: Bitmap? = null
 
@@ -99,7 +103,7 @@ internal class AudiobookArtworkLoader(private val context: Context) : BitmapLoad
         canvas.drawRect(0f, 0f, s, s, Paint().apply {
             shader = RadialGradient(s * 0.3f, s * 0.25f, s * 0.7f, 0x33FFFFFF, 0x00FFFFFF, Shader.TileMode.CLAMP)
         })
-        ContextCompat.getDrawable(context, R.drawable.ph_headphones)?.mutate()?.let { icon ->
+        ContextCompat.getDrawable(context, placeholderIcon)?.mutate()?.let { icon ->
             val iconSize = (s * 0.36f).toInt()
             val left = (size - iconSize) / 2
             icon.setBounds(left, left, left + iconSize, left + iconSize)
