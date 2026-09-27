@@ -270,7 +270,7 @@ val appModule = module {
             accountTesters = mapOf(
                 com.example.myapplication.media.source.UserAccountKind.OPENSUBTITLES to { account ->
                     get<com.example.myapplication.network.enrichment.OpenSubtitlesClient>()
-                        .login(account.username, account.password) is com.example.myapplication.network.LookupResult.Found
+                        .login(account.username, account.password, apiKeyOverride = account.apiKey) is com.example.myapplication.network.LookupResult.Found
                 },
             ),
         )
@@ -279,12 +279,6 @@ val appModule = module {
         com.example.myapplication.media.source.DefaultPlaybackSourceSettingsService(
             store = get(),
             connectionTester = get(),
-            availableAccounts = {
-                val openSubtitles = get<com.example.myapplication.network.enrichment.OpenSubtitlesClient>()
-                buildSet {
-                    if (openSubtitles.isConfigured) add(com.example.myapplication.media.source.UserAccountKind.OPENSUBTITLES)
-                }
-            },
         )
     }
     single {

@@ -36,6 +36,8 @@ data class PlaybackSourcePublicDraft(
     val username: String = "",
     val userId: String = "",
     val hasStoredSecret: Boolean = false,
+    /** Сохранён ли ключ API учётки; сам ключ сюда не попадает. */
+    val hasStoredApiKey: Boolean = false,
     val downloadAllowed: Boolean = false,
     val allowInsecureHttp: Boolean = false,
 )
@@ -52,9 +54,9 @@ interface PlaybackSourceConnectionTester {
 interface PlaybackSourceSettingsService {
     fun summaries(): List<PlaybackSourceConfigurationSummary>
     fun draft(kind: PlaybackSourceKind): PlaybackSourcePublicDraft
-    fun save(draft: PlaybackSourcePublicDraft, replacementSecret: String): Boolean
+    fun save(draft: PlaybackSourcePublicDraft, replacementSecret: String, replacementApiKey: String = ""): Boolean
     fun remove(kind: PlaybackSourceKind)
-    suspend fun test(draft: PlaybackSourcePublicDraft, replacementSecret: String): Boolean?
+    suspend fun test(draft: PlaybackSourcePublicDraft, replacementSecret: String, replacementApiKey: String = ""): Boolean?
 }
 
 class DefaultPlaybackSourceSettingsService(
@@ -64,7 +66,7 @@ class DefaultPlaybackSourceSettingsService(
      * Учётки, которые сейчас можно подключить. OpenSubtitles без ключа приложения не работает —
      * такой строки в настройках нет вовсе, а не «подключено, но не работает».
      */
-    private val availableAccounts: () -> Set<UserAccountKind> = { emptySet() },
+    private val availableAccounts: () -> Set<UserAccountKind> = { UserAccountKind.entries.toSet() },
 ) : PlaybackSourceSettingsService {
     override fun summaries(): List<PlaybackSourceConfigurationSummary> = baseSummaries() +
         PlaybackSourceKind.entries.mapNotNull { kind ->
@@ -102,6 +104,7 @@ class DefaultPlaybackSourceSettingsService(
                 baseUrl = config.baseUrl,
                 username = config.username,
                 hasStoredSecret = true,
+                hasStoredApiKey = config.apiKey.isNotBlank(),
                 allowInsecureHttp = config.allowInsecureHttp,
             )
         }
@@ -117,13 +120,13 @@ class DefaultPlaybackSourceSettingsService(
         }
     } ?: PlaybackSourcePublicDraft(kind)
 
-    override fun save(draft: PlaybackSourcePublicDraft, replacementSecret: String): Boolean =
+    override fun save(draft: PlaybackSourcePublicDraft, replacementSecret: String, replacementApiKey: String): Boolean =
         runCatching {
             when (draft.kind) {
                 PlaybackSourceKind.WEBDAV -> store.saveWebDav(requireNotNull(webDavConfig(draft, replacementSecret)))
                 PlaybackSourceKind.OPENSUBTITLES -> {
                     val account = requireNotNull(draft.kind.account)
-                    store.saveAccount(account, requireNotNull(accountConfig(draft, replacementSecret, account)))
+                    store.saveAccount(account, requireNotNull(accountConfig(draft, replacementSecret, account, replacementApiKey)))
                 }
                 else -> {
                     val provider = requireNotNull(draft.kind.personalProvider)
@@ -146,12 +149,13 @@ class DefaultPlaybackSourceSettingsService(
     override suspend fun test(
         draft: PlaybackSourcePublicDraft,
         replacementSecret: String,
+        replacementApiKey: String,
     ): Boolean? = try {
         when (draft.kind) {
             PlaybackSourceKind.WEBDAV -> webDavConfig(draft, replacementSecret)
                 ?.let { connectionTester.testWebDav(it) }
             PlaybackSourceKind.OPENSUBTITLES -> draft.kind.account?.let { account ->
-                accountConfig(draft, replacementSecret, account)?.let { connectionTester.testAccount(account, it) }
+                accountConfig(draft, replacementSecret, account, replacementApiKey)?.let { connectionTester.testAccount(account, it) }
             }
             else -> draft.kind.personalProvider?.let { provider ->
                 personalConfig(draft, replacementSecret, provider)
@@ -186,19 +190,19 @@ class DefaultPlaybackSourceSettingsService(
         draft: PlaybackSourcePublicDraft,
         replacementSecret: String,
         kind: UserAccountKind,
+        replacementApiKey: String = "",
     ): UserAccountConfig? {
         val saved = store.account(kind)
-        // Сохранённый пароль переиспользуется только для того же логина на том же сервере.
-        val secret = replacementSecret.ifBlank {
-            saved?.password?.takeIf {
-                saved.username == draft.username.trim() && saved.baseUrl == draft.baseUrl.trim()
-            }.orEmpty()
-        }
+        // Сохранённые пароль и ключ переиспользуются только для того же логина на том же сервере.
+        val sameScope = saved != null && saved.username == draft.username.trim() && saved.baseUrl == draft.baseUrl.trim()
+        val secret = replacementSecret.ifBlank { saved?.password?.takeIf { sameScope }.orEmpty() }
+        val apiKey = replacementApiKey.trim().ifBlank { saved?.apiKey?.takeIf { sameScope }.orEmpty() }
         return UserAccountConfig(
             username = draft.username.trim(),
             password = secret,
             baseUrl = draft.baseUrl.trim(),
             allowInsecureHttp = draft.allowInsecureHttp,
+            apiKey = apiKey,
         ).takeIf { it.isValidFor(kind) }
     }
 

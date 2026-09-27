@@ -214,9 +214,9 @@ private fun SourceEditor(
     if (account == PlaybackSourceKind.OPENSUBTITLES.account) {
         Text(
             if (ru) {
-                "Ваш аккаунт opensubtitles.com. Субтитры скачиваются в счёт его суточного лимита; скачанные хранятся на устройстве и повторно лимит не тратят."
+                "Свой ключ API и аккаунт opensubtitles.com (ключ — в разделе API consumers на сайте). Субтитры скачиваются в счёт суточного лимита аккаунта; скачанные хранятся на устройстве и повторно лимит не тратят."
             } else {
-                "Your opensubtitles.com account. Downloads count against its daily limit; downloaded files stay on the device and are not charged again."
+                "Your own API key and opensubtitles.com account (the key is under API consumers on the site). Downloads count against the account's daily limit; downloaded files stay on the device and are not charged again."
             },
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             fontFamily = SnProFamily,
@@ -282,6 +282,19 @@ private fun SourceEditor(
         singleLine = true,
         modifier = Modifier.fillMaxWidth(),
     )
+    if (account?.needsApiKey == true) {
+        OutlinedTextField(
+            value = editor.apiKey,
+            onValueChange = { value -> onUpdate { it.copy(apiKey = value) } },
+            label = { Text(if (ru) "Ключ API" else "API key") },
+            placeholder = {
+                if (editor.hasStoredApiKey) Text(if (ru) "Сохранён — оставьте пустым" else "Saved — leave blank")
+            },
+            visualTransformation = PasswordVisualTransformation(),
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth(),
+        )
+    }
     if (account == null) {
         ToggleRow(
             title = if (ru) "Разрешить скачивание" else "Allow downloads",

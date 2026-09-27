@@ -112,6 +112,7 @@ class PlaybackSourceCredentialsStore(context: Context) : PlaybackSourceConfigSto
             password = prefs.getString("${prefix}_password", "").orEmpty(),
             baseUrl = prefs.getString("${prefix}_base_url", "").orEmpty(),
             allowInsecureHttp = prefs.getBoolean("${prefix}_allow_insecure_http", false),
+            apiKey = prefs.getString("${prefix}_api_key", "").orEmpty(),
         ).takeIf { it.isValidFor(kind) }
     }
 
@@ -123,13 +124,14 @@ class PlaybackSourceCredentialsStore(context: Context) : PlaybackSourceConfigSto
             .putString("${prefix}_password", config.password)
             .putString("${prefix}_base_url", config.baseUrl.trim())
             .putBoolean("${prefix}_allow_insecure_http", config.allowInsecureHttp)
+            .putString("${prefix}_api_key", config.apiKey.trim())
             .apply()
     }
 
     override fun clearAccount(kind: UserAccountKind) {
         val prefix = kind.credentialPrefix
         prefs.edit().apply {
-            listOf("_username", "_password", "_base_url", "_allow_insecure_http").forEach { remove(prefix + it) }
+            listOf("_username", "_password", "_base_url", "_allow_insecure_http", "_api_key").forEach { remove(prefix + it) }
         }.apply()
     }
 

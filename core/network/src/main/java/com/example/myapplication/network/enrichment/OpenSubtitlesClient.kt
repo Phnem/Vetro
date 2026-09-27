@@ -51,8 +51,9 @@ class OpenSubtitlesClient(
     }
 
     /** Вход пользователя: токен для скачивания и, у VIP, свой адрес API. */
-    suspend fun login(username: String, password: String): LookupResult<OpenSubtitlesSession> {
-        val key = apiKey().takeIf { it.isNotBlank() } ?: return disabled()
+    /** [apiKeyOverride] — ключ, который пользователь только что ввёл и проверяет (ещё не сохранён). */
+    suspend fun login(username: String, password: String, apiKeyOverride: String? = null): LookupResult<OpenSubtitlesSession> {
+        val key = (apiKeyOverride ?: apiKey()).takeIf { it.isNotBlank() } ?: return disabled()
         return http.text(USER_PROVIDER, "$BASE/login", rate, HttpMethod.Post, userCredentials = true) {
             header("Api-Key", key)
             contentType(ContentType.Application.Json)

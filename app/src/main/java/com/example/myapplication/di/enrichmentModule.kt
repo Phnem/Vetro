@@ -42,7 +42,14 @@ val enrichmentModule = module {
     single { IntroDbClient(get(), rate(perSecond = 1.0, burst = 3.0)) }
     // Общий client id Anime-Skip «сильно лимитирован» — ходим редко, ответы кэшируются на неделю.
     single { AnimeSkipClient(get(), rate(perSecond = 0.5, burst = 2.0)) }
-    single { OpenSubtitlesClient(get(), rate(perSecond = 4.0, burst = 4.0)) }
+    // BYOK: ключ API — из учётки пользователя в «Источниках»; ключ приложения — только запасной.
+    single {
+        val accounts = get<com.example.myapplication.media.source.PlaybackSourceConfigStore>()
+        OpenSubtitlesClient(get(), rate(perSecond = 4.0, burst = 4.0), apiKey = {
+            accounts.account(com.example.myapplication.media.source.UserAccountKind.OPENSUBTITLES)?.apiKey
+                ?.takeIf { it.isNotBlank() } ?: com.phnem.vetro.network.BuildConfig.OPENSUBTITLES_API_KEY
+        })
+    }
     single { OmdbClient(get(), rate(perSecond = 2.0, burst = 4.0)) }
     single { FanartClient(get(), rate(perSecond = 2.0, burst = 4.0)) }
     single { YouTubeClient(get(), rate(perSecond = 2.0, burst = 2.0), identity = get()) }

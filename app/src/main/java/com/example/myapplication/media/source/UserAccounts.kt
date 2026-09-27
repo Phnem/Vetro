@@ -10,8 +10,10 @@ enum class UserAccountKind(
     val credentialPrefix: String,
     /** Нужен ли адрес сервера (свой Subsonic) или сервис один (OpenSubtitles). */
     val needsServer: Boolean,
+    /** Нужен ли собственный ключ API пользователя (BYOK). */
+    val needsApiKey: Boolean = false,
 ) {
-    OPENSUBTITLES("OpenSubtitles", "account_opensubtitles", needsServer = false),
+    OPENSUBTITLES("OpenSubtitles", "account_opensubtitles", needsServer = false, needsApiKey = true),
 }
 
 data class UserAccountConfig(
@@ -19,9 +21,12 @@ data class UserAccountConfig(
     val password: String,
     val baseUrl: String = "",
     val allowInsecureHttp: Boolean = false,
+    /** Ключ API сервиса, выданный самому пользователю; хранится так же, как пароль. */
+    val apiKey: String = "",
 ) {
     fun isValidFor(kind: UserAccountKind): Boolean {
         if (username.isBlank() || password.isEmpty()) return false
+        if (kind.needsApiKey && apiKey.isBlank()) return false
         if (!kind.needsServer) return true
         val url = baseUrl.trim()
         return url.startsWith("https://") || (allowInsecureHttp && url.startsWith("http://"))

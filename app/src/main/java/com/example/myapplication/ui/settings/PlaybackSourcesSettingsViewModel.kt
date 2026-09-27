@@ -39,6 +39,9 @@ data class PlaybackSourceEditorState(
     /** New input only. A previously saved password/token is never copied into UI state. */
     val secret: String = "",
     val hasStoredSecret: Boolean = false,
+    /** Новый ключ API (BYOK); сохранённый в состояние UI не копируется. */
+    val apiKey: String = "",
+    val hasStoredApiKey: Boolean = false,
     val downloadAllowed: Boolean = false,
     val allowInsecureHttp: Boolean = false,
 )
@@ -87,7 +90,8 @@ class PlaybackSourcesSettingsViewModel(
                 val updated = transform(current)
                 state.copy(
                     editor = updated.copy(
-                        hasStoredSecret = current.hasStoredSecret && !current.scopeChanged(updated)
+                        hasStoredSecret = current.hasStoredSecret && !current.scopeChanged(updated),
+                        hasStoredApiKey = current.hasStoredApiKey && !current.scopeChanged(updated),
                     ),
                     message = null,
                 )
@@ -102,7 +106,11 @@ class PlaybackSourcesSettingsViewModel(
             _uiState.update { it.copy(message = PlaybackSourceSettingsMessage.SECRET_REQUIRED) }
             return false
         }
-        val saved = service.save(editor.toDraft(), editor.secret)
+        if (editor.kind.account?.needsApiKey == true && !editor.hasStoredApiKey && editor.apiKey.isBlank()) {
+            _uiState.update { it.copy(message = PlaybackSourceSettingsMessage.SECRET_REQUIRED) }
+            return false
+        }
+        val saved = service.save(editor.toDraft(), editor.secret, editor.apiKey)
         if (saved) {
             _uiState.value = PlaybackSourcesSettingsUiState(
                 sources = service.summaries(),
@@ -252,7 +260,7 @@ class PlaybackSourcesSettingsViewModel(
 
     private suspend fun runProbe(probe: Probe) {
         try {
-            val success = service.test(probe.editor.toDraft(), probe.editor.secret)
+            val success = service.test(probe.editor.toDraft(), probe.editor.secret, probe.editor.apiKey)
             if (probeIsCurrent(probe)) {
                 _uiState.update {
                     it.copy(
@@ -296,6 +304,7 @@ private fun PlaybackSourcePublicDraft.toEditor() = PlaybackSourceEditorState(
     username = username,
     userId = userId,
     hasStoredSecret = hasStoredSecret,
+    hasStoredApiKey = hasStoredApiKey,
     downloadAllowed = downloadAllowed,
     allowInsecureHttp = allowInsecureHttp,
 )
@@ -307,6 +316,7 @@ private fun PlaybackSourceEditorState.toDraft() = PlaybackSourcePublicDraft(
     username = username,
     userId = userId,
     hasStoredSecret = hasStoredSecret,
+    hasStoredApiKey = hasStoredApiKey,
     downloadAllowed = downloadAllowed,
     allowInsecureHttp = allowInsecureHttp,
 )
