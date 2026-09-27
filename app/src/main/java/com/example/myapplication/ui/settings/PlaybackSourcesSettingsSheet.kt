@@ -1,5 +1,9 @@
 package com.example.myapplication.ui.settings
 
+import com.example.myapplication.media.subtitles.whisper.ModelState
+import com.example.myapplication.media.subtitles.whisper.WhisperModel
+import com.example.myapplication.media.subtitles.whisper.WhisperModelStore
+import org.koin.compose.koinInject
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.ui.platform.LocalContext
@@ -133,6 +137,8 @@ fun PlaybackSourcesSettingsSheet(
                 onRefresh = viewModel::refreshCustomSource,
                 onRemove = viewModel::removeCustomSource,
             )
+
+            WhisperModelsSection(ru = ru)
         } else {
             SourceEditor(
                 editor = editor,
@@ -453,6 +459,65 @@ private fun CustomSourcesSection(
                 onRefresh = { onRefresh(source.key) },
                 onRemove = { onRemove(source.key) },
             )
+        }
+    }
+}
+
+/**
+ * Модели Whisper на устройстве: сколько места занимают и удаление. Скачивание — из меню «Субтитры»
+ * плеера, где понятно, зачем модель нужна; здесь — только то, что уже лежит на телефоне.
+ */
+@Composable
+private fun WhisperModelsSection(ru: Boolean) {
+    val store = koinInject<WhisperModelStore>()
+    val states by store.states.collectAsStateWithLifecycle()
+    val present = WhisperModel.entries.filter { states[it] !is ModelState.Absent && states[it] != null }
+    Spacer(Modifier.height(4.dp))
+    Text(
+        text = if (ru) "Субтитры на устройстве" else "On-device subtitles",
+        style = MaterialTheme.typography.titleMedium,
+        fontFamily = SnProFamily,
+        fontWeight = FontWeight.SemiBold,
+    )
+    Text(
+        text = if (ru) {
+            "Whisper распознаёт речь прямо на телефоне, звук никуда не отправляется. Модель скачивается из меню «Субтитры» в плеере."
+        } else {
+            "Whisper recognizes speech on the phone; audio never leaves it. The model is downloaded from the Subtitles menu in the player."
+        },
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        fontFamily = SnProFamily,
+    )
+    if (present.isEmpty()) {
+        Text(if (ru) "Модели не скачаны" else "No models downloaded", fontFamily = SnProFamily)
+        return
+    }
+    present.forEach { model ->
+        val state = states[model]
+        Surface(shape = SquircleShape(18.dp), tonalElevation = 2.dp, modifier = Modifier.fillMaxWidth()) {
+            Row(Modifier.padding(horizontal = 14.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        (if (ru) model.titleRu else model.titleEn) + " · " + "%.0f".format(model.sizeBytes / 1_000_000.0) + (if (ru) " МБ" else " MB"),
+                        fontFamily = SnProFamily,
+                        fontWeight = FontWeight.Medium,
+                    )
+                    Text(
+                        text = when (state) {
+                            is ModelState.Downloading -> (if (ru) "Загрузка " else "Downloading ") + "${state.percent}%"
+                            ModelState.Verifying -> if (ru) "Проверка файла" else "Checking the file"
+                            is ModelState.Failed -> if (ru) "Загрузка не завершена" else "Download incomplete"
+                            else -> if (ru) "Готова" else "Ready"
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontFamily = SnProFamily,
+                    )
+                }
+                TextButton(onClick = { store.delete(model) }) {
+                    Text(if (ru) "Удалить" else "Delete", color = MaterialTheme.colorScheme.error, fontFamily = SnProFamily)
+                }
+            }
         }
     }
 }

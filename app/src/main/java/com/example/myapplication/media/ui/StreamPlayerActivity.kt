@@ -1,5 +1,20 @@
 package com.example.myapplication.media.ui
 
+import android.app.Activity
+import android.app.ActivityManager
+import android.os.Build
+import androidx.compose.runtime.collectAsState
+import androidx.media3.common.C
+import com.example.myapplication.media.subtitles.OpenSubtitlesUi
+import com.example.myapplication.media.subtitles.SubtitleMenuAction
+import com.example.myapplication.media.subtitles.WhisperUi
+import com.example.myapplication.media.subtitles.whisper.ModelState
+import com.example.myapplication.media.subtitles.whisper.WhisperDeviceProfile
+import com.example.myapplication.media.subtitles.whisper.WhisperLanguage
+import com.example.myapplication.media.subtitles.whisper.WhisperModel
+import com.example.myapplication.media.subtitles.whisper.WhisperModelStore
+import com.example.myapplication.media.subtitles.whisper.WhisperRequest
+import com.example.myapplication.media.subtitles.whisper.WhisperSubtitleManager
 import com.example.myapplication.network.AppStoreJson
 import com.example.myapplication.media.progress.runPlaybackProgressSaver
 import androidx.compose.runtime.CompositionLocalProvider
@@ -121,6 +136,8 @@ class StreamPlayerActivity : ComponentActivity(), PipHostActivity {
     private val okHttpClient: OkHttpClient by inject()
     private val playbackStore: EpisodePlaybackStore by inject()
     private val externalSubtitles: ExternalSubtitleService by inject()
+    private val whisperModels: WhisperModelStore by inject()
+    private val whisperSubtitles: WhisperSubtitleManager by inject()
     private val enrichmentCoordinator: CollectionEnrichmentCoordinator by inject()
     private val settings: DataStore<Preferences> by inject(named("settings"))
     private val json = AppStoreJson
@@ -243,15 +260,27 @@ class StreamPlayerActivity : ComponentActivity(), PipHostActivity {
                     var subtitleOffers by remember { mutableStateOf<List<SubtitleOffer>>(emptyList()) }
                     var pendingSubtitleId by remember { mutableStateOf<String?>(null) }
                     var subtitleLoading by remember { mutableStateOf(false) }
+                    var openSubtitlesSearching by remember { mutableStateOf(false) }
                     val uiLanguage = playerSettingsState.value.language
                     LaunchedEffect(season, episode, uiLanguage) {
                         subtitleOffers = emptyList()
                         if (!externalSubtitles.isAvailable) return@LaunchedEffect
+                        openSubtitlesSearching = true
                         val languages = listOf(if (uiLanguage == AppLanguage.RU) "ru" else "en", "en").distinct()
                         subtitleOffers = runCatching {
                             externalSubtitles.offers(playbackIdentity, season, episode, languages)
                         }.getOrDefault(emptyList())
+                        openSubtitlesSearching = false
                     }
+                    // Whisper: модель по силам устройства, язык — вручную или «определить».
+                    val recommendedModel = remember { recommendedWhisperModel() }
+                    val modelStates by whisperModels.states.collectAsState()
+                    var chosenModel by remember { mutableStateOf<WhisperModel?>(null) }
+                    val whisperModel = chosenModel
+                        ?: whisperModels.anyReady(recommendedModel)?.first
+                        ?: recommendedModel
+                    var whisperLanguage by rememberSaveable { mutableStateOf(WhisperLanguage.AUTO) }
+                    var whisperShowing by remember(episode) { mutableStateOf(false) }
 
                     // Прогресс пишется под текущую серию и после переключения — тоже (onStop читает
                     // именно эти поля).
@@ -282,6 +311,25 @@ class StreamPlayerActivity : ComponentActivity(), PipHostActivity {
                         }
                     }
                     val player = playbackSession.player
+                    // Длительность — для плана распознавания: пока источник не готов, «Сгенерировать» скрыто.
+                    var playerDurationMs by remember(player) { mutableLongStateOf(0L) }
+                    DisposableEffect(player) {
+                        val listener = object : Player.Listener {
+                            override fun onPlaybackStateChanged(playbackState: Int) {
+                                player.duration.takeIf { it != C.TIME_UNSET && it > 0 }?.let { playerDurationMs = it }
+                            }
+                        }
+                        player.addListener(listener)
+                        onDispose { player.removeListener(listener) }
+                    }
+                    // Ключ кэша Whisper: серия + озвучка (разные озвучки — разная речь) + язык + модель.
+                    val whisperKey = "whisper|$animeId|s$season|e$episode|" +
+                        "${current.sourceName ?: current.url.substringBefore('?')}|${whisperLanguage.name}|${whisperModel.name}"
+                    val cachedWhisper = remember(whisperKey, playerDurationMs) {
+                        playerDurationMs.takeIf { it > 0 }?.let { whisperSubtitles.cached(whisperKey, it) }
+                    }
+                    val liveWhisper by remember(whisperKey) { whisperSubtitles.progress(whisperKey) }.collectAsState(initial = null)
+                    val whisperProgress = liveWhisper ?: cachedWhisper
                     val recoveryPolicy = remember { StreamRecoveryPolicy() }
                     val bufferingWatchdog = remember(player, current.url) {
                         ContinuousBufferingWatchdog(WATCHDOG_BUFFERING_MS)
@@ -691,7 +739,61 @@ class StreamPlayerActivity : ComponentActivity(), PipHostActivity {
                             },
                             // Ожидание рисует сама поверхность локально, вместо текстовой плашки.
                             loading = switchingTo != null || retrying || subtitleLoading,
-                            subtitleOffers = subtitleOffers,
+                            openSubtitles = OpenSubtitlesUi(
+                                configured = externalSubtitles.isAvailable,
+                                offers = subtitleOffers,
+                                searching = openSubtitlesSearching,
+                            ),
+                            whisper = WhisperUi(
+                                engineAvailable = whisperSubtitles.isEngineAvailable,
+                                model = whisperModel,
+                                modelState = modelStates[whisperModel] ?: ModelState.Absent,
+                                recommended = recommendedModel,
+                                language = whisperLanguage,
+                                progress = whisperProgress,
+                                showing = whisperShowing,
+                                durationKnown = playerDurationMs > 0,
+                            ),
+                            whisperCues = whisperProgress?.cues.orEmpty(),
+                            onHideWhisper = { whisperShowing = false },
+                            onSubtitleMenuAction = { action ->
+                                when (action) {
+                                    is SubtitleMenuAction.DownloadModel -> {
+                                        chosenModel = action.model
+                                        whisperModels.download(action.model)
+                                    }
+                                    SubtitleMenuAction.CancelDownload -> whisperModels.cancel(whisperModel)
+                                    SubtitleMenuAction.Generate -> whisperModels.readyFile(whisperModel)?.let { file ->
+                                        whisperSubtitles.start(
+                                            WhisperRequest(
+                                                key = whisperKey,
+                                                mediaItem = StreamingPlaybackSessionFactory.buildMediaItem(current),
+                                                sourceFactory = StreamingPlaybackSessionFactory.mediaSourceFactory(
+                                                    this@StreamPlayerActivity, okHttpClient, current,
+                                                ),
+                                                durationMs = playerDurationMs,
+                                                fromMs = player.currentPosition.coerceAtLeast(0L),
+                                                language = whisperLanguage,
+                                                model = whisperModel,
+                                                modelFile = file,
+                                            ),
+                                        )
+                                        whisperShowing = true
+                                    }
+                                    SubtitleMenuAction.Stop -> whisperSubtitles.stop(whisperKey)
+                                    SubtitleMenuAction.Show -> whisperShowing = true
+                                    SubtitleMenuAction.CycleLanguage -> {
+                                        whisperLanguage = WhisperLanguage.entries[(whisperLanguage.ordinal + 1) % WhisperLanguage.entries.size]
+                                    }
+                                    SubtitleMenuAction.DeleteModel -> {
+                                        whisperSubtitles.stop(whisperKey)
+                                        whisperModels.delete(whisperModel)
+                                        chosenModel = null
+                                        whisperShowing = false
+                                    }
+                                    is SubtitleMenuAction.Open, SubtitleMenuAction.None -> Unit
+                                }
+                            },
                             onLoadSubtitle = { offer ->
                                 if (!subtitleLoading) {
                                     subtitleLoading = true
@@ -912,6 +1014,16 @@ class StreamPlayerActivity : ComponentActivity(), PipHostActivity {
         }
     }
 }
+/** Модель Whisper по силам устройства: память, ядра, 64-битный ARM. */
+private fun Activity.recommendedWhisperModel(): WhisperModel {
+    val memory = ActivityManager.MemoryInfo().also { getSystemService(ActivityManager::class.java).getMemoryInfo(it) }
+    return WhisperDeviceProfile.recommended(
+        totalRamBytes = memory.totalMem,
+        cores = Runtime.getRuntime().availableProcessors(),
+        arm64 = Build.SUPPORTED_64_BIT_ABIS.contains("arm64-v8a"),
+    )
+}
+
 private fun subtitleLoadMessage(result: SubtitleLoad, ru: Boolean): String = when (result) {
     SubtitleLoad.AccountRejected -> if (ru) {
         "OpenSubtitles не принял логин — проверьте аккаунт в настройках источников"

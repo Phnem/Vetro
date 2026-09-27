@@ -108,6 +108,13 @@ object StreamingPlaybackSessionFactory {
         return builder.build()
     }
 
+    /**
+     * Источник так же, как у плеера (заголовки источника, OkHttp, file:// для локальных файлов), — для
+     * фоновой работы со звуком того же видео (локальные субтитры).
+     */
+    internal fun mediaSourceFactory(context: Context, client: OkHttpClient, video: VetroVideo): MediaSource.Factory =
+        createMediaSourceFactory(context, client, video, StreamingTransferMonitor(SystemClock::elapsedRealtime))
+
     private fun createMediaSourceFactory(
         context: Context,
         client: OkHttpClient,

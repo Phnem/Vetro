@@ -91,6 +91,8 @@ media3-session = { module = "androidx.media3:media3-session", version.ref = "med
 media3-inspector = { module = "androidx.media3:media3-inspector", version.ref = "media3" }
 media3-datasource-okhttp = { module = "androidx.media3:media3-datasource-okhttp", version.ref = "media3" }
 media3-exoplayer-workmanager = { module = "androidx.media3:media3-exoplayer-workmanager", version.ref = "media3" }
+# Звук текущего видео для локального распознавания (Whisper): клип диапазона быстрее реального времени.
+media3-transformer = { module = "androidx.media3:media3-transformer", version.ref = "media3" }
 jsoup = { module = "org.jsoup:jsoup", version = "1.18.3" }
 androidx-documentfile = { module = "androidx.documentfile:documentfile", version.ref = "documentfile" }
 androidx-palette = { module = "androidx.palette:palette-ktx", version.ref = "palette" }

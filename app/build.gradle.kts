@@ -192,6 +192,7 @@ dependencies {
     implementation(libs.media3.inspector)
     implementation(libs.media3.datasource.okhttp)
     implementation(libs.media3.exoplayer.workmanager)
+    implementation(libs.media3.transformer)
     implementation(libs.jsoup)
     implementation(libs.androidx.documentfile)
     implementation(libs.androidx.palette)

@@ -65,6 +65,10 @@ data class SubtitleOption(
     val trackIndex: Int = -1,
     val externalKey: String? = null,
     val isOff: Boolean = false,
+    /** Переход в раздел или настройка — меню остаётся открытым. */
+    val keepsMenuOpen: Boolean = false,
+    /** Действие для вызывающего (раздел меню, Whisper); null — обычная дорожка. */
+    val action: String? = null,
 )
 
 /** Режим кадра: как есть (letterbox, обычно 16:9) или с обрезкой краёв (заполнить экран). */

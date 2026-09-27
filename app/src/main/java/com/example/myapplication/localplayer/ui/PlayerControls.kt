@@ -804,7 +804,8 @@ fun PlayerControlsOverlay(
                 speed = speed,
                 onSelectSpeed = { onSelectSpeed(it); menuState.targetState = false },
                 onSelectAudio = { onSelectAudio(it); menuState.targetState = false },
-                onSelectSubtitle = { onSelectSubtitle(it); menuState.targetState = false },
+                // Раздел меню и настройки (язык, загрузка модели) меню не закрывают.
+                onSelectSubtitle = { onSelectSubtitle(it); if (!it.keepsMenuOpen) menuState.targetState = false },
                 onDismiss = { menuState.targetState = false },
             )
         }
@@ -1189,12 +1190,19 @@ private fun OptionMenu(
         PlayerMenu.SUBTITLES -> subtitleOptions.indexOfFirst { it.isSelected }.coerceAtLeast(0)
         PlayerMenu.SPEED -> SPEED_OPTIONS.indexOfFirst { it == speed }.coerceAtLeast(0)
     }
-    fun commit(index: Int) {
+    /** true — после выбора меню закрывается. */
+    fun commit(index: Int): Boolean {
+        if (menu == PlayerMenu.SUBTITLES) {
+            val option = subtitleOptions.getOrNull(index) ?: return true
+            onSelectSubtitle(option)
+            return !option.keepsMenuOpen
+        }
         when (menu) {
             PlayerMenu.AUDIO -> audioTracks.getOrNull(index)?.let(onSelectAudio)
-            PlayerMenu.SUBTITLES -> subtitleOptions.getOrNull(index)?.let(onSelectSubtitle)
+            PlayerMenu.SUBTITLES -> Unit
             PlayerMenu.SPEED -> SPEED_OPTIONS.getOrNull(index)?.let(onSelectSpeed)
         }
+        return true
     }
 
     Box(Modifier.fillMaxSize()) {
@@ -1227,8 +1235,7 @@ private fun OptionMenu(
                     labels = labels,
                     selectedIndex = selectedIndex,
                     onCommit = { index ->
-                        commit(index)
-                        onDismiss()
+                        if (commit(index)) onDismiss()
                     },
                     modifier = Modifier.statusBarsPadding().displayCutoutPadding(),
                 )

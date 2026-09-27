@@ -1,5 +1,21 @@
 package com.example.myapplication.media.ui
 
+import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Text
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.sp
+import com.example.myapplication.media.subtitles.OpenSubtitlesUi
+import com.example.myapplication.media.subtitles.SubtitleMenuAction
+import com.example.myapplication.media.subtitles.SubtitlePage
+import com.example.myapplication.media.subtitles.WhisperUi
+import com.example.myapplication.media.subtitles.subtitleMenu
+import com.example.myapplication.media.subtitles.whisper.ModelState
+import com.example.myapplication.media.subtitles.whisper.SubtitleCue
+import com.example.myapplication.media.subtitles.whisper.WhisperLanguage
+import com.example.myapplication.media.subtitles.whisper.WhisperModel
 import android.view.ViewGroup
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
@@ -36,7 +52,6 @@ import com.example.myapplication.localplayer.ui.SubtitleOption
 import com.example.myapplication.localplayer.ui.playerIsRu
 import com.example.myapplication.media.source.VetroSubtitleTrack
 import com.example.myapplication.media.subtitles.SubtitleOffer
-import com.example.myapplication.media.subtitles.subtitleLabel
 import com.example.myapplication.localplayer.ui.ImmersivePlayerWindow
 import com.example.myapplication.localplayer.ui.rememberMediaSkipPlayback
 import com.example.myapplication.localplayer.ui.rememberPlaybackClock
@@ -78,9 +93,14 @@ fun StreamPlayerSurface(
     onNextEpisode: () -> Unit = {},
     /** Идёт резолв ссылки или переключение серии; показывается локальный индикатор в контролах. */
     loading: Boolean = false,
-    /** Субтитры OpenSubtitles, которые можно подгрузить (ещё не скачаны). */
-    subtitleOffers: List<SubtitleOffer> = emptyList(),
+    /** Раздел OpenSubtitles меню «Субтитры» (BYOK). */
+    openSubtitles: OpenSubtitlesUi = OpenSubtitlesUi(configured = false, offers = emptyList(), searching = false),
     onLoadSubtitle: (SubtitleOffer) -> Unit = {},
+    /** Раздел «Создать на устройстве» (Whisper) и готовые реплики для показа поверх кадра. */
+    whisper: WhisperUi? = null,
+    whisperCues: List<SubtitleCue> = emptyList(),
+    onSubtitleMenuAction: (SubtitleMenuAction) -> Unit = {},
+    onHideWhisper: () -> Unit = {},
     /** Id подгруженной дорожки: включить, как только она появится в плеере. */
     pendingSubtitleId: String? = null,
     onPendingSubtitleApplied: () -> Unit = {},
@@ -135,8 +155,18 @@ fun StreamPlayerSurface(
         studioTracks + embeddedAudioTracks.takeIf { it.size > 1 }.orEmpty()
 
     val ru = playerIsRu()
-    val subtitleOptions = remember(tracksSnapshot, subtitleOffers, ru) {
-        tracksSnapshot.subtitleOptions(subtitleOffers, ru)
+    var subtitlePage by remember { mutableStateOf(SubtitlePage.ROOT) }
+    val textTracks = remember(tracksSnapshot, ru) { tracksSnapshot.textTracks(ru) }
+    val whisperUi = whisper ?: WhisperUi(
+        engineAvailable = false, model = WhisperModel.DEFAULT, modelState = ModelState.Absent,
+        recommended = WhisperModel.DEFAULT, language = WhisperLanguage.AUTO, progress = null,
+        showing = false, durationKnown = false,
+    )
+    val subtitleOptions = remember(subtitlePage, textTracks, openSubtitles, whisperUi, ru) {
+        subtitleMenu(subtitlePage, textTracks.embedded, openSubtitles, whisperUi, ru).map { option ->
+            // Уже подгруженное предложение OpenSubtitles выбирается как дорожка, без повторной загрузки.
+            option.externalKey?.toLongOrNull()?.let(textTracks.userAdded::get) ?: option
+        }
     }
     // Подгруженная дорожка появляется в плеере после пересборки источника — тогда и включаем её.
     LaunchedEffect(player, tracksSnapshot, pendingSubtitleId) {
@@ -228,6 +258,10 @@ fun StreamPlayerSurface(
             },
         )
 
+        if (whisperUi.showing) {
+            WhisperCueOverlay(cues = whisperCues, position = clock.position, inPip = isInPip)
+        }
+
         if (!isInPip) {
             PlayerControlsOverlay(
                 player = player,
@@ -267,16 +301,29 @@ fun StreamPlayerSurface(
                 },
                 subtitleOptions = subtitleOptions,
                 onSelectSubtitle = { option ->
+                    val action = SubtitleMenuAction.decode(option.action)
                     when {
-                        option.isOff -> player.trackSelectionParameters = player.trackSelectionParameters
-                            .buildUpon()
-                            .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
-                            .build()
-                        option.externalKey != null -> subtitleOffers
-                            .firstOrNull { it.fileId.toString() == option.externalKey }
-                            ?.let(onLoadSubtitle)
-                        else -> player.selectTextTrack(option.groupIndex, option.trackIndex)
+                        action is SubtitleMenuAction.Open -> subtitlePage = action.page
+                        action == SubtitleMenuAction.None -> Unit
+                        action != null -> {
+                            onSubtitleMenuAction(action)
+                            // Показ реплик Whisper — вместо дорожек плеера, не поверх них.
+                            if (action == SubtitleMenuAction.Show) player.disableTextTracks()
+                        }
+                        option.isOff -> {
+                            player.disableTextTracks()
+                            onHideWhisper()
+                        }
+                        option.externalKey != null -> {
+                            openSubtitles.offers.firstOrNull { it.fileId.toString() == option.externalKey }?.let(onLoadSubtitle)
+                            onHideWhisper()
+                        }
+                        else -> {
+                            player.selectTextTrack(option.groupIndex, option.trackIndex)
+                            onHideWhisper()
+                        }
                     }
+                    if (!option.keepsMenuOpen) subtitlePage = SubtitlePage.ROOT
                 },
                 onSetFit = { fit = it },
             )
@@ -318,51 +365,64 @@ private fun Tracks.streamAudioOptions(): List<AudioTrackOption> {
     return result
 }
 
-/**
- * «Выкл», встроенные текстовые дорожки, затем ещё не скачанные предложения OpenSubtitles. Предложение,
- * которое уже подгружено в это видео, второй раз не показывается. Пусто — выбирать не из чего.
- */
-private fun Tracks.subtitleOptions(offers: List<SubtitleOffer>, ru: Boolean): List<SubtitleOption> {
+/** Текстовые дорожки плеера: пришедшие с видео и подгруженные пользователем (по file_id OpenSubtitles). */
+private class TextTracks(val embedded: List<SubtitleOption>, val userAdded: Map<Long, SubtitleOption>)
+
+private fun Tracks.textTracks(ru: Boolean): TextTracks {
     val embedded = ArrayList<SubtitleOption>()
-    val presentIds = HashSet<String>()
+    val userAdded = HashMap<Long, SubtitleOption>()
     groups.forEachIndexed { groupIndex, group ->
         if (group.type != C.TRACK_TYPE_TEXT) return@forEachIndexed
         for (trackIndex in 0 until group.length) {
             if (!group.isTrackSupported(trackIndex)) continue
             val format = group.getTrackFormat(trackIndex)
-            format.id?.let(presentIds::add)
             val label = format.label
                 ?: format.language?.let {
                     java.util.Locale.forLanguageTag(it).displayLanguage.ifBlank { it }
                 }
                 ?: if (ru) "Дорожка ${embedded.size + 1}" else "Track ${embedded.size + 1}"
-            embedded += SubtitleOption(
+            val option = SubtitleOption(
                 id = "$groupIndex:$trackIndex",
                 label = label.replaceFirstChar { it.uppercase() },
                 isSelected = group.isTrackSelected(trackIndex),
                 groupIndex = groupIndex,
                 trackIndex = trackIndex,
             )
+            val fileId = format.id?.substringAfter(VetroSubtitleTrack.USER_ADDED_PREFIX, "")?.takeWhile(Char::isDigit)?.toLongOrNull()
+            if (fileId != null) userAdded[fileId] = option else embedded += option
         }
     }
-    val external = offers
-        .filter { offer -> presentIds.none { it.contains("${VetroSubtitleTrack.USER_ADDED_PREFIX}${offer.fileId}") } }
-        .map { offer ->
-            SubtitleOption(
-                id = "offer:${offer.fileId}",
-                label = subtitleLabel(offer),
-                isSelected = false,
-                externalKey = offer.fileId.toString(),
-            )
+    return TextTracks(embedded, userAdded)
+}
+
+private fun ExoPlayer.disableTextTracks() {
+    trackSelectionParameters = trackSelectionParameters.buildUpon().setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true).build()
+}
+
+/**
+ * Реплики Whisper поверх кадра: распознанное появляется по мере готовности, без пересборки источника.
+ * Вид — как у субтитров плеера: белый текст на полупрозрачной подложке у нижнего края.
+ */
+@Composable
+private fun BoxScope.WhisperCueOverlay(cues: List<SubtitleCue>, position: () -> Long, inPip: Boolean) {
+    val text by remember(cues) {
+        derivedStateOf {
+            val p = position()
+            cues.lastOrNull { it.startMs <= p && p < it.endMs }?.text?.trim()
         }
-    if (embedded.isEmpty() && external.isEmpty()) return emptyList()
-    val off = SubtitleOption(
-        id = "off",
-        label = if (ru) "Выкл" else "Off",
-        isSelected = embedded.none { it.isSelected },
-        isOff = true,
+    }
+    val current = text ?: return
+    Text(
+        text = current,
+        color = Color.White,
+        fontSize = if (inPip) 10.sp else 17.sp,
+        textAlign = TextAlign.Center,
+        modifier = Modifier
+            .align(Alignment.BottomCenter)
+            .padding(horizontal = 48.dp, vertical = if (inPip) 6.dp else 36.dp)
+            .background(Color.Black.copy(alpha = 0.55f), RoundedCornerShape(6.dp))
+            .padding(horizontal = 10.dp, vertical = 4.dp),
     )
-    return listOf(off) + embedded + external
 }
 
 private fun ExoPlayer.selectTextTrack(groupIndex: Int, trackIndex: Int) {
