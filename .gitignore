@@ -19,7 +19,8 @@ local.properties
 # Baseline/startup profile is source: it ships in release builds (see :baselineprofile).
 !/app/src/release/generated/
 .kotlin/
-wrapper/
+# Stray top-level wrapper folder (the real one is gradle/wrapper/, which stays tracked)
+/wrapper/
 app/release/
 *.apk
 *.jar
