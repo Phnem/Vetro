@@ -48,7 +48,7 @@ val audiobookModule = module {
     single { AudiobookFeatureGate(enabled = BuildConfig.AUDIOBOOKS_ENABLED) }
     single { LocalFolderSource(get()) }
     single { TorrentEngine(androidContext()) }
-    single { com.example.myapplication.audiobooks.data.AudiobookMarkerStore(androidContext()) }
+    single { com.example.myapplication.audiobooks.data.AudiobookMarkerStore(get()) }
     single { KnigavuheMetadata(get(), TokenBucketRateLimiter(maxTokens = 2.0, refillTokensPerSecond = 1.0)) }
     // Все онлайн-источники одним списком — он же приоритет для витрины, озвучек и цепочки запасных:
     // сперва стабильные прямые ссылки с длинами глав, затем подписанные ссылки и сайты без длин,

@@ -401,7 +401,10 @@ fun AudiobookPlayerHost(language: AppLanguage = AppLanguage.RU, modifier: Modifi
                         val at = state.globalMs()
                         if (id != null && at != null) {
                             performHaptic(view, Haptic.Success)
-                            scope.launch { markerStore.add(id, at) }
+                            val chapter = state.timeline?.chapterAt(at)
+                            scope.launch {
+                                markerStore.add(id, at, chapter?.index ?: 0, at - (chapter?.startMs ?: 0L))
+                            }
                         }
                     },
                     onSheet = { which ->
@@ -464,9 +467,7 @@ fun AudiobookPlayerHost(language: AppLanguage = AppLanguage.RU, modifier: Modifi
                             state = state,
                             strings = strings,
                             markers = markers,
-                            onDelete = { marker ->
-                                book.narrationId?.value?.let { id -> scope.launch { markerStore.remove(id, marker) } }
-                            },
+                            onDelete = { marker -> scope.launch { markerStore.remove(marker) } },
                             onDismiss = ::closeSheet,
                         )
                         null -> Unit

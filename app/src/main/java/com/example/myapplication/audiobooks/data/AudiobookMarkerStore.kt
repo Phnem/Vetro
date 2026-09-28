@@ -1,66 +1,63 @@
 package com.example.myapplication.audiobooks.data
 
-import android.content.Context
-import com.example.myapplication.data.local.JsonMapFileStore
-import java.io.File
+import app.cash.sqldelight.coroutines.asFlow
+import app.cash.sqldelight.coroutines.mapToList
+import com.example.myapplication.data.local.AnimeDatabase
+import com.example.myapplication.data.local.Audiobook_bookmark
+import java.util.UUID
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.map
-import kotlinx.serialization.Serializable
-import kotlinx.serialization.builtins.ListSerializer
+import kotlinx.coroutines.withContext
 
 /** Маркер — место в книге, куда пользователь хочет вернуться: позиция на шкале книги (все треки подряд). */
-@Serializable
 data class AudiobookMarker(
+    val id: String,
     val globalMs: Long,
     val createdAt: Long,
 )
 
 /**
- * Маркеры аудиокниг по озвучке (narrationId): у каждой озвучки своя шкала времени, и позиция из
- * одной в другой ничего не значит. Файловый стор без миграции базы — как у соседних кэшей.
+ * Маркеры аудиокниг по озвучке — таблица `audiobook_bookmark`: у каждой озвучки своя шкала
+ * времени, позиция из одной в другой ничего не значит. Удаление озвучки уносит её маркеры каскадом.
  */
-class AudiobookMarkerStore(context: Context) {
+class AudiobookMarkerStore(private val db: AnimeDatabase) {
+    private val q get() = db.audiobookQueries
 
-    private val store = JsonMapFileStore(
-        File(context.filesDir, "audiobook_markers_v1.json"),
-        ListSerializer(AudiobookMarker.serializer()),
-        TAG,
-    )
-
-    /** Маркеры озвучки. Стор читается с диска при первой подписке: без этого после перезапуска поток был пуст до первой записи. */
     fun markers(narrationId: String): Flow<List<AudiobookMarker>> =
-        kotlinx.coroutines.flow.flow {
-            store.ensureLoaded()
-            emitAll(store.flow)
-        }
-            .map { it[narrationId].orEmpty().sortedBy { m -> m.globalMs } }
+        q.bookmarksByNarration(narrationId).asFlow().mapToList(Dispatchers.IO)
+            .map { rows -> rows.map { AudiobookMarker(it.id, it.global_ms, it.created_at) } }
             .distinctUntilChanged()
 
-    suspend fun ensureLoaded() = store.ensureLoaded()
-
-    /** Новый маркер. Рядом (ближе [MERGE_WINDOW_MS]) с уже стоящим второй не ставится. */
-    suspend fun add(narrationId: String, globalMs: Long) {
-        store.ensureLoaded()
-        store.update { map ->
-            val current = map[narrationId].orEmpty()
-            if (current.any { kotlin.math.abs(it.globalMs - globalMs) < MERGE_WINDOW_MS }) return@update map
-            map + (narrationId to (current + AudiobookMarker(globalMs, System.currentTimeMillis())))
+    /**
+     * Новый маркер. Рядом (ближе [MERGE_WINDOW_MS]) с уже стоящим второй не ставится. Озвучка
+     * заводится в базе с первым сохранением прогресса; маркер до этого момента молча не ставится.
+     */
+    suspend fun add(narrationId: String, globalMs: Long, chapterIndex: Int, chapterOffsetMs: Long) =
+        withContext(Dispatchers.IO) {
+            val existing = q.bookmarksByNarration(narrationId).executeAsList()
+            if (existing.any { kotlin.math.abs(it.global_ms - globalMs) < MERGE_WINDOW_MS }) return@withContext
+            runCatching {
+                q.insertBookmark(
+                    Audiobook_bookmark(
+                        id = UUID.randomUUID().toString(),
+                        narration_id = narrationId,
+                        global_ms = globalMs,
+                        chapter_idx = chapterIndex.toLong(),
+                        chapter_offset_ms = chapterOffsetMs,
+                        note = null,
+                        created_at = System.currentTimeMillis(),
+                    ),
+                )
+            }
         }
-    }
 
-    suspend fun remove(narrationId: String, marker: AudiobookMarker) {
-        store.ensureLoaded()
-        store.update { map ->
-            val rest = map[narrationId].orEmpty() - marker
-            if (rest.isEmpty()) map - narrationId else map + (narrationId to rest)
-        }
+    suspend fun remove(marker: AudiobookMarker) = withContext(Dispatchers.IO) {
+        q.deleteBookmark(marker.id)
     }
 
     companion object {
-        private const val TAG = "AudiobookMarkers"
-
         /** Два нажатия подряд в одном месте — один маркер, а не две точки друг на друге. */
         const val MERGE_WINDOW_MS = 5_000L
     }

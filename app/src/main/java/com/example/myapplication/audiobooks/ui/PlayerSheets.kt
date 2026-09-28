@@ -661,7 +661,7 @@ internal fun ColumnScope.MarkersSheetContent(
     Spacer(Modifier.height(14.dp))
     val timeline = state.timeline
     LazyColumn(verticalArrangement = Arrangement.spacedBy(3.dp), modifier = Modifier.heightIn(max = 460.dp)) {
-        itemsIndexed(markers, key = { _, m -> m.createdAt }) { i, marker ->
+        itemsIndexed(markers, key = { _, m -> m.id }) { i, marker ->
             val chapter = timeline?.chapterAt(marker.globalMs)
             Row(
                 Modifier
