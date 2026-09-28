@@ -19,7 +19,8 @@ CREATE TABLE audiobook_work (
     cover_blurhash TEXT,
     selected_narration_id TEXT,
     updated_at INTEGER NOT NULL,
-    is_favorite INTEGER NOT NULL DEFAULT 0
+    is_favorite INTEGER NOT NULL DEFAULT 0,
+    in_library INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX audiobook_work_collection ON audiobook_work(collection_id);
 CREATE INDEX audiobook_work_fingerprint ON audiobook_work(cluster_fingerprint);
@@ -97,8 +98,31 @@ upsertWork:
 INSERT OR REPLACE INTO audiobook_work(
     work_id, cluster_fingerprint, collection_id, title, title_original, authors_json, series_title,
     series_index, description, genres_json, language, year, is_collection, cover_url,
-    cover_palette_json, cover_blurhash, selected_narration_id, updated_at, is_favorite
+    cover_palette_json, cover_blurhash, selected_narration_id, updated_at, is_favorite, in_library
 ) VALUES ?;
+
+setWorkInLibrary:
+UPDATE audiobook_work SET in_library = :inLibrary WHERE work_id = :workId;
+
+-- Библиотека пользователя: свои книги и избранное. К каждой — озвучка (выбранная или первая)
+-- и её лучший вариант: закреплённый пользователем, затем доступный.
+libraryWorks:
+SELECT w.work_id, w.title, w.authors_json, w.cover_url, w.is_favorite, w.in_library, w.updated_at,
+       n.narration_id, n.narrators_json, n.duration_ms,
+       v.variant_id, v.source_id, v.source_url
+FROM audiobook_work w
+LEFT JOIN audiobook_narration n ON n.narration_id = COALESCE(
+    w.selected_narration_id,
+    (SELECT n2.narration_id FROM audiobook_narration n2 WHERE n2.work_id = w.work_id LIMIT 1)
+)
+LEFT JOIN audiobook_variant v ON v.variant_id = (
+    SELECT v2.variant_id FROM audiobook_variant v2
+    WHERE v2.narration_id = n.narration_id
+    ORDER BY v2.user_pinned DESC, (v2.availability = 'AVAILABLE') DESC
+    LIMIT 1
+)
+WHERE w.in_library = 1 OR w.is_favorite = 1
+ORDER BY w.updated_at DESC;
 
 setWorkFavorite:
 UPDATE audiobook_work SET is_favorite = :favorite WHERE work_id = :workId;

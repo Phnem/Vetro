@@ -9,6 +9,9 @@ import com.example.myapplication.audiobooks.data.CachedBook
 import com.example.myapplication.audiobooks.data.CachedShelf
 import com.example.myapplication.audiobooks.data.CatalogShelf
 import com.example.myapplication.audiobooks.data.ContinueItem
+import com.example.myapplication.audiobooks.data.LibraryBook
+import com.example.myapplication.audiobooks.data.OpenedBook
+import com.example.myapplication.audiobooks.data.local.LocalLibraryImporter
 import com.example.myapplication.audiobooks.playback.AudiobookLauncher
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -24,7 +27,39 @@ class BooksHomeViewModel(
     private val catalog: BooksCatalog,
     private val repository: AudiobookRepository,
     private val launcher: AudiobookLauncher,
+    private val importer: LocalLibraryImporter,
 ) : ViewModel() {
+
+    /**
+     * Библиотека пользователя (свои папки и избранное). null — ещё не прочитана: пока так, дом не
+     * решает, что показывать, и не мигает витриной у того, у кого библиотека есть.
+     */
+    val library: StateFlow<List<LibraryBook>?> = repository.library()
+        .stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
+    /** Сколько папок сейчас добавляется (0 — ничего): для строки «Добавляю…» под заголовком. */
+    private val _importing = MutableStateFlow(0)
+    val importing: StateFlow<Int> = _importing.asStateFlow()
+
+    /** Папка из системного выбора: книги из неё — в библиотеку, с добором метаданных у источников. */
+    fun importFolder(uri: android.net.Uri) {
+        _importing.update { it + 1 }
+        viewModelScope.launch {
+            try {
+                runCatching { importer.importTree(uri) }
+            } finally {
+                _importing.update { (it - 1).coerceAtLeast(0) }
+            }
+        }
+    }
+
+    /** Своя книга с полки: играет сразу, в полном плеере. */
+    fun playLibrary(book: LibraryBook) {
+        val narration = book.narrationId ?: return
+        val variant = book.variantId ?: return
+        if (_launch.value is LaunchState.Starting) return
+        start(variant.value) { launcher.playLocal(OpenedBook(book.workId, narration, variant)) }
+    }
 
     val shelves: List<CatalogShelf> = catalog.shelves
 
@@ -46,6 +81,8 @@ class BooksHomeViewModel(
     val launch: StateFlow<LaunchState> = _launch.asStateFlow()
 
     init {
+        // Папки, добавленные раньше отдельной страницей, — в библиотеку (один раз на папку).
+        viewModelScope.launch { runCatching { importer.syncExisting() } }
         viewModelScope.launch {
             _weekListenedMs.value = repository.listenedSince(System.currentTimeMillis() - WEEK_MS)
         }

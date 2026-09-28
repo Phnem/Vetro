@@ -100,7 +100,16 @@ val audiobookModule = module {
     }
     single { AudiobookPlayerState() }
     single { AudiobookLauncher(androidContext(), get(named(SOURCES)), get(), get(), get(), get(), get()) }
-    viewModel { BooksHomeViewModel(get(), get(), get()) }
+    single {
+        com.example.myapplication.audiobooks.data.local.LocalLibraryImporter(
+            local = get(),
+            resolver = get(),
+            search = get(),
+            sources = get(named(SOURCES)),
+            repository = get(),
+        )
+    }
+    viewModel { BooksHomeViewModel(get(), get(), get(), get()) }
     viewModel { (source: String, key: String, title: String) ->
         BookDetailsViewModel(
             source, key, title, get(named(SOURCES)), get(), get(), get(),

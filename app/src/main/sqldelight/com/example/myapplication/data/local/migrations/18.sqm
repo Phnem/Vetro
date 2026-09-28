@@ -1,0 +1,3 @@
+-- Библиотека пользователя аудиокниг: книга добавлена им самим (своя папка). Избранное тоже считается
+-- библиотекой, но хранится своим флагом is_favorite.
+ALTER TABLE audiobook_work ADD COLUMN in_library INTEGER NOT NULL DEFAULT 0;

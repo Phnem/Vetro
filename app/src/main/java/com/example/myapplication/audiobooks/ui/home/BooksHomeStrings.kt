@@ -35,6 +35,9 @@ data class BooksHomeStrings(
     val favorite: String,
     val shelfFailed: String,
     val close: String,
+    /** Под заголовком, пока папка добавляется и добираются метаданные. */
+    val adding: String,
+    val unknownAuthor: String,
 )
 
 fun booksHomeStrings(language: AppLanguage): BooksHomeStrings = when (language) {
@@ -65,6 +68,8 @@ fun booksHomeStrings(language: AppLanguage): BooksHomeStrings = when (language) 
         minutes = "мин",
         books = { n -> "$n ${ruPlural(n, "книга", "книги", "книг")}" },
         addFolder = "Добавить папку с книгами",
+        adding = "Добавляю книги…",
+        unknownAuthor = "Автор неизвестен",
         loading = "Загружаем полку…",
         preparing = "Готовим книгу…",
         favorite = "В избранное",
@@ -98,6 +103,8 @@ fun booksHomeStrings(language: AppLanguage): BooksHomeStrings = when (language) 
         minutes = "min",
         books = { n -> if (n == 1) "1 book" else "$n books" },
         addFolder = "Add a folder with books",
+        adding = "Adding books…",
+        unknownAuthor = "Unknown author",
         loading = "Loading the shelf…",
         preparing = "Preparing the book…",
         favorite = "Favourite",

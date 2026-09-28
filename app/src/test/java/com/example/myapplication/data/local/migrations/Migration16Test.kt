@@ -25,8 +25,8 @@ class Migration16Test {
         migrated = JdbcSqliteDriver(JdbcSqliteDriver.IN_MEMORY)
         migrated.execute(null, "CREATE TABLE anime (id TEXT PRIMARY KEY NOT NULL)", 0)
         migrated.execute(null, "PRAGMA user_version = 16", 0)
-        // 16.sqm создаёт таблицы, 17.sqm добавляет избранное — сравниваем с итоговой схемой.
-        AnimeDatabase.Schema.migrate(migrated, 16, 18).value
+        // 16.sqm создаёт таблицы, 17.sqm добавляет избранное, 18.sqm — библиотеку; сравниваем с итоговой схемой.
+        AnimeDatabase.Schema.migrate(migrated, 16, AnimeDatabase.Schema.version).value
         fresh = JdbcSqliteDriver(JdbcSqliteDriver.IN_MEMORY)
         AnimeDatabase.Schema.create(fresh).value
     }
@@ -78,7 +78,7 @@ class Migration16Test {
         title_original = null, authors_json = "[]", series_title = null, series_index = null,
         description = null, genres_json = "[]", language = "RU", year = null, is_collection = 0,
         cover_url = null, cover_palette_json = null, cover_blurhash = null, selected_narration_id = null,
-        updated_at = 0, is_favorite = 0,
+        updated_at = 0, is_favorite = 0, in_library = 0,
     )
 
     private fun narration(id: String, workId: String) = Audiobook_narration(

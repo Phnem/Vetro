@@ -68,8 +68,9 @@ class AudiobookRepository(
                     cover_blurhash = work?.cover_blurhash,
                     selected_narration_id = work?.selected_narration_id,
                     updated_at = nowMs(),
-                    // INSERT OR REPLACE переписывает строку целиком: избранное переносим явно.
+                    // INSERT OR REPLACE переписывает строку целиком: избранное и библиотеку переносим явно.
                     is_favorite = work?.is_favorite ?: 0,
+                    in_library = work?.in_library ?: 0,
                 ),
             )
             val narrationFp = fingerprint(book.narrators, "", "")
@@ -125,6 +126,7 @@ class AudiobookRepository(
                         language = BookLanguage.RU.name, year = null, is_collection = 0,
                         cover_url = meta.coverUrl, cover_palette_json = null, cover_blurhash = null,
                         selected_narration_id = meta.narrationId.value, updated_at = nowMs(), is_favorite = 0,
+                        in_library = 0,
                     ),
                 )
             }
@@ -181,6 +183,99 @@ class AudiobookRepository(
                 )
             }
         }
+
+    /**
+     * Библиотека пользователя: книги, которые он добавил сам (своя папка), и избранное. Пока она
+     * пуста, дом показывает витрину источников; с первой своей книгой — полки по авторам.
+     */
+    fun library(): Flow<List<LibraryBook>> =
+        q.libraryWorks().asFlow().mapToList(Dispatchers.IO).map { rows ->
+            rows.map { r ->
+                LibraryBook(
+                    workId = WorkId(r.work_id),
+                    narrationId = r.narration_id?.let(::NarrationId),
+                    variantId = r.variant_id?.let(::VariantId),
+                    title = r.title,
+                    authors = decode(r.authors_json),
+                    narrators = r.narrators_json?.let(::decode).orEmpty(),
+                    coverUrl = r.cover_url,
+                    durationMs = r.duration_ms,
+                    local = r.source_id == LOCAL_SOURCE_ID,
+                    own = r.in_library == 1L,
+                )
+            }
+        }
+
+    /**
+     * Своя книга из папки: произведение, озвучка и вариант под теми же id, что у локальной книги
+     * (по ним плеер пишет прогресс), сразу в библиотеке. [meta] — то, что удалось добрать по
+     * тегам файлов и у источников; чего нет — остаётся пустым, а не выдуманным.
+     */
+    suspend fun saveLocal(
+        workId: WorkId,
+        narrationId: NarrationId,
+        variantId: VariantId,
+        folderUri: String,
+        meta: LocalBookMeta,
+    ) = io {
+        q.transaction {
+            val work = q.workById(workId.value).executeAsOneOrNull()
+            q.upsertWork(
+                Audiobook_work(
+                    work_id = workId.value,
+                    cluster_fingerprint = fingerprint(meta.authors, meta.title, ""),
+                    collection_id = work?.collection_id,
+                    title = meta.title,
+                    title_original = work?.title_original,
+                    authors_json = json.encodeToString(meta.authors),
+                    series_title = work?.series_title,
+                    series_index = work?.series_index,
+                    description = meta.description ?: work?.description,
+                    genres_json = json.encodeToString(meta.genres),
+                    language = meta.language ?: work?.language ?: BookLanguage.RU.name,
+                    year = meta.year?.toLong() ?: work?.year,
+                    is_collection = work?.is_collection ?: 0,
+                    cover_url = meta.coverUrl ?: work?.cover_url,
+                    cover_palette_json = work?.cover_palette_json,
+                    cover_blurhash = work?.cover_blurhash,
+                    selected_narration_id = narrationId.value,
+                    updated_at = nowMs(),
+                    is_favorite = work?.is_favorite ?: 0,
+                    in_library = 1,
+                ),
+            )
+            q.upsertNarration(
+                Audiobook_narration(
+                    narration_id = narrationId.value,
+                    work_id = workId.value,
+                    cluster_fingerprint = fingerprint(meta.narrators, "", ""),
+                    narrators_json = json.encodeToString(meta.narrators),
+                    kind = "SOLO",
+                    duration_ms = meta.durationMs,
+                    chapter_count = meta.chapterCount?.toLong(),
+                ),
+            )
+            q.upsertVariant(
+                Audiobook_variant(
+                    variant_id = variantId.value,
+                    narration_id = narrationId.value,
+                    source_id = LOCAL_SOURCE_ID,
+                    source_url = folderUri,
+                    duration_ms = meta.durationMs,
+                    chapter_count = meta.chapterCount?.toLong(),
+                    availability = AVAILABLE,
+                    infrastructure = null,
+                    last_verified_at = nowMs(),
+                    user_pinned = 1,
+                ),
+            )
+        }
+    }
+
+    /** Есть ли книга уже в библиотеке (чтобы не добирать метаданные повторно). */
+    suspend fun inLibrary(workId: WorkId): Boolean = io {
+        q.workById(workId.value).executeAsOneOrNull()?.in_library == 1L
+    }
 
     fun isFavorite(workId: WorkId): Flow<Boolean> =
         q.workFavorite(workId.value).asFlow().mapToList(Dispatchers.IO).map { it.firstOrNull() == 1L }
@@ -269,6 +364,39 @@ data class NarrationBook(
 )
 
 data class OpenedBook(val workId: WorkId, val narrationId: NarrationId, val variantId: VariantId)
+
+/** Книга библиотеки пользователя для полок дома. */
+data class LibraryBook(
+    val workId: WorkId,
+    val narrationId: NarrationId?,
+    val variantId: VariantId?,
+    val title: String,
+    val authors: List<String>,
+    val narrators: List<String>,
+    val coverUrl: String?,
+    val durationMs: Long?,
+    /** Своя папка на устройстве — играет без сети, страницы у источника у неё нет. */
+    val local: Boolean,
+    /** Добавлена пользователем сам (не просто избранное): с первой такой книгой дом — это библиотека. */
+    val own: Boolean,
+)
+
+/** Что известно о своей книге: теги файлов + добор у источников. */
+data class LocalBookMeta(
+    val title: String,
+    val authors: List<String>,
+    val narrators: List<String> = emptyList(),
+    val coverUrl: String? = null,
+    val description: String? = null,
+    val genres: List<String> = emptyList(),
+    val year: Int? = null,
+    val language: String? = null,
+    val durationMs: Long? = null,
+    val chapterCount: Int? = null,
+)
+
+/** Источник варианта «своя папка» (id варианта начинается с того же префикса). */
+const val LOCAL_SOURCE_ID = "local"
 
 data class PlaybackBookMeta(
     val workId: WorkId,

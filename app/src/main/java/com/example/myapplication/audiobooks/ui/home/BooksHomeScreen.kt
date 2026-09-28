@@ -79,7 +79,6 @@ import androidx.media3.common.util.UnstableApi
 import com.example.myapplication.audiobooks.data.BooksCatalog
 import com.example.myapplication.audiobooks.data.CachedBook
 import com.example.myapplication.audiobooks.data.ContinueItem
-import com.example.myapplication.audiobooks.ui.LocalBooksPanel
 import com.example.myapplication.audiobooks.ui.getAudiobookStrings
 import com.example.myapplication.network.AppLanguage
 import com.example.myapplication.ui.shared.theme.BrandOrange
@@ -124,11 +123,16 @@ fun BooksHomeScreen(
     // «назад» возвращал на общий список полок вместо той, с которой открыли книгу.
     var openShelfKey by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf<String?>(null) }
     var sheetBook by remember { mutableStateOf<CachedBook?>(null) }
-    var showLocal by remember { mutableStateOf(false) }
     val context = LocalContext.current
+    val library by vm.library.collectAsStateWithLifecycle()
+    val importing by vm.importing.collectAsStateWithLifecycle()
+    // «Добавить» сразу открывает системный выбор папки; выбранная папка уходит в библиотеку.
+    val folderPicker = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.OpenDocumentTree(),
+    ) { uri -> uri?.let(vm::importFolder) }
 
-    LaunchedEffect(morph.open != null || sheetBook != null || showLocal) {
-        onOverlayVisibleChange(morph.open != null || sheetBook != null || showLocal)
+    LaunchedEffect(morph.open != null || sheetBook != null) {
+        onOverlayVisibleChange(morph.open != null || sheetBook != null)
     }
     // Ошибки запуска без открытого листа (кнопка «Продолжить») — коротким тостом.
     LaunchedEffect(launch) {
@@ -144,7 +148,13 @@ fun BooksHomeScreen(
 
     // Все полки на месте с первого кадра: пока выдачи нет, карточка — скелет с пустым веером,
     // а не пустой экран, который «появляется» через несколько секунд.
-    val shelves = remember(content, strings) {
+    // С первой своей книгой дом — это библиотека: полка на автора. До того — витрина источников.
+    val ownLibrary = library?.takeIf { books -> books.any { it.own } }
+    val libraryByKey = remember(ownLibrary) {
+        ownLibrary.orEmpty().mapNotNull { b -> b.variantId?.let { it.value to b } }.toMap()
+    }
+    val shelves = remember(content, strings, ownLibrary) {
+        if (ownLibrary != null) return@remember authorShelves(ownLibrary, strings)
         buildList {
             val showcase = content[BooksCatalog.SHOWCASE_KEY]
             add(OpenShelf(BooksCatalog.SHOWCASE_KEY, strings.showcaseTitle, strings.showcaseSubtitle,
@@ -200,7 +210,8 @@ fun BooksHomeScreen(
                 openShelfKey = shelf.key
                 morph.expand(shelf, scope, reducedMotion)
             },
-            onAddFolder = { showLocal = true },
+            onAddFolder = { runCatching { folderPicker.launch(null) } },
+            importing = importing > 0,
         )
 
         morph.open?.let { shelf ->
@@ -211,30 +222,21 @@ fun BooksHomeScreen(
                 morph = morph,
                 // Книга с источником — полноценная страница книги; без источника (витрина) — лист
                 // с честным «пока не нашли».
-                onBook = { b -> if (b.playable) onOpenBook(b.source, b.key, b.title, b.coverUrl) else sheetBook = b },
+                onBook = { b ->
+                    val own = libraryByKey["${b.source}:${b.key}"]
+                    when {
+                        // Своя папка — страницы у источника нет, сразу играет.
+                        own != null && own.local -> vm.playLibrary(own)
+                        b.playable -> onOpenBook(b.source, b.key, b.title, b.coverUrl)
+                        else -> sheetBook = b
+                    }
+                },
                 onClose = {
                     openShelfKey = null
                     morph.collapse(scope, reducedMotion)
                 },
             )
             FlyingCovers(morph, shelf)
-        }
-
-        if (showLocal) {
-            BackHandler { showLocal = false }
-            Box(
-                Modifier
-                    .fillMaxSize()
-                    .background(background)
-                    .statusBarsPadding(),
-            ) {
-                LocalBooksPanel(
-                    getAudiobookStrings(language),
-                    Modifier.fillMaxSize(),
-                    autoOpenPicker = false,
-                    onClose = { showLocal = false },
-                )
-            }
         }
 
         BookSheet(
@@ -266,6 +268,7 @@ private fun HomeList(
     onResume: (ContinueItem, Boolean) -> Unit,
     onOpenShelf: (OpenShelf) -> Unit,
     onAddFolder: () -> Unit,
+    importing: Boolean = false,
 ) {
     val ink = if (isDark) Color.White else Color(0xFF111111)
     val lift = with(LocalDensity.current) { 12.dp.toPx() }
@@ -296,6 +299,7 @@ private fun HomeList(
                     )
                 }
                 val subtitle = when {
+                    importing -> strings.adding
                     continueItems.size > 1 -> strings.inProgress(continueItems.size)
                     weekMs >= 60_000 -> strings.thisWeek(strings.duration(weekMs / 1000))
                     else -> strings.subtitleEmpty
@@ -323,6 +327,7 @@ private fun HomeList(
                 title = shelf.title,
                 subtitle = shelf.subtitle,
                 topStart = when {
+                    shelf.library -> ""
                     shelf.fetchedAt != null -> strings.updated(strings.ago(now - shelf.fetchedAt))
                     shelf.key in failed -> strings.shelfFailed
                     else -> strings.loading
@@ -429,7 +434,42 @@ internal data class OpenShelf(
     val books: List<CachedBook>,
     /** null — выдачи ещё нет, карточка показывается скелетом. */
     val fetchedAt: Long?,
+    /** Полка библиотеки пользователя (автор), а не витрина источника: у неё нет «обновлено». */
+    val library: Boolean = false,
 )
+
+/**
+ * Полки библиотеки: одна на автора (по первому автору книги), крупные авторы первыми, без автора —
+ * отдельной полкой в конце. Внутри — книги в порядке добавления.
+ */
+internal fun authorShelves(books: List<com.example.myapplication.audiobooks.data.LibraryBook>, strings: BooksHomeStrings): List<OpenShelf> {
+    val byAuthor = books.groupBy { it.authors.firstOrNull()?.trim()?.takeIf(String::isNotEmpty) }
+    return byAuthor.entries
+        .sortedWith(compareBy<Map.Entry<String?, List<com.example.myapplication.audiobooks.data.LibraryBook>>> { it.key == null }.thenByDescending { it.value.size })
+        .map { (author, list) ->
+            OpenShelf(
+                key = "author:" + (author ?: "?"),
+                title = author ?: strings.unknownAuthor,
+                // Число книг уже в углу карточки — под названием общая длительность полки.
+                subtitle = list.sumOf { it.durationMs ?: 0L }.takeIf { it > 0 }?.let { strings.duration(it / 1000) }.orEmpty(),
+                books = list.map { b ->
+                    val variant = b.variantId?.value.orEmpty()
+                    CachedBook(
+                        source = variant.substringBefore(':', ""),
+                        key = variant.substringAfter(':', ""),
+                        title = b.title,
+                        authors = b.authors,
+                        narrators = b.narrators,
+                        coverUrl = b.coverUrl,
+                        durationSec = b.durationMs?.div(1000),
+                        narrations = 1,
+                    )
+                },
+                fetchedAt = null,
+                library = true,
+            )
+        }
+}
 
 /**
  * Три обложки веера в полёте — отдельный слой поверх дома и страницы на всё время перехода.

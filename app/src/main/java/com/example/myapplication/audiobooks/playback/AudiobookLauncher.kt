@@ -102,6 +102,25 @@ class AudiobookLauncher(
         }.getOrElse { if (it is kotlinx.coroutines.CancellationException) throw it else Result.Unavailable }
     }
 
+    /**
+     * Книга библиотеки из своей папки: манифест — через общий резолвер (он умеет локальные папки),
+     * название, автор и обложка — из базы. Страницы у источника у неё нет, поэтому сразу играем.
+     */
+    suspend fun playLocal(opened: OpenedBook, expand: Boolean = true): Result {
+        val manifest = runCatching { resolver.manifest(opened.variantId) }.getOrElse { return Result.Unavailable }
+        val meta = repository.bookOf(opened.narrationId)
+        return runCatching {
+            start(
+                opened, manifest,
+                meta?.title.orEmpty(), meta?.authors.orEmpty().joinToString(", "),
+                meta?.narrators.orEmpty().joinToString(", "), meta?.coverUrl,
+                null, null, null,
+            )
+            if (expand) playerState.requestExpand()
+            Result.Started
+        }.getOrElse { if (it is kotlinx.coroutines.CancellationException) throw it else Result.Unavailable }
+    }
+
     private suspend fun start(
         book: OpenedBook,
         manifest: MediaManifest,
