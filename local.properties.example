@@ -47,3 +47,21 @@ KINOPOISK_API_KEY=
 #   supabase/migrations/20260625120000_align_production_schema.sql
 SUPABASE_URL=
 SUPABASE_ANON_KEY=
+
+# --- Обогащение карточек и субтитры (все ключи необязательны) ---
+# Пустой ключ = источник просто не опрашивается, остальное работает.
+#   OpenSubtitles: https://www.opensubtitles.com/consumers (ключ приложения; пользователь может
+#     подключить и свой в «Аккаунтах» — режим BYOK)
+#   OMDb (рейтинги IMDb/RT/Metacritic): https://www.omdbapi.com/apikey.aspx
+#   YouTube Data API v3 (трейлеры) и Google Books: https://console.cloud.google.com/apis/credentials
+#     — ключ ограничен Android-приложением: добавьте com.phnem.vetro и SHA-1 своей подписи
+#   Fanart.tv (логотипы, фоны): https://fanart.tv/get-an-api-key/
+#   NYT Books: https://developer.nytimes.com/get-started
+#   TasteDive: https://tastedive.com/read/api
+OPENSUBTITLES_API_KEY=
+OMDB_API_KEY=
+YOUTUBE_API_KEY=
+FANART_API_KEY=
+NYT_API_KEY=
+TASTEDIVE_API_KEY=
+GOOGLE_BOOKS_API_KEY=
