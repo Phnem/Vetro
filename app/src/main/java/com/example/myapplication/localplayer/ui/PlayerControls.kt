@@ -45,6 +45,7 @@ import androidx.compose.material.icons.rounded.FastForward
 import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.automirrored.rounded.Undo
+import androidx.compose.material.icons.rounded.Replay
 import androidx.compose.material.icons.rounded.SkipNext
 import androidx.compose.material.icons.rounded.Speed
 import androidx.compose.material3.Icon
@@ -198,6 +199,21 @@ fun PlayerControlsOverlay(
     val scope = rememberCoroutineScope()
 
     var controlsVisible by remember { mutableStateOf(true) }
+
+    // Undo Seek: дальний прыжок (свайп или шкала) запоминает, откуда прыгнули; несколько секунд
+    // в углу висит «Вернуться». Шаги ±10 и двойные тапы сюда не пишут — это не «улетел».
+    var seekUndoFrom by remember { mutableStateOf<Long?>(null) }
+    fun seekWithUndo(target: Long) {
+        val from = player.currentPosition
+        seekUndoFrom = from.takeIf { kotlin.math.abs(target - from) >= UNDO_SEEK_MIN_JUMP_MS }
+        player.seekTo(target)
+    }
+    LaunchedEffect(seekUndoFrom) {
+        if (seekUndoFrom != null) {
+            kotlinx.coroutines.delay(UNDO_SEEK_VISIBLE_MS)
+            seekUndoFrom = null
+        }
+    }
     var locked by remember { mutableStateOf(false) }
     var menuKind by remember { mutableStateOf<PlayerMenu?>(null) }
     val menuState = remember { MutableTransitionState(false) }
@@ -379,7 +395,7 @@ fun PlayerControlsOverlay(
                     },
                     onDragEnd = {
                         if (!blocked && axis == DragAxis.Horizontal && duration > 0) {
-                            player.seekTo(target)
+                            seekWithUndo(target)
                         }
                         seekPreview = null
                         levels.release()
@@ -532,6 +548,21 @@ fun PlayerControlsOverlay(
                     .align(Alignment.BottomEnd)
                     .navigationBarsPadding()
                     .padding(end = 16.dp, bottom = 104.dp),
+            )
+        }
+
+        // «Вернуться» после дальнего прыжка — в левом углу, на высоте «Пропустить»: разные действия
+        // не должны делить одно место.
+        seekUndoFrom?.let { from ->
+            SeekUndoButton(
+                onClick = {
+                    seekUndoFrom = null
+                    seekWithUndo(from)
+                },
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .navigationBarsPadding()
+                    .padding(start = 16.dp, bottom = 104.dp),
             )
         }
 
@@ -728,7 +759,7 @@ fun PlayerControlsOverlay(
                         onScrubStart = { isScrubbing = true },
                         onScrubEnd = { fraction ->
                             isScrubbing = false
-                            if (duration > 0) player.seekTo((fraction * duration).toLong())
+                            if (duration > 0) seekWithUndo((fraction * duration).toLong())
                         },
                     )
 
@@ -1066,6 +1097,38 @@ private fun SeekRipple(burst: SeekBurst, modifier: Modifier = Modifier) {
         }
     }
 }
+
+/** «Вернуться»: та же капсула, что у «Пропустить», иконка — назад по кругу. */
+@Composable
+private fun SeekUndoButton(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier = modifier
+            .playerOutlineCapsule()
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = onClick,
+            )
+            .padding(start = 14.dp, end = 20.dp, top = 12.dp, bottom = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(Icons.Rounded.Replay, contentDescription = null, tint = Color.White, modifier = Modifier.size(22.dp))
+        Spacer(Modifier.width(6.dp))
+        Text(
+            text = if (playerIsRu()) "Вернуться" else "Go back",
+            style = MaterialTheme.typography.titleMedium.copy(fontFamily = SnProFamily, fontWeight = FontWeight.SemiBold),
+            color = Color.White,
+        )
+    }
+}
+
+/** Прыжок короче этого — не «улетел», отменять нечего. */
+private const val UNDO_SEEK_MIN_JUMP_MS = 20_000L
+/** Сколько висит «Вернуться». */
+private const val UNDO_SEEK_VISIBLE_MS = 7_000L
 
 @Composable
 private fun SkipButton(
