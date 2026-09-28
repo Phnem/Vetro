@@ -33,6 +33,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -81,6 +82,7 @@ import com.example.myapplication.media.player.StreamRecoveryTrigger
 import com.example.myapplication.media.player.playbackHttpStatus
 import com.example.myapplication.media.player.rankRecoveryCandidates
 import com.example.myapplication.media.player.selectPreferredVideo
+import com.example.myapplication.media.player.dubSimilarity
 import com.example.myapplication.media.player.selectResumePosition
 import com.example.myapplication.media.source.flattenVideosWithSource
 import com.example.myapplication.media.player.VetroVideoCache
@@ -241,6 +243,8 @@ class StreamPlayerActivity : ComponentActivity(), PipHostActivity {
                     var recoveryOwner by remember { mutableStateOf<Player?>(null) }
                     var sameUrlRetryUsed by remember { mutableStateOf(false) }
                     var playbackError by remember { mutableStateOf<String?>(null) }
+                    // Плеер сам ушёл на другой источник посреди серии — коротко говорим об этом.
+                    var sourceSwitchNotice by remember { mutableStateOf<String?>(null) }
                     var manualSwitchFallback by remember { mutableStateOf<VetroVideo?>(null) }
                     // Студия, выбранная пользователем через колесо озвучки — переносится на соседние
                     // серии в switchToEpisode(), иначе выбор сбрасывался бы на дефолт резолвера каждый раз.
@@ -363,6 +367,7 @@ class StreamPlayerActivity : ComponentActivity(), PipHostActivity {
                         manualSwitchFallback = null
                         playbackError = null
                         Log.i(TAG, "Switching to ranked fallback ${currentIndex + 1}/${candidates.size}")
+                        sourceSwitchNotice = next.sourceName ?: next.label
                         current = next.copy(resolvedAt = System.currentTimeMillis())
                         return true
                     }
@@ -416,6 +421,9 @@ class StreamPlayerActivity : ComponentActivity(), PipHostActivity {
                                 currentIndex = updated.lastIndex
                                 sameUrlRetryUsed = false
                                 manualSwitchFallback = null
+                                if (refreshed.sourceName != previous.sourceName) {
+                                    sourceSwitchNotice = refreshed.sourceName ?: refreshed.label
+                                }
                                 current = refreshed.copy(resolvedAt = System.currentTimeMillis())
                             } else if (player.playbackState != Player.STATE_READY) {
                                 // Замены нет — но исходный поток мог ожить сам, пока мы её искали:
@@ -854,6 +862,25 @@ class StreamPlayerActivity : ComponentActivity(), PipHostActivity {
                             onPendingSubtitleApplied = { pendingSubtitleId = null },
                         )
 
+                        sourceSwitchNotice?.let { name ->
+                            LaunchedEffect(name, current.url) {
+                                kotlinx.coroutines.delay(SOURCE_NOTICE_MS)
+                                sourceSwitchNotice = null
+                            }
+                            val ru = playerSettingsState.value.language == com.example.myapplication.network.AppLanguage.RU
+                            Text(
+                                text = (if (ru) "Источник переключён · " else "Source switched · ") + name,
+                                color = Color.White,
+                                style = MaterialTheme.typography.labelLarge,
+                                modifier = Modifier
+                                    .align(Alignment.TopCenter)
+                                    .statusBarsPadding()
+                                    .padding(top = 16.dp)
+                                    .background(Color.Black.copy(alpha = 0.66f), androidx.compose.foundation.shape.CircleShape)
+                                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                            )
+                        }
+
                         val errorText = playbackError ?: switchError
                         if (errorText != null) {
                             Column(
@@ -968,6 +995,7 @@ class StreamPlayerActivity : ComponentActivity(), PipHostActivity {
         rankVideosForResolution(videos, preferredResolution)
     }
 
+    /** Свежая ссылка на ту же серию: сначала та же или самая похожая озвучка (см. dubSimilarity). */
     private suspend fun resolveReplacement(
         resolver: EpisodeStreamResolver,
         episode: Int,
@@ -975,12 +1003,20 @@ class StreamPlayerActivity : ComponentActivity(), PipHostActivity {
         excludedUrls: Set<String>,
     ): VetroVideo? = resolver
         .resolve(episode, previous.resolution ?: DEFAULT_RESOLUTION)
-        .firstOrNull { it.url !in excludedUrls }
+        .filter { it.url !in excludedUrls }
+        .withIndex()
+        .maxWithOrNull(
+            compareBy<IndexedValue<VetroVideo>> { dubSimilarity(previous.sourceName, it.value.sourceName) }
+                .thenByDescending { it.index },
+        )
+        ?.value
 
     companion object {
         private const val TAG = "StreamPlayer"
         private const val WATCHDOG_BUFFERING_MS = 8_000L
         private const val WATCHDOG_POLL_MS = 250L
+        /** Сколько висит плашка «Источник переключён». */
+        private const val SOURCE_NOTICE_MS = 3_500L
         /** К чему тянемся, если у текущей ссылки разрешение неизвестно. */
         private const val DEFAULT_RESOLUTION = 1080
         private const val EXTRA_VIDEO_JSON = "video_json"

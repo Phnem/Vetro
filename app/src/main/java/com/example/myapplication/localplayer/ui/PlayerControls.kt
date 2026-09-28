@@ -65,6 +65,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
@@ -551,8 +552,9 @@ fun PlayerControlsOverlay(
             )
         }
 
-        // «Вернуться» после дальнего прыжка — в левом углу, на высоте «Пропустить»: разные действия
-        // не должны делить одно место.
+        // «Вернуться» после дальнего прыжка — в левом углу, над меткой времени: разные действия не
+        // должны делить одно место. Поверх слоя управления (zIndex): иначе нижний блок с полосой
+        // забирал нажатие себе.
         seekUndoFrom?.let { from ->
             SeekUndoButton(
                 onClick = {
@@ -560,9 +562,10 @@ fun PlayerControlsOverlay(
                     seekWithUndo(from)
                 },
                 modifier = Modifier
+                    .zIndex(10f)
                     .align(Alignment.BottomStart)
                     .navigationBarsPadding()
-                    .padding(start = 16.dp, bottom = 104.dp),
+                    .padding(start = 16.dp, bottom = 136.dp),
             )
         }
 

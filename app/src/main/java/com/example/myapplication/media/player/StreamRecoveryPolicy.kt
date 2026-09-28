@@ -73,8 +73,10 @@ internal class ContinuousBufferingWatchdog(
 }
 
 /**
- * Recovery order: another host without a quality increase, lower quality on the same host, then
- * another host at any remaining quality. Same-host equal/higher URLs are deliberately omitted.
+ * Recovery order: the closest dub first ([dubSimilarity] — a source dying mid-episode must not
+ * silently swap the voice actors), then another host without a quality increase, lower quality on
+ * the same host, then another host at any remaining quality. Same-host equal/higher URLs are
+ * deliberately omitted.
  */
 internal fun rankRecoveryCandidates(
     current: VetroVideo,
@@ -114,7 +116,8 @@ internal fun rankRecoveryCandidates(
             )
         }
         .sortedWith(
-            compareBy<RankedRecoveryCandidate> { it.category }
+            compareByDescending<RankedRecoveryCandidate> { dubSimilarity(current.sourceName, it.video.sourceName) }
+                .thenBy { it.category }
                 .thenBy { it.qualityDistance },
         )
         .map { it.video }
@@ -146,6 +149,36 @@ internal fun selectPreferredVideo(
 ): VetroVideo? =
     preferredSourceName?.let { name -> resolved.firstOrNull { it.sourceName == name } }
         ?: resolved.firstOrNull()
+
+/**
+ * Насколько озвучка кандидата похожа на текущую: 3 — та же студия, 2 — общие слова в названии
+ * («AniDUB» и «Kodik · AniDUB»), 1 — тот же алфавит (русская озвучка остаётся русской), 0 — чужая.
+ */
+internal fun dubSimilarity(current: String?, candidate: String?): Int {
+    if (current.isNullOrBlank() || candidate.isNullOrBlank()) return 0
+    val a = dubWords(current)
+    val b = dubWords(candidate)
+    return when {
+        current.trim().equals(candidate.trim(), ignoreCase = true) -> 3
+        a.isNotEmpty() && b.isNotEmpty() && a.intersect(b).isNotEmpty() -> 2
+        current.isCyrillic() == candidate.isCyrillic() -> 1
+        else -> 0
+    }
+}
+
+/** Слова названия озвучки без служебных («озвучка», «dub», качество, провайдеры-плееры). */
+private fun dubWords(name: String): Set<String> =
+    name.lowercase().replace('ё', 'е')
+        .split(Regex("[^\\p{L}\\p{N}]+"))
+        .filter { it.length > 2 && it !in DUB_NOISE && it.toIntOrNull() == null }
+        .toSet()
+
+private fun String.isCyrillic(): Boolean = any { it in 'а'..'я' || it in 'А'..'Я' || it == 'ё' || it == 'Ё' }
+
+private val DUB_NOISE = setOf(
+    "озвучка", "озвучание", "dub", "voice", "sub", "subs", "субтитры", "многоголосый", "одноголосый",
+    "hls", "mp4", "1080p", "720p", "480p", "360p", "kodik", "player", "плеер", "cdn",
+)
 
 private data class RankedRecoveryCandidate(
     val video: VetroVideo,

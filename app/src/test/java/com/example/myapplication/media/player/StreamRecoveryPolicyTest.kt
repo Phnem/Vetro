@@ -159,6 +159,29 @@ class StreamRecoveryPolicyTest {
         hasFallback = hasFallback,
     )
 
+    @Test
+    fun `fallback ranking keeps the dub before host and quality`() {
+        val current = video("https://a.example/ep.m3u8", 1080, sourceName = "AniDUB")
+        val otherDub = video("https://b.example/ep.m3u8", 1080, sourceName = "AniLibria")
+        val sameDubOtherPlayer = video("https://c.example/ep.m3u8", 720, sourceName = "Kodik · AniDUB")
+        val english = video("https://d.example/ep.m3u8", 1080, sourceName = "HiAnime Sub")
+
+        val ranked = rankRecoveryCandidates(current, listOf(english, otherDub, sameDubOtherPlayer), emptySet())
+
+        // Та же студия у другого плеера — первой, даже с худшим качеством.
+        assertEquals(sameDubOtherPlayer, ranked.first())
+        assertEquals(3, ranked.size)
+    }
+
+    @Test
+    fun `dub similarity levels`() {
+        assertEquals(3, dubSimilarity("AniLibria", "anilibria"))
+        assertEquals(2, dubSimilarity("AniDUB", "Kodik · AniDUB"))
+        assertEquals(1, dubSimilarity("Студийная Банда", "Кубик в Кубе"))
+        assertEquals(0, dubSimilarity("Студийная Банда", "Crunchyroll"))
+        assertEquals(0, dubSimilarity(null, "AniDUB"))
+    }
+
     private fun video(url: String, resolution: Int, sourceName: String? = null) = VetroVideo(
         url = url,
         label = "${resolution}p",
