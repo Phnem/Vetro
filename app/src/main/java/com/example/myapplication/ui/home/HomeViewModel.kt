@@ -186,18 +186,34 @@ class HomeViewModel(
      * источника загружены (до этого список не показывается), а обновляется только по явному
      * «потянуть, чтобы обновить» — и один раз, если снимка ещё не было вовсе (первый запуск).
      * Полоски выхода и подписи на карточках при этом живые: они читают [airingProgress].
+     *
+     * Между полными пересборками набор только РАСТЁТ: тайтл, у которого в этой сессии вышла
+     * серия (непрочитанное уведомление) или начался сезон, поднимается наверх сразу — это
+     * событие, а не дрожание. Выпадают из группы тайтлы только на pull-to-refresh, чтобы
+     * смахнутое уведомление не роняло карточку вниз под пальцем.
      */
     private val airingOrder = MutableStateFlow<Set<String>?>(null)
 
     private suspend fun airingNowIds(): Set<String> {
         seriesSeasonsStore.ensureLoaded()
         val anime = localDataSource.observeAiringProgress().first()
-        return (seriesAiring(seriesSeasonsStore.flow.value) + anime).filterValues { it.isAiringNow() }.keys
+        val airing = (seriesAiring(seriesSeasonsStore.flow.value) + anime).filterValues { it.isAiringNow() }.keys
+        val unread = withContext(Dispatchers.IO) { localDataSource.getUpdates() }.map { it.animeId }
+        return airing + unread
+    }
+
+    /** Дополнить порядок новыми «актуальными», не выкидывая прежних (см. [airingOrder]). */
+    private fun growAiringOrder(ids: Set<String>) {
+        airingOrder.update { current -> if (current == null || current.containsAll(ids)) current else current + ids }
     }
 
     init {
         viewModelScope.launch {
             airingOrder.value = runCatching { airingNowIds() }.getOrElse { emptySet() }
+            // Новые серии, найденные уже в этой сессии (проверка при входе, фоновый воркер).
+            localDataSource.observeUpdates().collect { list ->
+                growAiringOrder(list.mapTo(HashSet()) { it.animeId })
+            }
         }
     }
 
@@ -494,9 +510,13 @@ class HomeViewModel(
                 val language = readLanguageFromSettings()
                 episodeUpdateCheckCoordinator.detectAndStore(language, force = force)
                 _uiState.update { it.copy(isCheckingUpdates = false) }
-                // Порядок «выходящих» — только по явному обновлению или если его ещё не было.
+                // Полная пересборка порядка — только по явному обновлению или если его ещё не было;
+                // иначе лишь дополняем тем, что проверка нашла выходящим сейчас.
+                val fresh = runCatching { airingNowIds() }.getOrNull()
                 if (force || airingOrder.value.isNullOrEmpty()) {
-                    airingOrder.value = runCatching { airingNowIds() }.getOrElse { airingOrder.value.orEmpty() }
+                    airingOrder.value = fresh ?: airingOrder.value.orEmpty()
+                } else if (fresh != null) {
+                    growAiringOrder(fresh)
                 }
                 // Приложение открыто → системные пуши не показываем: обновления живут
                 // in-app стопкой сверху. Убираем из шторки всё, что мог оставить
