@@ -160,4 +160,20 @@ class BookAudioAlignerTest {
         assertEquals(text, book.display)
         assertEquals(listOf("глава", "три", "сол", "номер", "шесть", "елка"), book.tokens.keys.toList())
     }
+
+    @Test
+    fun `sentences between two shown cues are filled in at a plausible pace, not across a long gap`() {
+        val text = BookText("Первое предложение здесь. Второе предложение тоже. Третье предложение есть. Четвёртое предложение.")
+        fun cue(s: Int, start: Long, end: Long, c: Float = 0.9f) =
+            AlignedCue(start, end, text.sentences[s].start, text.sentences[s].end, s, c)
+        val filled = BookAudioAligner.fillGaps(listOf(cue(0, 0, 2_000), cue(3, 6_000, 8_000)), text)
+        assertEquals(listOf(0, 1, 2, 3), filled.map { it.sentence })
+        assertEquals(2_000L, filled[1].startMs)
+        assertEquals(6_000L, filled[2].endMs, 5)
+        // Минута тишины на две короткие фразы — это не чтение, не заполняем.
+        val gap = BookAudioAligner.fillGaps(listOf(cue(0, 0, 2_000), cue(3, 62_000, 64_000)), text)
+        assertEquals(listOf(0, 3), gap.map { it.sentence })
+    }
+
+    private fun assertEquals(expected: Long, actual: Long, delta: Long) = assertTrue("$expected vs $actual", kotlin.math.abs(expected - actual) <= delta)
 }

@@ -37,6 +37,13 @@ interface SpeechEngine {
 
     /** [pcm] — 16 кГц моно; метки времени — от начала [pcm]. [onProgress] — 0..100. */
     suspend fun transcribe(model: File, pcm: FloatArray, language: String?, threads: Int, onProgress: (Int) -> Unit): Transcription
+
+    /**
+     * Пословно: каждая реплика — одно слово со своими метками. Нужна выравниванию с текстом книги;
+     * движок, который так не умеет, отдаёт фразы.
+     */
+    suspend fun transcribeWords(model: File, pcm: FloatArray, language: String?, threads: Int): Transcription =
+        transcribe(model, pcm, language, threads) {}
 }
 
 /** Готовые субтитры на диске: повторное открытие серии не распознаёт заново. */

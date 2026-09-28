@@ -200,6 +200,31 @@ fun AudiobookPlayerHost(language: AppLanguage = AppLanguage.RU, modifier: Modifi
     val chapterRecovery: com.example.myapplication.audiobooks.chapters.ChapterRecoveryManager = koinInject()
     val recovered by recoveredStore.flow.collectAsState()
     val recoveredEntry = variant?.let { recovered[it.value] }
+    // Субтитры: выбранный источник работает, пока книга играет; другой источник — остановлен.
+    val subtitleStrings = remember(language) { subtitleStrings(language) }
+    val subtitleModesStore: AudiobookSubtitleModes = koinInject()
+    val subtitleModes by subtitleModesStore.modes.collectAsState()
+    val bookAlignment: com.example.myapplication.audiobooks.text.BookAlignmentManager = koinInject()
+    val deviceSubtitles: com.example.myapplication.audiobooks.text.DeviceSubtitleManager = koinInject()
+    val subtitleMode = variant?.let { subtitleModes[it] } ?: AudiobookSubtitleMode.OFF
+    val narrationForText = book?.narrationId
+    LaunchedEffect(variant, subtitleMode, narrationForText) {
+        val v = variant ?: return@LaunchedEffect
+        when (subtitleMode) {
+            AudiobookSubtitleMode.BOOK_TEXT -> {
+                deviceSubtitles.disable(v)
+                narrationForText?.let { bookAlignment.enable(v, it) { state.globalMs() } }
+            }
+            AudiobookSubtitleMode.DEVICE -> {
+                bookAlignment.disable(v)
+                deviceSubtitles.enable(v, if (strings.russian) "ru" else null) { state.globalMs() }
+            }
+            AudiobookSubtitleMode.OFF -> {
+                bookAlignment.disable(v)
+                deviceSubtitles.disable(v)
+            }
+        }
+    }
     LaunchedEffect(variant, recoveredEntry?.applied) {
         state.timeline = variant?.let { v ->
             runCatching { resolver.manifest(v).let { BookTimeline(it.tracks, it.chapters) } }.getOrNull()
@@ -476,6 +501,14 @@ fun AudiobookPlayerHost(language: AppLanguage = AppLanguage.RU, modifier: Modifi
                             state, strings, favorite, ::toggleFavorite,
                             markerCount = markers.size,
                             onMarkers = { openSheet(PlayerSheet.MARKERS) },
+                            subtitlesLabel = variant?.let { subtitleStrings.title + " · " + subtitleStrings.menuValue(subtitleModes[it] ?: AudiobookSubtitleMode.OFF) },
+                            onSubtitles = { openSheet(PlayerSheet.SUBTITLES) },
+                        )
+                        PlayerSheet.SUBTITLES -> if (variant != null) SubtitlesSheetContent(
+                            variant = variant,
+                            narration = book.narrationId,
+                            strings = subtitleStrings,
+                            position = { state.globalMs() },
                         )
                         PlayerSheet.MARKERS -> MarkersSheetContent(
                             state = state,
@@ -727,6 +760,10 @@ private fun FullPlayerContent(
                         52.dp, 24.dp, tint = if (favorite) BrandOrange else Color.White, enabled = interactive, onClick = onFavorite,
                     )
                 }
+            }
+            TrackUriCodec.decode(book.uri)?.variant?.let { v ->
+                AudiobookSubtitleLine(v, state, remember(strings.russian) { subtitleStrings(if (strings.russian) AppLanguage.RU else AppLanguage.EN) },
+                    Modifier.padding(top = 14.dp))
             }
             Spacer(Modifier.height(22.dp))
             SeekBar(

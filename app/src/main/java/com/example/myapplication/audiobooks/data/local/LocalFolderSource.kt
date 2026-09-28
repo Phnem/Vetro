@@ -137,6 +137,25 @@ class LocalFolderSource(private val context: Context) : ManifestSource {
         if ('�' in utf8) String(bytes, charset("windows-1251")) else utf8
     }
 
+    /** Текст книги рядом со звуком (EPUB/FB2/TXT в папке книги или в её подпапке): имя и адрес. */
+    suspend fun textFiles(variant: VariantId): List<Pair<String, Uri>> = withContext(Dispatchers.IO) {
+        val (treeUri, bookUri) = decode(variant) ?: return@withContext emptyList()
+        if (!hasGrant(treeUri)) return@withContext emptyList()
+        val root = documentTree(treeUri) ?: return@withContext emptyList()
+        val book = if (root.uri == bookUri) root else
+            runCatching { root.listFiles().firstOrNull { it.isDirectory && it.uri == bookUri } }.getOrNull() ?: return@withContext emptyList()
+        val found = ArrayList<Pair<String, Uri>>()
+        fun collect(dir: DocumentFile, depth: Int) {
+            for (child in runCatching { dir.listFiles() }.getOrDefault(emptyArray())) {
+                val name = child.name ?: continue
+                if (child.isFile && name.substringAfterLast('.', "").lowercase() in TEXT_EXTENSIONS) found += name to child.uri
+                else if (child.isDirectory && depth < MAX_DEPTH) collect(child, depth + 1)
+            }
+        }
+        collect(book, 0)
+        found
+    }
+
     private fun scanTree(treeUri: Uri): List<LocalBook> {
         if (!hasGrant(treeUri)) return emptyList()
         val root = documentTree(treeUri) ?: return emptyList()
@@ -325,5 +344,6 @@ class LocalFolderSource(private val context: Context) : ManifestSource {
         val COVER_NAMES = listOf("cover", "folder", "front", "artwork")
         const val MAX_EMBEDDED_ART_BYTES = 8 * 1024 * 1024
         const val MAX_CUE_BYTES = 512 * 1024
+        val TEXT_EXTENSIONS = setOf("epub", "fb2", "txt")
     }
 }

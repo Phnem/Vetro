@@ -41,7 +41,7 @@ Java_com_example_myapplication_media_subtitles_whisper_WhisperCppEngine_nativeFr
 
 extern "C" JNIEXPORT jobjectArray JNICALL
 Java_com_example_myapplication_media_subtitles_whisper_WhisperCppEngine_nativeTranscribe(
-        JNIEnv *env, jclass, jlong context, jfloatArray pcm, jstring language, jint threads, jobject progress_sink) {
+        JNIEnv *env, jclass, jlong context, jfloatArray pcm, jstring language, jint threads, jboolean words, jobject progress_sink) {
     auto *ctx = reinterpret_cast<whisper_context *>(context);
     const jsize count = env->GetArrayLength(pcm);
     std::vector<float> samples(static_cast<size_t>(count));
@@ -60,9 +60,11 @@ Java_com_example_myapplication_media_subtitles_whisper_WhisperCppEngine_nativeTr
     params.print_realtime = false;
     params.print_timestamps = false;
     params.print_special = false;
-    // Реплики — по фразам, а не одним куском на 30 секунд.
-    params.token_timestamps = false;
-    params.max_len = 0;
+    // Реплики — по фразам, а не одним куском на 30 секунд. Пословно (words) — для синхронизации с
+    // текстом книги: каждое слово со своими акустическими метками, а не раскладка фразы поровну.
+    params.token_timestamps = words == JNI_TRUE;
+    params.max_len = words == JNI_TRUE ? 1 : 0;
+    params.split_on_word = words == JNI_TRUE;
     params.suppress_blank = true;
     params.no_context = true;
 

@@ -313,6 +313,8 @@ class AudiobookRepository(
             authors = decode(work.authors_json),
             narrators = decode(narration.narrators_json),
             coverUrl = work.cover_url,
+            language = work.language,
+            titleOriginal = work.title_original,
         )
     }
 
@@ -361,6 +363,8 @@ data class NarrationBook(
     val authors: List<String>,
     val narrators: List<String>,
     val coverUrl: String?,
+    val language: String = "",
+    val titleOriginal: String? = null,
 )
 
 data class OpenedBook(val workId: WorkId, val narrationId: NarrationId, val variantId: VariantId)

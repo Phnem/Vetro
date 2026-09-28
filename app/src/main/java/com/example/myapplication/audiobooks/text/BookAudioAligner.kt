@@ -252,6 +252,36 @@ class BookAudioAligner(private val book: BookText) {
     private fun gramKey(a: String, b: String, c: String) = "$a $b $c"
 
     companion object {
+        /**
+         * Предложения без своих якорей между двумя показываемыми репликами (стык блоков, ошибки
+         * распознавания подряд) — по времени между ними, пропорционально длине текста. Только если
+         * темп правдоподобен (6–30 знаков в секунду) и промежуток короче минуты: иначе там, скорее,
+         * пропуск чтеца или вставка, и строка остаётся пустой. Уверенность — средняя.
+         */
+        fun fillGaps(cues: List<AlignedCue>, book: BookText): List<AlignedCue> {
+            val shown = cues.filter { it.confidence >= SHOW_THRESHOLD && !it.openEnd }.sortedBy { it.sentence }
+            val bySentence = cues.associateBy { it.sentence }.toMutableMap()
+            for ((a, b) in shown.zipWithNext()) {
+                if (b.sentence <= a.sentence + 1) continue
+                val missing = (a.sentence + 1 until b.sentence).filter { (bySentence[it]?.confidence ?: 0f) < SHOW_THRESHOLD }
+                if (missing.size != b.sentence - a.sentence - 1) continue
+                val span = b.startMs - a.endMs
+                if (span <= 0 || span > 60_000) continue
+                val lengths = missing.map { book.sentences[it].let { s -> (s.end - s.start).coerceAtLeast(1) } }
+                val chars = lengths.sum()
+                val rate = chars * 1000.0 / span
+                if (rate !in 6.0..30.0) continue
+                var t = a.endMs.toDouble()
+                for ((k, s) in missing.withIndex()) {
+                    val d = span * lengths[k].toDouble() / chars
+                    val sentence = book.sentences[s]
+                    bySentence[s] = AlignedCue(t.toLong(), (t + d).toLong(), sentence.start, sentence.end, s, SHOW_THRESHOLD)
+                    t += d
+                }
+            }
+            return bySentence.values.sortedBy { it.startMs }
+        }
+
         const val GRAM = 3
         /** Реплики с уверенностью ниже — не показываются: пустая строка лучше неверного текста. */
         const val SHOW_THRESHOLD = 0.3f

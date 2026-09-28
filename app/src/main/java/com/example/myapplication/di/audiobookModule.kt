@@ -101,9 +101,7 @@ val audiobookModule = module {
             context = androidContext(),
             resolver = get(),
             store = get(),
-            reader = com.example.myapplication.audiobooks.chapters.BookAudioReader(
-                com.example.myapplication.audiobooks.playback.VetroAudioDataSource.factory(androidContext(), get(), get()),
-            ),
+            reader = get(),
             local = get(),
             models = get(),
             speech = get(),
@@ -111,6 +109,49 @@ val audiobookModule = module {
             workDir = File(androidContext().filesDir, "audiobooks/chapter-scan"),
         )
     }
+    // Звук книги без плеера — для поиска глав и синхронизации текста.
+    single {
+        com.example.myapplication.audiobooks.chapters.BookAudioReader(
+            com.example.myapplication.audiobooks.playback.VetroAudioDataSource.factory(androidContext(), get(), get()),
+        )
+    }
+    // Субтитры аудиокниг: текст книги (источники от своего файла к общественному достоянию) и,
+    // отдельно, распознавание на устройстве.
+    single {
+        val http = com.example.myapplication.audiobooks.text.source.TextHttp(get<OkHttpClient>())
+        listOf(
+            com.example.myapplication.audiobooks.text.source.LocalTextSource(androidContext(), get()),
+            com.example.myapplication.audiobooks.text.source.GutenbergTextSource(http),
+            com.example.myapplication.audiobooks.text.source.StandardEbooksTextSource(http),
+            com.example.myapplication.audiobooks.text.source.WikisourceTextSource(http),
+            com.example.myapplication.audiobooks.text.source.OpenLibraryTextSource(http),
+        )
+    }
+    single {
+        com.example.myapplication.audiobooks.text.BookAlignmentManager(
+            context = androidContext(),
+            resolver = get(),
+            repository = get(),
+            sources = get(),
+            store = com.example.myapplication.audiobooks.text.AlignmentStore(File(androidContext().filesDir, "audiobooks/alignment")),
+            reader = get(),
+            models = get(),
+            speech = get(),
+            scope = get<com.example.myapplication.AppScope>(),
+        )
+    }
+    single {
+        com.example.myapplication.audiobooks.text.DeviceSubtitleManager(
+            context = androidContext(),
+            resolver = get(),
+            reader = get(),
+            models = get(),
+            speech = get(),
+            scope = get<com.example.myapplication.AppScope>(),
+            root = File(androidContext().filesDir, "audiobooks/asr-subtitles"),
+        )
+    }
+    single { com.example.myapplication.audiobooks.ui.AudiobookSubtitleModes(androidContext()) }
     single { AudiobookRepository(get()) }
     single {
         BooksCatalog(

@@ -24,6 +24,18 @@ class WhisperCppEngine : SpeechEngine {
         language: String?,
         threads: Int,
         onProgress: (Int) -> Unit,
+    ): Transcription = run(model, pcm, language, threads, words = false, onProgress)
+
+    override suspend fun transcribeWords(model: File, pcm: FloatArray, language: String?, threads: Int): Transcription =
+        run(model, pcm, language, threads, words = true) {}
+
+    private suspend fun run(
+        model: File,
+        pcm: FloatArray,
+        language: String?,
+        threads: Int,
+        words: Boolean,
+        onProgress: (Int) -> Unit,
     ): Transcription = withContext(Dispatchers.Default) {
         check(isAvailable) { "whisper.cpp is not in this build" }
         lock.withLock {
@@ -33,7 +45,7 @@ class WhisperCppEngine : SpeechEngine {
                 check(context != 0L) { "Failed to load ${model.name}" }
                 contextModel = model.absolutePath
             }
-            val raw = nativeTranscribe(context, pcm, language ?: "auto", threads, ProgressSink(onProgress))
+            val raw = nativeTranscribe(context, pcm, language ?: "auto", threads, words, ProgressSink(onProgress))
             parse(raw)
         }
     }
@@ -54,7 +66,7 @@ class WhisperCppEngine : SpeechEngine {
          * Возвращает строки «язык» и затем «t0_ms\tt1_ms\tтекст» — без JSON на нативной стороне и без
          * объектов на каждую реплику через JNI.
          */
-        @JvmStatic external fun nativeTranscribe(context: Long, pcm: FloatArray, language: String, threads: Int, progress: ProgressSink): Array<String>
+        @JvmStatic external fun nativeTranscribe(context: Long, pcm: FloatArray, language: String, threads: Int, words: Boolean, progress: ProgressSink): Array<String>
 
         fun parse(raw: Array<String>): Transcription {
             val language = raw.firstOrNull()?.takeIf { it.isNotBlank() }

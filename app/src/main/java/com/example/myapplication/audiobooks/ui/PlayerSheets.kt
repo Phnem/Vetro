@@ -78,7 +78,7 @@ import kotlinx.coroutines.flow.drop
 // главы — в том же виде, что оглавление манги (MangaChaptersPage): группа строк одной карточкой.
 // ==========================================
 
-internal enum class PlayerSheet { CHAPTERS, SPEED, TIMER, NARRATION, MORE, MARKERS }
+internal enum class PlayerSheet { CHAPTERS, SPEED, TIMER, NARRATION, MORE, MARKERS, SUBTITLES }
 
 private val Ink = Color.White
 private val Muted = Color.White.copy(alpha = 0.6f)
@@ -609,10 +609,17 @@ internal fun ColumnScope.MoreSheetContent(
     onFavorite: () -> Unit,
     markerCount: Int = 0,
     onMarkers: () -> Unit = {},
+    /** «Субтитры · Текст книги»; null — пункта нет. */
+    subtitlesLabel: String? = null,
+    onSubtitles: () -> Unit = {},
 ) {
     val controller = state.controller ?: return
     SheetTitle(strings.moreTitle)
     Spacer(Modifier.height(14.dp))
+    if (subtitlesLabel != null) {
+        NavRow(subtitlesLabel, R.drawable.ph_subtitles, onSubtitles)
+        Spacer(Modifier.height(3.dp))
+    }
     // Пункт есть, только когда у книги есть хотя бы один маркер.
     if (markerCount > 0) {
         NavRow(strings.backToMarker(markerCount), R.drawable.ph_bookmark_simple_fill, onMarkers)
