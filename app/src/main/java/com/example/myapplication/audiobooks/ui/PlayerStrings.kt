@@ -56,6 +56,30 @@ data class PlayerStrings(
     /** Кнопка отмены случайной перемотки. */
     val undoSeek: String,
     val skipSilenceLevels: List<String>,
+    // Автовосстановление глав.
+    val findChapters: String,
+    val findChaptersHint: String,
+    val recoveryReading: String,
+    val recoverySilence: (Int) -> String,
+    val recoverySpeech: (Int) -> String,
+    val recoveryPausedHeat: String,
+    val recoveryPausedBattery: String,
+    val recoveryNeedsWifi: String,
+    val recoveryFailed: String,
+    val recoveryNothing: String,
+    /** «Найдено 18 предполагаемых глав — применить?» */
+    val recoveryFound: (Int) -> String,
+    val recoveryConfirmed: (Int) -> String,
+    val recoveryApplied: String,
+    val apply: String,
+    val notNow: String,
+    val restoreChapters: String,
+    val retry: String,
+    val stop: String,
+    /** Плашка в плеере: «18 глав найдено». */
+    val recoveryPill: (Int) -> String,
+    /** Язык интерфейса — им распознаются заголовки глав и называются главы без заголовка. */
+    val russian: Boolean,
 )
 
 fun playerStrings(language: AppLanguage): PlayerStrings = when (language) {
@@ -108,6 +132,28 @@ fun playerStrings(language: AppLanguage): PlayerStrings = when (language) {
         deleteMarker = "Удалить маркер",
         undoSeek = "Вернуться",
         skipSilenceLevels = listOf("Выкл", "Мягко", "Обычно", "Сильно"),
+        findChapters = "Найти главы",
+        findChaptersHint = "По паузам чтеца и словам «Глава…» в речи. Разметка не изменится, пока вы её не примете",
+        recoveryReading = "Читаю разметку…",
+        recoverySilence = { "Ищу паузы · $it%" },
+        recoverySpeech = { "Слушаю начала глав · $it%" },
+        recoveryPausedHeat = "Пауза: телефон нагрелся",
+        recoveryPausedBattery = "Пауза: мало заряда",
+        recoveryNeedsWifi = "Книгу с сайта нужно прочитать целиком — подключитесь к Wi‑Fi",
+        recoveryFailed = "Не удалось прочитать звук книги",
+        recoveryNothing = "Глав не нашлось: паузы в записи ровные",
+        recoveryFound = { n ->
+            ruPlural(n, "Найдена $n предполагаемая глава", "Найдено $n предполагаемые главы", "Найдено $n предполагаемых глав") + " — применить?"
+        },
+        recoveryConfirmed = { n -> ruPlural(n, "$n подтверждена", "$n подтверждены", "$n подтверждены") + " заголовком в речи" },
+        recoveryApplied = "Главы найдены автоматически",
+        apply = "Применить",
+        notNow = "Не надо",
+        restoreChapters = "Вернуть исходные",
+        retry = "Искать снова",
+        stop = "Остановить",
+        recoveryPill = { n -> ruPlural(n, "$n глава найдена", "$n главы найдено", "$n глав найдено") },
+        russian = true,
     )
     AppLanguage.EN -> PlayerStrings(
         collapse = "Collapse player",
@@ -158,6 +204,26 @@ fun playerStrings(language: AppLanguage): PlayerStrings = when (language) {
         deleteMarker = "Delete marker",
         undoSeek = "Go back",
         skipSilenceLevels = listOf("Off", "Light", "Normal", "Aggressive"),
+        findChapters = "Find chapters",
+        findChaptersHint = "From the narrator's pauses and spoken “Chapter…”. Nothing changes until you accept",
+        recoveryReading = "Reading the markup…",
+        recoverySilence = { "Finding pauses · $it%" },
+        recoverySpeech = { "Listening to chapter openings · $it%" },
+        recoveryPausedHeat = "Paused: the phone is hot",
+        recoveryPausedBattery = "Paused: low battery",
+        recoveryNeedsWifi = "An online book has to be read in full — connect to Wi‑Fi",
+        recoveryFailed = "Couldn't read the book's audio",
+        recoveryNothing = "No chapters found: the pauses are uniform",
+        recoveryFound = { n -> "Found $n likely chapters — apply?" },
+        recoveryConfirmed = { n -> "$n confirmed by a spoken heading" },
+        recoveryApplied = "Chapters found automatically",
+        apply = "Apply",
+        notNow = "Not now",
+        restoreChapters = "Restore original",
+        retry = "Search again",
+        stop = "Stop",
+        recoveryPill = { n -> "$n chapters found" },
+        russian = false,
     )
 }
 

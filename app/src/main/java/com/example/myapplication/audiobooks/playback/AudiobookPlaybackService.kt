@@ -33,6 +33,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
 import java.util.Locale
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
@@ -45,6 +46,7 @@ class AudiobookPlaybackService : MediaLibraryService() {
     private val manifestResolver: ManifestResolver by inject()
     private val chain: NarrationChain by inject()
     private val repository: AudiobookRepository by inject()
+    private val recoveredChapters: com.example.myapplication.audiobooks.chapters.RecoveredChapterStore by inject()
     /** Книга, чьё «избранное» сейчас отражает сердце в системной карточке. */
     private var favoriteWork: String? = null
     private var favoriteJob: Job? = null
@@ -144,6 +146,13 @@ class AudiobookPlaybackService : MediaLibraryService() {
             publishSessionState()
         }
         player.addListener(playerListener)
+        // Пользователь принял или отменил найденные главы — карточка системы перечитывает разметку.
+        recoveryScope.launch {
+            recoveredChapters.flow.drop(1).collect {
+                chapterVariant = null
+                refreshChapterMetadata()
+            }
+        }
 
         val launchApp = PendingIntent.getActivity(
             this,

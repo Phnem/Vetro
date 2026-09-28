@@ -195,9 +195,22 @@ fun AudiobookPlayerHost(language: AppLanguage = AppLanguage.RU, modifier: Modifi
 
     val book = state.book
     val variant = book?.uri?.let(TrackUriCodec::decode)?.variant
-    LaunchedEffect(variant) {
+    // Найденные главы: принятие/отказ меняет разметку — шкала перечитывается.
+    val recoveredStore: com.example.myapplication.audiobooks.chapters.RecoveredChapterStore = koinInject()
+    val chapterRecovery: com.example.myapplication.audiobooks.chapters.ChapterRecoveryManager = koinInject()
+    val recovered by recoveredStore.flow.collectAsState()
+    val recoveredEntry = variant?.let { recovered[it.value] }
+    LaunchedEffect(variant, recoveredEntry?.applied) {
         state.timeline = variant?.let { v ->
             runCatching { resolver.manifest(v).let { BookTimeline(it.tracks, it.chapters) } }.getOrNull()
+        }
+        // Своя книга без разметки — главы ищутся сами, в фоне; результат ждёт согласия в «Главах».
+        // С сайта — только по кнопке: книгу пришлось бы скачать целиком.
+        if (variant != null && variant.value.startsWith("local:") && recoveredStore.get(variant) == null) {
+            val raw = runCatching { resolver.rawManifest(variant) }.getOrNull()
+            if (raw != null && com.example.myapplication.audiobooks.chapters.ChapterRecoveryManager.needsRecovery(raw)) {
+                chapterRecovery.start(variant, strings.russian)
+            }
         }
     }
     // Переход по цепочке сайтов виден пользователю: плеер не молча сменил источник или замолчал.
@@ -396,6 +409,7 @@ fun AudiobookPlayerHost(language: AppLanguage = AppLanguage.RU, modifier: Modifi
                     onCollapse = { collapse() },
                     onFavorite = ::toggleFavorite,
                     markers = markers,
+                    foundChapters = recoveredEntry?.takeIf { !it.applied && !it.declined }?.chapters?.size ?: 0,
                     onAddMarker = {
                         val id = book.narrationId?.value
                         val at = state.globalMs()
@@ -619,6 +633,8 @@ private fun FullPlayerContent(
     onFavorite: () -> Unit,
     onSheet: (PlayerSheet) -> Unit,
     markers: List<com.example.myapplication.audiobooks.data.AudiobookMarker> = emptyList(),
+    /** Найдено глав, ждущих согласия: плашка сверху ведёт в «Главы». */
+    foundChapters: Int = 0,
     onAddMarker: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
@@ -659,6 +675,23 @@ private fun FullPlayerContent(
         ) {
             GlassCircleButton(backdrop, R.drawable.ph_caret_down, strings.collapse, 52.dp, 22.dp, enabled = interactive, onClick = onCollapse)
             Spacer(Modifier.weight(1f))
+            if (foundChapters >= 2) {
+                Text(
+                    strings.recoveryPill(foundChapters),
+                    color = Color.White,
+                    fontFamily = SnProFamily,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 13.sp,
+                    maxLines = 1,
+                    modifier = Modifier
+                        .align(Alignment.CenterVertically)
+                        .clip(CircleShape)
+                        .background(BrandOrange)
+                        .clickable(enabled = interactive) { onSheet(PlayerSheet.CHAPTERS) }
+                        .padding(horizontal = 14.dp, vertical = 8.dp),
+                )
+                Spacer(Modifier.weight(1f))
+            }
             GlassCircleButton(backdrop, R.drawable.ph_dots_three_vertical, strings.more, 52.dp, 22.dp, enabled = interactive) {
                 onSheet(PlayerSheet.MORE)
             }

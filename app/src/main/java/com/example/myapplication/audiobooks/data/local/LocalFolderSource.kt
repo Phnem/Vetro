@@ -119,6 +119,24 @@ class LocalFolderSource(private val context: Context) : ManifestSource {
         MediaManifest(variant, tracks, chapters, System.currentTimeMillis(), null)
     }
 
+    /**
+     * CUE-лист в папке книги (разметка глав единственного файла), текстом. Старые русские листы —
+     * в cp1251: если UTF-8 не читается, пробуем её.
+     */
+    suspend fun cueSheet(variant: VariantId): String? = withContext(Dispatchers.IO) {
+        val (treeUri, bookUri) = decode(variant) ?: return@withContext null
+        if (!hasGrant(treeUri)) return@withContext null
+        val root = documentTree(treeUri) ?: return@withContext null
+        val book = if (root.uri == bookUri) root else
+            runCatching { root.listFiles().firstOrNull { it.isDirectory && it.uri == bookUri } }.getOrNull() ?: return@withContext null
+        val cue = runCatching { book.listFiles().singleOrNull { it.isFile && it.name.orEmpty().endsWith(".cue", ignoreCase = true) } }
+            .getOrNull() ?: return@withContext null
+        val bytes = runCatching { context.contentResolver.openInputStream(cue.uri)?.use { it.readBytes() } }.getOrNull()
+            ?.takeIf { it.size in 1..MAX_CUE_BYTES } ?: return@withContext null
+        val utf8 = String(bytes, Charsets.UTF_8)
+        if ('�' in utf8) String(bytes, charset("windows-1251")) else utf8
+    }
+
     private fun scanTree(treeUri: Uri): List<LocalBook> {
         if (!hasGrant(treeUri)) return emptyList()
         val root = documentTree(treeUri) ?: return emptyList()
@@ -306,5 +324,6 @@ class LocalFolderSource(private val context: Context) : ManifestSource {
         val IMAGE_EXTENSIONS = setOf("jpg", "jpeg", "png", "webp")
         val COVER_NAMES = listOf("cover", "folder", "front", "artwork")
         const val MAX_EMBEDDED_ART_BYTES = 8 * 1024 * 1024
+        const val MAX_CUE_BYTES = 512 * 1024
     }
 }

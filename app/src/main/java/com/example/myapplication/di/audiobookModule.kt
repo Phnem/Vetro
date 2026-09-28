@@ -83,8 +83,34 @@ val audiobookModule = module {
     }
     single { AudiobookSearch(get(named(SOURCES))) }
     single { NarrationChain(get(), get(named(SOURCES)), get(), get()) }
-    // Резолвер знает все источники манифестов: сайты и локальную папку.
-    single { ManifestResolver(sources = get<List<AudiobookSource>>(named(SOURCES)) + get<LocalFolderSource>()) }
+    // Резолвер знает все источники манифестов: сайты и локальную папку; принятые восстановленные
+    // главы накладываются поверх разметки источника.
+    single {
+        com.example.myapplication.audiobooks.chapters.RecoveredChapterStore(
+            File(androidContext().filesDir, "audiobooks/recovered_chapters.json"),
+        )
+    }
+    single {
+        ManifestResolver(
+            sources = get<List<AudiobookSource>>(named(SOURCES)) + get<LocalFolderSource>(),
+            chapterOverride = get<com.example.myapplication.audiobooks.chapters.RecoveredChapterStore>(),
+        )
+    }
+    single {
+        com.example.myapplication.audiobooks.chapters.ChapterRecoveryManager(
+            context = androidContext(),
+            resolver = get(),
+            store = get(),
+            reader = com.example.myapplication.audiobooks.chapters.BookAudioReader(
+                com.example.myapplication.audiobooks.playback.VetroAudioDataSource.factory(androidContext(), get(), get()),
+            ),
+            local = get(),
+            models = get(),
+            speech = get(),
+            scope = get<com.example.myapplication.AppScope>(),
+            workDir = File(androidContext().filesDir, "audiobooks/chapter-scan"),
+        )
+    }
     single { AudiobookRepository(get()) }
     single {
         BooksCatalog(

@@ -1,6 +1,7 @@
 package com.example.myapplication.audiobooks.domain.source
 
 import com.example.myapplication.audiobooks.domain.model.AudioTrack
+import com.example.myapplication.audiobooks.domain.model.Chapter
 import com.example.myapplication.audiobooks.domain.model.MediaManifest
 import com.example.myapplication.audiobooks.domain.model.VariantId
 import kotlinx.coroutines.sync.Mutex
@@ -12,9 +13,18 @@ interface ManifestSource {
     suspend fun refresh(variant: VariantId): MediaManifest
 }
 
+/**
+ * Главы, которые пользователь принял взамен разметки источника (автовосстановление глав).
+ * null — своих нет, остаются главы манифеста.
+ */
+fun interface ChapterOverride {
+    suspend fun chapters(manifest: MediaManifest): List<Chapter>?
+}
+
 /** Holds fresh manifests and serializes refreshes so prefetching adjacent tracks does not stampede. */
 class ManifestResolver(
     private val sources: List<ManifestSource>,
+    private val chapterOverride: ChapterOverride? = null,
     private val nowMs: () -> Long = System::currentTimeMillis,
 ) {
     private val lock = Mutex()
@@ -29,7 +39,10 @@ class ManifestResolver(
         manifests.remove(variant)
     }
 
-    suspend fun manifest(variant: VariantId): MediaManifest = lock.withLock {
+    suspend fun manifest(variant: VariantId): MediaManifest = overlay(rawManifest(variant))
+
+    /** Манифест как его отдал источник — без принятых пользователем глав. */
+    suspend fun rawManifest(variant: VariantId): MediaManifest = lock.withLock {
         manifests[variant]?.takeIf(::isFresh) ?: run {
             val source = sources.firstOrNull { it.supports(variant) }
                 ?: error("No manifest source for variant")
@@ -55,6 +68,11 @@ class ManifestResolver(
         }
         manifest.tracks.getOrNull(trackIndex)
             ?: error("Track index out of range")
+    }
+
+    private suspend fun overlay(manifest: MediaManifest): MediaManifest {
+        val chapters = chapterOverride?.let { runCatching { it.chapters(manifest) }.getOrNull() } ?: return manifest
+        return manifest.copy(chapters = chapters)
     }
 
     private fun isFresh(manifest: MediaManifest): Boolean =

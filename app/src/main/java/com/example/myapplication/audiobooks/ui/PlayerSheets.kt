@@ -383,6 +383,7 @@ private fun SkipSilenceLevels(
 
 // ---------- Главы (вид оглавления манги) ----------
 
+@androidx.media3.common.util.UnstableApi
 @Composable
 internal fun ColumnScope.ChaptersSheetContent(
     state: AudiobookPlayerState,
@@ -413,6 +414,9 @@ internal fun ColumnScope.ChaptersSheetContent(
         Pill(strings.notListened, selected = onlyNotListened) { onlyNotListened = true }
     }
     Spacer(Modifier.height(14.dp))
+    com.example.myapplication.audiobooks.domain.model.TrackUriCodec.decode(book.uri)?.variant?.let { variant ->
+        ChapterRecoveryPanel(variant, timeline, strings)
+    }
     val listState = rememberLazyListState(initialFirstVisibleItemIndex = (current.index - 2).coerceAtLeast(0))
     LazyColumn(
         state = listState,
