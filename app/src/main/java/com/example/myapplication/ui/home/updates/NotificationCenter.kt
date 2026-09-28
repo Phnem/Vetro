@@ -3,13 +3,13 @@ package com.example.myapplication.ui.home.updates
 import com.example.myapplication.ui.shared.theme.IosScroll
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.AnimationVector1D
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.draggable
 import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.WindowInsets
@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.lazy.LazyColumn
@@ -30,6 +31,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -40,11 +42,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.GraphicsLayerScope
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onPlaced
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
@@ -56,6 +61,8 @@ import com.example.myapplication.ui.shared.theme.BrandOrange
 import com.example.myapplication.ui.shared.theme.MotionTokens
 import com.example.myapplication.ui.shared.theme.SnProFamily
 import com.example.myapplication.ui.shared.theme.rememberReducedMotion
+import com.example.myapplication.utils.Haptic
+import com.example.myapplication.utils.performHaptic
 import com.kyant.backdrop.Backdrop
 import kotlinx.coroutines.launch
 import kotlin.math.abs
@@ -75,6 +82,12 @@ import kotlin.math.sign
 // Заголовок, карточки и кнопка «Очистить всё» — элементы одного списка во весь экран: список
 // клипует содержимое, и только так вылет из колокольчика (он выше первой карточки) не обрезается.
 // Сама панель лежит ПОД слоем верхнего дока: затемнение и размытие фона дока не касаются.
+//
+// Смахивание: карточка уходит из списка в момент решения, а её изображение долетает поверх
+// списка на тех же Animatable (скорость пальца — начальная скорость полёта). Оставшиеся съезжают
+// на освободившееся место пружиной с лёгким перелётом, каждая следующая чуть мягче — волна.
+// Зазор между карточками — внутри элемента, а не в Arrangement: иначе сдвиг соседей шёл бы
+// двумя движениями (слот, потом зазор).
 // ==========================================
 
 @Composable
@@ -116,6 +129,39 @@ fun NotificationCenter(
     LaunchedEffect(updates) { departed.retainAll { id -> updates.any { it.animeId == id } } }
     val visible = updates.filter { it.animeId !in departed }
     val p = { progress.value }
+    val scope = rememberCoroutineScope()
+    val view = LocalView.current
+    val density = LocalDensity.current
+    val departing = remember { mutableStateListOf<CenterDeparture>() }
+    var origin by remember { mutableStateOf(Offset.Zero) }
+
+    fun depart(
+        update: AnimeUpdate,
+        slot: Rect,
+        offsetX: Animatable<Float, AnimationVector1D>,
+        velocity: Float,
+        direction: Float,
+    ) {
+        if (update.animeId in departed) return
+        performHaptic(view, Haptic.Light)
+        val card = CenterDeparture(update, slot, offsetX)
+        departing += card
+        departed += update.animeId
+        scope.launch {
+            try {
+                if (!reducedMotion) {
+                    offsetX.animateTo(
+                        direction * slot.width * 1.25f,
+                        MotionTokens.notificationFling(),
+                        initialVelocity = velocity,
+                    )
+                }
+            } finally {
+                departing -= card
+                onDismissUpdate(update)
+            }
+        }
+    }
 
     val top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
     val bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
@@ -123,6 +169,7 @@ fun NotificationCenter(
     Box(
         modifier = modifier
             .fillMaxSize()
+            .onPlaced { origin = it.boundsInRoot().topLeft }
             // Затемнение идёт с тем же прогрессом, что и карточки; тап мимо закрывает центр.
             .drawBehind { drawRect(Color.Black, alpha = SCRIM_ALPHA * p().coerceIn(0f, 1f)) }
             .clickable(
@@ -141,7 +188,6 @@ fun NotificationCenter(
                 start = 12.dp,
                 end = 12.dp,
             ),
-            verticalArrangement = Arrangement.spacedBy(CARD_GAP),
         ) {
             item(key = "title") {
                 Text(
@@ -153,7 +199,7 @@ fun NotificationCenter(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 8.dp)
-                        .padding(bottom = HEADER_GAP - CARD_GAP)
+                        .padding(bottom = HEADER_GAP)
                         .flyFromBell(bellCenter, startScale = 0.16f, fadeStart = 0.12f, fadeSpan = 0.55f) {
                             headingReveal(p())
                         },
@@ -167,6 +213,7 @@ fun NotificationCenter(
                         fontFamily = SnProFamily,
                         color = Color.White.copy(alpha = 0.7f),
                         modifier = Modifier
+                            .animateItem(fadeInSpec = MotionTokens.easeEnter(), fadeOutSpec = null, placementSpec = null)
                             .padding(horizontal = 8.dp, vertical = 12.dp)
                             .flyFromBell(bellCenter) { itemReveal(p(), 0) },
                     )
@@ -185,15 +232,26 @@ fun NotificationCenter(
                         isDark = isDark,
                         enabled = open,
                         onOpen = { onOpenUpdate(update) },
-                        onDismiss = {
-                            departed += update.animeId
-                            onDismissUpdate(update)
+                        onDepart = { slot, offsetX, velocity, direction ->
+                            depart(update, slot, offsetX, velocity, direction)
                         },
+                        modifier = Modifier
+                            .animateItem(
+                                fadeInSpec = MotionTokens.easeEnter(),
+                                fadeOutSpec = null,
+                                placementSpec = MotionTokens.notificationReflowOffset(index),
+                            )
+                            .padding(bottom = CARD_GAP),
                     )
                 }
                 item(key = "clearAll") {
                     Box(
                         modifier = Modifier
+                            .animateItem(
+                                fadeInSpec = null,
+                                fadeOutSpec = null,
+                                placementSpec = MotionTokens.notificationReflowOffset(visible.size),
+                            )
                             .fillMaxWidth()
                             .padding(top = HEADER_GAP),
                         contentAlignment = Alignment.Center,
@@ -210,8 +268,48 @@ fun NotificationCenter(
                 }
             }
         }
+
+        // Смахнутые карточки долетают поверх списка с места, где их отпустили.
+        departing.forEach { card ->
+            key(card.update.animeId) {
+                Box(
+                    modifier = Modifier
+                        .offset {
+                            IntOffset(
+                                (card.slot.left - origin.x + card.x.value).roundToInt(),
+                                (card.slot.top - origin.y).roundToInt(),
+                            )
+                        }
+                        .size(with(density) { card.slot.width.toDp() }, CARD_HEIGHT)
+                        .graphicsLayer {
+                            alpha = p().coerceIn(0f, 1f)
+                            notificationSwipe(card.x.value, card.slot.width)
+                        },
+                ) {
+                    EpisodeUpdateCard(
+                        update = card.update,
+                        coverPath = remember(card.update.animeId) { coverPathFor(card.update.animeId) },
+                        episodeLabel = episodeLabelFor(card.update),
+                        isDark = isDark,
+                        backdrop = backdrop,
+                        material = material,
+                        onCard = onCard,
+                        accent = BrandOrange,
+                        clickEnabled = false,
+                        onClick = {},
+                    )
+                }
+            }
+        }
     }
 }
+
+/** Смахнутая карточка центра: где она лежала в списке и её горизонтальный сдвиг. */
+private class CenterDeparture(
+    val update: AnimeUpdate,
+    val slot: Rect,
+    val x: Animatable<Float, AnimationVector1D>,
+)
 
 /** Стеклянная капсула «Очистить всё» под последним уведомлением — тот же материал, что у карточек. */
 @Composable
@@ -251,6 +349,9 @@ private fun ClearAllGlassButton(
  * Одна карточка центра. Вылет из колокольчика — общий [flyFromBell]; поверх него свой горизонтальный
  * сдвиг для смахивания. Сдвиги идут через `offset {}`, а не через `graphicsLayer`: стекло сэмплирует
  * бэкдроп по позиции раскладки.
+ *
+ * Решение «уйти» принимает карточка, полёт — центр ([onDepart]): элемент списка исчезает сразу,
+ * а долетает его изображение поверх списка.
  */
 @Composable
 private fun NotificationCenterCard(
@@ -265,48 +366,60 @@ private fun NotificationCenterCard(
     isDark: Boolean,
     enabled: Boolean,
     onOpen: () -> Unit,
-    onDismiss: () -> Unit,
+    onDepart: (slot: Rect, offsetX: Animatable<Float, AnimationVector1D>, velocity: Float, direction: Float) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val scope = rememberCoroutineScope()
     val density = LocalDensity.current
+    val view = LocalView.current
+    val reducedMotion = rememberReducedMotion()
     val offsetX = remember { Animatable(0f) }
-    var departing by remember { mutableStateOf(false) }
-    var widthPx by remember { mutableStateOf(1f) }
-
-    fun flyOut(direction: Float) {
-        if (departing) return
-        departing = true
-        scope.launch {
-            offsetX.animateTo(direction * widthPx * 1.2f, MotionTokens.springExit())
-            onDismiss()
-        }
-    }
+    // Не состояние: слот меняется каждый кадр сдвига соседей, а читается только в жесте и слое.
+    val slot = remember { arrayOf(Rect.Zero) }
+    val pastDetent = remember { BooleanArray(1) }
+    fun threshold() = slot[0].width * MotionTokens.NotificationDismissFraction
 
     Box(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
-            .onPlaced { widthPx = it.size.width.toFloat().coerceAtLeast(1f) }
-            .flyFromBell(bellCenter, extraX = { offsetX.value }, extraAlpha = {
-                1f - (abs(offsetX.value) / (widthPx * 0.9f)).coerceIn(0f, 1f)
-            }, reveal = reveal)
+            .onPlaced { slot[0] = it.boundsInRoot() }
+            .flyFromBell(
+                bellCenter,
+                extraX = { offsetX.value },
+                extraLayer = { notificationSwipe(offsetX.value, slot[0].width) },
+                reveal = reveal,
+            )
             .draggable(
                 orientation = Orientation.Horizontal,
-                enabled = enabled && !departing,
+                enabled = enabled,
                 state = rememberDraggableState { delta ->
-                    scope.launch { offsetX.snapTo(offsetX.value + delta) }
+                    // Дельты применяются по очереди в корутинах — каждая от текущего значения,
+                    // так что захват посреди возврата продолжает движение без скачка.
+                    scope.launch {
+                        val x = offsetX.value + delta
+                        offsetX.snapTo(x)
+                        // Щелчок фиксатора: палец перешёл черту, за которой карточка уйдёт.
+                        val past = abs(x) > threshold()
+                        if (past && !pastDetent[0]) performHaptic(view, Haptic.Tick)
+                        pastDetent[0] = past
+                    }
                 },
+                onDragStarted = { pastDetent[0] = abs(offsetX.value) > threshold() },
                 onDragStopped = { velocity ->
-                    val dismiss = MotionTokens.willDismiss(
-                        offset = abs(offsetX.value),
-                        containerSize = widthPx,
-                        velocity = velocity / density.density,
-                        offsetFraction = SWIPE_DISMISS_FRACTION,
-                    )
-                    if (dismiss) {
-                        val direction = if (offsetX.value != 0f) sign(offsetX.value) else sign(velocity)
-                        flyOut(if (direction == 0f) 1f else direction)
+                    val x = offsetX.value
+                    val flingPx = MotionTokens.NotificationFlingVelocityDpPerSec * density.density
+                    // Бросок решает направление сам, дальний ход без броска — по стороне сдвига.
+                    val direction = when {
+                        abs(velocity) > flingPx -> sign(velocity)
+                        abs(x) > threshold() -> sign(x)
+                        else -> 0f
+                    }
+                    if (direction != 0f) {
+                        onDepart(slot[0], offsetX, velocity, direction)
+                    } else if (reducedMotion) {
+                        offsetX.snapTo(0f)
                     } else {
-                        scope.launch { offsetX.animateTo(0f, MotionTokens.springSnappy()) }
+                        offsetX.animateTo(0f, MotionTokens.notificationRebound(), initialVelocity = velocity)
                     }
                 },
             ),
@@ -320,8 +433,7 @@ private fun NotificationCenterCard(
             material = material,
             onCard = onCard,
             accent = BrandOrange,
-            dimmed = false,
-            clickEnabled = enabled && !departing,
+            clickEnabled = enabled,
             onClick = onOpen,
         )
     }
@@ -336,7 +448,8 @@ private fun NotificationCenterCard(
 private fun Modifier.flyFromBell(
     bellCenter: () -> Offset?,
     extraX: () -> Float = { 0f },
-    extraAlpha: () -> Float = { 1f },
+    /** Дополнительные преобразования слоя поверх вылета (смахивание). */
+    extraLayer: GraphicsLayerScope.() -> Unit = {},
     startScale: Float = START_SCALE,
     fadeStart: Float = FADE_START,
     fadeSpan: Float = FADE_SPAN,
@@ -360,7 +473,8 @@ private fun Modifier.flyFromBell(
             val s = startScale + (1f - startScale) * r
             scaleX = s
             scaleY = s
-            alpha = ((r - fadeStart) / fadeSpan).coerceIn(0f, 1f) * extraAlpha()
+            alpha = ((r - fadeStart) / fadeSpan).coerceIn(0f, 1f)
+            extraLayer()
         }
 }
 
@@ -387,7 +501,6 @@ private const val MAX_REVEAL = 1.025f
 private const val START_SCALE = 0.12f
 private const val FADE_START = 0.06f
 private const val FADE_SPAN = 0.31f
-private const val SWIPE_DISMISS_FRACTION = 0.32f
 private val PANEL_TOP = 76.dp
 private val HEADER_GAP = 14.dp
 private val CARD_GAP = 8.dp

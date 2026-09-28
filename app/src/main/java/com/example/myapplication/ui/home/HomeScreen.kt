@@ -1300,8 +1300,8 @@ fun HomeScreen(
                         viewModel.dismissUpdate(update, ctx)
                         navController.navigateToDetails(update.animeId)
                     },
+                    // Отклик — в момент решения внутри стопки, здесь только запись.
                     onDismiss = { update ->
-                        performHaptic(view, Haptic.Light)
                         viewModel.dismissUpdate(update, ctx)
                     },
                     backdrop = backdrop,
@@ -1335,7 +1335,6 @@ fun HomeScreen(
                         navController.navigateToDetails(update.animeId)
                     },
                     onDismissUpdate = { update ->
-                        performHaptic(view, Haptic.Light)
                         viewModel.dismissUpdate(update, ctx)
                     },
                     onClearAll = {

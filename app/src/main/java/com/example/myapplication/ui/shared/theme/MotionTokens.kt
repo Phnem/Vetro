@@ -129,6 +129,43 @@ object MotionTokens {
     /** Любое закрытие: ζ 1.0 (нулевой отскок), T 160 мс ≈ 65% входа (закон 5). */
     fun <T> springExit(): SpringSpec<T> = specSpring(dampingRatio = 1.00f, periodMillis = 160)
 
+    // ---- Плашки уведомлений ---------------------------------------------------
+    // Стопка на главной и центр уведомлений говорят на одном наборе пружин: плашка — лёгкий
+    // физический объект, поэтому прилёт и заполнение слота слегка перелетают, а уход — нет.
+    // Перелёт для ζ < 1: OS = exp(−πζ / √(1 − ζ²)). Скорость пальца везде — начальное условие.
+
+    /** Прилёт плашки сверху: ζ 0.80, T 380 мс — перелёт ≈1.5%, мягкое «приземление». */
+    fun <T> notificationArrive(): SpringSpec<T> = specSpring(dampingRatio = 0.80f, periodMillis = 380)
+
+    /** Возврат недосвайпнутой плашки: ζ 0.78, T 300 мс — остаток броска гасится одним покачиванием. */
+    fun <T> notificationRebound(): SpringSpec<T> = specSpring(dampingRatio = 0.78f, periodMillis = 300)
+
+    /** Улёт за край: критическое затухание, T 220 мс — плашка не возвращается и не качается. */
+    fun <T> notificationFling(): SpringSpec<T> = specSpring(dampingRatio = 1.00f, periodMillis = 220)
+
+    /** Соседи занимают освободившийся слот: ζ 0.72, T 340 мс — перелёт ≈4%, «приятное падение». */
+    fun <T> notificationReflow(): SpringSpec<T> = specSpring(dampingRatio = 0.72f, periodMillis = 340)
+
+    /**
+     * Сдвиг элемента списка на освободившееся место. Каскад без таймеров: у каждой следующей
+     * плашки период на 8% длиннее, и волна сама бежит вниз, не обрывая скорость ни одной из них.
+     */
+    fun notificationReflowOffset(order: Int): SpringSpec<IntOffset> {
+        val stretch = 1f + 0.08f * order.coerceIn(0, StaggerMaxItems)
+        val omega = 2f * Math.PI.toFloat() / (0.340f * stretch)
+        return spring(
+            dampingRatio = 0.72f,
+            stiffness = omega * omega,
+            visibilityThreshold = IntOffset.VisibilityThreshold,
+        )
+    }
+
+    /** Доля ширины, после которой отпущенная плашка уходит. */
+    const val NotificationDismissFraction: Float = 0.32f
+
+    /** Бросок быстрее этого уводит плашку даже с короткого хода (по направлению броска). */
+    const val NotificationFlingVelocityDpPerSec: Float = 1000f
+
     /** Каскад содержимого (§5.3): сдвиг на элемент и предел очереди. */
     const val StaggerMillis: Int = 24
     const val StaggerMaxItems: Int = 6
