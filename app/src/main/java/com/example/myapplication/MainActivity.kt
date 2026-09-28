@@ -67,6 +67,7 @@ class MainActivity : ComponentActivity() {
 
     private val externalListSyncCoordinator: ExternalListSyncCoordinator by inject()
     private val supabaseClient: SupabaseClient by inject()
+    private val animeLocalData: com.example.myapplication.data.local.AnimeLocalDataSource by inject()
 
     /** id тайтла из тапа по пушу «вышла новая серия»; открываем Details, когда граф готов. */
     private val pendingAnimeId = MutableStateFlow<String?>(null)
@@ -137,6 +138,8 @@ class MainActivity : ComponentActivity() {
                     val destination = navEntry?.destination
                     if (splashVisible || !destination.isDeepLinkReady()) return@LaunchedEffect
                     pendingAnimeId.value = null
+                    // Пуш открыт — прочитано и в колокольчике приложения.
+                    runCatching { animeLocalData.removeUpdate(animeId) }
                     navController.navigateToDetails(animeId)
                 }
 

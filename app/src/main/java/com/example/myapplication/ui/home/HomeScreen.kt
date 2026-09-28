@@ -1296,6 +1296,8 @@ fun HomeScreen(
                     onOpen = { update ->
                         performHaptic(view, Haptic.Light)
                         collapseUpdatesToBell()
+                        // Открытое уведомление прочитано — как в системной шторке.
+                        viewModel.dismissUpdate(update, ctx)
                         navController.navigateToDetails(update.animeId)
                     },
                     onDismiss = { update ->
@@ -1328,6 +1330,8 @@ fun HomeScreen(
                     onOpenUpdate = { update ->
                         performHaptic(view, Haptic.Light)
                         notificationCenterOpen = false
+                        // Открытое уведомление прочитано — как в системной шторке.
+                        viewModel.dismissUpdate(update, ctx)
                         navController.navigateToDetails(update.animeId)
                     },
                     onDismissUpdate = { update ->
