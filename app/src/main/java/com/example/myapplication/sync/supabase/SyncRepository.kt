@@ -34,6 +34,12 @@ data class AnimeRemoteDto(
     val created_at: Long,
     val updated_at: String,
     val deleted_at: Long?,
+    // Пишется ВСЕГДА, даже равное умолчанию: клиент Supabase не кодирует значения по умолчанию, а
+    // пачка upsert берёт колонки из всех строк сразу — стоит в пачке появиться фильму или манге,
+    // и у строк-аниме без поля PostgREST ставил NULL: «null value in column media_type», синк
+    // коллекции падал целиком.
+    @OptIn(kotlinx.serialization.ExperimentalSerializationApi::class)
+    @kotlinx.serialization.EncodeDefault
     val media_type: String = "ANIME",
     val title_en: String? = null,
     val title_en_checked_at: Long? = null,
