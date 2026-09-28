@@ -96,6 +96,10 @@ fun StreamPlayerSurface(
     /** Раздел OpenSubtitles меню «Субтитры» (BYOK). */
     openSubtitles: OpenSubtitlesUi = OpenSubtitlesUi(configured = false, offers = emptyList(), searching = false),
     onLoadSubtitle: (SubtitleOffer) -> Unit = {},
+    /** Пользователь выбрал звуковую дорожку этого языка — запомнить для тайтла и его типа. */
+    onAudioLanguageChosen: (String) -> Unit = {},
+    /** Пользователь выбрал субтитры (язык) или выключил их — запомнить для тайтла и его типа. */
+    onSubtitlesChosen: (language: String?, off: Boolean) -> Unit = { _, _ -> },
     /** Раздел «Создать на устройстве» (Whisper) и готовые реплики для показа поверх кадра. */
     whisper: WhisperUi? = null,
     whisperCues: List<SubtitleCue> = emptyList(),
@@ -297,6 +301,7 @@ fun StreamPlayerSurface(
                         onSelectRendition(rendition)
                     } else {
                         player.applyStreamAudioOverride(option)
+                        player.trackLanguage(option.groupIndex, option.trackIndex)?.let(onAudioLanguageChosen)
                     }
                 },
                 subtitleOptions = subtitleOptions,
@@ -313,6 +318,7 @@ fun StreamPlayerSurface(
                         option.isOff -> {
                             player.disableTextTracks()
                             onHideWhisper()
+                            onSubtitlesChosen(null, true)
                         }
                         option.externalKey != null -> {
                             openSubtitles.offers.firstOrNull { it.fileId.toString() == option.externalKey }?.let(onLoadSubtitle)
@@ -321,6 +327,7 @@ fun StreamPlayerSurface(
                         else -> {
                             player.selectTextTrack(option.groupIndex, option.trackIndex)
                             onHideWhisper()
+                            onSubtitlesChosen(player.trackLanguage(option.groupIndex, option.trackIndex), false)
                         }
                     }
                     if (!option.keepsMenuOpen) subtitlePage = SubtitlePage.ROOT
@@ -424,6 +431,14 @@ private fun BoxScope.WhisperCueOverlay(cues: List<SubtitleCue>, position: () -> 
             .padding(horizontal = 10.dp, vertical = 4.dp),
     )
 }
+
+/** Язык дорожки (как его отдаёт контейнер: «ru», «eng», «ja»); null — не указан. */
+private fun ExoPlayer.trackLanguage(groupIndex: Int, trackIndex: Int): String? =
+    currentTracks.groups.getOrNull(groupIndex)
+        ?.takeIf { trackIndex in 0 until it.length }
+        ?.getTrackFormat(trackIndex)
+        ?.language
+        ?.takeIf { it.isNotBlank() && it != "und" }
 
 private fun ExoPlayer.selectTextTrack(groupIndex: Int, trackIndex: Int) {
     val group = currentTracks.groups.getOrNull(groupIndex) ?: return

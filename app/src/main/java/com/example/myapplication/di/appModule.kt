@@ -64,6 +64,7 @@ val appModule = module {
     single { AddFromApiUseCase(get(), get(), get(), get(), get()) }
     single { BatchEpisodeCheckUseCase(repository = get(), localDataSource = get()) }
     single { com.example.myapplication.data.local.SeriesSeasonsStore(androidContext()) }
+    single { com.example.myapplication.media.prefs.ContentPlaybackPreferences(androidContext()) }
     single {
         com.example.myapplication.domain.seasons.SeasonEpisodeLocator(
             seasonEpisodesStore = get(),

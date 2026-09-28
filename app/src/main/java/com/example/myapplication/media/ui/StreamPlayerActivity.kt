@@ -142,6 +142,7 @@ class StreamPlayerActivity : ComponentActivity(), PipHostActivity {
     private val whisperSubtitles: WhisperSubtitleManager by inject()
     private val enrichmentCoordinator: CollectionEnrichmentCoordinator by inject()
     private val settings: DataStore<Preferences> by inject(named("settings"))
+    private val playbackPrefs: com.example.myapplication.media.prefs.ContentPlaybackPreferences by inject()
     private val json = AppStoreJson
 
     private var activePlayer: Player? = null
@@ -320,6 +321,40 @@ class StreamPlayerActivity : ComponentActivity(), PipHostActivity {
                         }
                     }
                     val player = playbackSession.player
+
+                    // Предпочтения, которые следуют за контентом: озвучка, язык звука и субтитры,
+                    // выбранные раньше для этого тайтла (или, если нет, для его типа).
+                    val contentType = playbackIdentity.mediaType.name
+                    var playbackChoice by remember {
+                        mutableStateOf<com.example.myapplication.media.prefs.PlaybackChoice?>(null)
+                    }
+                    LaunchedEffect(Unit) {
+                        val choice = runCatching { playbackPrefs.choiceFor(animeId, contentType) }.getOrNull()
+                            ?: return@LaunchedEffect
+                        playbackChoice = choice
+                        val studio = choice.sourceName ?: return@LaunchedEffect
+                        if (preferredSourceName == null) preferredSourceName = studio
+                        if (current.sourceName != studio) {
+                            val index = candidates.indexOfFirst { it.sourceName == studio }
+                            if (index >= 0) {
+                                currentIndex = index
+                                current = candidates[index].copy(resolvedAt = System.currentTimeMillis())
+                            }
+                        }
+                    }
+                    LaunchedEffect(player, playbackChoice) {
+                        val choice = playbackChoice ?: return@LaunchedEffect
+                        player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().apply {
+                            choice.audioLanguage?.let { setPreferredAudioLanguage(it) }
+                            when {
+                                choice.subtitlesOff == true -> setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
+                                choice.subtitleLanguage != null -> {
+                                    setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
+                                    setPreferredTextLanguage(choice.subtitleLanguage)
+                                }
+                            }
+                        }.build()
+                    }
                     // Длительность — для плана распознавания: пока источник не готов, «Сгенерировать» скрыто.
                     var playerDurationMs by remember(player) { mutableLongStateOf(0L) }
                     DisposableEffect(player) {
@@ -740,6 +775,9 @@ class StreamPlayerActivity : ComponentActivity(), PipHostActivity {
                             },
                             onSelectRendition = { rendition ->
                                 preferredSourceName = rendition.sourceName ?: preferredSourceName
+                                rendition.sourceName?.let { studio ->
+                                    scope.launch { runCatching { playbackPrefs.rememberSource(animeId, contentType, studio) } }
+                                }
                                 if (rendition.url != current.url) {
                                     cancelRecoveryResolve()
                                     recoveryOwner = player
@@ -833,6 +871,12 @@ class StreamPlayerActivity : ComponentActivity(), PipHostActivity {
                                     }
                                     is SubtitleMenuAction.Open, SubtitleMenuAction.None -> Unit
                                 }
+                            },
+                            onAudioLanguageChosen = { language ->
+                                scope.launch { runCatching { playbackPrefs.rememberAudio(animeId, contentType, language) } }
+                            },
+                            onSubtitlesChosen = { language, off ->
+                                scope.launch { runCatching { playbackPrefs.rememberSubtitles(animeId, contentType, language, off) } }
                             },
                             onLoadSubtitle = { offer ->
                                 if (!subtitleLoading) {
