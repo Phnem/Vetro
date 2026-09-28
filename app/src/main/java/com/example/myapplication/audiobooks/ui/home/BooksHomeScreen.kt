@@ -120,6 +120,9 @@ fun BooksHomeScreen(
     val scope = rememberCoroutineScope()
     val reducedMotion = rememberReducedMotion()
     val morph = remember { ShelfMorph() }
+    // Открытая полка переживает уход на страницу книги: экран при этом покидает композицию, и
+    // «назад» возвращал на общий список полок вместо той, с которой открыли книгу.
+    var openShelfKey by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf<String?>(null) }
     var sheetBook by remember { mutableStateOf<CachedBook?>(null) }
     var showLocal by remember { mutableStateOf(false) }
     val context = LocalContext.current
@@ -151,6 +154,13 @@ fun BooksHomeScreen(
                 add(OpenShelf(s.key, s.title, s.subtitle, cached?.books.orEmpty(), cached?.fetchedAt))
             }
         }
+    }
+
+    // Вернулись со страницы книги — полка снова открыта, сразу, без полёта обложек.
+    LaunchedEffect(shelves, openShelfKey) {
+        val key = openShelfKey ?: return@LaunchedEffect
+        if (morph.open != null) return@LaunchedEffect
+        shelves.firstOrNull { it.key == key && it.books.isNotEmpty() }?.let { morph.restore(it) }
     }
 
     // Свой фон обязателен: без него сквозь страницу просвечивала «вдавленная» соседняя страница
@@ -186,7 +196,10 @@ fun BooksHomeScreen(
             onResume = vm::resume,
             failed = failed,
             onRetry = vm::retry,
-            onOpenShelf = { shelf -> morph.expand(shelf, scope, reducedMotion) },
+            onOpenShelf = { shelf ->
+                openShelfKey = shelf.key
+                morph.expand(shelf, scope, reducedMotion)
+            },
             onAddFolder = { showLocal = true },
         )
 
@@ -199,7 +212,10 @@ fun BooksHomeScreen(
                 // Книга с источником — полноценная страница книги; без источника (витрина) — лист
                 // с честным «пока не нашли».
                 onBook = { b -> if (b.playable) onOpenBook(b.source, b.key, b.title, b.coverUrl) else sheetBook = b },
-                onClose = { morph.collapse(scope, reducedMotion) },
+                onClose = {
+                    openShelfKey = null
+                    morph.collapse(scope, reducedMotion)
+                },
             )
             FlyingCovers(morph, shelf)
         }
@@ -368,6 +384,15 @@ internal class ShelfMorph {
             to = (0 until FLYING).map { rectOf(targetCoords[it]) }
             if (reducedMotion) progress.snapTo(1f) else progress.animateTo(1f, MotionTokens.largeSurfaceEnter())
         }
+    }
+
+    /** Открыть полку без анимации — возврат на неё со страницы книги. */
+    suspend fun restore(shelf: OpenShelf) {
+        if (open != null) return
+        from = emptyList()
+        to = emptyList()
+        open = shelf
+        progress.snapTo(1f)
     }
 
     fun collapse(scope: CoroutineScope, reducedMotion: Boolean) {
