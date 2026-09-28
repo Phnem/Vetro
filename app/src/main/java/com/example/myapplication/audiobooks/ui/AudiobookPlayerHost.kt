@@ -397,8 +397,12 @@ fun AudiobookPlayerHost(language: AppLanguage = AppLanguage.RU, modifier: Modifi
                     state = state,
                     strings = strings,
                     backdrop = backdrop,
-                    favorite = favorite,
-                    onFavorite = ::toggleFavorite,
+                    // Закрыть: пауза и пустая очередь — мини-плеер уходит, место в книге сохранено,
+                    // книга остаётся в «Продолжить».
+                    onClose = {
+                        performHaptic(view, Haptic.Light)
+                        state.controller?.run { pause(); stop(); clearMediaItems() }
+                    },
                     onExpand = { expand() },
                     onDrag = { delta ->
                         scope.launch {
@@ -570,8 +574,7 @@ private fun MiniPlayerContent(
     state: AudiobookPlayerState,
     strings: PlayerStrings,
     backdrop: Backdrop,
-    favorite: Boolean,
-    onFavorite: () -> Unit,
+    onClose: () -> Unit,
     onExpand: () -> Unit,
     onDrag: (Offset) -> Unit,
     onDragEnd: () -> Unit,
@@ -596,7 +599,7 @@ private fun MiniPlayerContent(
             }
             .padding(9.dp),
     ) {
-        // Верх: капсула автор/чтец и сердце (референс мини-плеера).
+        // Верх: капсула автор/чтец и крестик — закрыть мини-плеер (лайк — в полном плеере).
         Row(Modifier.align(Alignment.TopStart).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             GlassSurface(backdrop, CircleShape, Modifier.weight(1f).height(38.dp)) {
                 Row(Modifier.fillMaxSize().padding(start = 4.dp, end = 10.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -622,8 +625,8 @@ private fun MiniPlayerContent(
             }
             Spacer(Modifier.width(6.dp))
             GlassCircleButton(
-                backdrop, if (favorite) R.drawable.ph_heart_fill else R.drawable.ph_heart, strings.favorite,
-                size = 38.dp, iconSize = 18.dp, tint = if (favorite) BrandOrange else Color.White, onClick = onFavorite,
+                backdrop, R.drawable.ph_x, strings.closePlayer,
+                size = 38.dp, iconSize = 16.dp, tint = Color.White, onClick = onClose,
             )
         }
         // Низ: время, тонкая полоса и три стеклянные кнопки.

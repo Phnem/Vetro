@@ -55,6 +55,8 @@ data class PlayerStrings(
     val deleteMarker: String,
     /** Кнопка отмены случайной перемотки. */
     val undoSeek: String,
+    /** Крестик мини-плеера. */
+    val closePlayer: String,
     val skipSilenceLevels: List<String>,
     // Автовосстановление глав.
     val findChapters: String,
@@ -131,6 +133,7 @@ fun playerStrings(language: AppLanguage): PlayerStrings = when (language) {
         backToMarker = { "Вернуться к маркеру · $it" },
         deleteMarker = "Удалить маркер",
         undoSeek = "Вернуться",
+        closePlayer = "Закрыть плеер",
         skipSilenceLevels = listOf("Выкл", "Мягко", "Обычно", "Сильно"),
         findChapters = "Найти главы",
         findChaptersHint = "По паузам чтеца и словам «Глава…» в речи. Разметка не изменится, пока вы её не примете",
@@ -203,6 +206,7 @@ fun playerStrings(language: AppLanguage): PlayerStrings = when (language) {
         backToMarker = { "Back to a marker · $it" },
         deleteMarker = "Delete marker",
         undoSeek = "Go back",
+        closePlayer = "Close player",
         skipSilenceLevels = listOf("Off", "Light", "Normal", "Aggressive"),
         findChapters = "Find chapters",
         findChaptersHint = "From the narrator's pauses and spoken “Chapter…”. Nothing changes until you accept",
