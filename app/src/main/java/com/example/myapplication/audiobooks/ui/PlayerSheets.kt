@@ -327,15 +327,56 @@ internal fun ColumnScope.SpeedSheetContent(state: AudiobookPlayerState, strings:
             .padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Column(Modifier.weight(1f)) {
-            Text(strings.skipSilence, color = Ink, fontFamily = SnProFamily, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
-            Text(strings.skipSilenceHint, color = Muted, fontFamily = SnProFamily, fontSize = 12.sp)
-        }
-        IosSwitch(checked = state.skipSilence) { enabled ->
-            controller.sendCustomCommand(
-                AudiobookSessionCommands.setSkipSilence,
-                Bundle().apply { putBoolean(AudiobookSessionCommands.SKIP_SILENCE, enabled) },
-            )
+        SkipSilenceLevels(state, strings, controller)
+    }
+}
+
+/**
+ * Пропуск тишины уровнями: «Выкл / Мягко / Обычно / Сильно». Выбранный уровень — оранжевый
+ * (правило «активное — оранжевое»), «Выкл» выбранным белым не подсвечивается как настройка.
+ */
+@Composable
+private fun SkipSilenceLevels(
+    state: AudiobookPlayerState,
+    strings: PlayerStrings,
+    controller: androidx.media3.session.MediaController,
+) {
+    Column(Modifier.fillMaxWidth()) {
+        Text(strings.skipSilence, color = Ink, fontFamily = SnProFamily, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
+        Text(strings.skipSilenceHint, color = Muted, fontFamily = SnProFamily, fontSize = 12.sp)
+        Spacer(Modifier.height(10.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            strings.skipSilenceLevels.forEachIndexed { index, label ->
+                val selected = state.skipSilenceLevel == index
+                Text(
+                    text = label,
+                    color = when {
+                        selected && index > 0 -> Color.White
+                        selected -> Color(0xFF111111)
+                        else -> Muted
+                    },
+                    fontFamily = SnProFamily,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 13.sp,
+                    maxLines = 1,
+                    modifier = Modifier
+                        .clip(CircleShape)
+                        .background(
+                            when {
+                                selected && index > 0 -> BrandOrange
+                                selected -> Color.White
+                                else -> Color.White.copy(alpha = 0.08f)
+                            },
+                        )
+                        .clickable {
+                            controller.sendCustomCommand(
+                                AudiobookSessionCommands.setSkipSilence,
+                                Bundle().apply { putInt(AudiobookSessionCommands.SKIP_SILENCE_LEVEL, index) },
+                            )
+                        }
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                )
+            }
         }
     }
 }
@@ -575,11 +616,14 @@ internal fun ColumnScope.MoreSheetContent(
     }
     SettingRow(strings.favorite, checked = favorite, onChange = { onFavorite() })
     Spacer(Modifier.height(3.dp))
-    SettingRow(strings.skipSilence, checked = state.skipSilence) { enabled ->
-        controller.sendCustomCommand(
-            AudiobookSessionCommands.setSkipSilence,
-            Bundle().apply { putBoolean(AudiobookSessionCommands.SKIP_SILENCE, enabled) },
-        )
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(18.dp))
+            .background(Color.Black.copy(alpha = 0.22f))
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+    ) {
+        SkipSilenceLevels(state, strings, controller)
     }
 }
 

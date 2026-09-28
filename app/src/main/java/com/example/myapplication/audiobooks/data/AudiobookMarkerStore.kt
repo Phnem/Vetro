@@ -5,6 +5,7 @@ import com.example.myapplication.data.local.JsonMapFileStore
 import java.io.File
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.map
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.ListSerializer
@@ -28,8 +29,12 @@ class AudiobookMarkerStore(context: Context) {
         TAG,
     )
 
+    /** Маркеры озвучки. Стор читается с диска при первой подписке: без этого после перезапуска поток был пуст до первой записи. */
     fun markers(narrationId: String): Flow<List<AudiobookMarker>> =
-        store.flow
+        kotlinx.coroutines.flow.flow {
+            store.ensureLoaded()
+            emitAll(store.flow)
+        }
             .map { it[narrationId].orEmpty().sortedBy { m -> m.globalMs } }
             .distinctUntilChanged()
 

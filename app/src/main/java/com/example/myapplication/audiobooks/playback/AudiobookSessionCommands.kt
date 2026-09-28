@@ -11,6 +11,8 @@ object AudiobookSessionCommands {
     const val MINUTES = "minutes"
     const val REMAINING_MS = "sleep_remaining_ms"
     const val SKIP_SILENCE = "skip_silence"
+    /** Уровень пропуска тишины — ordinal [SilenceLevel]. */
+    const val SKIP_SILENCE_LEVEL = "skip_silence_level"
     /** Имя сайта, на который плеер сам перешёл по цепочке; пусто — запасных не осталось. */
     const val SOURCE_NOTICE = "source_notice"
     /** Растёт с каждым переходом: приложение показывает каждое сообщение один раз. */

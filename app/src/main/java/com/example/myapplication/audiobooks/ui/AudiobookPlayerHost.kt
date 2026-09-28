@@ -179,7 +179,7 @@ fun AudiobookPlayerHost(language: AppLanguage = AppLanguage.RU, modifier: Modifi
                 if (state.book != snapshot) state.book = snapshot
                 state.trackPositionMs.longValue = controller.currentPosition.coerceAtLeast(0L)
                 state.sleepRemainingMs = controller.sessionExtras.getLong(AudiobookSessionCommands.REMAINING_MS, -1L)
-                state.skipSilence = controller.sessionExtras.getBoolean(AudiobookSessionCommands.SKIP_SILENCE, false)
+                state.skipSilenceLevel = controller.sessionExtras.getInt(AudiobookSessionCommands.SKIP_SILENCE_LEVEL, 0)
                 val noticeSeq = controller.sessionExtras.getInt(AudiobookSessionCommands.SOURCE_NOTICE_SEQ, 0)
                 if (noticeSeq != state.sourceNotice.first) {
                     state.sourceNotice = noticeSeq to controller.sessionExtras.getString(AudiobookSessionCommands.SOURCE_NOTICE).orEmpty()

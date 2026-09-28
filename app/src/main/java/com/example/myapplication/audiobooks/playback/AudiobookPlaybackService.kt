@@ -54,6 +54,7 @@ class AudiobookPlaybackService : MediaLibraryService() {
         AudiobookProgressTracker(get(), CoroutineScope(SupervisorJob() + Dispatchers.IO))
     }
     private lateinit var player: ExoPlayer
+    private val silence = LeveledSilenceChain()
     private lateinit var session: MediaLibrarySession
     private lateinit var resumptionStore: PlaybackResumptionStore
     private lateinit var sleepTimer: SleepTimerController
@@ -136,8 +137,8 @@ class AudiobookPlaybackService : MediaLibraryService() {
     override fun onCreate() {
         super.onCreate()
         resumptionStore = PlaybackResumptionStore(this)
-        player = AudiobookPlayerFactory.create(this, manifestResolver, get())
-        player.skipSilenceEnabled = getSharedPreferences(PREFS, MODE_PRIVATE).getBoolean(AudiobookSessionCommands.SKIP_SILENCE, false)
+        player = AudiobookPlayerFactory.create(this, manifestResolver, get(), silence)
+        applySilenceLevel(savedSilenceLevel())
         sleepTimer = SleepTimerController(player) { remaining ->
             sleepRemainingMs = remaining ?: -1L
             publishSessionState()
@@ -270,9 +271,31 @@ class AudiobookPlaybackService : MediaLibraryService() {
 
     private fun sessionState() = Bundle().apply {
         putLong(AudiobookSessionCommands.REMAINING_MS, sleepRemainingMs)
-        putBoolean(AudiobookSessionCommands.SKIP_SILENCE, player.skipSilenceEnabled)
+        putBoolean(AudiobookSessionCommands.SKIP_SILENCE, silence.level != SilenceLevel.OFF)
+        putInt(AudiobookSessionCommands.SKIP_SILENCE_LEVEL, silence.level.ordinal)
         putString(AudiobookSessionCommands.SOURCE_NOTICE, sourceNotice)
         putInt(AudiobookSessionCommands.SOURCE_NOTICE_SEQ, sourceNoticeSeq)
+    }
+
+    /** Сохранённый уровень; старый флаг «пропуск тишины включён» читается как «Обычно». */
+    private fun savedSilenceLevel(): SilenceLevel {
+        val prefs = getSharedPreferences(PREFS, MODE_PRIVATE)
+        return when {
+            prefs.contains(AudiobookSessionCommands.SKIP_SILENCE_LEVEL) ->
+                SilenceLevel.fromOrdinal(prefs.getInt(AudiobookSessionCommands.SKIP_SILENCE_LEVEL, 0))
+            prefs.getBoolean(AudiobookSessionCommands.SKIP_SILENCE, false) -> SilenceLevel.NORMAL
+            else -> SilenceLevel.OFF
+        }
+    }
+
+    /**
+     * Сменить уровень: цепочка включает обработчик уровня при `skipSilenceEnabled = true`, а выход
+     * перечитывает активные обработчики только на смене флага — поэтому выключить и включить.
+     */
+    private fun applySilenceLevel(level: SilenceLevel) {
+        silence.level = level
+        player.skipSilenceEnabled = false
+        if (level != SilenceLevel.OFF) player.skipSilenceEnabled = true
     }
 
     private fun publishSessionState() {
@@ -441,9 +464,16 @@ class AudiobookPlaybackService : MediaLibraryService() {
                 }
                 AudiobookSessionCommands.cancelSleepTimer.customAction -> sleepTimer.cancel()
                 AudiobookSessionCommands.setSkipSilence.customAction -> {
-                    player.skipSilenceEnabled = args.getBoolean(AudiobookSessionCommands.SKIP_SILENCE)
+                    val level = if (args.containsKey(AudiobookSessionCommands.SKIP_SILENCE_LEVEL)) {
+                        SilenceLevel.fromOrdinal(args.getInt(AudiobookSessionCommands.SKIP_SILENCE_LEVEL))
+                    } else if (args.getBoolean(AudiobookSessionCommands.SKIP_SILENCE)) {
+                        SilenceLevel.NORMAL
+                    } else {
+                        SilenceLevel.OFF
+                    }
+                    applySilenceLevel(level)
                     getSharedPreferences(PREFS, MODE_PRIVATE).edit()
-                        .putBoolean(AudiobookSessionCommands.SKIP_SILENCE, player.skipSilenceEnabled).apply()
+                        .putInt(AudiobookSessionCommands.SKIP_SILENCE_LEVEL, level.ordinal).apply()
                     publishSessionState()
                 }
                 else -> return super.onCustomCommand(session, controller, customCommand, args)
