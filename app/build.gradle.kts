@@ -149,10 +149,11 @@ android {
 
     packaging {
         jniLibs {
-            // Распаковка .so при установке была нужна только бинарнику ffmpeg (его запускали как
-            // исполняемый файл). Без него библиотеки грузятся прямо из APK: меньше места после
-            // установки, выравнивание под 16 КБ страницы AGP делает сам.
-            useLegacyPackaging = false
+            // Библиотеки в APK сжаты и распаковываются при установке. Несжатые грузились прямо из
+            // APK, но торрент-движок (libtorrent + boost + OpenSSL) — 15 МБ машинного кода, сжатый —
+            // 6 МБ: для APK, который скачивают с GitHub, размер загрузки важнее. Место на телефоне
+            // после установки почти то же (APK + распакованная библиотека одного ABI).
+            useLegacyPackaging = true
         }
     }
 }
@@ -246,7 +247,6 @@ dependencies {
     // x86_64 — только для эмулятора в debug, чтобы не раздувать релиз).
     implementation(libs.libtorrent4j)
     implementation(libs.libtorrent4j.android.arm64)
-    implementation(libs.libtorrent4j.android.arm)
     debugImplementation(libs.libtorrent4j.android.x64)
     implementation(libs.work.runtime.ktx)
 

@@ -90,9 +90,17 @@ class TorrentEngine(private val root: File) {
     fun isComplete(hash: String): Boolean =
         runCatching { session.find(Sha1Hash.parseHex(hash))?.status()?.isFinished == true }.getOrDefault(false)
 
-    private companion object {
-        const val UPLOAD_LIMIT_BYTES = 64 * 1024
-        const val MAGNET_TIMEOUT_SEC = 45
+    companion object {
+        private const val UPLOAD_LIMIT_BYTES = 64 * 1024
+        private const val MAGNET_TIMEOUT_SEC = 45
+
+        /**
+         * Есть ли libtorrent под этот телефон. В APK движок только для arm64-v8a (и x86_64 в debug
+         * для эмулятора): 32-битная сборка весила 13 МБ ради почти исчезнувших устройств.
+         */
+        val isSupported: Boolean by lazy {
+            runCatching { System.loadLibrary("torrent4j") }.isSuccess
+        }
     }
 }
 

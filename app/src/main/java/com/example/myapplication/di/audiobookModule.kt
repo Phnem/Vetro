@@ -69,11 +69,15 @@ val audiobookModule = module {
             add(RealAudiobooksSource(site(http)))
             IpaudioWpSource.SITES.forEach { (id, name, base) -> add(IpaudioWpSource(site(http), id, name, base)) }
             // Трекеры — последними: звук приходит не сразу, зато раздача остаётся на устройстве.
-            val torrents = get<TorrentEngine>()
-            add(RutorSource(site(http), torrents))
-            add(AudiobooSource(site(http), torrents))
-            add(AudioBookBaySource(site(http), torrents))
-            add(PirateBaySource(site(http), torrents))
+            // Движок собран только под 64-битные ABI: на 32-битном телефоне торрент-источников нет вовсе,
+            // а не «есть, но падают» при первом обращении к libtorrent.
+            if (TorrentEngine.isSupported) {
+                val torrents = get<TorrentEngine>()
+                add(RutorSource(site(http), torrents))
+                add(AudiobooSource(site(http), torrents))
+                add(AudioBookBaySource(site(http), torrents))
+                add(PirateBaySource(site(http), torrents))
+            }
         }
     }
     single { AudiobookSearch(get(named(SOURCES))) }
