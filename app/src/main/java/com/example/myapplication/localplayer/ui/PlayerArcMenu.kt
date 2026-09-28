@@ -6,6 +6,9 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
@@ -64,6 +67,8 @@ fun ArcCapsuleMenu(
     selectedIndex: Int,
     onCommit: (Int) -> Unit,
     modifier: Modifier = Modifier,
+    /** Тап мимо капсул закрывает колесо. */
+    onDismiss: () -> Unit = {},
 ) {
     if (labels.isEmpty()) return
     val view = LocalView.current
@@ -71,8 +76,10 @@ fun ArcCapsuleMenu(
     val scope = rememberCoroutineScope()
     val total = labels.size
 
-    var rawIndex by remember(total) { mutableFloatStateOf(selectedIndex.toFloat()) }
-    var committed by remember(total) { mutableIntStateOf(selectedIndex) }
+    // Ключ — сами пункты, а не их число: у меню субтитров и озвучки может быть поровну пунктов,
+    // и колесо не должно переносить позицию и выбор из одного меню в другое.
+    var rawIndex by remember(labels) { mutableFloatStateOf(selectedIndex.toFloat()) }
+    var committed by remember(labels) { mutableIntStateOf(selectedIndex) }
     var dragging by remember { mutableStateOf(false) }
 
     val stepPx = with(density) { DRAG_PER_ITEM.toPx() }
@@ -81,6 +88,12 @@ fun ArcCapsuleMenu(
     Box(
         modifier = modifier
             .fillMaxSize()
+            // Колесо лежит поверх плеера на весь экран: ни один жест под ним не должен сработать —
+            // ни перемотка горизонтальным свайпом, ни громкость/яркость, ни ускорение удержанием.
+            // Этот слой — внешний: в основном проходе он получает событие ПОСЛЕ прокрутки колеса и
+            // тапа мимо, поэтому им не мешает, а плееру отдаёт уже потреблённое.
+            .pointerInput(Unit) { consumeEverything() }
+            .pointerInput(Unit) { detectTapGestures(onTap = { onDismiss() }) }
             .pointerInput(total) {
                 var startIndex = 0f
                 var lastNearest = 0

@@ -196,6 +196,8 @@ fun PlayerControlsOverlay(
      */
     onSetFit: (VideoFit) -> Unit,
     onControlsVisibleChange: (Boolean) -> Unit = {},
+    /** Меню субтитров открывается заново — хозяин возвращает его на первую страницу. */
+    onSubtitlesMenuOpened: () -> Unit = {},
 ) {
     val scope = rememberCoroutineScope()
 
@@ -672,7 +674,7 @@ fun PlayerControlsOverlay(
                             contentDescription = if (playerIsRu()) "Субтитры" else "Subtitles",
                             tint = Color.White,
                             iconSize = TOP_DOCK_ICON,
-                            onClick = { menuKind = PlayerMenu.SUBTITLES; menuState.targetState = true },
+                            onClick = { onSubtitlesMenuOpened(); menuKind = PlayerMenu.SUBTITLES; menuState.targetState = true },
                         )
                     }
                     DockIconButton(
@@ -828,6 +830,11 @@ fun PlayerControlsOverlay(
             }
         }
 
+        // Меню доиграло закрытие — забываем, какое было: следующее открытие начнётся с чистого
+        // листа, а не с хвоста прошлого меню.
+        LaunchedEffect(menuState.isIdle, menuState.currentState) {
+            if (menuState.isIdle && !menuState.currentState && !menuState.targetState) menuKind = null
+        }
         val kind = menuKind
         if (kind != null && (menuState.targetState || menuState.currentState || !menuState.isIdle)) {
             OptionMenu(
@@ -1282,11 +1289,10 @@ private fun OptionMenu(
                 Modifier
                     .fillMaxSize()
                     .background(Color.Black.copy(alpha = 0.4f))
-                    .pointerInput(Unit) { detectTapGestures(onTap = { onDismiss() }) }
-                    // Скрим глушит ПЕРЕТАСКИВАНИЯ: тап-детектор их не потребляет, и раньше любое
-                    // движение пальцем по открытому меню проваливалось в жесты плеера под ним —
-                    // список «нельзя было прокрутить», вместо этого шла перемотка.
-                    .pointerInput(Unit) { consumeDragsOnly() },
+                    // Скрим глушит ВСЁ, что под ним: перетаскивания (раньше они проваливались в
+                    // перемотку и громкость) и удержание (ускорение). Внешний слой — после тапа.
+                    .pointerInput(Unit) { consumeEverything() }
+                    .pointerInput(Unit) { detectTapGestures(onTap = { onDismiss() }) },
             )
         }
         AnimatedVisibility(
@@ -1303,6 +1309,7 @@ private fun OptionMenu(
                     onCommit = { index ->
                         if (commit(index)) onDismiss()
                     },
+                    onDismiss = onDismiss,
                     modifier = Modifier.statusBarsPadding().displayCutoutPadding(),
                 )
             } else {
@@ -1339,17 +1346,16 @@ private fun OptionMenu(
 }
 
 /**
- * Съедает только движения пальца, оставляя «чистые» тапы вышестоящему детектору: у тапа нет
- * смещения, поэтому потреблять нечего и обработчик закрытия по клику продолжает работать.
+ * Поглощает жест целиком — касание, движение, отпускание, — чтобы плеер под меню его не увидел.
+ * Ставится ВНЕШНИМ модификатором: в основном проходе события идут от внутренних обработчиков к
+ * внешним, так что тап-закрытие и прокрутка меню успевают отработать раньше.
  */
-private suspend fun PointerInputScope.consumeDragsOnly() {
+internal suspend fun PointerInputScope.consumeEverything() {
     awaitEachGesture {
-        awaitFirstDown(requireUnconsumed = false)
+        awaitFirstDown(requireUnconsumed = false).consume()
         while (true) {
             val event = awaitPointerEvent()
-            event.changes.forEach { change ->
-                if (change.positionChange() != Offset.Zero) change.consume()
-            }
+            event.changes.forEach { it.consume() }
             if (event.changes.none { it.pressed }) break
         }
     }
