@@ -446,6 +446,7 @@ private fun DetailsInfoPage(
             DetailsTitle(
                 displayTitle = displayTitle,
                 logo = enrichment?.logo,
+                copiedLabel = if (language == AppLanguage.RU) "Название скопировано" else "Title copied",
                 textStyle = MaterialTheme.typography.headlineMedium.copy(
                     fontFamily = SnProFamily,
                     fontWeight = FontWeight.Bold,

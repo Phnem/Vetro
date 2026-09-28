@@ -5,6 +5,7 @@ import android.net.Uri
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -34,6 +35,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -67,10 +69,26 @@ internal fun DetailsTitle(
     logo: ArtworkImage?,
     textStyle: TextStyle,
     color: Color,
+    /** Подпись тоста «скопировано» (до Android 13 — там система своего не показывает). */
+    copiedLabel: String = "Название скопировано",
 ) {
     var logoReady by remember(logo?.url) { mutableStateOf(false) }
     val logoAlpha by animateFloatAsState(if (logoReady) 1f else 0f, MotionTokens.standard(), label = "detailsLogoAlpha")
-    Box {
+    val context = LocalContext.current
+    val view = androidx.compose.ui.platform.LocalView.current
+    // Удержание названия (и текста, и логотипа) копирует его — чтобы искать тайтл где-то ещё.
+    Box(
+        Modifier.pointerInput(displayTitle) {
+            detectTapGestures(onLongPress = {
+                val clipboard = context.getSystemService(android.content.ClipboardManager::class.java)
+                clipboard?.setPrimaryClip(android.content.ClipData.newPlainText(displayTitle, displayTitle))
+                com.example.myapplication.utils.performHaptic(view, com.example.myapplication.utils.Haptic.Light)
+                if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.TIRAMISU) {
+                    android.widget.Toast.makeText(context, copiedLabel, android.widget.Toast.LENGTH_SHORT).show()
+                }
+            })
+        },
+    ) {
         if (!logoReady) {
             Text(text = displayTitle, style = textStyle, color = color, maxLines = 3, overflow = TextOverflow.Ellipsis)
         }
