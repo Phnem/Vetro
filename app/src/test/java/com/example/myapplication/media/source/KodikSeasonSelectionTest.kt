@@ -175,4 +175,40 @@ class KodikSeasonSelectionTest {
             )
         )
     }
+
+    /** Регрессия 28.09: «Перерождение в аристократа…» S3E1 играло S2E1 — у Kodik третьего ещё нет. */
+    @Test
+    fun `a release of another numbered season never stands in for the requested one`() {
+        val s2 = listOf("Перерождение в аристократа со способностью анализа 2", "Tensei Kizoku, Kantei Skill de Nariagaru 2nd Season")
+        // Названия самого сезона (AniList); русское название франшизы сезон не подтверждает.
+        val s3Titles = listOf("Tensei Kizoku, Kantei Skill de Nariagaru 3rd Season")
+        assertEquals(false, kodikReleaseServesSeason(s2, season = 3, seasonTitles = s3Titles))
+        // Первый сезон без номера тоже не третий.
+        assertEquals(false, kodikReleaseServesSeason(listOf("Перерождение в аристократа со способностью анализа"), season = 3, seasonTitles = s3Titles))
+        // Сам третий — годится.
+        assertEquals(true, kodikReleaseServesSeason(listOf("Tensei Kizoku, Kantei Skill de Nariagaru 3rd Season"), season = 3, seasonTitles = s3Titles))
+        assertEquals(true, kodikReleaseServesSeason(listOf("Перерождение в аристократа со способностью анализа 3"), season = 3, seasonTitles = s3Titles))
+        // Первый сезон не подменяется релизом второго.
+        assertEquals(false, kodikReleaseServesSeason(s2, season = 1, seasonTitles = listOf("Tensei Kizoku, Kantei Skill de Nariagaru")))
+    }
+
+    @Test
+    fun `single-season release fallback needs the release to confirm the season`() {
+        val only = linkedMapOf(1 to mapOf(1 to "https://kodik.example/s2-release/episode-1"))
+        assertNull(
+            selectKodikSerialEpisodeLink(
+                baseLink = "https://kodik.example/s2-release", linksBySeason = only, lastSeason = 1, lastEpisode = 12,
+                season = 3, episode = 1, seasonIdentifiable = true, releaseConfirmsSeason = false,
+            ),
+        )
+    }
+
+    @Test
+    fun `russian and english season markers are read`() {
+        assertEquals(2, explicitReleaseSeason("Tensei Kizoku 2nd Season"))
+        assertEquals(3, explicitReleaseSeason("Магическая битва 3 сезон"))
+        assertEquals(2, explicitReleaseSeason("Врата Штейна [ТВ-2]"))
+        assertEquals(4, explicitReleaseSeason("Re:Zero Season 4"))
+        assertNull(explicitReleaseSeason("Перерождение в аристократа со способностью анализа"))
+    }
 }

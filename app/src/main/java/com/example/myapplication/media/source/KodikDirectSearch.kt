@@ -98,17 +98,53 @@ internal fun selectKodikSerialEpisodeLink(
     season: Int,
     episode: Int,
     seasonIdentifiable: Boolean,
+    /**
+     * Сам релиз подтверждает нужный сезон (название сезона целиком или его номер в названии).
+     * Без этого подмена «единственный сезон релиза = просимый» брала второй сезон вместо
+     * третьего: русское название франшизы находит все её релизы, а свежего ещё нет.
+     */
+    releaseConfirmsSeason: Boolean = seasonIdentifiable,
 ): String? {
     if (lastEpisode > 0 && episode > lastEpisode) return null
     if (linksBySeason != null) {
         selectKodikEpisodeLink(linksBySeason, season, episode)?.let { return it }
         val onlySeason = linksBySeason.entries.singleOrNull() ?: return null
-        if (!seasonIdentifiable && season != 1) return null
+        if (season != 1 && !(seasonIdentifiable && releaseConfirmsSeason)) return null
         return onlySeason.value[episode]
     }
     if (lastSeason > 0 && lastSeason != season) return null
     return baseLink.withKodikEpisodeParams(season, episode)
 }
+
+/**
+ * Номер сезона, явно написанный в названии релиза: «2nd Season», «Season 3», «3 сезон»,
+ * «сезон 2», «ТВ-2». null — номера нет (первый сезон или сезон со своим названием).
+ */
+internal fun explicitReleaseSeason(title: String): Int? =
+    com.example.myapplication.updates.SeasonNumbering.explicitSeason(title)
+        ?: RU_SEASON.find(title)?.let { m -> m.groupValues.drop(1).firstOrNull { it.isNotEmpty() }?.toIntOrNull() }
+
+/**
+ * Годится ли релиз Kodik для просимого сезона. Явно другой номер в названии — никогда (иначе
+ * «…2nd Season» уходит за третий сезон или за первый). Для второго и дальше сезонов релиз должен
+ * сам его подтвердить: название сезона целиком или его номер отдельным словом.
+ */
+internal fun kodikReleaseServesSeason(remoteTitles: List<String>, season: Int, seasonTitles: List<String>): Boolean {
+    val explicit = remoteTitles.mapNotNull(::explicitReleaseSeason).toSet()
+    if (explicit.isNotEmpty() && season !in explicit) return false
+    if (season <= 1) return true
+    if (season in explicit) return true
+    val wanted = seasonTitles.map(::normalizeReleaseTitle).filter { it.isNotEmpty() }.toSet()
+    if (remoteTitles.any { normalizeReleaseTitle(it) in wanted }) return true
+    val number = Regex("""(?:^|[^\p{L}\p{N}])${season}(?:$|[^\p{L}\p{N}])""")
+    return remoteTitles.any { number.containsMatchIn(it) }
+}
+
+private fun normalizeReleaseTitle(value: String): String =
+    value.lowercase().replace('ё', 'е').split(Regex("""[^\p{L}\p{N}]+""")).filter { it.isNotEmpty() }.joinToString(" ")
+
+// Фигурные скобки не нужны: на Android литеральная «}» в ICU-регэкспе роняет разбор.
+private val RU_SEASON = Regex("""(?:(\d+)[\s-]*(?:й\s+)?[сС]езон|[сС]езон\s+(\d+)|(?:^|[^\p{L}])[тТ][вВ][\s-]*(\d+))""")
 
 private fun String.withKodikEpisodeParams(season: Int, episode: Int): String {
     val separator = if (contains('?')) '&' else '?'
@@ -147,6 +183,9 @@ class KodikDirectSearch(
             .filter(String::isNotBlank)
             .distinctBy(String::lowercase)
         if (queries.isEmpty()) return emptyList()
+        // Сезон подтверждает только его собственное название (AniList), не русское название
+        // франшизы: по нему находятся все релизы, в том числе прошлых сезонов.
+        val seasonTitles = listOfNotNull(anime.title, anime.titleEn).takeIf { seasonIdentifiable }.orEmpty()
 
         return withContext(Dispatchers.IO) {
             for (query in queries) {
@@ -157,6 +196,7 @@ class KodikDirectSearch(
                     season = seasonNumber.coerceAtLeast(1),
                     episode = episodeNumber,
                     seasonIdentifiable = seasonIdentifiable,
+                    seasonTitles = seasonTitles,
                     limit = limit,
                 )
                 if (candidates.isNotEmpty()) {
@@ -234,16 +274,20 @@ class KodikDirectSearch(
         season: Int,
         episode: Int,
         seasonIdentifiable: Boolean,
+        seasonTitles: List<String>,
         limit: Int,
     ): List<KodikIframeCandidate> = payload.optJSONArray("results").objects()
         // Kodik по названию охотно отдаёт «похожее»: без порога матчера в выдачу уедет чужой тайтл.
         .filter { result -> score(localTitles, result) >= TitleMatcher.MATCH_THRESHOLD }
-        .mapNotNull { result -> toCandidate(result, season, episode, seasonIdentifiable) }
+        .mapNotNull { result -> toCandidate(result, season, episode, seasonIdentifiable, seasonTitles) }
         .distinctBy { it.iframeUrl }
         .take(limit)
 
-    private fun score(localTitles: List<String>, result: JSONObject): Double {
-        val remote = buildList {
+    private fun score(localTitles: List<String>, result: JSONObject): Double =
+        localTitles.maxOfOrNull { TitleMatcher.bestScore(it, remoteTitles(result)) } ?: 0.0
+
+    private fun remoteTitles(result: JSONObject): List<String> =
+        buildList {
             result.optString("title").trim().takeIf(String::isNotBlank)?.let(::add)
             result.optString("title_orig").trim().takeIf(String::isNotBlank)?.let(::add)
             // other_title — одна строка со всеми синонимами через " / ", а матчер сравнивает
@@ -253,21 +297,24 @@ class KodikDirectSearch(
                 .filter(String::isNotBlank)
                 .forEach(::add)
         }
-        return localTitles.maxOfOrNull { TitleMatcher.bestScore(it, remote) } ?: 0.0
-    }
 
     private fun toCandidate(
         result: JSONObject,
         season: Int,
         episode: Int,
         seasonIdentifiable: Boolean,
+        seasonTitles: List<String>,
     ): KodikIframeCandidate? {
         val baseLink = normalizeUrl(result.optString("link")) ?: return null
         val isSerial = result.optString("type").contains("serial", ignoreCase = true)
+        val titles = remoteTitles(result)
+        // Релиз явно другого сезона не годится ни одной ступенью ниже.
+        if (titles.mapNotNull(::explicitReleaseSeason).let { it.isNotEmpty() && season !in it }) return null
+        val confirms = kodikReleaseServesSeason(titles, season, seasonTitles)
 
         val iframe = if (!isSerial) {
             // Фильм/OVA одной серией: отдаём только когда просят первую — иначе это не та серия.
-            if (!isKodikStandaloneEligible(season, episode, seasonIdentifiable)) return null
+            if (!isKodikStandaloneEligible(season, episode, seasonIdentifiable && confirms)) return null
             baseLink
         } else {
             // with_episodes даёт прямую ссылку на серию; если её нет — сезонный плеер умеет
@@ -280,6 +327,7 @@ class KodikDirectSearch(
                 season = season,
                 episode = episode,
                 seasonIdentifiable = seasonIdentifiable,
+                releaseConfirmsSeason = confirms,
             ) ?: return null
         }
 
