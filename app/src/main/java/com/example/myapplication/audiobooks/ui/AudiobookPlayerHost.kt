@@ -228,6 +228,10 @@ fun AudiobookPlayerHost(language: AppLanguage = AppLanguage.RU, modifier: Modifi
     val favorite by remember(book?.workId) {
         book?.workId?.let(repository::isFavorite) ?: flowOf(false)
     }.collectAsState(initial = false)
+    val markerStore: com.example.myapplication.audiobooks.data.AudiobookMarkerStore = koinInject()
+    val markers by remember(book?.narrationId) {
+        book?.narrationId?.value?.let(markerStore::markers) ?: flowOf(emptyList())
+    }.collectAsState(initial = emptyList())
     val controller = state.controller
     if (book == null || controller == null) return
 
@@ -391,6 +395,15 @@ fun AudiobookPlayerHost(language: AppLanguage = AppLanguage.RU, modifier: Modifi
                     interactive = isFull,
                     onCollapse = { collapse() },
                     onFavorite = ::toggleFavorite,
+                    markers = markers,
+                    onAddMarker = {
+                        val id = book.narrationId?.value
+                        val at = state.globalMs()
+                        if (id != null && at != null) {
+                            performHaptic(view, Haptic.Success)
+                            scope.launch { markerStore.add(id, at) }
+                        }
+                    },
                     onSheet = { which ->
                         if (which == PlayerSheet.NARRATION) {
                             narration = NarrationChoice()
@@ -427,7 +440,7 @@ fun AudiobookPlayerHost(language: AppLanguage = AppLanguage.RU, modifier: Modifi
             Box(Modifier.fillMaxSize().zIndex(2f)) {
                 PlayerSheetFrame(visible = sheetVisible, onDismiss = ::closeSheet) {
                     when (sheet) {
-                        PlayerSheet.CHAPTERS -> ChaptersSheetContent(state, strings, ::closeSheet)
+                        PlayerSheet.CHAPTERS -> ChaptersSheetContent(state, strings, ::closeSheet, markers)
                         PlayerSheet.SPEED -> SpeedSheetContent(state, strings)
                         PlayerSheet.TIMER -> SleepTimerSheetContent(state, strings, ::closeSheet)
                         PlayerSheet.NARRATION -> NarrationSheetContent(narration, strings) { option ->
@@ -442,7 +455,20 @@ fun AudiobookPlayerHost(language: AppLanguage = AppLanguage.RU, modifier: Modifi
                                 }
                             }
                         }
-                        PlayerSheet.MORE -> MoreSheetContent(state, strings, favorite, ::toggleFavorite)
+                        PlayerSheet.MORE -> MoreSheetContent(
+                            state, strings, favorite, ::toggleFavorite,
+                            markerCount = markers.size,
+                            onMarkers = { openSheet(PlayerSheet.MARKERS) },
+                        )
+                        PlayerSheet.MARKERS -> MarkersSheetContent(
+                            state = state,
+                            strings = strings,
+                            markers = markers,
+                            onDelete = { marker ->
+                                book.narrationId?.value?.let { id -> scope.launch { markerStore.remove(id, marker) } }
+                            },
+                            onDismiss = ::closeSheet,
+                        )
                         null -> Unit
                     }
                 }
@@ -591,9 +617,34 @@ private fun FullPlayerContent(
     onCollapse: () -> Unit,
     onFavorite: () -> Unit,
     onSheet: (PlayerSheet) -> Unit,
+    markers: List<com.example.myapplication.audiobooks.data.AudiobookMarker> = emptyList(),
+    onAddMarker: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val pos = chapterPosition(book, state.timeline, state.trackPositionMs.longValue)
+    val nowGlobal = state.globalMs()
+    // Маркер «здесь» — активное состояние кнопки (оранжевая), см. правило «активное — оранжевое».
+    val markedHere = nowGlobal != null && markers.any {
+        kotlin.math.abs(it.globalMs - nowGlobal) < com.example.myapplication.audiobooks.data.AudiobookMarkerStore.MERGE_WINDOW_MS
+    }
+    // Точки маркеров на шкале текущей главы.
+    val markerFractions = run {
+        val chapter = pos.chapter
+        val duration = pos.durationMs?.takeIf { it > 0 }
+        if (chapter == null || duration == null) emptyList()
+        else markers.mapNotNull { m ->
+            val f = (m.globalMs - chapter.startMs).toFloat() / duration
+            f.takeIf { it in 0f..1f }
+        }
+    }
+    // «Вернуться» живёт несколько секунд после дальнего прыжка.
+    val undoFrom = state.undoSeekFromMs
+    LaunchedEffect(undoFrom) {
+        if (undoFrom != null) {
+            kotlinx.coroutines.delay(UNDO_SEEK_VISIBLE_MS)
+            state.dismissUndoSeek()
+        }
+    }
     var seeking by remember(book.mediaId, pos.index) { mutableFloatStateOf(-1f) }
     val fraction = if (seeking >= 0f) seeking else pos.durationMs?.takeIf { it > 0 }?.let { pos.positionMs.toFloat() / it } ?: 0f
     Box(modifier) {
@@ -629,14 +680,24 @@ private fun FullPlayerContent(
                         fontFamily = SnProFamily, fontSize = 18.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
                 Spacer(Modifier.width(12.dp))
-                GlassCircleButton(
-                    backdrop, if (favorite) R.drawable.ph_heart_fill else R.drawable.ph_heart, strings.favorite,
-                    52.dp, 24.dp, tint = BrandOrange, enabled = interactive, onClick = onFavorite,
-                )
+                // Маркер — прямо над сердцем. Оба белые, оранжевые только в активном состоянии.
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    GlassCircleButton(
+                        backdrop, if (markedHere) R.drawable.ph_bookmark_simple_fill else R.drawable.ph_bookmark_simple,
+                        strings.addMarker, 52.dp, 22.dp, tint = if (markedHere) BrandOrange else Color.White,
+                        enabled = interactive, onClick = onAddMarker,
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    GlassCircleButton(
+                        backdrop, if (favorite) R.drawable.ph_heart_fill else R.drawable.ph_heart, strings.favorite,
+                        52.dp, 24.dp, tint = if (favorite) BrandOrange else Color.White, enabled = interactive, onClick = onFavorite,
+                    )
+                }
             }
             Spacer(Modifier.height(22.dp))
             SeekBar(
                 fraction = fraction,
+                markers = markerFractions,
                 enabled = interactive,
                 onSeek = { seeking = it },
                 onSeekFinished = {
@@ -653,6 +714,22 @@ private fun FullPlayerContent(
                 val shown = if (seeking >= 0f) pos.durationMs?.let { (it * seeking).toLong() } ?: pos.positionMs else pos.positionMs
                 Text(formatClock(shown), color = Color.White.copy(alpha = 0.72f), fontFamily = SnProFamily, fontSize = 13.sp)
                 Spacer(Modifier.weight(1f))
+                if (undoFrom != null && interactive) {
+                    // Отмена случайной перемотки: туда, где был до прыжка.
+                    Text(
+                        "↺ " + strings.undoSeek,
+                        color = Color.White,
+                        fontFamily = SnProFamily,
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 13.sp,
+                        modifier = Modifier
+                            .clip(CircleShape)
+                            .background(Color.White.copy(alpha = 0.16f))
+                            .clickable { state.undoSeek() }
+                            .padding(horizontal = 12.dp, vertical = 3.dp),
+                    )
+                    Spacer(Modifier.weight(1f))
+                }
                 Text(pos.durationMs?.let(::formatClock) ?: "", color = Color.White.copy(alpha = 0.72f), fontFamily = SnProFamily, fontSize = 13.sp)
             }
             Spacer(Modifier.height(20.dp))
@@ -667,7 +744,8 @@ private fun FullPlayerContent(
             Spacer(Modifier.height(24.dp))
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 PlayerTile(backdrop, strings.speed, interactive, Modifier.weight(1f), onClick = { onSheet(PlayerSheet.SPEED) }) {
-                    Text(formatSpeed(book.speed), color = BrandOrange,
+                    // Скорость по умолчанию (1×) — белая, изменённая — оранжевая.
+                    Text(formatSpeed(book.speed), color = if (kotlin.math.abs(book.speed - 1f) > 0.01f) BrandOrange else Color.White,
                         fontFamily = SnProFamily, fontWeight = FontWeight.SemiBold, fontSize = 19.sp)
                 }
                 PlayerTile(backdrop, if (pos.count > 1) strings.chapterShort(pos.index + 1, pos.count) else strings.chapters,
@@ -717,7 +795,14 @@ private fun PlayerTile(
 
 /** Шкала главы: трек 6 dp, оранжевая заливка и бегунок; тап и перетаскивание — перемотка. */
 @Composable
-private fun SeekBar(fraction: Float, enabled: Boolean, onSeek: (Float) -> Unit, onSeekFinished: () -> Unit) {
+private fun SeekBar(
+    fraction: Float,
+    enabled: Boolean,
+    onSeek: (Float) -> Unit,
+    onSeekFinished: () -> Unit,
+    /** Маркеры на шкале главы (доли 0..1) — маленькие белые точки. */
+    markers: List<Float> = emptyList(),
+) {
     Box(
         Modifier
             .fillMaxWidth()
@@ -742,12 +827,19 @@ private fun SeekBar(fraction: Float, enabled: Boolean, onSeek: (Float) -> Unit, 
                 drawRoundRect(Color.White.copy(alpha = 0.2f), Offset(0f, y - track / 2), Size(size.width, track), r)
                 val x = size.width * fraction.coerceIn(0f, 1f)
                 drawRoundRect(BrandOrange, Offset(0f, y - track / 2), Size(x.coerceAtLeast(track), track), r)
+                val dot = 3.dp.toPx()
+                markers.forEach { m ->
+                    drawCircle(Color.White, radius = dot, center = Offset((size.width * m).coerceIn(dot, size.width - dot), y))
+                }
                 drawCircle(BrandOrange, radius = 9.dp.toPx(), center = Offset(x.coerceIn(9.dp.toPx(), size.width - 9.dp.toPx()), y))
             },
     )
 }
 
 private val MiniSize = 196.dp
+
+/** Сколько живёт кнопка «Вернуться» после дальнего прыжка. */
+private const val UNDO_SEEK_VISIBLE_MS = 7_000L
 
 /** Строка капсулы мини-плеера: без шрифтовых полей, высота строки задаётся на месте. */
 private val CapsuleLine = TextStyle(

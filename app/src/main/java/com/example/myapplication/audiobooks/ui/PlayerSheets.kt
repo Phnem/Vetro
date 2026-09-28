@@ -78,7 +78,7 @@ import kotlinx.coroutines.flow.drop
 // главы — в том же виде, что оглавление манги (MangaChaptersPage): группа строк одной карточкой.
 // ==========================================
 
-internal enum class PlayerSheet { CHAPTERS, SPEED, TIMER, NARRATION, MORE }
+internal enum class PlayerSheet { CHAPTERS, SPEED, TIMER, NARRATION, MORE, MARKERS }
 
 private val Ink = Color.White
 private val Muted = Color.White.copy(alpha = 0.6f)
@@ -343,7 +343,12 @@ internal fun ColumnScope.SpeedSheetContent(state: AudiobookPlayerState, strings:
 // ---------- Главы (вид оглавления манги) ----------
 
 @Composable
-internal fun ColumnScope.ChaptersSheetContent(state: AudiobookPlayerState, strings: PlayerStrings, onDismiss: () -> Unit) {
+internal fun ColumnScope.ChaptersSheetContent(
+    state: AudiobookPlayerState,
+    strings: PlayerStrings,
+    onDismiss: () -> Unit,
+    markers: List<com.example.myapplication.audiobooks.data.AudiobookMarker> = emptyList(),
+) {
     val book = state.book ?: return
     val timeline: BookTimeline = state.timeline ?: run {
         Text(book.chapterTitle, color = Muted, fontFamily = SnProFamily)
@@ -388,6 +393,10 @@ internal fun ColumnScope.ChaptersSheetContent(state: AudiobookPlayerState, strin
                 ).joinToString(" • "),
                 isCurrent = isCurrent,
                 listened = listened,
+                // У главы с маркером — та же иконка, что у кнопки маркера в плеере.
+                marked = markers.any { m ->
+                    m.globalMs >= chapter.startMs && (chapter.durationMs == null || m.globalMs < chapter.startMs + chapter.durationMs!!)
+                },
                 progress = if (isCurrent) current.durationMs?.let { d -> current.positionMs.toFloat() / d } else null,
                 shape = groupRowShape(i, chapters.size),
             ) {
@@ -414,6 +423,7 @@ private fun ChapterRow(
     listened: Boolean,
     progress: Float?,
     shape: Shape,
+    marked: Boolean = false,
     onClick: () -> Unit,
 ) {
     Row(
@@ -452,6 +462,10 @@ private fun ChapterRow(
             }
         }
         Spacer(Modifier.width(8.dp))
+        if (marked) {
+            PhIcon(R.drawable.ph_bookmark_simple_fill, 16.dp, Color.White)
+            Spacer(Modifier.width(8.dp))
+        }
         PhIcon(
             icon = if (isCurrent) R.drawable.ph_waveform else R.drawable.ph_check,
             size = 18.dp,
@@ -543,10 +557,22 @@ internal data class NarrationOption(
 // ---------- Ещё ----------
 
 @Composable
-internal fun ColumnScope.MoreSheetContent(state: AudiobookPlayerState, strings: PlayerStrings, favorite: Boolean, onFavorite: () -> Unit) {
+internal fun ColumnScope.MoreSheetContent(
+    state: AudiobookPlayerState,
+    strings: PlayerStrings,
+    favorite: Boolean,
+    onFavorite: () -> Unit,
+    markerCount: Int = 0,
+    onMarkers: () -> Unit = {},
+) {
     val controller = state.controller ?: return
     SheetTitle(strings.moreTitle)
     Spacer(Modifier.height(14.dp))
+    // Пункт есть, только когда у книги есть хотя бы один маркер.
+    if (markerCount > 0) {
+        NavRow(strings.backToMarker(markerCount), R.drawable.ph_bookmark_simple_fill, onMarkers)
+        Spacer(Modifier.height(3.dp))
+    }
     SettingRow(strings.favorite, checked = favorite, onChange = { onFavorite() })
     Spacer(Modifier.height(3.dp))
     SettingRow(strings.skipSilence, checked = state.skipSilence) { enabled ->
@@ -554,6 +580,75 @@ internal fun ColumnScope.MoreSheetContent(state: AudiobookPlayerState, strings: 
             AudiobookSessionCommands.setSkipSilence,
             Bundle().apply { putBoolean(AudiobookSessionCommands.SKIP_SILENCE, enabled) },
         )
+    }
+}
+
+@Composable
+private fun NavRow(title: String, icon: Int, onClick: () -> Unit) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(18.dp))
+            .background(Color.Black.copy(alpha = 0.22f))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        PhIcon(icon, 18.dp, Ink)
+        Spacer(Modifier.width(12.dp))
+        Text(title, color = Ink, fontFamily = SnProFamily, fontWeight = FontWeight.SemiBold, fontSize = 15.sp,
+            modifier = Modifier.weight(1f))
+        PhIcon(R.drawable.ph_caret_right, 16.dp, Muted)
+    }
+}
+
+// ---------- Маркеры ----------
+
+/** Список маркеров книги: время на шкале книги и глава; тап — перейти, крестик — удалить. */
+@Composable
+internal fun ColumnScope.MarkersSheetContent(
+    state: AudiobookPlayerState,
+    strings: PlayerStrings,
+    markers: List<com.example.myapplication.audiobooks.data.AudiobookMarker>,
+    onDelete: (com.example.myapplication.audiobooks.data.AudiobookMarker) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    SheetTitle(strings.markersTitle, trailing = markers.size.toString())
+    Spacer(Modifier.height(14.dp))
+    val timeline = state.timeline
+    LazyColumn(verticalArrangement = Arrangement.spacedBy(3.dp), modifier = Modifier.heightIn(max = 460.dp)) {
+        itemsIndexed(markers, key = { _, m -> m.createdAt }) { i, marker ->
+            val chapter = timeline?.chapterAt(marker.globalMs)
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .clip(groupRowShape(i, markers.size))
+                    .background(Color.Black.copy(alpha = 0.22f))
+                    .clickable {
+                        state.seekToGlobal(marker.globalMs)
+                        onDismiss()
+                    }
+                    .padding(start = 14.dp, end = 6.dp, top = 8.dp, bottom = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                PhIcon(R.drawable.ph_bookmark_simple_fill, 16.dp, Ink)
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(formatClock(marker.globalMs), color = Ink, fontFamily = SnProFamily,
+                        fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
+                    chapter?.let {
+                        Text(it.title, color = Muted, fontFamily = SnProFamily, fontSize = 12.sp,
+                            maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                }
+                Box(
+                    Modifier.size(40.dp).clip(CircleShape).clickable { onDelete(marker) },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    PhIcon(R.drawable.ph_x, 16.dp, Muted)
+                }
+            }
+        }
     }
 }
 

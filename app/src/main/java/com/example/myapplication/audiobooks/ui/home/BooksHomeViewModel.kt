@@ -75,12 +75,12 @@ class BooksHomeViewModel(
         start(book.key) { launcher.play(book.toSourceBook()) }
     }
 
-    fun resume(item: ContinueItem) {
+    fun resume(item: ContinueItem, expand: Boolean = false) {
         val variant = item.variantId?.value ?: return
         val source = variant.substringBefore(':')
         val key = variant.substringAfter(':')
         val book = CachedBook(source, key, item.title, item.authors, item.narrators, item.coverUrl, null, 1)
-        start(key) { launcher.play(book.toSourceBook(), expand = false) }
+        start(key) { launcher.play(book.toSourceBook(), expand = expand) }
     }
 
     fun consumeLaunch() {

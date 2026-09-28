@@ -1,6 +1,9 @@
 package com.example.myapplication.audiobooks.ui.home
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -17,6 +20,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -27,6 +31,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -51,12 +58,16 @@ import org.koin.compose.koinInject
  * «Продолжить» на доме — широкая карточка-плеер (референс пользователя): обложка на всю карточку,
  * стеклянная капсула автор/чтец, сердце, крупное название, время и три стеклянные кнопки. Если эта
  * книга уже в плеере, карточка показывает живой прогресс и управляет тем же плеером.
+ *
+ * Тап по самой карточке открывает полный плеер: книга в плеере — он просто разворачивается, иначе
+ * [onOpen] запускает её сразу в полном виде. Кнопки внизу — управление без разворачивания.
  */
 @Composable
 internal fun NowPlayingCard(
     item: ContinueItem,
     strings: BooksHomeStrings,
     onResume: () -> Unit,
+    onOpen: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val player: AudiobookPlayerState = koinInject()
@@ -80,9 +91,12 @@ internal fun NowPlayingCard(
     Box(
         modifier
             .fillMaxWidth()
-            .height(196.dp)
+            .height(CardHeight)
             .shadow(16.dp, shape, clip = false, ambientColor = Color.Black, spotColor = Color.Black)
-            .clip(shape),
+            .clip(shape)
+            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {
+                if (live != null) player.requestExpand() else onOpen()
+            },
     ) {
         Box(Modifier.fillMaxSize().layerBackdrop(backdrop)) {
             BookArt(item.coverUrl, Modifier.fillMaxSize())
@@ -100,17 +114,29 @@ internal fun NowPlayingCard(
             )
         }
         Row(Modifier.padding(10.dp).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            GlassSurface(backdrop, CircleShape, Modifier.height(44.dp).widthIn(max = 230.dp)) {
-                Row(Modifier.padding(start = 5.dp, end = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+            GlassSurface(backdrop, CircleShape, Modifier.height(CapsuleHeight).widthIn(max = 230.dp)) {
+                Row(
+                    Modifier.fillMaxHeight().padding(start = 5.dp, end = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
                     BookArt(item.coverUrl, Modifier.size(34.dp).clip(CircleShape))
                     Spacer(Modifier.width(9.dp))
-                    Column {
-                        Text(item.authors.joinToString(", ").ifBlank { item.title }, color = Color.White,
-                            fontFamily = SnProFamily, fontWeight = FontWeight.SemiBold, fontSize = 13.sp,
-                            maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        if (item.narrators.isNotEmpty()) {
-                            Text(item.narrators.joinToString(", "), color = Color.White.copy(alpha = 0.6f),
-                                fontFamily = SnProFamily, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    // Две строки обязаны уместиться в капсулу при любом масштабе шрифта: высота строк
+                    // задана явно и без шрифтовых полей, масштаб ограничен — иначе чтец выпадал из
+                    // капсулы вниз, прямо на название книги (как было в мини-плеере до той же правки).
+                    val density = LocalDensity.current
+                    CompositionLocalProvider(
+                        LocalDensity provides Density(density.density, density.fontScale.coerceAtMost(1.1f)),
+                    ) {
+                        Column(verticalArrangement = Arrangement.Center) {
+                            Text(item.authors.joinToString(", ").ifBlank { item.title }, color = Color.White,
+                                style = CapsuleLine.copy(fontWeight = FontWeight.SemiBold, fontSize = 13.sp, lineHeight = 15.sp),
+                                maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            if (item.narrators.isNotEmpty()) {
+                                Text(item.narrators.joinToString(", "), color = Color.White.copy(alpha = 0.6f),
+                                    style = CapsuleLine.copy(fontSize = 11.sp, lineHeight = 13.sp),
+                                    maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            }
                         }
                     }
                 }
@@ -127,8 +153,10 @@ internal fun NowPlayingCard(
                 .fillMaxWidth(0.62f)
                 .padding(start = 16.dp, bottom = 12.dp),
         ) {
+            // Колонка прижата к низу: две строки по 23 sp заканчиваются ниже капсулы с запасом
+            // (высота карточки подобрана под это), крупнее — название наезжало на капсулу.
             Text(item.title, color = Color.White, fontFamily = SnProFamily, fontWeight = FontWeight.Bold,
-                fontSize = 22.sp, lineHeight = 25.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                fontSize = 20.sp, lineHeight = 23.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
             Spacer(Modifier.height(10.dp))
             Row {
                 Text(formatClock(elapsedMs), color = Color.White, fontFamily = SnProFamily, fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
@@ -157,3 +185,17 @@ internal fun NowPlayingCard(
         }
     }
 }
+
+/** Высота карточки: капсула сверху (10 + 44 dp) и нижняя колонка с названием в две строки не пересекаются. */
+private val CardHeight = 212.dp
+private val CapsuleHeight = 44.dp
+
+/** Строка капсулы без шрифтовых полей: высота строки — ровно lineHeight. */
+private val CapsuleLine = TextStyle(
+    fontFamily = SnProFamily,
+    platformStyle = androidx.compose.ui.text.PlatformTextStyle(includeFontPadding = false),
+    lineHeightStyle = androidx.compose.ui.text.style.LineHeightStyle(
+        alignment = androidx.compose.ui.text.style.LineHeightStyle.Alignment.Center,
+        trim = androidx.compose.ui.text.style.LineHeightStyle.Trim.Both,
+    ),
+)

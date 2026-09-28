@@ -46,6 +46,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -155,6 +156,19 @@ fun BooksHomeScreen(
     // Свой фон обязателен: без него сквозь страницу просвечивала «вдавленная» соседняя страница
     // рабочей области. Тот же тёплый градиент, что у настроек и страницы серий.
     val background = remember(isDark) { IosDesign.screenGradient(isDark) }
+    // «Глава 8 · 37%» на обложках начатых книг — по сохранённому месту (source:key → прогресс).
+    val progressLabels = remember(continueItems, strings) {
+        continueItems.mapNotNull { item ->
+            val key = item.variantId?.value ?: return@mapNotNull null
+            val percent = item.totalMs?.takeIf { it > 0 }?.let { (item.globalMs * 100 / it).coerceIn(0, 100) }
+            val label = buildString {
+                append(strings.chapter(item.chapterIndex.coerceAtLeast(0) + 1))
+                percent?.let { append(" · ").append(it).append('%') }
+            }
+            key to label
+        }.toMap()
+    }
+    CompositionLocalProvider(LocalBookProgress provides { book -> progressLabels["${book.source}:${book.key}"] }) {
     Box(
         modifier
             .fillMaxSize()
@@ -216,6 +230,7 @@ fun BooksHomeScreen(
             onDismiss = { sheetBook = null; vm.consumeLaunch() },
         )
     }
+    }
 }
 
 // ---------- Список дома ----------
@@ -231,7 +246,8 @@ private fun HomeList(
     morph: ShelfMorph,
     failed: Set<String>,
     onRetry: (String) -> Unit,
-    onResume: (ContinueItem) -> Unit,
+    /** Второй аргумент — сразу открыть полный плеер (тап по карточке), а не только запустить. */
+    onResume: (ContinueItem, Boolean) -> Unit,
     onOpenShelf: (OpenShelf) -> Unit,
     onAddFolder: () -> Unit,
 ) {
@@ -272,7 +288,14 @@ private fun HomeList(
             }
         }
         continueItems.firstOrNull()?.let { first ->
-            item(key = "continue") { NowPlayingCard(first, strings, onResume = { onResume(first) }) }
+            item(key = "continue") {
+                NowPlayingCard(
+                    first,
+                    strings,
+                    onResume = { onResume(first, false) },
+                    onOpen = { onResume(first, true) },
+                )
+            }
         }
         items(shelves, key = { it.key }) { shelf ->
             val topEnd = if (shelf.key == BooksCatalog.SHOWCASE_KEY) {

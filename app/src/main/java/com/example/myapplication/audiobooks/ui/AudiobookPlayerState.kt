@@ -62,9 +62,28 @@ class AudiobookPlayerState {
         return timeline?.toGlobal(ref.trackIndex, trackPositionMs.longValue)
     }
 
+    /**
+     * Откуда пользователь прыгнул последней «дальней» перемоткой (шкала, глава, маркер) — для
+     * кнопки «Вернуться». null — кнопки нет. Кнопки ±15/30 сюда не пишут: это шаг, а не прыжок.
+     */
+    var undoSeekFromMs by mutableStateOf<Long?>(null)
+        private set
+
     fun seekToGlobal(globalMs: Long) {
         val (index, offset) = timeline?.toTrack(globalMs.coerceAtLeast(0L)) ?: return
+        val from = globalMs()
+        undoSeekFromMs = from?.takeIf { kotlin.math.abs(it - globalMs) >= UNDO_SEEK_MIN_JUMP_MS }
         controller?.seekTo(index, offset)
+    }
+
+    /** «Вернуться»: назад на место до прыжка; повторный прыжок оттуда снова можно отменить. */
+    fun undoSeek() {
+        val target = undoSeekFromMs ?: return
+        seekToGlobal(target)
+    }
+
+    fun dismissUndoSeek() {
+        undoSeekFromMs = null
     }
 }
 
@@ -143,3 +162,6 @@ internal fun formatClock(ms: Long): String {
     return if (minutes >= 60) "%d:%02d:%02d".format(minutes / 60, minutes % 60, seconds % 60)
     else "%d:%02d".format(minutes, seconds % 60)
 }
+
+/** Прыжок короче этого — не «улетел», отменять нечего. */
+internal const val UNDO_SEEK_MIN_JUMP_MS = 20_000L

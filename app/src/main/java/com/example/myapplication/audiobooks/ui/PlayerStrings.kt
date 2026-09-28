@@ -46,6 +46,16 @@ data class PlayerStrings(
     val moveMiniTopRight: String,
     val moveMiniBottomLeft: String,
     val moveMiniBottomRight: String,
+    /** Кнопка над сердцем: поставить маркер в текущем месте. */
+    val addMarker: String,
+    val markerAdded: String,
+    val markersTitle: String,
+    /** Пункт меню «…»: «Вернуться к маркеру · 3». */
+    val backToMarker: (Int) -> String,
+    val deleteMarker: String,
+    /** Кнопка отмены случайной перемотки. */
+    val undoSeek: String,
+    val skipSilenceLevels: List<String>,
 )
 
 fun playerStrings(language: AppLanguage): PlayerStrings = when (language) {
@@ -91,6 +101,13 @@ fun playerStrings(language: AppLanguage): PlayerStrings = when (language) {
         moveMiniTopRight = "Переместить в правый верхний угол",
         moveMiniBottomLeft = "Переместить в левый нижний угол",
         moveMiniBottomRight = "Переместить в правый нижний угол",
+        addMarker = "Поставить маркер",
+        markerAdded = "Маркер поставлен",
+        markersTitle = "Маркеры",
+        backToMarker = { "Вернуться к маркеру · $it" },
+        deleteMarker = "Удалить маркер",
+        undoSeek = "Вернуться",
+        skipSilenceLevels = listOf("Выкл", "Мягко", "Обычно", "Сильно"),
     )
     AppLanguage.EN -> PlayerStrings(
         collapse = "Collapse player",
@@ -134,6 +151,13 @@ fun playerStrings(language: AppLanguage): PlayerStrings = when (language) {
         moveMiniTopRight = "Move to top right",
         moveMiniBottomLeft = "Move to bottom left",
         moveMiniBottomRight = "Move to bottom right",
+        addMarker = "Add a marker",
+        markerAdded = "Marker added",
+        markersTitle = "Markers",
+        backToMarker = { "Back to a marker · $it" },
+        deleteMarker = "Delete marker",
+        undoSeek = "Go back",
+        skipSilenceLevels = listOf("Off", "Light", "Normal", "Aggressive"),
     )
 }
 

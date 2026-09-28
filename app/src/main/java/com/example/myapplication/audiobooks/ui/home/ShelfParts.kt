@@ -44,6 +44,13 @@ internal val ShelfCoverHeight = 156.dp
 internal val CoverRadius = 10.dp
 
 /**
+ * Прогресс книги для капсулы на обложке («Глава 8 · 37%»); null — книгу ещё не слушали. Экран книг
+ * строит это один раз из списка «в процессе», обложка читает сама — так капсула есть везде, где
+ * рисуется обложка (полка, сетка, лист книги), без протаскивания параметра через каждый вызов.
+ */
+internal val LocalBookProgress = androidx.compose.runtime.staticCompositionLocalOf<(CachedBook) -> String?> { { null } }
+
+/**
  * Обложка книги: 2:3, радиус 10, мягкая тень. Без картинки — нейтральная плашка с названием, а не
  * выдуманный арт (issues/39).
  */
@@ -80,6 +87,24 @@ internal fun BookCover(
                 maxLines = 4,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.padding(10.dp),
+            )
+        }
+        LocalBookProgress.current(book)?.let { label ->
+            Text(
+                text = label,
+                color = Color.White,
+                fontFamily = SnProFamily,
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 10.sp,
+                lineHeight = 12.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(horizontal = 6.dp, vertical = 7.dp)
+                    .clip(androidx.compose.foundation.shape.CircleShape)
+                    .background(Color.Black.copy(alpha = 0.62f))
+                    .padding(horizontal = 8.dp, vertical = 3.dp),
             )
         }
     }
