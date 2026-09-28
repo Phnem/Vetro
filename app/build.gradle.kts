@@ -124,6 +124,12 @@ android {
         buildConfig = true
     }
 
+    // android.util.Log в JVM-тестах — заглушка вместо «not mocked»: сетевой код (локальный прокси
+    // трансляции) тестируется целиком, а журнал в нём не главное.
+    testOptions {
+        unitTests.isReturnDefaultValues = true
+    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_21
         targetCompatibility = JavaVersion.VERSION_21
@@ -249,6 +255,9 @@ dependencies {
     implementation(libs.libtorrent4j.android.arm64)
     debugImplementation(libs.libtorrent4j.android.x64)
     implementation(libs.work.runtime.ktx)
+    // «Воспроизвести на…»: Google Cast. DLNA/UPnP — свой лёгкий клиент (media/remote/dlna).
+    implementation(libs.play.services.cast.framework)
+    implementation(libs.androidx.mediarouter)
 
     // 8. SQLDelight
     implementation(libs.sqldelight.android.driver)
@@ -270,6 +279,7 @@ dependencies {
     // Test
     testImplementation(libs.junit)
     testImplementation("io.ktor:ktor-client-mock")
+    testImplementation(libs.okhttp.mockwebserver)
     // JVM SQLite driver — прогон SQLDelight-миграций в JUnit-тестах (не android-driver, тому
     // нужен Android runtime).
     testImplementation(libs.sqldelight.sqlite.driver)

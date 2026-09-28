@@ -33,6 +33,7 @@ class VetroApplication : Application(), SingletonImageLoader.Factory {
                 audiobookModule,
                 com.example.myapplication.di.enrichmentModule,
                 com.example.myapplication.di.whisperModule,
+                com.example.myapplication.di.remotePlaybackModule,
                 databaseModule,
                 viewModelModule
             )

@@ -92,6 +92,10 @@ media3-inspector = { module = "androidx.media3:media3-inspector", version.ref = 
 media3-datasource-okhttp = { module = "androidx.media3:media3-datasource-okhttp", version.ref = "media3" }
 media3-exoplayer-workmanager = { module = "androidx.media3:media3-exoplayer-workmanager", version.ref = "media3" }
 # Звук текущего видео для локального распознавания (Whisper): клип диапазона быстрее реального времени.
+# --- «Воспроизвести на…»: Google Cast (свой список устройств через MediaRouter) ---
+play-services-cast-framework = { module = "com.google.android.gms:play-services-cast-framework", version = "22.3.1" }
+androidx-mediarouter = { module = "androidx.mediarouter:mediarouter", version = "1.8.1" }
+okhttp-mockwebserver = { module = "com.squareup.okhttp3:mockwebserver", version.ref = "okhttp" }
 media3-transformer = { module = "androidx.media3:media3-transformer", version.ref = "media3" }
 jsoup = { module = "org.jsoup:jsoup", version = "1.18.3" }
 androidx-documentfile = { module = "androidx.documentfile:documentfile", version.ref = "documentfile" }
