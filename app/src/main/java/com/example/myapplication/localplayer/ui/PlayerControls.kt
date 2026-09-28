@@ -97,7 +97,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.myapplication.ui.shared.loading.BubbleClusterLoader
 import androidx.media3.common.PlaybackParameters
-import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.common.Player
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
+import com.example.myapplication.media.remote.ui.RemoteButtonState
 import com.example.myapplication.ui.shared.theme.BrandOrangeBright
 import com.example.myapplication.ui.shared.theme.MotionTokens
 import com.example.myapplication.ui.shared.theme.SnProFamily
@@ -144,7 +149,9 @@ private data class SeekBurst(val forward: Boolean, val steps: Int)
  */
 @Composable
 fun PlayerControlsOverlay(
-    player: ExoPlayer,
+    // Интерфейс, а не ExoPlayer: на время показа на ТВ сюда приходит «удалённый» плеер, и те же
+    // кнопки, шкала и жесты управляют телевизором.
+    player: Player,
     title: String,
     /** Вторая строка шапки — серия и сезон. `null` = заголовок остаётся однострочным. */
     subtitle: String? = null,
@@ -198,6 +205,11 @@ fun PlayerControlsOverlay(
     onControlsVisibleChange: (Boolean) -> Unit = {},
     /** Меню субтитров открывается заново — хозяин возвращает его на первую страницу. */
     onSubtitlesMenuOpened: () -> Unit = {},
+    /** Кнопка «Воспроизвести на…»; null — не показывать (локальный плеер файлов). */
+    remoteButton: RemoteButtonState? = null,
+    onRemote: () -> Unit = {},
+    /** Долгое нажатие: подсказать последнее устройство (сам список открывает обычное). */
+    onRemoteLongPress: () -> Unit = {},
 ) {
     val scope = rememberCoroutineScope()
 
@@ -659,6 +671,9 @@ fun PlayerControlsOverlay(
                 Spacer(Modifier.width(10.dp))
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (remoteButton != null) {
+                        RemoteDockButton(remoteButton, onRemote, onRemoteLongPress)
+                    }
                     DockIconButton(
                         icon = painterResource(R.drawable.ic_player_audio),
                         contentDescription = if (playerIsRu()) "Аудиодорожка" else "Audio track",
@@ -1566,6 +1581,51 @@ private fun PlayerActionButton(
                 color = tint,
                 maxLines = 1,
             )
+        }
+    }
+}
+
+/**
+ * «Воспроизвести на…»: телевизор (не значок трансляции экрана — это показ видео, а не зеркало).
+ * Подключено — залитый и оранжевый; подключение — оранжевый контур; ошибка — точка.
+ */
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+@Composable
+private fun RemoteDockButton(state: RemoteButtonState, onClick: () -> Unit, onLongClick: () -> Unit) {
+    val ru = playerIsRu()
+    val connected = state == RemoteButtonState.CONNECTED
+    Box(
+        modifier = Modifier
+            .size(44.dp)
+            .combinedClickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = onClick,
+                onLongClick = onLongClick,
+            )
+            .semantics {
+                contentDescription = if (ru) "Воспроизвести на…" else "Play on…"
+                stateDescription = when (state) {
+                    RemoteButtonState.CONNECTED -> if (ru) "Подключено" else "Connected"
+                    RemoteButtonState.CONNECTING -> if (ru) "Подключение" else "Connecting"
+                    RemoteButtonState.ERROR -> if (ru) "Ошибка" else "Error"
+                    else -> ""
+                }
+            },
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            painter = painterResource(if (connected) R.drawable.ph_television_simple_fill else R.drawable.ph_television_simple),
+            contentDescription = null,
+            tint = when (state) {
+                RemoteButtonState.CONNECTED -> BrandOrangeBright
+                RemoteButtonState.CONNECTING -> BrandOrangeBright.copy(alpha = 0.75f)
+                else -> Color.White
+            },
+            modifier = Modifier.size(TOP_DOCK_ICON),
+        )
+        if (state == RemoteButtonState.ERROR) {
+            Box(Modifier.align(Alignment.TopEnd).padding(top = 9.dp, end = 9.dp).size(7.dp).clip(CircleShape).background(Color(0xFFFF5A4F)))
         }
     }
 }

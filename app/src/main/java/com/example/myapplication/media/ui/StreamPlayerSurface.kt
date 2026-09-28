@@ -63,6 +63,12 @@ import com.example.myapplication.media.source.VetroVideo
 import com.example.myapplication.ui.shared.theme.MotionTokens
 import kotlin.math.max
 
+/**
+ * Показ на телевизоре глазами поверхности плеера: чем управлять ([player] — телевизор как Media3
+ * Player) и что написать вместо кадра.
+ */
+data class RemoteSurface(val player: Player, val deviceName: String, val status: String?)
+
 /** The custom Exo controls applied to a remote, header-aware player. */
 @Composable
 fun StreamPlayerSurface(
@@ -108,16 +114,24 @@ fun StreamPlayerSurface(
     /** Id подгруженной дорожки: включить, как только она появится в плеере. */
     pendingSubtitleId: String? = null,
     onPendingSubtitleApplied: () -> Unit = {},
+    /** Идёт показ на ТВ: элементы управления ведут телевизор, кадр телефона скрыт. */
+    remote: RemoteSurface? = null,
+    /** Кнопка «Воспроизвести на…» в доке; null — нет. */
+    remoteButton: com.example.myapplication.media.remote.ui.RemoteButtonState? = null,
+    onRemote: () -> Unit = {},
+    onRemoteLongPress: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
-    var isPlaying by remember(player) { mutableStateOf(player.isPlaying) }
-    var isBuffering by remember(player) { mutableStateOf(player.playbackState != Player.STATE_READY) }
+    // Кем управляют кнопки, шкала и жесты: телефоном или телевизором.
+    val controlPlayer: Player = remote?.player ?: player
+    var isPlaying by remember(controlPlayer) { mutableStateOf(controlPlayer.isPlaying) }
+    var isBuffering by remember(controlPlayer) { mutableStateOf(controlPlayer.playbackState != Player.STATE_READY) }
     val showLoading = shouldShowStreamLoading(
         requestPending = loading,
         playerBuffering = isBuffering,
     )
     // Позицию поверхность не читает: см. PlaybackClock.
-    val clock = rememberPlaybackClock(player, isPlaying)
+    val clock = rememberPlaybackClock(controlPlayer, isPlaying)
     var embeddedAudioTracks by remember(player) {
         mutableStateOf<List<AudioTrackOption>>(emptyList())
     }
@@ -191,7 +205,8 @@ fun StreamPlayerSurface(
         malId = malId,
         durationMs = clock.durationMs,
         positionMs = clock.position,
-        autoSkipEnabled = autoSkipEnabled,
+        // Пропуск заставок сдвигает плеер телефона; на время показа на ТВ он не работает.
+        autoSkipEnabled = autoSkipEnabled && remote == null,
         exactTimestamps = video.timestamps,
         exactOrigin = video.sourceName,
         reference = video.skipReference,
@@ -201,7 +216,7 @@ fun StreamPlayerSurface(
     )
     val activeSegment = skipPlayback.activeSegment
 
-    DisposableEffect(player) {
+    DisposableEffect(controlPlayer) {
         val listener = object : Player.Listener {
             override fun onIsPlayingChanged(playing: Boolean) {
                 isPlaying = playing
@@ -210,7 +225,13 @@ fun StreamPlayerSurface(
             override fun onPlaybackStateChanged(playbackState: Int) {
                 isBuffering = playbackState == Player.STATE_BUFFERING
             }
+        }
+        controlPlayer.addListener(listener)
+        onDispose { controlPlayer.removeListener(listener) }
+    }
 
+    DisposableEffect(player) {
+        val listener = object : Player.Listener {
             override fun onTracksChanged(tracks: Tracks) {
                 embeddedAudioTracks = tracks.streamAudioOptions()
                 tracksSnapshot = tracks
@@ -269,9 +290,13 @@ fun StreamPlayerSurface(
             WhisperCueOverlay(cues = whisperCues, position = clock.position, inPip = isInPip)
         }
 
+        if (remote != null) {
+            RemoteNowPlaying(remote, Modifier.fillMaxSize())
+        }
+
         if (!isInPip) {
             PlayerControlsOverlay(
-                player = player,
+                player = controlPlayer,
                 title = title,
                 onRotate = onRotate,
                 isPlaying = isPlaying,
@@ -287,7 +312,7 @@ fun StreamPlayerSurface(
                 audioTracks = audioTracks,
                 speed = speed,
                 fit = fit,
-                skipVisible = !autoSkipEnabled && activeSegment != null,
+                skipVisible = remote == null && !autoSkipEnabled && activeSegment != null,
                 onSkip = skipPlayback.manualSkip,
                 undoOffer = skipPlayback.undoOffer,
                 onUndoSkip = skipPlayback.undoSkip,
@@ -337,6 +362,9 @@ fun StreamPlayerSurface(
                 },
                 onSetFit = { fit = it },
                 onSubtitlesMenuOpened = { subtitlePage = SubtitlePage.ROOT },
+                remoteButton = remoteButton,
+                onRemote = onRemote,
+                onRemoteLongPress = onRemoteLongPress,
             )
         }
 
@@ -473,4 +501,39 @@ private fun ExoPlayer.applyStreamAudioOverride(option: AudioTrackOption) {
             TrackSelectionOverride(group.mediaTrackGroup, listOf(option.trackIndex))
         )
         .build()
+}
+
+/** Вместо кадра, пока идёт показ на телевизоре: куда ушло видео и что с ним. */
+@Composable
+private fun RemoteNowPlaying(remote: RemoteSurface, modifier: Modifier = Modifier) {
+    val ru = playerIsRu()
+    androidx.compose.foundation.layout.Column(
+        modifier = modifier.background(Color.Black),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = androidx.compose.foundation.layout.Arrangement.Center,
+    ) {
+        androidx.compose.material3.Icon(
+            painter = androidx.compose.ui.res.painterResource(com.phnem.vetro.R.drawable.ph_television_simple_fill),
+            contentDescription = null,
+            tint = com.example.myapplication.ui.shared.theme.BrandOrangeBright,
+            modifier = Modifier.size(56.dp),
+        )
+        androidx.compose.foundation.layout.Spacer(Modifier.size(14.dp))
+        androidx.compose.material3.Text(
+            text = if (ru) "Показ на «${remote.deviceName}»" else "Playing on “${remote.deviceName}”",
+            color = Color.White,
+            fontFamily = com.example.myapplication.ui.shared.theme.SnProFamily,
+            fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
+            fontSize = androidx.compose.ui.unit.TextUnit(18f, androidx.compose.ui.unit.TextUnitType.Sp),
+        )
+        remote.status?.let {
+            androidx.compose.foundation.layout.Spacer(Modifier.size(6.dp))
+            androidx.compose.material3.Text(
+                text = it,
+                color = Color.White.copy(alpha = 0.62f),
+                fontFamily = com.example.myapplication.ui.shared.theme.SnProFamily,
+                fontSize = androidx.compose.ui.unit.TextUnit(13f, androidx.compose.ui.unit.TextUnitType.Sp),
+            )
+        }
+    }
 }

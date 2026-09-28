@@ -1,5 +1,19 @@
 package com.example.myapplication.media.ui
 
+import androidx.compose.animation.core.MutableTransitionState
+import com.example.myapplication.media.remote.RemoteConnection
+import com.example.myapplication.media.remote.RemoteDevice
+import com.example.myapplication.media.remote.RemoteError
+import com.example.myapplication.media.remote.RemoteMedia
+import com.example.myapplication.media.remote.RemotePlaybackException
+import com.example.myapplication.media.remote.RemoteSessionPlayer
+import com.example.myapplication.media.remote.RemoteStatus
+import com.example.myapplication.media.remote.RemoteSubtitle
+import com.example.myapplication.media.remote.proxy.ProxyUpstream
+import com.example.myapplication.media.remote.ui.RemoteButtonState
+import com.example.myapplication.media.remote.ui.RemoteDevicesPanel
+import com.example.myapplication.media.source.SanitizeHeaders
+import com.example.myapplication.media.source.credentialHeadersFor
 import android.app.Activity
 import android.app.ActivityManager
 import android.os.Build
@@ -143,6 +157,9 @@ class StreamPlayerActivity : ComponentActivity(), PipHostActivity {
     private val enrichmentCoordinator: CollectionEnrichmentCoordinator by inject()
     private val settings: DataStore<Preferences> by inject(named("settings"))
     private val playbackPrefs: com.example.myapplication.media.prefs.ContentPlaybackPreferences by inject()
+    private val remote: com.example.myapplication.media.remote.RemotePlaybackManager by inject()
+    /** Телевизор как плеер, пока идёт показ на нём: прогресс при выходе пишется с его позиции. */
+    private var remoteControl: Player? = null
     private val json = AppStoreJson
 
     private var activePlayer: Player? = null
@@ -355,6 +372,147 @@ class StreamPlayerActivity : ComponentActivity(), PipHostActivity {
                             }
                         }.build()
                     }
+                    // ---------- «Воспроизвести на…» ----------
+                    // Телевизор — тоже Media3 Player: пока он подключён, им управляют те же кнопки,
+                    // шкала и жесты, а плеер телефона стоит на паузе.
+                    val remoteConnection by remote.connection.collectAsState()
+                    val remoteDevices by remote.devices.collectAsState()
+                    val remotePlayback by remote.playback.collectAsState()
+                    val remotePlayer = remember { RemoteSessionPlayer(remote) }
+                    DisposableEffect(Unit) { onDispose { remotePlayer.release() } }
+                    val remoteActive = remoteConnection is RemoteConnection.Connected
+                    val controlPlayer: Player = if (remoteActive) remotePlayer else player
+                    LaunchedEffect(controlPlayer) { remoteControl = if (remoteActive) remotePlayer else null }
+                    val devicesPanel = remember { MutableTransitionState(false) }
+                    val devicesPanelOpen = devicesPanel.targetState
+                    val mediaKey = "$animeId|$season|$episode"
+                    val ruRemote = uiLanguage == AppLanguage.RU
+                    // С какой серией и озвучкой уже работает ТВ — чтобы не перезагружать её лишний раз.
+                    var remoteLoadedFor by remember { mutableStateOf<String?>(null) }
+                    var remoteWasConnected by remember { mutableStateOf(false) }
+
+                    DisposableEffect(devicesPanelOpen) {
+                        if (devicesPanelOpen) remote.startDiscovery()
+                        onDispose { if (devicesPanelOpen) remote.stopDiscovery() }
+                    }
+
+                    fun selectedSubtitleLanguage(): String? = player.currentTracks.groups
+                        .firstOrNull { it.type == C.TRACK_TYPE_TEXT && it.isSelected }
+                        ?.let { g -> (0 until g.length).firstOrNull { g.isTrackSelected(it) }?.let { g.getTrackFormat(it).language } }
+
+                    /** Что отдать телевизору: провайдер решил «что», трансляция — «куда». */
+                    fun remoteMediaFor(video: VetroVideo, startMs: Long): RemoteMedia {
+                        val selectedLanguage = selectedSubtitleLanguage()
+                        return RemoteMedia(
+                            key = mediaKey,
+                            title = animeTitle,
+                            subtitle = if (playbackIdentity.mediaType == MediaType.MOVIE) null
+                                else (if (season > 1) "S$season · " else "") + (if (ruRemote) "Серия $episode" else "Episode $episode"),
+                            artworkUrl = null,
+                            url = video.url,
+                            mimeType = null,
+                            headers = SanitizeHeaders.sanitize(video.headers),
+                            // Учётные заголовки — только в их область, как у локального плеера.
+                            headersFor = if (video.credentialRef != null) {
+                                { target: String -> SanitizeHeaders.sanitize(video.credentialHeadersFor(target)) }
+                            } else null,
+                            subtitles = video.subtitles
+                                .filterNot { it.mimeType.contains("ass", true) || it.mimeType.contains("ssa", true) }
+                                .map { t ->
+                                    RemoteSubtitle(
+                                        url = t.url,
+                                        language = t.lang,
+                                        label = t.label,
+                                        mimeType = t.mimeType,
+                                        selected = selectedLanguage != null && t.lang == selectedLanguage,
+                                        isLocalFile = !t.url.startsWith("http"),
+                                    )
+                                },
+                            durationMs = player.duration.takeIf { it > 0 },
+                            startPositionMs = startMs,
+                        )
+                    }
+
+                    /** Источник отозвал ссылку посреди показа — та же озвучка заново (для прокси). */
+                    fun refreshUpstreamFor(video: VetroVideo): () -> ProxyUpstream? = {
+                        kotlinx.coroutines.runBlocking {
+                            runCatching { resolveReplacement(episodeResolver, episode, video, emptySet()) }.getOrNull()
+                        }?.let { fresh -> ProxyUpstream(fresh.url, SanitizeHeaders.sanitize(fresh.headers)) }
+                    }
+
+                    fun castTo(device: RemoteDevice) {
+                        val connected = remoteConnection as? RemoteConnection.Connected
+                        if (connected?.device?.id == device.id) { devicesPanel.targetState = false; return }
+                        // Телефон → ТВ: с того же места, а не с начала.
+                        val wasPlaying = player.isPlaying
+                        val start = if (remoteActive) remote.currentPositionMs() else player.currentPosition.coerceAtLeast(0L)
+                        player.pause()
+                        val target = current
+                        scope.launch {
+                            try {
+                                remote.cast(device, remoteMediaFor(target, start), refreshUpstreamFor(target))
+                                remoteLoadedFor = "${target.url}|$episode"
+                                devicesPanel.targetState = false
+                            } catch (e: RemotePlaybackException) {
+                                // Ошибку показывает лист; телефон продолжает, как играл.
+                                if (wasPlaying && remote.connection.value !is RemoteConnection.Connected) player.play()
+                            }
+                        }
+                    }
+
+                    fun returnToPhone() {
+                        if (!remoteActive) { devicesPanel.targetState = false; return }
+                        scope.launch {
+                            // ТВ → телефон: позиция телевизора, остановка показа, продолжение здесь.
+                            val position = remote.disconnect(stopPlayback = true)
+                            remoteLoadedFor = null
+                            if (position > 0) player.seekTo(position)
+                            player.play()
+                            devicesPanel.targetState = false
+                        }
+                    }
+
+                    // Пока показ на ТВ, телефон молчит — в том числе новый плеер после смены озвучки.
+                    LaunchedEffect(player, remoteActive) {
+                        if (remoteActive) player.playWhenReady = false
+                    }
+                    LaunchedEffect(remoteConnection) {
+                        when (val c = remoteConnection) {
+                            is RemoteConnection.Connected -> remoteWasConnected = true
+                            is RemoteConnection.Failed -> if (remoteWasConnected && c.error == RemoteError.DeviceGone) {
+                                // ТВ пропал посреди показа — продолжаем на телефоне с его последней позиции.
+                                remoteWasConnected = false
+                                val position = remote.disconnect(stopPlayback = false)
+                                remoteLoadedFor = null
+                                if (position > 0) player.seekTo(position)
+                                player.play()
+                                Toast.makeText(
+                                    this@StreamPlayerActivity,
+                                    if (ruRemote) "Связь с «${c.device?.name.orEmpty()}» потеряна — продолжаем на телефоне"
+                                    else "Lost “${c.device?.name.orEmpty()}” — continuing on the phone",
+                                    Toast.LENGTH_LONG,
+                                ).show()
+                            }
+                            else -> Unit
+                        }
+                    }
+                    // Другая озвучка или серия, пока идёт показ, — на тот же телевизор.
+                    LaunchedEffect(remoteActive, current.url, current.resolvedAt, episode) {
+                        if (!remoteActive) return@LaunchedEffect
+                        val id = "${current.url}|$episode"
+                        if (remoteLoadedFor == id) return@LaunchedEffect
+                        val loaded = remote.media.value
+                        if (remoteLoadedFor == null && loaded?.key == mediaKey && loaded.url == current.url) {
+                            remoteLoadedFor = id
+                            return@LaunchedEffect
+                        }
+                        val sameEpisode = loaded?.key == mediaKey
+                        val start = if (sameEpisode) remote.currentPositionMs()
+                            else stored?.takeIf { !it.watched }?.positionMs ?: 0L
+                        runCatching { remote.replaceMedia(remoteMediaFor(current, start), refreshUpstreamFor(current)) }
+                        remoteLoadedFor = id
+                    }
+
                     // Длительность — для плана распознавания: пока источник не готов, «Сгенерировать» скрыто.
                     var playerDurationMs by remember(player) { mutableLongStateOf(0L) }
                     DisposableEffect(player) {
@@ -577,19 +735,41 @@ class StreamPlayerActivity : ComponentActivity(), PipHostActivity {
                         if (target != null) player.seekTo(target)
                     }
 
-                    LaunchedEffect(player, animeId, season, episode) {
-                        runPlaybackProgressSaver(isPlaying = { player.isPlaying }) {
-                            val duration = player.duration
+                    // Прогресс — с того, что сейчас играет: телефона или телевизора.
+                    LaunchedEffect(controlPlayer, animeId, season, episode) {
+                        runPlaybackProgressSaver(isPlaying = { controlPlayer.isPlaying }) {
+                            val duration = controlPlayer.duration
                             if (duration > 0L) {
                                 playbackStore.saveProgress(
                                     animeId = animeId,
                                     season = season,
                                     episode = episode,
-                                    positionMs = player.currentPosition,
+                                    positionMs = controlPlayer.currentPosition,
                                     durationMs = duration,
                                 )
                             }
                         }
+                    }
+
+                    // Серия на ТВ закончилась — автопереход тем же путём, что кнопка «дальше».
+                    DisposableEffect(remotePlayer, autoNext, availableEpisodes, episode, switchingTo) {
+                        val listener = object : Player.Listener {
+                            override fun onPlaybackStateChanged(playbackState: Int) {
+                                if (playbackState == Player.STATE_ENDED &&
+                                    remote.connection.value is RemoteConnection.Connected &&
+                                    shouldAutoAdvance(
+                                        enabled = autoNext,
+                                        durationMs = remotePlayer.duration,
+                                        hasNext = EpisodeRange.hasNext(episode, availableEpisodes),
+                                        switching = switchingTo != null,
+                                    )
+                                ) {
+                                    switchToEpisode(EpisodeRange.nextOf(episode, availableEpisodes))
+                                }
+                            }
+                        }
+                        remotePlayer.addListener(listener)
+                        onDispose { remotePlayer.removeListener(listener) }
                     }
 
                     // Сторож просыпается только на время буферизации: слушатель плеера говорит, когда
@@ -904,7 +1084,46 @@ class StreamPlayerActivity : ComponentActivity(), PipHostActivity {
                             },
                             pendingSubtitleId = pendingSubtitleId,
                             onPendingSubtitleApplied = { pendingSubtitleId = null },
+                            remote = (remoteConnection as? RemoteConnection.Connected)?.let { c ->
+                                RemoteSurface(
+                                    player = remotePlayer,
+                                    deviceName = c.device.name,
+                                    status = when (remotePlayback.status) {
+                                        RemoteStatus.LOADING, RemoteStatus.BUFFERING -> if (ruRemote) "Загрузка…" else "Loading…"
+                                        RemoteStatus.PAUSED -> if (ruRemote) "Пауза" else "Paused"
+                                        RemoteStatus.ENDED -> if (ruRemote) "Серия закончилась" else "Finished"
+                                        else -> c.service.protocol.label
+                                    },
+                                )
+                            },
+                            remoteButton = when (remoteConnection) {
+                                is RemoteConnection.Connected -> RemoteButtonState.CONNECTED
+                                is RemoteConnection.Connecting -> RemoteButtonState.CONNECTING
+                                is RemoteConnection.Failed -> RemoteButtonState.ERROR
+                                RemoteConnection.Idle -> if (devicesPanelOpen) RemoteButtonState.DISCOVERING else RemoteButtonState.IDLE
+                            },
+                            // Нажатие всегда открывает список; долгое — тоже, но с последним устройством
+                            // первой строкой. Само не подключается никогда.
+                            onRemote = { devicesPanel.targetState = true },
+                            onRemoteLongPress = { devicesPanel.targetState = true },
                         )
+
+                        if (devicesPanel.targetState || devicesPanel.currentState || !devicesPanel.isIdle) {
+                            val suggested = remember(remoteDevices) { remote.onlineLastDevice() }
+                            RemoteDevicesPanel(
+                                state = devicesPanel,
+                                devices = remoteDevices,
+                                connection = remoteConnection,
+                                hasLocalNetwork = remember(remoteDevices, devicesPanelOpen) { remote.hasLocalNetwork() },
+                                suggested = suggested,
+                                onPhone = ::returnToPhone,
+                                onDevice = ::castTo,
+                                onDismiss = {
+                                    devicesPanel.targetState = false
+                                    remote.clearError()
+                                },
+                            )
+                        }
 
                         sourceSwitchNotice?.let { name ->
                             LaunchedEffect(name, current.url) {
@@ -977,6 +1196,18 @@ class StreamPlayerActivity : ComponentActivity(), PipHostActivity {
         }
     }
 
+    /** Кнопки громкости во время показа на ТВ меняют громкость телевизора. */
+    override fun onKeyDown(keyCode: Int, event: android.view.KeyEvent?): Boolean {
+        val connected = remote.connection.value is RemoteConnection.Connected
+        if (connected && (keyCode == android.view.KeyEvent.KEYCODE_VOLUME_UP || keyCode == android.view.KeyEvent.KEYCODE_VOLUME_DOWN)) {
+            val step = if (keyCode == android.view.KeyEvent.KEYCODE_VOLUME_UP) 0.05f else -0.05f
+            val volume = ((remote.playback.value.volume ?: 0.5f) + step).coerceIn(0f, 1f)
+            lifecycleScope.launch { runCatching { remote.setVolume(volume) } }
+            return true
+        }
+        return super.onKeyDown(keyCode, event)
+    }
+
     override fun onStop() {
         persistActivePlayer()
         super.onStop()
@@ -1008,7 +1239,7 @@ class StreamPlayerActivity : ComponentActivity(), PipHostActivity {
     }
 
     private fun persistActivePlayer() {
-        val player = activePlayer ?: return
+        val player = remoteControl ?: activePlayer ?: return
         val duration = player.duration
         if (duration <= 0L || activeAnimeId.isBlank()) return
         val position = player.currentPosition.coerceIn(0L, duration)
