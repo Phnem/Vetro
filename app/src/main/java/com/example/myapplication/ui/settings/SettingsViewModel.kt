@@ -577,7 +577,7 @@ class SettingsViewModel(
         viewModelScope.launch {
             withContext(Dispatchers.IO) {
                 val dbFile = context.getDatabasePath("anime.db")
-                val shareText = "Check out Vetro — media list manager: https://github.com/Phnem/Vetro-Collection"
+                val shareText = "Check out Vetro — media list manager: https://github.com/Phnem/Vetro"
                 val sendIntent = if (dbFile.exists()) {
                     databaseFactory.checkpoint()
                     val exportDir = File(context.cacheDir, "share").apply { mkdirs() }

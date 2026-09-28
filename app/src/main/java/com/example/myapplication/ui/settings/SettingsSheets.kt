@@ -655,7 +655,7 @@ fun ContactSheet(
                 title = "GitHub",
                 onClick = {
                     performHaptic(view, Haptic.Light)
-                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/Phnem/Vetro-Collection")))
+                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/Phnem/Vetro")))
                     onDismiss()
                 },
                 modifier = Modifier.weight(1f)
