@@ -46,8 +46,14 @@ __pycache__/
 .claude/worktrees/
 .claude/settings.local.json
 
-# Stray artifact from a mistyped git command
+# Stray artifacts from mistyped git commands
 /-remote --tags origin
+/h origin v*
+
+# Signing keys and keystores — never in the repository
+*.jks
+*.keystore
+keystore.properties
 
 # Local debug/scratch artifacts, not meant for the repo
 /.codex-remote-attachments/
@@ -56,9 +62,31 @@ __pycache__/
 /katana_animation.html
 /.scratch/vetro_readme_audit.png
 /Screen_Recording_20260730_153543_Pinterest.mp4
+/1000008*.png
+/1000008*.jpg
+/preview.png
+/swipe.png
+/swipe_n.png
+
+# Gradle's native-platform/jansi DLLs that leaked into the project root
+/native/
+
+# Leftover Haze stub from before the library was dropped
+/commonMain/
+
+# Editor settings
+.vscode/
 
 # graft's local graph cache — regenerable, not committed (run `graft build`).
 /graft/
 
 # Legacy Python download worker (not packaged since Chaquopy removal) — kept locally only
 /app/src/main/python/
+
+# Local agent workflow, specs and prototypes — kept on disk, not published
+/.scratch/
+/.agents/
+/CLAUDE.md
+/CONTEXT.md
+/Design.md
+/experiments/
