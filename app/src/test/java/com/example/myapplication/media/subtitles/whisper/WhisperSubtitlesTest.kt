@@ -40,11 +40,13 @@ class WhisperSubtitlesTest {
         assertEquals(1, WhisperDeviceProfile.threads(1))
     }
 
-    private class FakeEngine : SpeechEngine {
+    private class FakeEngine : Recognizer {
         val languages = mutableListOf<String?>()
         var calls = 0
-        override val isAvailable = true
-        override suspend fun transcribe(model: java.io.File, pcm: FloatArray, language: String?, threads: Int, onProgress: (Int) -> Unit): Transcription {
+        override val id = "SMALL"
+        override val cloud = false
+        override suspend fun transcribeWords(pcm: FloatArray, language: String?, threads: Int) = transcribe(pcm, language, threads) {}
+        override suspend fun transcribe(pcm: FloatArray, language: String?, threads: Int, onProgress: (Int) -> Unit): Transcription {
             calls++
             languages += language
             // Реплика на 2-й секунде куска и служебная метка, которую надо выбросить.
@@ -59,7 +61,6 @@ class WhisperSubtitlesTest {
         val scope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob())
         val manager = WhisperSubtitleManager(
             extract = { _, range -> FloatArray(((range.last + 1 - range.first) / 1000).toInt()) },
-            engine = engine,
             cache = WhisperSubtitleCache(dir),
             scope = scope,
             threads = 4,
@@ -67,7 +68,7 @@ class WhisperSubtitlesTest {
         val request = WhisperRequest(
             key = "anime:1:s1:e2:dub", mediaItem = androidx.media3.common.MediaItem.EMPTY,
             sourceFactory = FakeFactory, durationMs = 150_000, fromMs = 70_000,
-            language = WhisperLanguage.AUTO, model = WhisperModel.SMALL, modelFile = java.io.File(dir, "m.bin"),
+            language = WhisperLanguage.AUTO, recognizer = engine,
         )
         manager.start(request)
         val done = kotlinx.coroutines.withTimeout(5_000) {

@@ -7,6 +7,7 @@ import com.example.myapplication.media.player.StreamingPlaybackSessionFactory
 import com.example.myapplication.media.source.VetroVideo
 import com.example.myapplication.media.subtitles.whisper.AudioExtractor
 import com.example.myapplication.media.subtitles.whisper.ModelState
+import com.example.myapplication.media.subtitles.whisper.OnDeviceRecognizer
 import com.example.myapplication.media.subtitles.whisper.WHISPER_SAMPLE_RATE
 import com.example.myapplication.media.subtitles.whisper.WhisperCppEngine
 import com.example.myapplication.media.subtitles.whisper.WhisperDeviceProfile
@@ -114,7 +115,6 @@ class WhisperEngineDeviceTest {
             val cacheDir = File(context.cacheDir, "whisper-chain-subs").apply { deleteRecursively() }
             val manager = WhisperSubtitleManager(
                 extract = { r, range -> extractor.extract(r.mediaItem, r.sourceFactory, range.first, range.last + 1) },
-                engine = engine,
                 cache = WhisperSubtitleCache(cacheDir),
                 scope = scope,
                 threads = threads,
@@ -123,7 +123,7 @@ class WhisperEngineDeviceTest {
                 key = "device-test|jfk", mediaItem = StreamingPlaybackSessionFactory.buildMediaItem(video),
                 sourceFactory = StreamingPlaybackSessionFactory.mediaSourceFactory(context, OkHttpClient(), video),
                 durationMs = 11_000, fromMs = 0, language = WhisperLanguage.EN,
-                model = WhisperModel.TINY, modelFile = model(WhisperModel.TINY),
+                recognizer = OnDeviceRecognizer(engine, WhisperModel.TINY, model(WhisperModel.TINY)),
             )
             manager.start(request)
             val done = withTimeout(120_000) { manager.progress(request.key).first { it?.status == WhisperStatus.DONE || it?.status == WhisperStatus.FAILED }!! }

@@ -32,6 +32,8 @@ data class WhisperUi(
     val showing: Boolean,
     /** Длительность видео известна — можно планировать распознавание. */
     val durationKnown: Boolean,
+    /** Подключён ключ OpenRouter: без скачанной модели распознаёт облако. */
+    val cloudAvailable: Boolean = false,
 )
 
 /** Что сделать по пункту меню; кодируется в [SubtitleOption.action]. */
@@ -105,14 +107,46 @@ fun subtitleMenu(
         }
         SubtitlePage.WHISPER -> buildList {
             add(back)
-            if (!whisper.engineAvailable) {
+            if (!whisper.engineAvailable && !whisper.cloudAvailable) {
                 add(info("w-engine", if (ru) "Недоступно в этой сборке" else "Not available in this build"))
                 return@buildList
             }
-            when (val state = whisper.modelState) {
+            // Распознавание: показать, прогресс, запуск, язык. Общее для модели на телефоне и облака.
+            fun recognition() {
+                val progress = whisper.progress
+                val running = progress?.status == WhisperStatus.RUNNING
+                if (progress != null && progress.cues.isNotEmpty()) {
+                    add(act("w-show", if (ru) "Показать субтитры" else "Show subtitles", "show", keepOpen = false, selected = whisper.showing))
+                }
+                if (running) {
+                    add(info("w-running", (if (ru) "Распознано " else "Recognized ") + percent(progress!!) + "%"))
+                    add(act("w-stop", if (ru) "Остановить" else "Stop", "stop"))
+                } else if (progress?.status != WhisperStatus.DONE && whisper.durationKnown) {
+                    val resume = progress != null && progress.coveredMs > 0
+                    add(act("w-generate", if (resume) (if (ru) "Продолжить распознавание" else "Continue") else (if (ru) "Сгенерировать субтитры" else "Generate subtitles"), "generate", keepOpen = false))
+                }
+                add(act("w-language", (if (ru) "Язык: " else "Language: ") + languageLabel(whisper.language, ru), "language"))
+            }
+            val state = whisper.modelState
+            if (whisper.engineAvailable && state is ModelState.Ready) {
+                recognition()
+                if (whisper.progress?.slowerThanRealTime == true && whisper.recommended != whisper.model) {
+                    add(info("w-slow", if (ru) "Медленнее видео — попробуйте лёгкую модель" else "Slower than the video — try a lighter model"))
+                }
+                add(act("w-delete", if (ru) "Удалить модель" else "Delete model", "delete"))
+                return@buildList
+            }
+            if (whisper.cloudAvailable) {
+                // Модели на телефоне нет — распознаёт Whisper через OpenRouter по ключу из AI Connect.
+                add(info("w-cloud", if (ru) "Через OpenRouter · Whisper Large V3 Turbo" else "Via OpenRouter · Whisper Large V3 Turbo"))
+                recognition()
+                if (!whisper.engineAvailable) return@buildList
+            }
+            when (state) {
                 ModelState.Absent, is ModelState.Failed -> {
                     if (state is ModelState.Failed) add(info("w-failed", failureText(state.reason, ru)))
-                    add(act("w-download", downloadLabel(whisper.model, ru), "download:${whisper.model.name}"))
+                    val offline = if (whisper.cloudAvailable) (if (ru) " — без сети" else " — offline") else ""
+                    add(act("w-download", downloadLabel(whisper.model, ru) + offline, "download:${whisper.model.name}"))
                     if (whisper.recommended != whisper.model) {
                         add(info("w-weak", if (ru) "Для этого телефона лучше лёгкая модель" else "A lighter model suits this phone"))
                         add(act("w-download-light", downloadLabel(whisper.recommended, ru), "download:${whisper.recommended.name}"))
@@ -123,25 +157,7 @@ fun subtitleMenu(
                     add(act("w-cancel", if (ru) "Отменить загрузку" else "Cancel download", "cancel"))
                 }
                 ModelState.Verifying -> add(info("w-verify", if (ru) "Проверка файла модели…" else "Checking the model file…"))
-                is ModelState.Ready -> {
-                    val progress = whisper.progress
-                    val running = progress?.status == WhisperStatus.RUNNING
-                    if (progress != null && progress.cues.isNotEmpty()) {
-                        add(act("w-show", if (ru) "Показать субтитры" else "Show subtitles", "show", keepOpen = false, selected = whisper.showing))
-                    }
-                    if (running) {
-                        add(info("w-running", (if (ru) "Распознано " else "Recognized ") + percent(progress!!) + "%"))
-                        add(act("w-stop", if (ru) "Остановить" else "Stop", "stop"))
-                    } else if (progress?.status != WhisperStatus.DONE && whisper.durationKnown) {
-                        val resume = progress != null && progress.coveredMs > 0
-                        add(act("w-generate", if (resume) (if (ru) "Продолжить распознавание" else "Continue") else (if (ru) "Сгенерировать субтитры" else "Generate subtitles"), "generate", keepOpen = false))
-                    }
-                    if (progress?.slowerThanRealTime == true && whisper.recommended != whisper.model) {
-                        add(info("w-slow", if (ru) "Медленнее видео — попробуйте лёгкую модель" else "Slower than the video — try a lighter model"))
-                    }
-                    add(act("w-language", (if (ru) "Язык: " else "Language: ") + languageLabel(whisper.language, ru), "language"))
-                    add(act("w-delete", if (ru) "Удалить модель" else "Delete model", "delete"))
-                }
+                is ModelState.Ready -> Unit
             }
         }
     }

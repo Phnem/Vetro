@@ -96,7 +96,8 @@ data class WhisperProgress(
 
 /**
  * Что распознавать. [key] — серия + озвучка (разные озвучки — разная речь) + язык + модель;
- * [fromMs] — с какого места начинать: сначала то, что пользователь сейчас смотрит.
+ * [fromMs] — с какого места начинать: сначала то, что пользователь сейчас смотрит; [recognizer] —
+ * модель на устройстве или облако (см. [SpeechRouter]).
  */
 @OptIn(UnstableApi::class)
 data class WhisperRequest(
@@ -106,8 +107,7 @@ data class WhisperRequest(
     val durationMs: Long,
     val fromMs: Long,
     val language: WhisperLanguage,
-    val model: WhisperModel,
-    val modelFile: File,
+    val recognizer: Recognizer,
 )
 
 /**
@@ -119,7 +119,6 @@ data class WhisperRequest(
 class WhisperSubtitleManager(
     /** Звук диапазона [start, end) видео, 16 кГц моно (в приложении — [AudioExtractor]). */
     private val extract: suspend (WhisperRequest, LongRange) -> FloatArray,
-    private val engine: SpeechEngine,
     private val cache: WhisperSubtitleCache,
     private val scope: CoroutineScope,
     private val threads: Int,
@@ -127,8 +126,6 @@ class WhisperSubtitleManager(
 ) {
     private val progress = MutableStateFlow<Map<String, WhisperProgress>>(emptyMap())
     private val jobs = mutableMapOf<String, Job>()
-
-    val isEngineAvailable: Boolean get() = engine.isAvailable
 
     fun progress(key: String): Flow<WhisperProgress?> = progress.map { it[key] }
 
@@ -157,7 +154,7 @@ class WhisperSubtitleManager(
     }
 
     private suspend fun run(r: WhisperRequest) {
-        var transcript = cache.load(r.key) ?: CachedTranscript(r.model.name, r.language.code)
+        var transcript = cache.load(r.key) ?: CachedTranscript(r.recognizer.id, r.language.code)
         fun emit(status: WhisperStatus, slow: Boolean = false) = progress.update {
             it + (r.key to WhisperProgress(status, transcript.cues, transcript.covered.sumOf { c -> c[1] - c[0] }, r.durationMs, transcript.detectedLanguage, slow))
         }
@@ -170,7 +167,7 @@ class WhisperSubtitleManager(
                 val pcm = extract(r, chunk)
                 val language = r.language.code ?: transcript.detectedLanguage
                 val result = withContext(Dispatchers.Default) {
-                    engine.transcribe(r.modelFile, pcm, language, threads) {}
+                    r.recognizer.transcribe(pcm, language, threads)
                 }
                 val shifted = result.cues
                     .filter { it.text.isNotBlank() && it.text.trim() !in NOISE }

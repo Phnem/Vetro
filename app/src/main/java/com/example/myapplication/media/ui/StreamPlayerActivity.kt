@@ -23,6 +23,8 @@ import com.example.myapplication.media.subtitles.OpenSubtitlesUi
 import com.example.myapplication.media.subtitles.SubtitleMenuAction
 import com.example.myapplication.media.subtitles.WhisperUi
 import com.example.myapplication.media.subtitles.whisper.ModelState
+import com.example.myapplication.media.subtitles.whisper.OpenRouterWhisper
+import com.example.myapplication.media.subtitles.whisper.SpeechRouter
 import com.example.myapplication.media.subtitles.whisper.WhisperDeviceProfile
 import com.example.myapplication.media.subtitles.whisper.WhisperLanguage
 import com.example.myapplication.media.subtitles.whisper.WhisperModel
@@ -154,6 +156,7 @@ class StreamPlayerActivity : ComponentActivity(), PipHostActivity {
     private val externalSubtitles: ExternalSubtitleService by inject()
     private val whisperModels: WhisperModelStore by inject()
     private val whisperSubtitles: WhisperSubtitleManager by inject()
+    private val speechRouter: SpeechRouter by inject()
     private val enrichmentCoordinator: CollectionEnrichmentCoordinator by inject()
     private val settings: DataStore<Preferences> by inject(named("settings"))
     private val playbackPrefs: com.example.myapplication.media.prefs.ContentPlaybackPreferences by inject()
@@ -306,6 +309,13 @@ class StreamPlayerActivity : ComponentActivity(), PipHostActivity {
                     val whisperModel = chosenModel
                         ?: whisperModels.anyReady(recommendedModel)?.first
                         ?: recommendedModel
+                    // Модели на телефоне нет, но подключён ключ OpenRouter — распознаёт облако.
+                    val cloudSpeech by speechRouter.cloudAvailability.collectAsState(initial = speechRouter.cloudAvailable)
+                    val whisperRoute = when {
+                        speechRouter.onDeviceAvailable && modelStates[whisperModel] is ModelState.Ready -> whisperModel.name
+                        cloudSpeech -> OpenRouterWhisper.CACHE_ID
+                        else -> whisperModel.name
+                    }
                     var whisperLanguage by rememberSaveable { mutableStateOf(WhisperLanguage.AUTO) }
                     var whisperShowing by remember(episode) { mutableStateOf(false) }
 
@@ -526,7 +536,7 @@ class StreamPlayerActivity : ComponentActivity(), PipHostActivity {
                     }
                     // Ключ кэша Whisper: серия + озвучка (разные озвучки — разная речь) + язык + модель.
                     val whisperKey = "whisper|$animeId|s$season|e$episode|" +
-                        "${current.sourceName ?: current.url.substringBefore('?')}|${whisperLanguage.name}|${whisperModel.name}"
+                        "${current.sourceName ?: current.url.substringBefore('?')}|${whisperLanguage.name}|$whisperRoute"
                     val cachedWhisper = remember(whisperKey, playerDurationMs) {
                         playerDurationMs.takeIf { it > 0 }?.let { whisperSubtitles.cached(whisperKey, it) }
                     }
@@ -1003,7 +1013,8 @@ class StreamPlayerActivity : ComponentActivity(), PipHostActivity {
                                 searching = openSubtitlesSearching,
                             ),
                             whisper = WhisperUi(
-                                engineAvailable = whisperSubtitles.isEngineAvailable,
+                                engineAvailable = speechRouter.onDeviceAvailable,
+                                cloudAvailable = cloudSpeech,
                                 model = whisperModel,
                                 modelState = modelStates[whisperModel] ?: ModelState.Absent,
                                 recommended = recommendedModel,
@@ -1021,7 +1032,7 @@ class StreamPlayerActivity : ComponentActivity(), PipHostActivity {
                                         whisperModels.download(action.model)
                                     }
                                     SubtitleMenuAction.CancelDownload -> whisperModels.cancel(whisperModel)
-                                    SubtitleMenuAction.Generate -> whisperModels.readyFile(whisperModel)?.let { file ->
+                                    SubtitleMenuAction.Generate -> (speechRouter.onDevice(whisperModel) ?: speechRouter.cloud())?.let { recognizer ->
                                         whisperSubtitles.start(
                                             WhisperRequest(
                                                 key = whisperKey,
@@ -1032,8 +1043,7 @@ class StreamPlayerActivity : ComponentActivity(), PipHostActivity {
                                                 durationMs = playerDurationMs,
                                                 fromMs = player.currentPosition.coerceAtLeast(0L),
                                                 language = whisperLanguage,
-                                                model = whisperModel,
-                                                modelFile = file,
+                                                recognizer = recognizer,
                                             ),
                                         )
                                         whisperShowing = true

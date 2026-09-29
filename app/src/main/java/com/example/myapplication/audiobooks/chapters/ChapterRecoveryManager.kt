@@ -14,9 +14,8 @@ import com.example.myapplication.audiobooks.domain.model.MediaManifest
 import com.example.myapplication.audiobooks.domain.model.TrackUriCodec
 import com.example.myapplication.audiobooks.domain.model.VariantId
 import com.example.myapplication.audiobooks.domain.source.ManifestResolver
-import com.example.myapplication.media.subtitles.whisper.SpeechEngine
+import com.example.myapplication.media.subtitles.whisper.SpeechRouter
 import com.example.myapplication.media.subtitles.whisper.WhisperModel
-import com.example.myapplication.media.subtitles.whisper.WhisperModelStore
 import java.io.File
 import java.security.MessageDigest
 import kotlinx.coroutines.CancellationException
@@ -57,8 +56,7 @@ class ChapterRecoveryManager(
     private val store: RecoveredChapterStore,
     private val reader: BookAudioReader,
     private val local: LocalFolderSource,
-    private val models: WhisperModelStore,
-    private val speech: SpeechEngine,
+    private val speech: SpeechRouter,
     private val scope: CoroutineScope,
     private val workDir: File,
 ) {
@@ -163,8 +161,8 @@ class ChapterRecoveryManager(
         // 3. Что звучит после самых длинных пауз: «Глава третья» подтверждает границу и даёт название.
         val headings = HashMap<SilenceGap, Heading>()
         var opening: Heading? = null
-        val model = models.anyReady(WhisperModel.BASE)?.second
-        if (model != null && speech.isAvailable) {
+        val model = speech.pick(listOf(WhisperModel.BASE) + WhisperModel.entries)
+        if (model != null) {
             val language = if (russian) "ru" else "en"
             val candidates = ChapterProposer.candidates(gaps, totalMs).sortedBy { it.endMs }
             val points = listOf<SilenceGap?>(null) + candidates
@@ -178,7 +176,7 @@ class ChapterRecoveryManager(
                 }.getOrNull() ?: continue
                 if (pcm.isEmpty()) continue
                 val text = runCatching {
-                    speech.transcribe(model, pcm, language, WHISPER_THREADS) {}.cues.joinToString(" ") { it.text }
+                    model.transcribe(pcm, language, WHISPER_THREADS).cues.joinToString(" ") { it.text }
                 }.getOrNull() ?: continue
                 val heading = HeadingParser.parse(text) ?: continue
                 if (gap == null) opening = heading else headings[gap] = heading

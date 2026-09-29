@@ -40,6 +40,24 @@ class SubtitleMenuTest {
     }
 
     @Test
+    fun `without a model an OpenRouter key recognizes in the cloud, the model stays an offline option`() {
+        val cloud = whisper(recommended = WhisperModel.SMALL).copy(cloudAvailable = true)
+        assertEquals(
+            listOf("‹ Назад", "Через OpenRouter · Whisper Large V3 Turbo", "Сгенерировать субтитры", "Язык: определить", "Скачать модель · Обычная · 190 МБ — без сети"),
+            labels(subtitleMenu(SubtitlePage.WHISPER, emptyList(), noOs, cloud, true)),
+        )
+        // Без нативного движка (не arm64) облако всё равно работает, скачивать нечего.
+        val noEngine = cloud.copy(engineAvailable = false)
+        assertEquals(
+            listOf("‹ Назад", "Через OpenRouter · Whisper Large V3 Turbo", "Сгенерировать субтитры", "Язык: определить"),
+            labels(subtitleMenu(SubtitlePage.WHISPER, emptyList(), noOs, noEngine, true)),
+        )
+        // Скачанная модель важнее облака.
+        val ready = cloud.copy(modelState = ModelState.Ready(File("m")))
+        assertEquals(listOf("‹ Назад", "Сгенерировать субтитры", "Язык: определить", "Удалить модель"), labels(subtitleMenu(SubtitlePage.WHISPER, emptyList(), noOs, ready, true)))
+    }
+
+    @Test
     fun `whisper walks from download to generate to show`() {
         val absent = subtitleMenu(SubtitlePage.WHISPER, emptyList(), noOs, whisper(recommended = WhisperModel.BASE), true)
         assertEquals(

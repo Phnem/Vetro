@@ -13,10 +13,9 @@ import com.example.myapplication.audiobooks.domain.model.TrackUriCodec
 import com.example.myapplication.audiobooks.domain.model.VariantId
 import com.example.myapplication.audiobooks.domain.source.ManifestResolver
 import com.example.myapplication.audiobooks.domain.timeline.BookTimeline
-import com.example.myapplication.media.subtitles.whisper.SpeechEngine
+import com.example.myapplication.media.subtitles.whisper.SpeechRouter
 import com.example.myapplication.media.subtitles.whisper.SubtitleCue
 import com.example.myapplication.media.subtitles.whisper.WhisperModel
-import com.example.myapplication.media.subtitles.whisper.WhisperModelStore
 import java.io.File
 import java.security.MessageDigest
 import kotlinx.coroutines.CancellationException
@@ -55,7 +54,7 @@ private data class DeviceSubtitleFile(
 )
 
 /**
- * Субтитры аудиокниги, распознанные на устройстве (Whisper), — когда текста книги нет и
+ * Субтитры аудиокниги, распознанные Whisper (на устройстве или облаком, см. [SpeechRouter]), — когда текста книги нет и
  * пользователь сам выбрал этот пункт. Показывается распознанный текст. Хранилище своё
  * (`files/audiobooks/asr-subtitles`), с синхронизацией текста книги не пересекается.
  */
@@ -64,8 +63,7 @@ class DeviceSubtitleManager(
     private val context: Context,
     private val resolver: ManifestResolver,
     private val reader: BookAudioReader,
-    private val models: WhisperModelStore,
-    private val speech: SpeechEngine,
+    private val speech: SpeechRouter,
     private val scope: CoroutineScope,
     private val root: File,
 ) {
@@ -98,9 +96,7 @@ class DeviceSubtitleManager(
     }
 
     private suspend fun run(variant: VariantId, language: String?, position: () -> Long?) {
-        val (modelKind, model) = listOf(WhisperModel.SMALL, WhisperModel.BASE, WhisperModel.TINY)
-            .firstNotNullOfOrNull { m -> models.readyFile(m)?.let { m to it } }
-            ?.takeIf { speech.isAvailable }
+        val recognizer = speech.pick(listOf(WhisperModel.SMALL, WhisperModel.BASE, WhisperModel.TINY))
             ?: run { set(variant, DeviceSubtitleState.NeedsModel); return }
         val manifest = resolver.rawManifest(variant)
         val timeline = BookTimeline(manifest.tracks, manifest.chapters)
@@ -109,7 +105,7 @@ class DeviceSubtitleManager(
         val file = File(root, hash(variant.value) + ".json")
         var data = withContext(Dispatchers.IO) {
             runCatching { json.decodeFromString(DeviceSubtitleFile.serializer(), file.readText()) }.getOrNull()
-        }?.takeIf { it.audioFingerprint == print } ?: DeviceSubtitleFile(print, modelKind.name)
+        }?.takeIf { it.audioFingerprint == print } ?: DeviceSubtitleFile(print, recognizer.id)
         _cues.update { it + (variant to data.cues) }
         val blocks = ((total + BLOCK_MS - 1) / BLOCK_MS).toInt()
         while (true) {
@@ -136,7 +132,7 @@ class DeviceSubtitleManager(
                 val pcm = reader.speech(Uri.parse(TrackUriCodec.encode(variant, track)), offset, length)
                 if (pcm.isNotEmpty()) {
                     val threads = (Runtime.getRuntime().availableProcessors() - 2).coerceIn(2, 4)
-                    speech.transcribe(model, pcm, language, threads) {}.cues
+                    recognizer.transcribe(pcm, language, threads).cues
                         .filterNot(::isNoise)
                         .forEach { c -> cues += DeviceCue(t + c.startMs, t + c.endMs, c.text.trim()) }
                 }

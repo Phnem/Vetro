@@ -22,9 +22,9 @@ import com.example.myapplication.audiobooks.text.source.LocalTextSource
 import com.example.myapplication.audiobooks.text.source.TextCandidate
 import com.example.myapplication.audiobooks.text.source.TextMatch
 import com.example.myapplication.audiobooks.text.source.TextQuery
-import com.example.myapplication.media.subtitles.whisper.SpeechEngine
+import com.example.myapplication.media.subtitles.whisper.Recognizer
+import com.example.myapplication.media.subtitles.whisper.SpeechRouter
 import com.example.myapplication.media.subtitles.whisper.WhisperModel
-import com.example.myapplication.media.subtitles.whisper.WhisperModelStore
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -96,8 +96,7 @@ class BookAlignmentManager(
     private val sources: List<BookTextSource>,
     private val store: AlignmentStore,
     private val reader: BookAudioReader,
-    private val models: WhisperModelStore,
-    private val speech: SpeechEngine,
+    private val speech: SpeechRouter,
     private val scope: CoroutineScope,
 ) {
     private val _states = MutableStateFlow<Map<VariantId, BookTextState>>(emptyMap())
@@ -187,7 +186,8 @@ class BookAlignmentManager(
             if (done.size >= blocks) { set(variant, BookTextState.Ready(stored.sourceName)); return }
             val current = ((position() ?: 0L) / BLOCK_MS).toInt().coerceIn(0, blocks - 1)
             val near = (current..minOf(blocks - 1, current + AHEAD_BLOCKS)).firstOrNull { it !in done }
-            val next = near ?: if (canBackground()) {
+            // Облако — только у места прослушивания: вся книга в фоне — это гигабайты звука в сеть.
+            val next = near ?: if (!model.cloud && canBackground()) {
                 ((current until blocks) + (0 until current)).firstOrNull { it !in done }
             } else null
             if (next == null) {
@@ -297,7 +297,7 @@ class BookAlignmentManager(
         timeline: BookTimeline,
         start: Long,
         end: Long,
-        model: java.io.File,
+        model: Recognizer,
         language: String?,
         background: Boolean,
     ): List<AsrWord> {
@@ -312,7 +312,7 @@ class BookAlignmentManager(
             }
             if (pcm.isNotEmpty()) {
                 val threads = if (background) 2 else (Runtime.getRuntime().availableProcessors() - 2).coerceIn(2, 4)
-                val result = speech.transcribeWords(model, pcm, language, threads)
+                val result = model.transcribeWords(pcm, language, threads)
                 for (cue in result.cues) {
                     for (token in MatchText.tokens(cue.text, asr = true)) {
                         words += AsrWord(token.key, t + cue.startMs, t + cue.endMs)
@@ -342,9 +342,8 @@ class BookAlignmentManager(
     private fun language(stored: StoredText, book: BookText) = stored.language ?: book.language
 
     /** Для синхронизации хватает лёгкой модели: ошибки распознавания выравнивание переживает. */
-    private fun modelFile(): java.io.File? =
-        (models.readyFile(WhisperModel.BASE) ?: models.readyFile(WhisperModel.TINY) ?: models.readyFile(WhisperModel.SMALL))
-            ?.takeIf { speech.isAvailable }
+    private fun modelFile(): Recognizer? =
+        speech.pick(listOf(WhisperModel.BASE, WhisperModel.TINY, WhisperModel.SMALL))
 
     private fun canBackground(): Boolean {
         if (tooHot(PowerManager.THERMAL_STATUS_MODERATE)) return false
