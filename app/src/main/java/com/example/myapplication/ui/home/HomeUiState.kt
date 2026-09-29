@@ -47,5 +47,7 @@ data class HomeUiState(
      */
     val optimisticallyAddedKeys: PersistentSet<String> = persistentSetOf(),
     val libraryMediaTypeFilter: com.example.myapplication.data.models.MediaType? = null,
-    val searchMediaTypeFilter: com.example.myapplication.data.models.MediaType = com.example.myapplication.data.models.MediaType.ANIME
+    val searchMediaTypeFilter: com.example.myapplication.data.models.MediaType = com.example.myapplication.data.models.MediaType.ANIME,
+    /** Поиск в разделе «Книги»: аудиокниги у источников вместо каталогов тайтлов. */
+    val searchBooks: Boolean = false,
 )

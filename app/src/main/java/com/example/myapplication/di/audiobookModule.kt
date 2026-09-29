@@ -82,6 +82,7 @@ val audiobookModule = module {
         }
     }
     single { AudiobookSearch(get(named(SOURCES))) }
+    single { com.example.myapplication.audiobooks.data.BookSearchAdder(get(named(SOURCES)), get(), get()) }
     single { NarrationChain(get(), get(named(SOURCES)), get(), get()) }
     // Резолвер знает все источники манифестов: сайты и локальную папку; принятые восстановленные
     // главы накладываются поверх разметки источника.

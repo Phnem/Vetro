@@ -277,6 +277,10 @@ class AudiobookRepository(
         q.workById(workId.value).executeAsOneOrNull()?.in_library == 1L
     }
 
+    suspend fun setInLibrary(workId: WorkId, inLibrary: Boolean) = io {
+        q.setWorkInLibrary(inLibrary = if (inLibrary) 1 else 0, workId = workId.value)
+    }
+
     fun isFavorite(workId: WorkId): Flow<Boolean> =
         q.workFavorite(workId.value).asFlow().mapToList(Dispatchers.IO).map { it.firstOrNull() == 1L }
 

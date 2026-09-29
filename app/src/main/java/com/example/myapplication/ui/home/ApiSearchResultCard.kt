@@ -90,7 +90,8 @@ fun ApiSearchResultCard(
             title = result.title,
             rating = r10.takeIf { it > 0f },
             genres = displayGenres ?: persistentListOf(*(result.genres.take(3).toTypedArray())),
-            episodesText = buildString {
+            // У книги вместо серий и источника — автор, чтец и длительность (собраны в altTitle).
+            episodesText = if (result.categoryType == "BOOK") result.altTitle.orEmpty() else buildString {
                 append(
                     if (result.categoryType == "MOVIE") {
                         "1 film"

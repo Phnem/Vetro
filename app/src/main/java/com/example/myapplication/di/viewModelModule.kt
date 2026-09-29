@@ -43,6 +43,7 @@ val viewModelModule = module {
             mangaBindingStore = get(),
             mangaChapterCacheStore = get(),
             mangaReadingStore = get(),
+            bookSearch = if (get<com.example.myapplication.audiobooks.AudiobookFeatureGate>().enabled) get() else null,
         )
     }
     viewModel {

@@ -992,9 +992,12 @@ fun HomeScreen(
                             // Одна опция на MOVIE+SERIES (был единый TV_SERIES) — при выборе ищем
                             // раздел SERIES (см. HomeViewModel), MOVIE-раздел отсюда пока не достижим.
                             com.example.myapplication.data.models.MediaType.SERIES to strings.typeSeries
+                        ) + listOfNotNull(
+                            // null — аудиокниги: у них свой поиск по источникам и своя библиотека.
+                            (null to if (currentLanguage == AppLanguage.RU) "Книги" else "Books").takeIf { viewModel.canSearchBooks }
                         )
                         filters.forEach { (type, label) ->
-                            val isSelected = uiState.searchMediaTypeFilter == type
+                            val isSelected = if (type == null) uiState.searchBooks else !uiState.searchBooks && uiState.searchMediaTypeFilter == type
                             val scale by androidx.compose.animation.core.animateFloatAsState(
                                 targetValue = if (isSelected) 1.1f else 1.0f,
                                 animationSpec = MotionTokens.menuPop(),
@@ -1005,7 +1008,7 @@ fun HomeScreen(
                                     .padding(horizontal = 4.dp)
                                     .scale(scale)
                                     .clip(CircleShape)
-                                    .clickable { viewModel.setSearchMediaTypeFilter(type) }
+                                    .clickable { if (type == null) viewModel.setSearchBooks() else viewModel.setSearchMediaTypeFilter(type) }
                             ) {
                                 com.example.myapplication.SimpGlassCard(
                                     backdrop = backdrop,
@@ -1548,7 +1551,9 @@ private fun LazyListScope.apiSearchResultsSection(
             displayGenres = apiGenres,
             addLabel = strings.addButton,
             addedLabel = strings.addedButton,
-            mediaTypeLabel = when (uiState.searchMediaTypeFilter) {
+            mediaTypeLabel = if (result.categoryType == BOOK_CATEGORY) {
+                if (currentLanguage == AppLanguage.RU) "Аудиокнига" else "Audiobook"
+            } else when (uiState.searchMediaTypeFilter) {
                 com.example.myapplication.data.models.MediaType.ANIME -> strings.typeAnime
                 com.example.myapplication.data.models.MediaType.MANGA -> strings.typeManga
                 com.example.myapplication.data.models.MediaType.MOVIE -> strings.typeMovie

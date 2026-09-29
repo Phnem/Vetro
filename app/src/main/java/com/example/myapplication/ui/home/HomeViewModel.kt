@@ -57,6 +57,9 @@ import com.example.myapplication.worker.AnimeUpdateWorker
 
 private val KEY_CONTENT_TYPE = stringPreferencesKey("contentType")
 
+/** `categoryType` найденной аудиокниги: у книг свой раздел и своё хранилище, не коллекция тайтлов. */
+internal const val BOOK_CATEGORY = "BOOK"
+
 @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 class HomeViewModel(
     private val repository: AnimeRepository,
@@ -74,6 +77,8 @@ class HomeViewModel(
     private val mangaBindingStore: com.example.myapplication.manga.data.MangaBindingStore,
     private val mangaChapterCacheStore: com.example.myapplication.manga.data.MangaChapterCacheStore,
     private val mangaReadingStore: com.example.myapplication.manga.data.MangaReadingStore,
+    /** null — раздел аудиокниг выключен в сборке, вкладки «Книги» в поиске нет. */
+    private val bookSearch: com.example.myapplication.audiobooks.data.BookSearchAdder? = null,
 ) : ViewModel() {
 
     /** Найденные прямые ссылки по одобренным сайтам (animeId → запись). Реактивно для карточек. */
@@ -279,14 +284,20 @@ class HomeViewModel(
     val apiSearchWithStatus: StateFlow<kotlinx.collections.immutable.ImmutableList<ApiSearchUiModel>> = combine(
         _uiState.map { it.apiSearchResults }.distinctUntilChanged(),
         _uiState.map { it.optimisticallyAddedKeys }.distinctUntilChanged(),
-        animeListFlow
-    ) { apiResults, optimisticKeys, localList ->
+        animeListFlow,
+        bookSearch?.libraryTitles ?: flowOf(emptySet()),
+    ) { apiResults, optimisticKeys, localList, bookTitles ->
         apiResults.map { result ->
+            val inDb = if (result.categoryType == BOOK_CATEGORY) {
+                bookSearch?.key(result.title) in bookTitles
+            } else {
+                isAddedInMemory(result, localList)
+            }
             ApiSearchUiModel(
                 result = result,
                 // Оптимистичный ключ ИЛИ факт в БД: кнопка обязана переключиться сразу по нажатию,
                 // не дожидаясь скачивания постера, иначе она откатывается и пользователь дожимает.
-                isAdded = searchResultKey(result) in optimisticKeys || isAddedInMemory(result, localList)
+                isAdded = searchResultKey(result) in optimisticKeys || inDb
             )
         }.toImmutableList()
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), persistentListOf())
@@ -356,6 +367,16 @@ class HomeViewModel(
             kotlinx.coroutines.delay(400)
             if (_uiState.value.searchQuery.trim() != trimmed) return@launch
             _uiState.update { it.copy(apiSearchLoading = true, apiSearchError = null) }
+            if (_uiState.value.searchBooks && bookSearch != null) {
+                val books = runCatching { bookSearch.search(trimmed) }.getOrElse { if (it is kotlinx.coroutines.CancellationException) throw it else emptyList() }
+                if (_uiState.value.searchQuery.trim() != trimmed) return@launch
+                val ru = uiLanguage.value == com.example.myapplication.network.AppLanguage.RU
+                foundBooks = books.associateBy { "${it.ref.source.value}:${it.ref.key}" }
+                _uiState.update {
+                    it.copy(apiSearchResults = books.map { b -> b.toSearchResult(ru) }.toImmutableList(), apiSearchLoading = false)
+                }
+                return@launch
+            }
             val mediaType = _uiState.value.searchMediaTypeFilter
             val contentType = when (mediaType) {
                 com.example.myapplication.data.models.MediaType.ANIME -> AppContentType.ANIME
@@ -416,8 +437,45 @@ class HomeViewModel(
         }
     }
 
+    /** Найденные книги по ключу результата — чтобы «Добавить» открыло страницу книги у её источника. */
+    private var foundBooks: Map<String, com.example.myapplication.audiobooks.domain.source.SourceBook> = emptyMap()
+
+    private fun com.example.myapplication.audiobooks.domain.source.SourceBook.toSearchResult(ru: Boolean): ApiSearchResult {
+        val hours = durationSec?.let { s -> if (s >= 3600) "${s / 3600} ${if (ru) "ч" else "h"}" else "${(s / 60).coerceAtLeast(1)} ${if (ru) "мин" else "min"}" }
+        val byline = listOfNotNull(
+            authors.joinToString(", ").takeIf { it.isNotBlank() },
+            narrators.joinToString(", ").takeIf { it.isNotBlank() }?.let { (if (ru) "читает " else "read by ") + it },
+            hours,
+        ).joinToString(" · ")
+        return ApiSearchResult(
+            title = title, altTitle = byline.ifBlank { null }, posterUrl = coverUrl, episodes = 0, description = "",
+            type = BOOK_CATEGORY, genres = genres, rating = null, source = BOOK_CATEGORY, categoryType = BOOK_CATEGORY,
+            externalId = "${ref.source.value}:${ref.key}",
+        )
+    }
+
+    private fun addBook(result: ApiSearchResult, key: String) {
+        val book = foundBooks[result.externalId] ?: return
+        val adder = bookSearch ?: return
+        _uiState.update { it.copy(optimisticallyAddedKeys = it.optimisticallyAddedKeys.add(key), addingFromApiId = key) }
+        viewModelScope.launch {
+            val ok = runCatching { adder.add(book) }.getOrElse { if (it is kotlinx.coroutines.CancellationException) throw it else false }
+            _uiState.update {
+                if (ok) it.copy(addingFromApiId = null) else it.copy(
+                    addingFromApiId = null,
+                    optimisticallyAddedKeys = it.optimisticallyAddedKeys.remove(key),
+                    apiSearchError = if (uiLanguage.value == com.example.myapplication.network.AppLanguage.RU) "Источник не отдал книгу" else "The source didn't return this book",
+                )
+            }
+        }
+    }
+
     fun addFromApi(result: ApiSearchResult) {
         val key = searchResultKey(result)
+        if (result.categoryType == BOOK_CATEGORY) {
+            if (key !in _uiState.value.optimisticallyAddedKeys) addBook(result, key)
+            return
+        }
 
         // Второе нажатие по той же карточке игнорируется: без этого «добавляю» и «уже добавлено»
         // не спасают — два вызова успевают пройти проверку дубликата до того, как первый допишет
@@ -477,7 +535,16 @@ class HomeViewModel(
     }
 
     fun setSearchMediaTypeFilter(filter: com.example.myapplication.data.models.MediaType) {
-        _uiState.update { it.copy(searchMediaTypeFilter = filter) }
+        _uiState.update { it.copy(searchMediaTypeFilter = filter, searchBooks = false) }
+        updateSearchQuery(_uiState.value.searchQuery)
+    }
+
+    /** Вкладка «Книги» есть, только если раздел аудиокниг включён в сборке. */
+    val canSearchBooks: Boolean get() = bookSearch != null
+
+    fun setSearchBooks() {
+        if (bookSearch == null) return
+        _uiState.update { it.copy(searchBooks = true, apiSearchResults = persistentListOf()) }
         updateSearchQuery(_uiState.value.searchQuery)
     }
 
