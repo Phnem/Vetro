@@ -1,8 +1,8 @@
 The biggest update so far.
-• Films and TV series with TMDB and Kinopoisk, episode tracking by season.
-• Audiobooks: a new Books section, your own folders, chapters and synced text subtitles.
-• Your own sources: WebDAV, Jellyfin, Emby, Stremio add-ons.
+• Films and TV series, episode tracking by season.
+• Audiobooks: a new Books section and a Books tab in search, your own folders, chapters and synced text subtitles.
+• Your own sources: WebDAV, media servers, add-ons.
 • Play on your TV over Google Cast or DLNA.
-• Subtitles from OpenSubtitles and generated on the phone.
+• Subtitles: search online, generate on the phone or in the cloud with your OpenRouter key.
 • Notification center for new episodes.
 • Faster: smooth page swipes, quicker start, smaller APK.

@@ -51,7 +51,7 @@ Vetro does not host any media. It connects to catalogues and sources that you ch
 
 ### Always know what's new
 
-- Episode checks across AniList, Shikimori and MyAnimeList, plus TMDB for TV series.
+- Episode checks across several anime and TV catalogues.
 - Progress is counted by season: cards show `S3 E12` instead of a franchise-wide total.
 - New episodes arrive as a stack of notification cards. They fold into a bell next to the dock and open as a notification centre.
 - Titles that are airing or have unread episodes stay at the top of the library, under favourites.
@@ -59,23 +59,25 @@ Vetro does not host any media. It connects to catalogues and sources that you ch
 
 ### Watch
 
-- A built-in player with picture-in-picture, episode navigation, auto-next and intro skipping (Anime-Skip, IntroDB and source timings).
+- A built-in player with picture-in-picture, episode navigation, auto-next and intro skipping.
 - Gestures: double-tap seek that accumulates, hold for 2×, pinch to zoom, brightness and volume on vertical swipes, and undo for an accidental seek.
 - If a source fails mid-episode, playback moves to another one and keeps the chosen dub.
 - Films and series have their own source cascade, separate for Russian and English.
-- Add your own sources: direct links, WebDAV, Jellyfin, Emby, Stremio add-ons and declarative provider packages. Imported packages run sandboxed and are signature-checked.
+- Add your own sources: direct links, WebDAV, self-hosted media servers, add-on catalogues and declarative provider packages. Imported packages run sandboxed and are signature-checked.
 - **Play on…**: send an episode to a TV over Google Cast or DLNA and control it from Vetro. A secure local proxy handles streams the TV can't open directly.
 - A system media card with poster, `S2 E5`, seek and episode buttons.
 - Download single episodes or whole seasons for offline playback, with resumable HLS downloads.
 
 ### Subtitles
 
-- Search and pick subtitles from OpenSubtitles, including with your own OpenSubtitles account and API key.
+- Search and pick subtitles online, including with your own subtitle account and API key.
 - Generate subtitles on the device with Whisper (whisper.cpp). Models are downloaded in the app; recognition runs locally on arm64 phones.
+- No model on the phone? With an OpenRouter key connected in AI Connect, Whisper Large V3 Turbo recognises the speech in the cloud. A downloaded model always comes first.
 
 ### Listen to audiobooks
 
 - A separate Books section with shelves from Russian and English sources, cross-source search and automatic fallback when a source goes down.
+- A Books tab in the main search: find a book across all sources and add it to your library in one tap.
 - Some sources stream while the file is still downloading.
 - Add your own audiobook folders; the library then groups them into one shelf per author.
 - Sleep timer, skip silence (Off / Light / Normal / Aggressive), playback speed, bookmarks, undo seek and a mini player.
@@ -91,8 +93,8 @@ Vetro does not host any media. It connects to catalogues and sources that you ch
 ### Make it yours
 
 - Light and dark themes, English and Russian interface.
-- iOS-style motion throughout: spring physics, iOS scrolling with rubber-band edges, swipe back from Details, and frosted-glass surfaces.
-- Optional cloud account (Supabase) with sync and backup, plus import and export of Shikimori, MyAnimeList and AniList lists.
+- iOS-style motion throughout: spring physics, swipe back from Details and frosted-glass surfaces.
+- Optional cloud account with sync and backup, plus import and export of lists from popular trackers.
 - Optional Bring Your Own Key (BYOK) AI provider for AI-assisted features.
 - A shareable PDF export of the collection, plus database maintenance and diagnostics in Developer Settings.
 
@@ -141,7 +143,7 @@ On an existing checkout, run `git submodule update --init` first. On Windows, us
 
 ### Optional service configuration
 
-Copy `local.properties.example` to `local.properties` and fill in only the integrations you plan to use. OAuth and Supabase values are read from environment variables first, then from `local.properties`. Catalogue and enrichment keys (TMDB, Kinopoisk, OpenSubtitles, OMDb, YouTube, Fanart.tv, Google Books and others) are read from `local.properties`. An empty value switches the related feature off. Never commit this file, API keys or signing keys.
+Copy `local.properties.example` to `local.properties` and fill in only the integrations you plan to use. OAuth and cloud-account values are read from environment variables first, then from `local.properties`. Catalogue and enrichment keys (the full list is in `local.properties.example`) are read from `local.properties`. An empty value switches the related feature off. Never commit this file, API keys or signing keys.
 
 ## Architecture
 
@@ -151,7 +153,7 @@ Vetro is a Kotlin and Jetpack Compose Android application with unidirectional st
 - **UI:** Jetpack Compose, Navigation Compose, a custom iOS-style design system (spring motion tokens, frosted glass), Material 3 where it fits.
 - **State and DI:** immutable UI state, Kotlin Flow, ViewModels and Koin.
 - **Data:** SQLDelight, DataStore, small JSON file caches, and WorkManager for downloads, sync and background checks.
-- **Network:** Ktor on a single shared OkHttp client, Apollo GraphQL for AniList, per-host rate limiting and circuit breakers.
+- **Network:** Ktor on a single shared OkHttp client, Apollo GraphQL, per-host rate limiting and circuit breakers.
 - **Playback:** AndroidX Media3 / ExoPlayer; Google Cast and DLNA for remote playback; libtorrent4j for streaming torrent sources.
 - **Native:** whisper.cpp built with the NDK for on-device speech recognition.
 - **Performance:** a shipped baseline profile, narrow R8 rules and ast-grep UI guardrails (`scripts/lint-ui.sh`).
