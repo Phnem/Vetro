@@ -109,6 +109,7 @@ fun ApiSearchResultCard(
         )
     }
 
+    val isBook = result.categoryType == "BOOK"
     val isDark = forceDarkCardStyle || isAppInDarkTheme()
     val cardBg = if (isDark) Color(0xFF1C1C1C) else MaterialTheme.colorScheme.surface
     val borderStroke = if (isDark) Color.White.copy(alpha = 0.15f) else LightBorder
@@ -254,6 +255,23 @@ fun ApiSearchResultCard(
                     }
                 }
 
+                // Автор и чтец (до трёх строк) стоят выше и не делят строку с кнопкой — иначе длинный
+                // текст выдавливал «Добавить» за край карточки.
+                if (isBook) {
+                    Text(
+                        text = state.episodesText,
+                        style = MaterialTheme.typography.labelLarge.copy(
+                            fontSize = 13.sp,
+                            lineHeight = 17.sp,
+                            fontFamily = SnProFamily
+                        ),
+                        color = subtitleColor.copy(alpha = 0.8f),
+                        maxLines = 3,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(top = 8.dp)
+                    )
+                }
+
                 Spacer(modifier = Modifier.weight(1f))
 
                 Row(
@@ -261,16 +279,23 @@ fun ApiSearchResultCard(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(
-                        text = state.episodesText,
-                        style = MaterialTheme.typography.labelLarge.copy(
-                            fontSize = 13.sp,
-                            fontFamily = SnProFamily
-                        ),
-                        color = subtitleColor.copy(alpha = 0.8f),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
+                    if (isBook) {
+                        Spacer(Modifier.weight(1f))
+                    } else {
+                        Text(
+                            text = state.episodesText,
+                            style = MaterialTheme.typography.labelLarge.copy(
+                                fontSize = 13.sp,
+                                fontFamily = SnProFamily
+                            ),
+                            color = subtitleColor.copy(alpha = 0.8f),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier
+                                .weight(1f)
+                                .padding(end = 8.dp)
+                        )
+                    }
                     Box(
                         modifier = Modifier
                             .fluidClickable(

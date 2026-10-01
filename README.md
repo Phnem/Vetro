@@ -23,7 +23,7 @@
   <a href="PRIVACY.MD">Privacy</a>
 </p>
 
-Vetro is an Android media library with a local-first core. Build a personal collection, follow new episodes as they air, then watch, read or listen without leaving the app. An account and cloud features are optional: the collection works fully offline.
+Vetro is an Android media library. Build a personal collection, follow new episodes as they air, then watch, read or listen without leaving the app. Search, episode checks, enrichment and media sources work over the network; an account and cloud sync are optional, and your saved collection stays readable offline.
 
 Vetro does not host any media. It connects to catalogues and sources that you choose, including your own servers.
 
@@ -160,7 +160,7 @@ Vetro is a Kotlin and Jetpack Compose Android application with unidirectional st
 
 ## Privacy
 
-Vetro is local-first and does not require an account to manage a collection. Network requests happen when you use online search, episode checks, media sources, enrichment, sync or backup, update checks, or an optional AI provider. Credentials for your own servers and accounts are stored encrypted on the device. See [PRIVACY.MD](PRIVACY.MD) for the full policy.
+Vetro does not require an account to manage a collection. Network requests happen when you use online search, episode checks, media sources, enrichment, sync or backup, update checks, or an optional AI provider. Credentials for your own servers and accounts are stored encrypted on the device. See [PRIVACY.MD](PRIVACY.MD) for the full policy.
 
 ## Contributing
 

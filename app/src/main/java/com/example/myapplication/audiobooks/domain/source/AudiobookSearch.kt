@@ -14,10 +14,14 @@ import kotlinx.coroutines.withTimeoutOrNull
 class AudiobookSearch(private val sources: List<AudiobookSource>) {
 
     /** Выдача всех источников в порядке приоритета; медленный сайт не держит остальных дольше [timeoutMs]. */
-    suspend fun searchAll(query: String, timeoutMs: Long = SEARCH_TIMEOUT_MS): List<SourceBook> = coroutineScope {
+    suspend fun searchAll(query: String, timeoutMs: Long = SEARCH_TIMEOUT_MS, pages: Int = 1): List<SourceBook> = coroutineScope {
         sources.map { source ->
             async {
-                withTimeoutOrNull(timeoutMs) { (source.search(query) as? SourceResult.Ok)?.value }.orEmpty()
+                (0 until pages.coerceAtLeast(1)).map { page ->
+                    async {
+                        withTimeoutOrNull(timeoutMs) { (source.search(query, page) as? SourceResult.Ok)?.value }.orEmpty()
+                    }
+                }.awaitAll().flatten().distinctBy { it.ref }
             }
         }.awaitAll().flatten()
     }

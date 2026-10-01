@@ -2,7 +2,7 @@
 
 **Last updated: May 08, 2026**
 
-This Privacy Policy describes how **Vetro** (the "Application") handles your information. The Application is an offline-first media manager designed to respect user privacy.
+This Privacy Policy describes how **Vetro** (the "Application") handles your information. The Application is a media manager designed to respect user privacy; an account is optional.
 
 ### 1. Information Collection and Use
 Vetro does not collect, store, or transmit any personal identification information (such as your name, email address, or phone number) to the developer or any third-party servers, except for the synchronization process described below.
