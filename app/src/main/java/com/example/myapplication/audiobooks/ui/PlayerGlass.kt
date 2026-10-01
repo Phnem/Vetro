@@ -26,7 +26,14 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
-import coil3.compose.AsyncImage
+import androidx.compose.foundation.Image
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.produceState
+import coil3.compose.AsyncImagePainter
+import coil3.compose.rememberAsyncImagePainter
+import coil3.toBitmap
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import com.example.myapplication.ui.shared.FrostedMaterials
 import com.example.myapplication.ui.shared.frostedGlass
 import com.example.myapplication.ui.shared.theme.MotionTokens
@@ -103,7 +110,10 @@ internal fun PhIcon(@DrawableRes icon: Int, size: Dp, tint: Color = Color.White,
     Icon(painter = painterResource(icon), contentDescription = null, tint = tint, modifier = modifier.size(size))
 }
 
-/** Обложка на всю поверхность; без картинки — тёмный градиент, а не выдуманный арт. */
+/**
+ * Обложка на всю поверхность; без картинки — тёмный градиент, а не выдуманный арт. Однотонные поля
+ * по краям картинки (серая щель внизу у части источников) срезаются, чтобы обложка дотягивалась до края.
+ */
 @Composable
 internal fun BookArt(uri: String?, modifier: Modifier = Modifier) {
     Box(
@@ -112,8 +122,22 @@ internal fun BookArt(uri: String?, modifier: Modifier = Modifier) {
         ),
     ) {
         if (uri != null) {
-            AsyncImage(
-                model = uri,
+            val painter = rememberAsyncImagePainter(uri)
+            val state by painter.state.collectAsState()
+            val trim by produceState(CoverTrim(), state) {
+                val image = (state as? AsyncImagePainter.State.Success)?.result?.image ?: return@produceState
+                value = withContext(Dispatchers.Default) {
+                    runCatching {
+                        val bmp = image.toBitmap(TRIM_PROBE, TRIM_PROBE)
+                        val px = IntArray(TRIM_PROBE * TRIM_PROBE)
+                        bmp.getPixels(px, 0, TRIM_PROBE, 0, 0, TRIM_PROBE, TRIM_PROBE)
+                        CoverTrim.detect(px, TRIM_PROBE, TRIM_PROBE)
+                    }.getOrDefault(CoverTrim())
+                }
+            }
+            val shown = remember(painter, trim) { if (trim.isEmpty) painter else TrimmedPainter(painter, trim) }
+            Image(
+                painter = shown,
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.matchParentSize(),
@@ -121,3 +145,5 @@ internal fun BookArt(uri: String?, modifier: Modifier = Modifier) {
         }
     }
 }
+
+private const val TRIM_PROBE = 96
