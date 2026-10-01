@@ -1,7 +1,19 @@
 package com.example.myapplication.audiobooks.ui
 
 import androidx.annotation.DrawableRes
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import kotlin.math.PI
+import kotlin.math.sin
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -109,6 +121,47 @@ internal fun GlassCircleButton(
 internal fun PhIcon(@DrawableRes icon: Int, size: Dp, tint: Color = Color.White, modifier: Modifier = Modifier) {
     Icon(painter = painterResource(icon), contentDescription = null, tint = tint, modifier = modifier.size(size))
 }
+
+/**
+ * Иконка «звуковая дорожка» (те же пять полос, что у `ph_waveform`), которая играет: полосы качаются,
+ * пока [playing], и плавно возвращаются к статичному виду на паузе.
+ */
+@Composable
+internal fun PlayingBars(playing: Boolean, size: Dp, tint: Color, modifier: Modifier = Modifier) {
+    val live by animateFloatAsState(if (playing) 1f else 0f, tween(300), label = "barsLive")
+    val transition = rememberInfiniteTransition(label = "bars")
+    val phases = BAR_PERIODS_MS.mapIndexed { i, period ->
+        transition.animateFloat(
+            initialValue = 0f,
+            targetValue = 1f,
+            animationSpec = infiniteRepeatable(tween(period, easing = LinearEasing), RepeatMode.Restart),
+            label = "bar$i",
+        )
+    }
+    Canvas(modifier.size(size)) {
+        val unit = this.size.width / 256f
+        BAR_BASE.forEachIndexed { i, base ->
+            // Синус со своим периодом на каждую полосу — ритм не повторяется синхронно.
+            val wave = 0.5f + 0.5f * sin(phases[i].value * 2f * PI.toFloat() + i * 1.3f)
+            val h = (base + (BAR_MIN + (BAR_MAX - BAR_MIN) * wave - base) * live) * unit
+            val x = (BAR_X[i] - BAR_W / 2f) * unit
+            drawRoundRect(
+                color = tint,
+                topLeft = Offset(x, (this.size.height - h) / 2f),
+                size = Size(BAR_W * unit, h),
+                cornerRadius = CornerRadius(BAR_W / 2f * unit),
+            )
+        }
+    }
+}
+
+// Геометрия `ph_waveform` (viewport 256): центры полос, ширина и статичные высоты.
+private val BAR_X = floatArrayOf(48f, 88f, 128f, 168f, 208f)
+private val BAR_BASE = floatArrayOf(64f, 208f, 144f, 64f, 96f)
+private val BAR_PERIODS_MS = listOf(900, 700, 1100, 800, 1000)
+private const val BAR_W = 16f
+private const val BAR_MIN = 40f
+private const val BAR_MAX = 208f
 
 /**
  * Обложка на всю поверхность; без картинки — тёмный градиент, а не выдуманный арт. Однотонные поля

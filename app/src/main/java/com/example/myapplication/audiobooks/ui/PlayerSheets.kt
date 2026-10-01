@@ -437,6 +437,7 @@ internal fun ColumnScope.ChaptersSheetContent(
                     },
                 ).joinToString(" • "),
                 isCurrent = isCurrent,
+                playing = isCurrent && state.book?.isPlaying == true,
                 listened = listened,
                 // У главы с маркером — та же иконка, что у кнопки маркера в плеере.
                 marked = markers.any { m ->
@@ -468,6 +469,7 @@ private fun ChapterRow(
     listened: Boolean,
     progress: Float?,
     shape: Shape,
+    playing: Boolean = false,
     marked: Boolean = false,
     onClick: () -> Unit,
 ) {
@@ -511,15 +513,15 @@ private fun ChapterRow(
             PhIcon(R.drawable.ph_bookmark_simple_fill, 16.dp, Color.White)
             Spacer(Modifier.width(8.dp))
         }
-        PhIcon(
-            icon = if (isCurrent) R.drawable.ph_waveform else R.drawable.ph_check,
-            size = 18.dp,
-            tint = when {
-                isCurrent -> BrandOrange
-                listened -> Muted
-                else -> Color.White.copy(alpha = 0.22f)
-            },
-        )
+        if (isCurrent) {
+            PlayingBars(playing, 18.dp, BrandOrange)
+        } else {
+            PhIcon(
+                icon = R.drawable.ph_check,
+                size = 18.dp,
+                tint = if (listened) Muted else Color.White.copy(alpha = 0.22f),
+            )
+        }
     }
 }
 
