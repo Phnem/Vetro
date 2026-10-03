@@ -2,3 +2,4 @@ Polish and fixes.
 • Book search: results are ranked by how well they match the title and author, and "Add" no longer gets pushed off the card.
 • Audiobooks: the current chapter's waveform animates while the book plays, covers with flat borders fill the whole player, and "Continue" starts your own folders instantly instead of hunting for an online source.
 • Glass: the search bar and the top dock no longer turn flat black after returning to the app or changing search results.
+• Cards: while a season is airing, the release bar is shown unless you are watching a different season; the watching bar returns once the season is complete.

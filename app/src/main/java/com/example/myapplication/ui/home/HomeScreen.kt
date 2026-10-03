@@ -104,6 +104,7 @@ import com.example.myapplication.SimpGlassCard
 import com.example.myapplication.SortFilterOverlay
 import com.example.myapplication.data.models.*
 import com.example.myapplication.data.repository.GenreRepository
+import com.example.myapplication.domain.seasons.isAiringNow
 import com.example.myapplication.domain.seasons.latestSeasonEpisode
 import com.example.myapplication.domain.seasons.releasedEpisodesLabel
 import com.example.myapplication.domain.seasons.ongoingSeason
@@ -1579,15 +1580,18 @@ private fun LazyListScope.apiSearchResultsSection(
 /**
  * Какой бар показать на карточке:
  *  1. пользователь читает мангу — бар чтения по главам, брендовый оранжевый, «12 / 60 ch.»;
- *  2. пользователь смотрит (есть сохранённая позиция хотя бы в одной серии) — бар просмотра,
- *     брендовый оранжевый, «62 / 80 ep.»;
- *  3. иначе идёт сезон — бар выхода серий, фиолетовый, «S5 4 / 14 ep.»;
- *  4. иначе бара нет.
+ *  2. сезон выходит прямо сейчас и вышло не меньше серий, чем посмотрено (в том же сезоне) —
+ *     бар выхода серий, фиолетовый, «S5 4 / 14 ep.»; так же, если смотреть ещё нечего;
+ *  3. пользователь смотрит (есть сохранённая позиция хотя бы в одной серии) — бар просмотра,
+ *     брендовый оранжевый, «62 / 80 ep.»: сезон закончился или зритель отстал на сезон назад;
+ *  4. иначе закрытый снимок выхода («сезон вышел полностью») — как раньше;
+ *  5. иначе бара нет.
  *
- * Чтение и просмотр в приоритете над выходом серий: пока человек читает или смотрит, ему важнее
- * своя позиция. И то и другое — факт активности в приложении, а не догадка по числам, поэтому
- * ложных срабатываний на случайных тайтлах быть не может. Один тайтл не бывает одновременно
- * читаемым и смотримым: прогресс чтения есть только у манги с подтверждённой привязкой.
+ * Чтение — в приоритете над всем: это факт активности в приложении, а не догадка по числам.
+ * Между выходом и просмотром решает сравнение: пока вышло ≥ просмотренного, важнее, сколько
+ * серий уже есть; просмотр показывается, когда выход ничего не говорит (сезон закрыт) или
+ * сравнивать не с чем (смотрят другой сезон). Один тайтл не бывает одновременно читаемым и
+ * смотримым: прогресс чтения есть только у манги с подтверждённой привязкой.
  */
 @Composable
 private fun rememberCardProgress(
@@ -1597,6 +1601,14 @@ private fun rememberCardProgress(
     airing: com.example.myapplication.data.models.AiringProgress?,
     reading: com.example.myapplication.manga.domain.MangaReadingSummary?,
 ): AiringCardInfo? = remember(layout, storedEpisodes, watched, airing, reading) {
+    fun airingInfo(a: com.example.myapplication.data.models.AiringProgress) = AiringCardInfo(
+        // Номер выходящего сезона — из расклада, если сезон там уже есть (см. latestSeasonEpisode):
+        // снимок выхода считает сезоны по приквелам и на франшизах со спешлами промахивается.
+        seasonNumber = latestSeasonEpisode(layout, a)?.season ?: layout.ongoingSeason()?.seasonNumber,
+        airedEpisodes = a.airedEpisodes,
+        totalEpisodes = a.totalEpisodes,
+        kind = CardProgressKind.AIRING,
+    )
     when {
         reading != null -> AiringCardInfo(
             seasonNumber = null,
@@ -1605,6 +1617,15 @@ private fun rememberCardProgress(
             kind = CardProgressKind.READING,
             newItems = reading.newChapters,
         )
+
+        // Сезон выходит, и вышло не меньше, чем посмотрено в нём, — бар выхода. Смотрят другой
+        // сезон или сезон закрыт — сравнивать нечего, остаётся бар просмотра ниже.
+        airing != null && airing.isAiringNow() && (
+            watched == null || run {
+                val airingSeason = airingInfo(airing).seasonNumber
+                (airingSeason == null || airingSeason == watched.season) && airing.airedEpisodes >= watched.episode
+            }
+        ) -> airingInfo(airing)
 
         // Прогресс внутри сезона: «S3 · 6 / 12». Знаменатель — серии этого сезона по раскладу;
         // без расклада он известен только у первого сезона (это сохранённый счётчик). Числитель
@@ -1622,14 +1643,7 @@ private fun rememberCardProgress(
             )
         }
 
-        airing != null -> AiringCardInfo(
-            // Номер выходящего сезона — из расклада, если сезон там уже есть (см. latestSeasonEpisode):
-            // снимок выхода считает сезоны по приквелам и на франшизах со спешлами промахивается.
-            seasonNumber = latestSeasonEpisode(layout, airing)?.season ?: layout.ongoingSeason()?.seasonNumber,
-            airedEpisodes = airing.airedEpisodes,
-            totalEpisodes = airing.totalEpisodes,
-            kind = CardProgressKind.AIRING,
-        )
+        airing != null -> airingInfo(airing)
 
         else -> null
     }
