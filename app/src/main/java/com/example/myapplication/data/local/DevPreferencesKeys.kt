@@ -37,6 +37,12 @@ object DevPreferencesKeys {
      */
     val LEGACY_UI = booleanPreferencesKey("dev_legacy_ui")
 
+    /**
+     * Экспериментальные карточки коллекции: обложка на всю карточку, текст поверх затемнения.
+     * Отсутствие ключа = ВЫКЛ (классическая карточка с постером сбоку).
+     */
+    val FULL_BLEED_CARDS = booleanPreferencesKey("dev_full_bleed_cards")
+
     /** Ключи удалённых настроек — стираются из файла настроек при старте (см. [LEGACY_UI]). */
     val RETIRED_UI_FLAGS = listOf(
         booleanPreferencesKey("dev_select_dock_navigation"),

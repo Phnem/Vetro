@@ -55,6 +55,7 @@ import com.example.myapplication.ui.settings.UpdateChangelogSheet
 import com.example.myapplication.ui.debug.FpsOverlay
 import com.example.myapplication.ui.shared.LocalAdaptiveGlassEnabled
 import com.example.myapplication.ui.shared.LocalModernUi
+import com.example.myapplication.ui.shared.LocalFullBleedCards
 import com.example.myapplication.ui.shared.LocalWorkspaceSearch
 import com.example.myapplication.ui.shared.WorkspaceSearchState
 import com.example.myapplication.ui.shared.theme.OneUiTheme
@@ -169,6 +170,7 @@ class MainActivity : ComponentActivity() {
                 CompositionLocalProvider(
                     LocalAdaptiveGlassEnabled provides settingsState.devAdaptiveGlassScroll,
                     LocalModernUi provides settingsState.modernUi,
+                    LocalFullBleedCards provides settingsState.devFullBleedCards,
                     LocalWorkspaceSearch provides workspaceSearch,
                     // iOS-«резинка» на краю всех списков и скроллов приложения (IosScroll.kt).
                     LocalOverscrollFactory provides overscrollFactory,

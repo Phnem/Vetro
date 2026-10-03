@@ -37,6 +37,9 @@ val LocalAdaptiveGlassScrollInProgress = compositionLocalOf { false }
  */
 val LocalModernUi = staticCompositionLocalOf { true }
 
+/** Dev-флаг: карточки коллекции с обложкой на всю площадь, см. `DevPreferencesKeys.FULL_BLEED_CARDS`. */
+val LocalFullBleedCards = compositionLocalOf { false }
+
 enum class GlassPreset(
     val fullBlur: Dp,
     val reducedBlur: Dp,

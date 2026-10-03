@@ -61,6 +61,7 @@ import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.filled.ViewCarousel
+import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.outlined.BrightnessAuto
 import androidx.compose.material.icons.outlined.Category
 import androidx.compose.material.icons.outlined.DarkMode
@@ -653,6 +654,7 @@ fun SettingsScreen(
                                     performHaptic(view, Haptic.Light)
                                     viewModel.setDevLegacyUi(enabled) { (context as? Activity)?.recreate() }
                                 },
+                                onFullBleedCardsToggle = { performHaptic(view, Haptic.Light); viewModel.setDevFullBleedCards(it) },
                                 onGithubUpdatesToggle = { enabled ->
                                     performHaptic(view, Haptic.Light)
                                     if (enabled) showGithubUpdatesEnableDialog = true
@@ -911,6 +913,7 @@ private fun DeveloperGroups(
     onFpsOverlayToggle: (Boolean) -> Unit,
     onAdaptiveGlassToggle: (Boolean) -> Unit,
     onLegacyUiToggle: (Boolean) -> Unit,
+    onFullBleedCardsToggle: (Boolean) -> Unit,
     onGithubUpdatesToggle: (Boolean) -> Unit,
     onExportLogs: () -> Unit,
     onExportPdf: () -> Unit,
@@ -980,6 +983,27 @@ private fun DeveloperGroups(
                             IosSwitch(
                                 checked = uiState.devLegacyUi,
                                 onCheckedChange = onLegacyUiToggle,
+                            )
+                        },
+                    )
+                },
+                {
+                    // Подписи здесь по той же причине, что у «Классического интерфейса» выше.
+                    val ru = strings.languageName == "RU"
+                    IosRow(
+                        title = if (ru) "Карточки с обложкой" else "Full-cover cards",
+                        subtitle = if (ru) {
+                            "Обложка на всю карточку, текст поверх"
+                        } else {
+                            "Cover fills the card, text on top"
+                        },
+                        isDark = isDark,
+                        icon = Icons.Filled.Image,
+                        iconBackground = devIcon,
+                        trailing = {
+                            IosSwitch(
+                                checked = uiState.devFullBleedCards,
+                                onCheckedChange = onFullBleedCardsToggle,
                             )
                         },
                     )

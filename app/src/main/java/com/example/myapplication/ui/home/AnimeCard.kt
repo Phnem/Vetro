@@ -59,6 +59,7 @@ import coil3.request.crossfade
 import coil3.size.Size
 import com.example.myapplication.ui.shared.theme.isAppInDarkTheme
 import com.example.myapplication.ui.shared.fluidClickable
+import com.example.myapplication.ui.shared.LocalFullBleedCards
 import com.example.myapplication.ui.shared.theme.BrandOrangeBright
 import com.example.myapplication.ui.shared.theme.SnProFamily
 import com.example.myapplication.ui.shared.theme.LightBorder
@@ -125,7 +126,7 @@ private val AiringBarColor = Color(0xFF6C4BF4)
  * по курам (кратно 12): вышло ≤12 → «n / 12», 13–24 → «n / 24», дальше 36, 48 и т.д.
  */
 @Composable
-private fun AiringProgressSection(
+internal fun AiringProgressSection(
     airing: AiringCardInfo,
     language: com.example.myapplication.network.AppLanguage,
     labelColor: Color,
@@ -279,6 +280,10 @@ fun AnimeCardBody(
     onLongClick: (() -> Unit)? = null,
     onEditClick: (() -> Unit)? = null,
 ) {
+    if (LocalFullBleedCards.current) {
+        FullBleedAnimeCardBody(state, modifier, posterModifier, onClick, onLongClick, onEditClick)
+        return
+    }
     val isDark = isAppInDarkTheme()
     // Рамка избранного — затухающая: золотая в левом верхнем углу и уходящая в прозрачность к
     // правому нижнему. Роль «это избранное» теперь несёт угловой чипс со звездой, поэтому рамке
@@ -569,7 +574,7 @@ private fun MediaType.pillIcon(): Int = when (this) {
  * наоборот — в светлой), в капсуле — название типа.
  */
 @Composable
-private fun MediaTypePill(
+internal fun MediaTypePill(
     mediaType: MediaType,
     label: String,
     isDark: Boolean,
@@ -631,7 +636,7 @@ private fun MediaTypePill(
  * радиусом, нижний правый скруглён мягче, отчего форма читается вымпелом, а не плашкой.
  */
 @Composable
-private fun FavoriteCornerChip(modifier: Modifier = Modifier) {
+internal fun FavoriteCornerChip(modifier: Modifier = Modifier) {
     Box(
         modifier = modifier
             .size(30.dp)
