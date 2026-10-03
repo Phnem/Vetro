@@ -3,3 +3,4 @@ Polish and fixes.
 • Audiobooks: the current chapter's waveform animates while the book plays, covers with flat borders fill the whole player, and "Continue" starts your own folders instantly instead of hunting for an online source.
 • Glass: the search bar and the top dock no longer turn flat black after returning to the app or changing search results.
 • Cards: while a season is airing, the release bar is shown unless you are watching a different season; the watching bar returns once the season is complete.
+• Sources: "Video sources" is now "Additional sources", with a separate "Import .vetro" button and links to Community sources (https://drive.google.com/drive/folders/1pUrXV6LYuEcoi6fMrsQpk9VXlWUhVo5f?usp=sharing) and a form to submit a source

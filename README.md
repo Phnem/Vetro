@@ -20,6 +20,8 @@
   <a href="https://github.com/Phnem/Vetro/releases">Releases</a> ·
   <a href="#screens">Screens</a> ·
   <a href="#install">Install</a> ·
+  <a href="https://drive.google.com/drive/folders/1pUrXV6LYuEcoi6fMrsQpk9VXlWUhVo5f?usp=sharing">Community sources</a> ·
+  <a href="https://docs.google.com/forms/d/e/1FAIpQLSeov9HZLYJvjpecngntqbXifCwdSXPf_t5G0PLqaob0t6pb-A/viewform">Submit a source</a> ·
   <a href="PRIVACY.MD">Privacy</a>
 </p>
 

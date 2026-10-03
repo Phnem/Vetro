@@ -410,7 +410,7 @@ fun SettingsScreen(
                             rows = listOf(
                                 {
                                     IosRow(
-                                        title = if (uiState.language == AppLanguage.RU) "Источники видео" else "Video sources",
+                                        title = if (uiState.language == AppLanguage.RU) "Дополнительные источники" else "Additional sources",
                                         subtitle = if (uiState.language == AppLanguage.RU) {
                                             "WebDAV, Jellyfin и Emby"
                                         } else {

@@ -7,6 +7,9 @@ import org.koin.compose.koinInject
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalUriHandler
+import android.net.Uri
+import android.provider.OpenableColumns
 import com.example.myapplication.media.source.movieseries.custom.CustomSourceInstaller
 import com.example.myapplication.media.source.movieseries.custom.PackagePreview
 import com.example.myapplication.media.source.sdk.PackageCapability
@@ -43,6 +46,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -92,7 +96,7 @@ fun PlaybackSourcesSettingsSheet(
                 }
             }
             Text(
-                text = if (ru) "Источники видео" else "Video sources",
+                text = if (ru) "Дополнительные источники" else "Additional sources",
                 style = MaterialTheme.typography.headlineSmall,
                 fontFamily = SnProFamily,
                 fontWeight = FontWeight.SemiBold,
@@ -374,6 +378,32 @@ private fun CustomSourcesSection(
 ) {
     var input by rememberSaveable { mutableStateOf("") }
     val context = LocalContext.current
+    val installer = remember { CustomSourceInstaller() }
+    // Ошибка самой кнопки .vetro (не тот файл) — до установщика такой файл не доходит.
+    var vetroFileError by rememberSaveable { mutableStateOf<String?>(null) }
+    // У .vetro нет MIME-типа, по фильтру «application/json» пикер его бы не показал: берём любой
+    // файл и проверяем расширение и содержимое уже после выбора.
+    val pickVetroFile = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        uri ?: return@rememberLauncherForActivityResult
+        val name = displayName(context, uri)
+        if (name != null && !name.endsWith(".vetro", ignoreCase = true) &&
+            !name.endsWith(".vetro-source", ignoreCase = true)
+        ) {
+            vetroFileError = if (ru) "Это не файл .vetro: $name" else "Not a .vetro file: $name"
+            return@rememberLauncherForActivityResult
+        }
+        val text = runCatching {
+            context.contentResolver.openInputStream(uri)?.use { stream ->
+                stream.readNBytesCompat(CustomSourceInstaller.MAX_PACKAGE_BYTES + 1).toString(Charsets.UTF_8)
+            }
+        }.getOrNull()
+        vetroFileError = when {
+            text.isNullOrBlank() -> if (ru) "Файл не прочитался" else "Could not read the file"
+            !installer.looksLikePackage(text) -> if (ru) "В файле нет пакета источника Vetro" else "The file has no Vetro source package"
+            else -> null
+        }
+        if (vetroFileError == null && text != null) onInstall(text)
+    }
     // Пакет из файла: читается целиком (он небольшой, лимит проверит установщик) и идёт тем же путём.
     val pickFile = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         uri ?: return@rememberLauncherForActivityResult
@@ -383,6 +413,49 @@ private fun CustomSourcesSection(
             }
         }.getOrNull()
         if (!text.isNullOrBlank()) onInstall(text)
+    }
+
+    Spacer(Modifier.height(4.dp))
+    Button(
+        onClick = {
+            vetroFileError = null
+            pickVetroFile.launch(arrayOf("*/*"))
+        },
+        enabled = !isInstalling,
+        shape = SquircleShape(18.dp),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Text(if (ru) "Импортировать .vetro" else "Import .vetro", fontFamily = SnProFamily)
+    }
+    Text(
+        text = if (ru) {
+            "Файл пакета источников Vetro. Перед установкой покажем, что источник умеет и к каким сайтам обращается."
+        } else {
+            "A Vetro source package file. Before installing you'll see what the source can do and which sites it talks to."
+        },
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        fontFamily = SnProFamily,
+    )
+    vetroFileError?.let { reason ->
+        Text(text = reason, color = MaterialTheme.colorScheme.error, fontFamily = SnProFamily)
+    }
+    val uriHandler = LocalUriHandler.current
+    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        OutlinedButton(
+            onClick = { runCatching { uriHandler.openUri(COMMUNITY_SOURCES_URL) } },
+            shape = SquircleShape(18.dp),
+            modifier = Modifier.weight(1f),
+        ) {
+            Text("Community sources", fontFamily = SnProFamily, maxLines = 1)
+        }
+        OutlinedButton(
+            onClick = { runCatching { uriHandler.openUri(SUBMIT_SOURCE_URL) } },
+            shape = SquircleShape(18.dp),
+            modifier = Modifier.weight(1f),
+        ) {
+            Text(if (ru) "Предложить источник" else "Submit a source", fontFamily = SnProFamily, maxLines = 1)
+        }
     }
 
     Spacer(Modifier.height(4.dp))
@@ -462,6 +535,19 @@ private fun CustomSourcesSection(
         }
     }
 }
+
+/** Общая папка проверенных пакетов источников; та же ссылка — в README репозитория. */
+private const val COMMUNITY_SOURCES_URL = "https://drive.google.com/drive/folders/1pUrXV6LYuEcoi6fMrsQpk9VXlWUhVo5f?usp=sharing"
+
+/** Форма, через которую сообщество присылает источники на проверку. */
+private const val SUBMIT_SOURCE_URL = "https://docs.google.com/forms/d/e/1FAIpQLSeov9HZLYJvjpecngntqbXifCwdSXPf_t5G0PLqaob0t6pb-A/viewform"
+
+/** Имя выбранного файла из провайдера документов; null — провайдер имени не отдал. */
+private fun displayName(context: android.content.Context, uri: Uri): String? = runCatching {
+    context.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { c ->
+        if (c.moveToFirst()) c.getString(0) else null
+    }
+}.getOrNull()
 
 /**
  * Модели Whisper на устройстве: сколько места занимают и удаление. Скачивание — из меню «Субтитры»
