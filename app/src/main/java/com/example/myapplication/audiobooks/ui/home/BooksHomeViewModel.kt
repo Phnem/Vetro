@@ -114,6 +114,13 @@ class BooksHomeViewModel(
 
     fun resume(item: ContinueItem, expand: Boolean = false) {
         val variant = item.variantId?.value ?: return
+        // Своя книга (папка на телефоне) страницы у сайта не имеет: запускаем её как локальную, иначе
+        // «Продолжить» искал бы несуществующий источник и минутами обходил сайты, прежде чем сдаться.
+        if (variant.startsWith(com.example.myapplication.audiobooks.data.local.LocalFolderSource.PREFIX)) {
+            if (_launch.value is LaunchState.Starting) return
+            start(variant) { launcher.playLocal(OpenedBook(item.workId, item.narrationId, com.example.myapplication.audiobooks.domain.model.VariantId(variant)), expand = expand) }
+            return
+        }
         val source = variant.substringBefore(':')
         val key = variant.substringAfter(':')
         val book = CachedBook(source, key, item.title, item.authors, item.narrators, item.coverUrl, null, 1)

@@ -331,7 +331,7 @@ class LocalFolderSource(private val context: Context) : ManifestSource {
     private data class AudioMetadata(val durationMs: Long?, val title: String?, val chapters: List<EmbeddedChapter>)
     private data class EmbeddedChapter(val title: String, val startMs: Long, val durationMs: Long?)
 
-    private companion object {
+    internal companion object {
         const val PREFIX = "local:"
         const val KEY_ROOTS = "tree_uris"
         const val MAX_BOOKS = 100

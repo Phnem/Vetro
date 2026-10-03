@@ -60,6 +60,8 @@ class AudiobookLauncher(
         /** Глава со страницы книги: начало её трека, даже если длины глав сайт не сообщил. */
         startChapter: Int? = null,
     ): Result {
+        // Источника нет в списке (например, своя папка): искать «ту же книгу» на сайтах незачем.
+        if (sources.none { it.id == book.ref.source }) return Result.Unavailable
         val first = playOn(book, startFraction, startGlobalMs, startChapter)
         val result = if (first == Result.Started) {
             first

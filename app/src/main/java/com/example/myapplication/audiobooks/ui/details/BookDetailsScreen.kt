@@ -98,6 +98,9 @@ import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import com.phnem.vetro.R
 import kotlinx.coroutines.launch
 import org.koin.androidx.compose.koinViewModel
+import org.koin.compose.koinInject
+import com.example.myapplication.audiobooks.ui.AudiobookPlayerState
+import com.example.myapplication.audiobooks.ui.PlayingBars
 import org.koin.core.parameter.parametersOf
 
 // ==========================================
@@ -122,6 +125,9 @@ fun BookDetailsScreen(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val favorite by viewModel.favorite.collectAsStateWithLifecycle()
+    // Иконка текущей главы играет, только когда в плеере идёт именно эта озвучка.
+    val playerState: AudiobookPlayerState = koinInject()
+    val playing = playerState.book?.let { it.isPlaying && it.narrationId != null && it.narrationId == state.opened?.narrationId } == true
     val strings = remember(language) { bookDetailsStrings(language) }
     val isDark = isAppInDarkTheme()
     val scope = rememberCoroutineScope()
@@ -167,6 +173,7 @@ fun BookDetailsScreen(
                         strings = strings,
                         isDark = isDark,
                         background = background,
+                        playing = playing,
                         onChapter = { viewModel.listen(fromChapter = it) },
                     )
                 }
@@ -457,6 +464,7 @@ private fun ChaptersPage(
     strings: BookDetailsStrings,
     isDark: Boolean,
     background: Brush,
+    playing: Boolean,
     onChapter: (Int) -> Unit,
 ) {
     val details = state.details
@@ -514,16 +522,16 @@ private fun ChaptersPage(
                             )
                         }
                     }
-                    Icon(
-                        painter = painterResource(if (isCurrent) R.drawable.ph_waveform else if (listened) R.drawable.ph_check else R.drawable.ph_play_fill),
-                        contentDescription = null,
-                        tint = when {
-                            isCurrent -> BrandOrange
-                            listened -> muted
-                            else -> muted.copy(alpha = 0.5f)
-                        },
-                        modifier = Modifier.size(18.dp),
-                    )
+                    if (isCurrent) {
+                        PlayingBars(playing, 18.dp, BrandOrange)
+                    } else {
+                        Icon(
+                            painter = painterResource(if (listened) R.drawable.ph_check else R.drawable.ph_play_fill),
+                            contentDescription = null,
+                            tint = if (listened) muted else muted.copy(alpha = 0.5f),
+                            modifier = Modifier.size(18.dp),
+                        )
+                    }
                 }
             }
         }

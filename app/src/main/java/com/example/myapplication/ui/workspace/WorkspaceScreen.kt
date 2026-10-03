@@ -59,6 +59,10 @@ import com.example.myapplication.ui.navigation.navigateToAddEdit
 import com.example.myapplication.ui.navigation.navigateToInspect
 import com.example.myapplication.ui.navigation.navigateToWelcome
 import com.example.myapplication.ui.shared.DONATION_URL
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.ui.draw.drawBehind
+import com.example.myapplication.ui.shared.GlassBackdropRecovery
 import com.example.myapplication.ui.shared.LocalBackdropPinned
 import com.example.myapplication.ui.shared.theme.MotionTokens
 import com.example.myapplication.utils.getStrings
@@ -158,6 +162,23 @@ fun WorkspaceScreen(
         drawContent()
     }
 
+    // Запись backdrop иногда остаётся пустой (док заливается чёрным): после меню, панелей и возврата из
+    // фона просим узел перезаписать её — тем же приёмом, что в списке главной (см. GlassBackdropRecovery).
+    val backdropRedraw = remember { mutableIntStateOf(0) }
+    GlassBackdropRecovery(
+        overlayActive = menuOpen || showSyncPanel || showStats,
+        effectsSettled = true,
+        onRedraw = { backdropRedraw.intValue++ },
+    )
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) backdropRedraw.intValue++
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
     // Свайп между страницами и меню дока — тоже «пользователь что-то делает»: стопка обновлений
     // серий схлопывается в колокольчик (см. EpisodeNotificationTray).
     val notificationTray: EpisodeNotificationTray = koinInject()
@@ -172,7 +193,7 @@ fun WorkspaceScreen(
     val pinnedDuringSwipe = remember(pagerState) { { pagerState.isScrollInProgress } }
 
     Box(modifier = Modifier.fillMaxSize()) {
-        Box(modifier = Modifier.fillMaxSize().layerBackdrop(backdrop)) {
+        Box(modifier = Modifier.fillMaxSize().drawBehind { backdropRedraw.intValue }.layerBackdrop(backdrop)) {
         CompositionLocalProvider(LocalBackdropPinned provides pinnedDuringSwipe) {
         HorizontalPager(
             flingBehavior = IosScroll.pagerFlingBehavior(pagerState),

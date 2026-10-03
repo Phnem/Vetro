@@ -280,9 +280,21 @@ fun HomeScreen(
             if (event == androidx.lifecycle.Lifecycle.Event.ON_START) {
                 viewModel.clearSystemUpdateNotifications()
             }
+            // После ухода в фон система может сбросить записанный слой backdrop: док и поиск тогда
+            // заливаются сплошным цветом, пока что-то не перерисует список. Перезаписываем сами.
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
+                backdropRedraw.intValue++
+            }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
+    // Смена выдачи или вкладки поиска подменяет содержимое списка под стеклом поиска и дока: запись
+    // backdrop после этого иногда остаётся пустой (чёрное «стекло»), поэтому просим перезаписать её.
+    LaunchedEffect(uiState.apiSearchResults, uiState.searchBooks, uiState.searchMediaTypeFilter, uiState.apiSearchLoading) {
+        androidx.compose.runtime.withFrameNanos { }
+        backdropRedraw.intValue++
     }
 
     LaunchedEffect(isSupabaseSyncing, isCloudImageRestoring) {
