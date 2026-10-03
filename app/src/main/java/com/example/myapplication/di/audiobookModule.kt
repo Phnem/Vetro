@@ -79,7 +79,8 @@ val audiobookModule = module {
                 add(AudioBookBaySource(site(http), torrents))
                 add(PirateBaySource(site(http), torrents))
             }
-        }
+        // Разбор ответов сайтов — не на главном потоке (иначе замирают спиннеры и скролл).
+        }.map { com.example.myapplication.audiobooks.domain.source.OffMainSource(it) }
     }
     single { AudiobookSearch(get(named(SOURCES))) }
     single { com.example.myapplication.audiobooks.data.BookSearchAdder(get(named(SOURCES)), get(), get()) }

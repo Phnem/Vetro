@@ -277,6 +277,8 @@ fun AudiobookPlayerHost(language: AppLanguage = AppLanguage.RU, modifier: Modifi
     val sheetVisible = remember { MutableTransitionState(false) }
     var sheet by remember { mutableStateOf<PlayerSheet?>(null) }
     var narration by remember { mutableStateOf(NarrationChoice()) }
+    // Повторное открытие «Озвучки» отменяет прежний поиск, а не гонится с ним за результат.
+    var narrationJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
     fun openSheet(which: PlayerSheet) {
         sheet = which
         sheetVisible.targetState = true
@@ -453,7 +455,8 @@ fun AudiobookPlayerHost(language: AppLanguage = AppLanguage.RU, modifier: Modifi
                     onSheet = { which ->
                         if (which == PlayerSheet.NARRATION) {
                             narration = NarrationChoice()
-                            scope.launch { narration = findNarrations(book, sources, search) }
+                            narrationJob?.cancel()
+                            narrationJob = scope.launch { narration = findNarrations(book, sources, search) }
                         }
                         openSheet(which)
                     },
