@@ -214,6 +214,12 @@ fun HomeScreen(
     var showRecsSheet by remember { mutableStateOf(false) }
     /** Инкремент перезаписывает layerBackdrop списка после закрытия оверлеев (см. GlassBackdropRecovery). */
     val backdropRedraw = remember { mutableIntStateOf(0) }
+    /**
+     * Внеплановая перезапись (возврат из фона, смена выдачи поиска) ждёт, пока над списком нет
+     * размытия и «вдавливания»: запись под RenderEffect предка выходит пустой, и стекло поиска и дока
+     * заливается сплошным цветом (v3.3.7: переключение вкладки при пустом поиске гасило стекло).
+     */
+    val backdropRedrawPending = remember { mutableStateOf(false) }
     val recommendationsViewModel: RecommendationsViewModel = koinViewModel()
     val recsState by recommendationsViewModel.uiState.collectAsStateWithLifecycle()
     val recsStrings = getRecommendationsStrings(currentLanguage)
@@ -284,7 +290,7 @@ fun HomeScreen(
             // После ухода в фон система может сбросить записанный слой backdrop: док и поиск тогда
             // заливаются сплошным цветом, пока что-то не перерисует список. Перезаписываем сами.
             if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
-                backdropRedraw.intValue++
+                backdropRedrawPending.value = true
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -294,8 +300,7 @@ fun HomeScreen(
     // Смена выдачи или вкладки поиска подменяет содержимое списка под стеклом поиска и дока: запись
     // backdrop после этого иногда остаётся пустой (чёрное «стекло»), поэтому просим перезаписать её.
     LaunchedEffect(uiState.apiSearchResults, uiState.searchBooks, uiState.searchMediaTypeFilter, uiState.apiSearchLoading) {
-        androidx.compose.runtime.withFrameNanos { }
-        backdropRedraw.intValue++
+        backdropRedrawPending.value = true
     }
 
     LaunchedEffect(isSupabaseSyncing, isCloudImageRestoring) {
@@ -465,6 +470,13 @@ fun HomeScreen(
     // Для восстановления стекла важен только момент «анимации над layerBackdrop доиграли».
     val effectsSettled by remember {
         derivedStateOf { blurAmount.value <= 0.dp && homePushProgress.value <= 0.001f }
+    }
+    LaunchedEffect(backdropRedrawPending.value, effectsSettled) {
+        if (!backdropRedrawPending.value || !effectsSettled) return@LaunchedEffect
+        androidx.compose.runtime.withFrameNanos { }
+        backdropRedraw.intValue++
+        // Флаг — ключ этого же эффекта: сброс раньше отменил бы корутину до перезаписи.
+        backdropRedrawPending.value = false
     }
 
     // Любая шторка/диалог/оверлей поверх главной → док рабочей области уезжает вниз: он
