@@ -1,4 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <color name="vetro_window_background">#FF000000</color>
+    <color name="ic_launcher_mark">#FFD9C3AB</color>
+    <color name="ic_launcher_sun">#FFE85002</color>
 </resources>

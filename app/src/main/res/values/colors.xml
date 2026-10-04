@@ -2,4 +2,7 @@
 <resources>
     <!-- Совпадает с LightBackground; тёмную версию см. values-night/colors.xml -->
     <color name="vetro_window_background">#FFF9F9F9</color>
+    <!-- Иконка «Хиномару»: светлая тема системы; тёмная — values-night + drawable-night -->
+    <color name="ic_launcher_mark">#FF000000</color>
+    <color name="ic_launcher_sun">#FFC10801</color>
 </resources>
