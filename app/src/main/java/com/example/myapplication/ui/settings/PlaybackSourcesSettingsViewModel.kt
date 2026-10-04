@@ -153,7 +153,8 @@ class PlaybackSourcesSettingsViewModel(
     /** Installs from a pasted link or a pasted/imported definition, whichever the text is. */
     fun installCustomSource(input: String) {
         val sources = customSources ?: return
-        val text = input.trim()
+        // BOM в начале (так сохраняют Блокнот Windows и часть редакторов) ломает разбор JSON.
+        val text = input.removePrefix("\uFEFF").trim()
         if (text.isEmpty()) return
         viewModelScope.launch { installCustomSourceNow(sources, text) }
     }

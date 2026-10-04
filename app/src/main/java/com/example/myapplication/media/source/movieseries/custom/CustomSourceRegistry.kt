@@ -89,6 +89,9 @@ class CustomSourceInstaller(
         }
     }
 
+    fun looksLikeJsonObject(text: String): Boolean =
+        runCatching { json.parseToJsonElement(text) is JsonObject }.getOrDefault(false)
+
     /** Пакет v2 опознаётся по полю `format` верхнего уровня. */
     fun looksLikePackage(text: String): Boolean = runCatching {
         (json.parseToJsonElement(text) as? JsonObject)?.get("format")?.let { (it as? JsonPrimitive)?.intOrNull } != null

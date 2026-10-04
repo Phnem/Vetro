@@ -30,6 +30,16 @@ class ReadmeExamplesTest {
     }
 
     @Test
+    fun `the import button lets every example through, with or without a BOM`() {
+        listOf("full_package", "min_package", "manifest_v1").forEach { name ->
+            assertTrue(name, installer.looksLikeJsonObject(example(name)))
+            assertTrue("$name with BOM", installer.looksLikeJsonObject("\uFEFF" + example(name)).not())
+            assertTrue("$name BOM stripped", installer.looksLikeJsonObject(("\uFEFF" + example(name)).removePrefix("\uFEFF")))
+        }
+        assertTrue(installer.looksLikeJsonObject("https://addon.example.com/manifest.json").not())
+    }
+
+    @Test
     fun `manifest v1 example installs`() {
         val result = installer.fromManifestJson(example("manifest_v1"))
         assertTrue(result.toString(), result is SourceInstallResult.Installed)

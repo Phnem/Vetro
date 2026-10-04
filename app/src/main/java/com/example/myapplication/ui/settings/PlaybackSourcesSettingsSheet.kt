@@ -418,10 +418,16 @@ private fun CustomSourcesSection(
             context.contentResolver.openInputStream(uri)?.use { stream ->
                 stream.readNBytesCompat(CustomSourceInstaller.MAX_PACKAGE_BYTES + 1).toString(Charsets.UTF_8)
             }
-        }.getOrNull()
+        }.getOrNull()?.removePrefix("\uFEFF")
+        // Здесь — только «это вообще JSON-объект». Пакет это, манифест или что-то негодное, решает
+        // установщик: он же и называет точную причину отказа.
         vetroFileError = when {
             text.isNullOrBlank() -> if (ru) "Файл не прочитался" else "Could not read the file"
-            !installer.looksLikePackage(text) -> if (ru) "В файле нет пакета источника Vetro" else "The file has no Vetro source package"
+            !installer.looksLikeJsonObject(text) -> if (ru) {
+                "Файл не JSON: в нём должен быть один объект { … } без текста до и после"
+            } else {
+                "Not a JSON file: it must hold a single { … } object with nothing before or after it"
+            }
             else -> null
         }
         if (vetroFileError == null && text != null) onInstall(text)
