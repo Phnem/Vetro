@@ -390,6 +390,10 @@ val appModule = module {
                 get<com.example.myapplication.media.source.PersonalMediaServerPlaybackSource>(
                     named("emby-source")
                 ),
+                // Кино в общественном достоянии — после своих серверов пользователя.
+                com.example.myapplication.media.source.movieseries.InternetArchiveFilmsProvider(
+                    client = get<io.ktor.client.HttpClient>(),
+                ),
             ),
             providerHealth = get<com.example.myapplication.media.source.movieseries.ProviderHealthStore>(),
             customSources = {
