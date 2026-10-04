@@ -1,6 +1,7 @@
-Polish and fixes.
-• Book search: results are ranked by how well they match the title and author, and "Add" no longer gets pushed off the card.
-• Audiobooks: the current chapter's waveform animates while the book plays, covers with flat borders fill the whole player, and "Continue" starts your own folders instantly instead of hunting for an online source.
-• Glass: the search bar and the top dock no longer turn flat black after returning to the app or changing search results.
-• Cards: while a season is airing, the release bar is shown unless you are watching a different season; the watching bar returns once the season is complete.
-• Sources: "Video sources" is now "Additional sources", with a separate "Import .vetro" button and links to Community sources (https://drive.google.com/drive/folders/1pUrXV6LYuEcoi6fMrsQpk9VXlWUhVo5f?usp=sharing) and a form to submit a source
+New icon and your own servers.
+• A new V icon that follows the system light or dark theme.
+• Books from your own Audiobookshelf or Subsonic/Navidrome server, with chapters.
+• Public-domain films from Internet Archive.
+• "Additional sources": import .vetro files and community sources.
+• Book search ranks by title and author; local books resume offline.
+• Fixes: frozen spinners in Books, glass turning black after returning to the app, card bars while a season airs.
