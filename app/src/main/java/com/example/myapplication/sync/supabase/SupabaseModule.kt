@@ -54,6 +54,7 @@ val supabaseModule = org.koin.dsl.module {
             collectionImageRestoreCoordinator = get(),
             apiKeySyncRepository = get(),
             progressSyncRepository = get(),
+            audiobookSyncRepository = get(),
             appScope = get(),
         )
     }
@@ -71,6 +72,9 @@ val supabaseModule = org.koin.dsl.module {
 
     // Прогресс просмотра/чтения: DataStore ↔ Supabase.
     single { ProgressSyncRepository(androidContext(), get(), get(), get(), get(), get()) }
+
+    // Аудиокниги: книги, прогресс и закладки (только данные, без аудио).
+    single { AudiobookSyncRepository(androidContext(), get(), get(), get()) }
 }
 
 class AuthRepository(

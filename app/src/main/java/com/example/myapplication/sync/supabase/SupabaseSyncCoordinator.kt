@@ -28,6 +28,7 @@ class SupabaseSyncCoordinator(
     private val collectionImageRestoreCoordinator: CollectionImageRestoreCoordinator,
     private val apiKeySyncRepository: ApiKeySyncRepository,
     private val progressSyncRepository: ProgressSyncRepository,
+    private val audiobookSyncRepository: AudiobookSyncRepository,
     appScope: AppScope,
 ) {
     private val workManager = WorkManager.getInstance(context)
@@ -127,6 +128,8 @@ class SupabaseSyncCoordinator(
                 // Прогресс просмотра/чтения — тоже best-effort и после коллекции: строки прогресса
                 // ссылаются на тайтлы по id, и приезжать им логично уже к подтянутой коллекции.
                 progressSyncRepository.sync()
+                // Аудиокниги — свои таблицы, тоже best-effort.
+                audiobookSyncRepository.sync()
                 if (includeCloudImageRestore) {
                     collectionImageRestoreCoordinator.restoreFromCloudIfNeeded()
                 }

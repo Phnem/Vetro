@@ -210,3 +210,15 @@ VALUES ?;
 -- «На этой неделе: 4 ч 20 мин» — реальное время прослушивания с момента `since`.
 listenedSince:
 SELECT CAST(COALESCE(SUM(listened_ms), 0) AS INTEGER) FROM audiobook_listen_session WHERE started_at >= ?;
+
+-- Облачный синк (sync/supabase/AudiobookSyncRepository): «свои» книги — в библиотеке, в избранном
+-- или с прогрессом. Просто открытые у источника книги в облако не уходят.
+syncableWorks:
+SELECT * FROM audiobook_work
+WHERE in_library = 1 OR is_favorite = 1 OR work_id IN (SELECT work_id FROM audiobook_progress);
+
+allProgress:
+SELECT * FROM audiobook_progress;
+
+allBookmarks:
+SELECT * FROM audiobook_bookmark;
