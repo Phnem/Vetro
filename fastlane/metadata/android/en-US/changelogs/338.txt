@@ -1,0 +1,3 @@
+Fixes.
+• Glass on the search bar, the type chips and the dock no longer turns flat black when you switch search tabs or come back to the app with search open.
+• The episode list marks everything you have watched: earlier seasons and the current season up to your progress, not only episodes finished in the player. Old progress saved under a different season number no longer hides it.
