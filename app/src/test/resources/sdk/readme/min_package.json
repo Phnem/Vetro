@@ -1,0 +1,19 @@
+{
+  "format": 2,
+  "id": "example.films",
+  "version": "1.0.0",
+  "sdk": { "min": 2, "max": 2 },
+  "name": "Example Films",
+  "mediaTypes": ["MOVIE"],
+  "capabilities": ["STREAMS"],
+  "externalIds": ["imdb"],
+  "allowedHosts": ["films.example.org"],
+  "operations": {
+    "streams": {
+      "request": { "url": "https://films.example.org/api/movie/{imdbId}" },
+      "items": "/files",
+      "url": "/href",
+      "resolution": "/height"
+    }
+  }
+}

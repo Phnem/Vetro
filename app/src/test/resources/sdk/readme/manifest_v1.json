@@ -1,0 +1,11 @@
+{
+  "manifestVersion": 1,
+  "id": "example-cinema",
+  "name": "Example Cinema",
+  "baseUrl": "https://api.example.net",
+  "capabilities": ["MOVIE", "SERIES", "EN", "HLS", "TMDB_ID"],
+  "auth": { "kind": "HEADER", "name": "Authorization", "prefix": "Bearer " },
+  "movie":  { "path": "/movie/{tmdbId}" },
+  "series": { "path": "/tv/{tmdbId}/{season}/{episode}" },
+  "response": { "streams": "/sources", "url": "/file", "label": "/name", "resolution": "/height" }
+}

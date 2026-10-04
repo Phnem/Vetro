@@ -1,0 +1,41 @@
+{
+  "format": 2,
+  "id": "example.media",
+  "version": "1.0.0",
+  "sdk": { "min": 2, "max": 2 },
+  "name": "Example Media",
+  "author": "Example author",
+  "homepage": "https://example.com/",
+  "mediaTypes": ["MOVIE", "SERIES"],
+  "capabilities": ["SEARCH_BY_EXTERNAL_ID", "UNITS", "STREAMS", "SUBTITLES", "VARIANTS"],
+  "externalIds": ["tmdb", "imdb"],
+  "allowedHosts": ["api.example.com", "cdn.example.com"],
+  "auth": { "kind": "HEADER", "name": "X-Api-Key" },
+  "rateLimit": { "perSecond": 5, "burst": 10 },
+  "operations": {
+    "search": {
+      "request": { "url": "https://api.example.com/v1/search?tmdb={tmdbId}" },
+      "items": "/results",
+      "id": "/id",
+      "title": "/title",
+      "year": "/year",
+      "externalIds": { "tmdb": "/ids/tmdb", "imdb": "/ids/imdb" }
+    },
+    "units": {
+      "request": { "url": "https://api.example.com/v1/titles/{titleId}/episodes" },
+      "items": "/episodes",
+      "id": "/id",
+      "number": "/number",
+      "season": "/season"
+    },
+    "streams": {
+      "request": { "url": "https://api.example.com/v1/episodes/{unitId}/streams" },
+      "items": "/streams",
+      "url": "/url",
+      "label": "/label",
+      "resolution": "/quality",
+      "audioLanguage": "/audio",
+      "subtitles": { "items": "/subs", "url": "/url", "language": "/lang", "format": "/format" }
+    }
+  }
+}
