@@ -17,6 +17,8 @@ import com.example.myapplication.audiobooks.data.local.LocalFolderSource
 import com.example.myapplication.audiobooks.data.remote.Aknigi24Source
 import com.example.myapplication.audiobooks.data.remote.AudioknigaOneSource
 import com.example.myapplication.audiobooks.data.remote.InternetArchiveSource
+import com.example.myapplication.audiobooks.data.remote.SubsonicSource
+import com.example.myapplication.audiobooks.data.remote.AudiobookshelfSource
 import com.example.myapplication.audiobooks.data.remote.IpaudioWpSource
 import com.example.myapplication.audiobooks.data.remote.IzibSource
 import com.example.myapplication.audiobooks.data.remote.RealAudiobooksSource
@@ -56,6 +58,10 @@ val audiobookModule = module {
     single(named(SOURCES)) {
         val http = get<OkHttpClient>()
         buildList<AudiobookSource> {
+            // Своя медиатека пользователя — первой: собственная копия книги лучше любой чужой.
+            val accounts = get<com.example.myapplication.media.source.PlaybackSourceConfigStore>()
+            add(SubsonicSource(site(http), account = { accounts.account(com.example.myapplication.media.source.UserAccountKind.SUBSONIC) }))
+            add(AudiobookshelfSource(site(http), account = { accounts.account(com.example.myapplication.media.source.UserAccountKind.AUDIOBOOKSHELF) }))
             // RU
             add(Aknigi24Source(http, TokenBucketRateLimiter(maxTokens = 3.0, refillTokensPerSecond = 2.0)))
             add(YaknigaSource(site(http)))

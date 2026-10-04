@@ -232,6 +232,28 @@ private fun SourceEditor(
             fontFamily = SnProFamily,
         )
     }
+    if (account == PlaybackSourceKind.SUBSONIC.account) {
+        Text(
+            if (ru) {
+                "Свой сервер Subsonic или OpenSubsonic: Navidrome, Airsonic, Gonic, Nextcloud Music и другие. Альбомы сервера появятся в поиске книг, треки альбома станут главами."
+            } else {
+                "Your own Subsonic or OpenSubsonic server: Navidrome, Airsonic, Gonic, Nextcloud Music and others. Server albums show up in book search; an album's tracks become chapters."
+            },
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            fontFamily = SnProFamily,
+        )
+    }
+    if (account == PlaybackSourceKind.AUDIOBOOKSHELF.account) {
+        Text(
+            if (ru) {
+                "Свой сервер Audiobookshelf. Книги из его библиотек появятся в поиске книг вместе с главами, которые размечены на сервере."
+            } else {
+                "Your own Audiobookshelf server. Books from its libraries show up in book search, with the chapters marked on the server."
+            },
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            fontFamily = SnProFamily,
+        )
+    }
     if (account == null || account.needsServer) {
         OutlinedTextField(
             value = editor.baseUrl,
@@ -756,6 +778,8 @@ private val PlaybackSourceKind.title: String
         PlaybackSourceKind.JELLYFIN -> "Jellyfin"
         PlaybackSourceKind.EMBY -> "Emby"
         PlaybackSourceKind.OPENSUBTITLES -> "OpenSubtitles"
+        PlaybackSourceKind.SUBSONIC -> "Subsonic / Navidrome"
+        PlaybackSourceKind.AUDIOBOOKSHELF -> "Audiobookshelf"
     }
 
 private fun PlaybackSourceSettingsMessage.text(ru: Boolean): String = when (this) {

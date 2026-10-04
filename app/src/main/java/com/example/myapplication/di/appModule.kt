@@ -281,6 +281,26 @@ val appModule = module {
                     get<com.example.myapplication.network.enrichment.OpenSubtitlesClient>()
                         .login(account.username, account.password, apiKeyOverride = account.apiKey) is com.example.myapplication.network.LookupResult.Found
                 },
+                com.example.myapplication.media.source.UserAccountKind.SUBSONIC to { account ->
+                    val client = get<okhttp3.OkHttpClient>()
+                    val body = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                        client.newCall(
+                            okhttp3.Request.Builder()
+                                .url(com.example.myapplication.audiobooks.data.remote.SubsonicApi(account).url("ping"))
+                                .build(),
+                        ).execute().use { it.body?.string() }
+                    }
+                    body != null && com.example.myapplication.audiobooks.data.remote.SubsonicParser.okBody(body) != null
+                },
+                com.example.myapplication.media.source.UserAccountKind.AUDIOBOOKSHELF to { account ->
+                    com.example.myapplication.audiobooks.data.remote.audiobookshelfLogin(
+                        com.example.myapplication.audiobooks.data.remote.web.SourceHttp(
+                            get<okhttp3.OkHttpClient>(),
+                            com.example.myapplication.network.TokenBucketRateLimiter(maxTokens = 2.0, refillTokensPerSecond = 1.0),
+                        ),
+                        account,
+                    )
+                },
             ),
         )
     }

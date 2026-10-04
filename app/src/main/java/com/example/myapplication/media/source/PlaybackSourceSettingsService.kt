@@ -6,7 +6,9 @@ enum class PlaybackSourceKind {
     WEBDAV,
     JELLYFIN,
     EMBY,
-    OPENSUBTITLES;
+    OPENSUBTITLES,
+    SUBSONIC,
+    AUDIOBOOKSHELF;
 
     val personalProvider: PersonalMediaServerProvider?
         get() = when (this) {
@@ -19,6 +21,8 @@ enum class PlaybackSourceKind {
     val account: UserAccountKind?
         get() = when (this) {
             OPENSUBTITLES -> UserAccountKind.OPENSUBTITLES
+            SUBSONIC -> UserAccountKind.SUBSONIC
+            AUDIOBOOKSHELF -> UserAccountKind.AUDIOBOOKSHELF
             else -> null
         }
 }
@@ -98,7 +102,7 @@ class DefaultPlaybackSourceSettingsService(
                 allowInsecureHttp = config.allowInsecureHttp,
             )
         }
-        PlaybackSourceKind.OPENSUBTITLES -> store.account(UserAccountKind.OPENSUBTITLES)?.let { config ->
+        PlaybackSourceKind.OPENSUBTITLES, PlaybackSourceKind.SUBSONIC, PlaybackSourceKind.AUDIOBOOKSHELF -> store.account(requireNotNull(kind.account))?.let { config ->
             PlaybackSourcePublicDraft(
                 kind = kind,
                 baseUrl = config.baseUrl,
@@ -124,7 +128,7 @@ class DefaultPlaybackSourceSettingsService(
         runCatching {
             when (draft.kind) {
                 PlaybackSourceKind.WEBDAV -> store.saveWebDav(requireNotNull(webDavConfig(draft, replacementSecret)))
-                PlaybackSourceKind.OPENSUBTITLES -> {
+                PlaybackSourceKind.OPENSUBTITLES, PlaybackSourceKind.SUBSONIC, PlaybackSourceKind.AUDIOBOOKSHELF -> {
                     val account = requireNotNull(draft.kind.account)
                     store.saveAccount(account, requireNotNull(accountConfig(draft, replacementSecret, account, replacementApiKey)))
                 }
@@ -141,7 +145,7 @@ class DefaultPlaybackSourceSettingsService(
     override fun remove(kind: PlaybackSourceKind) {
         when (kind) {
             PlaybackSourceKind.WEBDAV -> store.clearWebDav()
-            PlaybackSourceKind.OPENSUBTITLES -> store.clearAccount(requireNotNull(kind.account))
+            PlaybackSourceKind.OPENSUBTITLES, PlaybackSourceKind.SUBSONIC, PlaybackSourceKind.AUDIOBOOKSHELF -> store.clearAccount(requireNotNull(kind.account))
             else -> store.clearPersonalServer(requireNotNull(kind.personalProvider))
         }
     }
@@ -154,7 +158,7 @@ class DefaultPlaybackSourceSettingsService(
         when (draft.kind) {
             PlaybackSourceKind.WEBDAV -> webDavConfig(draft, replacementSecret)
                 ?.let { connectionTester.testWebDav(it) }
-            PlaybackSourceKind.OPENSUBTITLES -> draft.kind.account?.let { account ->
+            PlaybackSourceKind.OPENSUBTITLES, PlaybackSourceKind.SUBSONIC, PlaybackSourceKind.AUDIOBOOKSHELF -> draft.kind.account?.let { account ->
                 accountConfig(draft, replacementSecret, account, replacementApiKey)?.let { connectionTester.testAccount(account, it) }
             }
             else -> draft.kind.personalProvider?.let { provider ->

@@ -14,6 +14,10 @@ enum class UserAccountKind(
     val needsApiKey: Boolean = false,
 ) {
     OPENSUBTITLES("OpenSubtitles", "account_opensubtitles", needsServer = false, needsApiKey = true),
+    /** Свой сервер Subsonic / OpenSubsonic (Navidrome, Airsonic, Gonic…) — источник аудиокниг. */
+    SUBSONIC("Subsonic", "account_subsonic", needsServer = true),
+    /** Свой сервер Audiobookshelf — источник аудиокниг с разметкой глав. */
+    AUDIOBOOKSHELF("Audiobookshelf", "account_audiobookshelf", needsServer = true),
 }
 
 data class UserAccountConfig(
