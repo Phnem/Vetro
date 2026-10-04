@@ -109,6 +109,12 @@ data class EpisodeMenuUiState(
     val seasonCovers: Map<Int, String> = emptyMap(),
     val actions: Map<EpisodeKey, EpisodeActionState> = emptyMap(),
     val playback: Map<EpisodeKey, EpisodePlaybackProgress> = emptyMap(),
+    /**
+     * Докуда тайтл просмотрен: дальняя из позиции счётчика серий (как на карточке главной) и
+     * самой дальней досмотренной серии. Всё не дальше неё — «Просмотрено», даже если серию
+     * смотрели не в приложении и позиции воспроизведения у неё нет.
+     */
+    val watchedThrough: EpisodeKey? = null,
     val selectedQuality: Int? = null,
     val qualityPicker: EpisodeQualityPickerState? = null,
     /** Incremented on each selection so the header chip can replay its morph-in animation. */
@@ -117,7 +123,15 @@ data class EpisodeMenuUiState(
     val resolvingQuality: Boolean = false,
     /** «Найти ещё» опрашивает источники просмотра прямо сейчас. */
     val discoveringSeasons: Boolean = false,
-)
+) {
+    /** Серия просмотрена: досмотрена в плеере или лежит не дальше [watchedThrough] (спецвыпуски — только по плееру). */
+    fun isWatched(key: EpisodeKey, special: Boolean = false): Boolean {
+        if (playback[key]?.watched == true) return true
+        val mark = watchedThrough ?: return false
+        if (special) return false
+        return key.season < mark.season || (key.season == mark.season && key.episode <= mark.episode)
+    }
+}
 
 sealed interface EpisodeMenuEvent {
     data class Play(
@@ -178,7 +192,7 @@ class EpisodeMenuViewModel(
                 val mapped = stored.mapKeys { (key, _) ->
                     EpisodeKey(key.season, key.episode)
                 }
-                _state.update { it.copy(playback = mapped) }
+                _state.update { it.copy(playback = mapped, watchedThrough = watchedThrough(mapped)) }
             }
         }
     }
@@ -240,6 +254,7 @@ class EpisodeMenuViewModel(
             )
         if (normalized == seasons) return
         seasons = normalized
+        _state.update { it.copy(watchedThrough = watchedThrough(it.playback)) }
         scanExistingDownloads()
         normalized.forEach(::loadArtwork)
     }
@@ -741,9 +756,27 @@ class EpisodeMenuViewModel(
         val all = seasons.flatMap { season ->
             (1..season.episodes.coerceAtLeast(0)).map { season to it }
         }
+        val state = _state.value
         return all.firstOrNull { (season, episode) ->
-            _state.value.playback[EpisodeKey(season.seasonNumber, episode)]?.watched != true
+            !state.isWatched(EpisodeKey(season.seasonNumber, episode), season.isSpecial)
         } ?: all.firstOrNull()
+    }
+
+    /**
+     * Отметка «просмотрено до»: счётчик серий тайтла, разложенный по сезонам, или самая дальняя
+     * досмотренная серия — что дальше. Старые записи прогресса под другим номером сезона (до
+     * стабилизации нумерации) отметку не сдвигают назад: берётся максимум.
+     */
+    private fun watchedThrough(playback: Map<EpisodeKey, EpisodePlaybackProgress>): EpisodeKey? {
+        // Сезон самой записи — по её id: у записи «Season 3» счётчик считает серии этого сезона.
+        val ownSeason = seasons.firstOrNull { s ->
+            (anime.anilistId != null && s.anilistId == anime.anilistId) || (anime.malId != null && s.malId == anime.malId)
+        }?.seasonNumber
+        val fromCount = com.example.myapplication.domain.seasons.watchedPositionFromCount(anime.episodes, seasons, ownSeason)
+            ?.let { EpisodeKey(it.season, it.episode) }
+        val fromPlayback = playback.filterValues { it.watched }.keys
+            .maxWithOrNull(compareBy<EpisodeKey>({ it.season }, { it.episode }))
+        return listOfNotNull(fromCount, fromPlayback).maxWithOrNull(compareBy({ it.season }, { it.episode }))
     }
 
     private fun currentAction(key: EpisodeKey): EpisodeActionState =

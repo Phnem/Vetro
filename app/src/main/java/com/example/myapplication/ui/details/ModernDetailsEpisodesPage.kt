@@ -250,6 +250,7 @@ fun ModernDetailsEpisodesPage(
                                 fallbackImage = state.seasonCovers[season.seasonNumber] ?: posterPath,
                                 action = state.actions[key] ?: EpisodeActionState.Available,
                                 progress = state.playback[key],
+                                watched = state.isWatched(key, season.isSpecial),
                                 streaming = state.streaming == key,
                                 ru = ru,
                                 isDark = isDark,
@@ -606,13 +607,14 @@ private fun EpisodeRow(
     fallbackImage: String?,
     action: EpisodeActionState,
     progress: EpisodePlaybackProgress?,
+    /** Досмотрена в плеере или не дальше отметки «просмотрено до» (см. EpisodeMenuUiState.isWatched). */
+    watched: Boolean,
     streaming: Boolean,
     ru: Boolean,
     isDark: Boolean,
     onClick: () -> Unit,
     onAction: () -> Unit,
 ) {
-    val watched = progress?.watched == true
     val hasProgress = (progress?.positionMs ?: 0L) > 0L
     val statusColor = when {
         watched -> StatusSuccess

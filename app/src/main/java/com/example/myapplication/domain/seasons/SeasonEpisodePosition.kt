@@ -67,3 +67,30 @@ fun releasedEpisodesLabel(currentEpisodes: Int, newEpisodes: Int, latest: Season
         latest.label()
     }
 }
+
+/**
+ * Счётчик просмотренных серий тайтла (`Anime.episodes`) → сезон и серия в нём по раскладу.
+ *
+ * У счётчика два масштаба (так его пишет проверка новых серий): серии своей записи, пока их не
+ * больше, чем в её сезоне ([ownSeasonNumber] — сезон, на который указывают anilist/mal id тайтла),
+ * иначе — сумма по франшизе. 62 при сезонах 11/12/13/12/24 и своём первом сезоне — это «S5 E14»;
+ * 14 у записи «Season 3» — «S5 E14» её собственного сезона. Спецвыпуски в счёт не входят; счётчик
+ * больше всех известных серий — последняя серия последнего сезона.
+ *
+ * null — смотреть нечего (0) или раскладывать не по чему.
+ */
+fun watchedPositionFromCount(count: Int, seasons: List<SeasonInfo>, ownSeasonNumber: Int? = null): SeasonEpisode? {
+    if (count <= 0) return null
+    val regular = seasons.filter { !it.isSpecial && it.episodes > 0 }.sortedBy { it.seasonNumber }
+    if (regular.isEmpty()) return null
+    regular.firstOrNull { it.seasonNumber == ownSeasonNumber }
+        ?.takeIf { count <= it.episodes }
+        ?.let { return SeasonEpisode(it.seasonNumber, count) }
+    var remaining = count
+    for (season in regular) {
+        if (remaining <= season.episodes) return SeasonEpisode(season.seasonNumber, remaining)
+        remaining -= season.episodes
+    }
+    val last = regular.last()
+    return SeasonEpisode(last.seasonNumber, last.episodes)
+}
