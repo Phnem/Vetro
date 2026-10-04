@@ -1,0 +1,6 @@
+Hotfix.
+• Cloud sync works again when your collection has films or TV series (the upload failed with "anime_media_type_check").
+• Audiobooks sync too: your books, listening position and bookmarks. Only the data, never the audio.
+• The AI key passphrase is saved to the cloud, so your other devices can unlock synced keys.
+• "Add" is no longer squeezed on search result cards.
+• .vetro files saved with a BOM import correctly.
