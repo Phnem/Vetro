@@ -31,6 +31,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
@@ -190,89 +191,100 @@ fun ApiSearchResultCard(
                     .fillMaxHeight()
                     .weight(1f)
             ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.Top
+                // Высота карточки фиксирована: текст получает только то, что осталось после кнопки.
+                // Раньше кнопка шла последней и при двухстрочном названии + двух рядах жанров
+                // сжималась в оранжевую полоску.
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                        .clipToBounds()
                 ) {
-                    Text(
-                        text = state.title,
-                        style = MaterialTheme.typography.titleMedium.copy(
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 17.sp,
-                            lineHeight = 22.sp,
-                            fontFamily = SnProFamily
-                        ),
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier
-                            .weight(1f)
-                            .padding(end = 8.dp)
-                    )
-                    state.rating?.let { rating10 ->
-                        if (rating10 > 0f) {
-                            Box(
-                                modifier = Modifier
-                                    .clip(CircleShape)
-                                    .background(MaterialTheme.colorScheme.secondaryContainer)
-                            ) {
-                                Text(
-                                    text = "★ ${RatingScale.format(rating10)}",
-                                    style = MaterialTheme.typography.labelMedium.copy(
-                                        color = getRatingColor(rating10),
-                                        fontFamily = SnProFamily
-                                    ),
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                                )
-                            }
-                        }
-                    }
-                }
-
-                if (state.genres.isNotEmpty()) {
-                    FlowRow(
-                        modifier = Modifier.padding(top = 8.dp),
-                        horizontalArrangement = Arrangement.spacedBy(4.dp),
-                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.Top
                     ) {
-                        state.genres.forEach { genre ->
-                            Box(
-                                modifier = Modifier
-                                    .clip(CircleShape)
-                                    .background(chipBg)
-                                    .padding(horizontal = 8.dp, vertical = 4.dp)
-                            ) {
-                                Text(
-                                    text = genre,
-                                    fontSize = 12.sp,
-                                    color = subtitleColor,
-                                    fontWeight = FontWeight.Medium,
-                                    fontFamily = SnProFamily
-                                )
+                        Text(
+                            text = state.title,
+                            style = MaterialTheme.typography.titleMedium.copy(
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 17.sp,
+                                lineHeight = 22.sp,
+                                fontFamily = SnProFamily
+                            ),
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier
+                                .weight(1f)
+                                .padding(end = 8.dp)
+                        )
+                        state.rating?.let { rating10 ->
+                            if (rating10 > 0f) {
+                                Box(
+                                    modifier = Modifier
+                                        .clip(CircleShape)
+                                        .background(MaterialTheme.colorScheme.secondaryContainer)
+                                ) {
+                                    Text(
+                                        text = "★ ${RatingScale.format(rating10)}",
+                                        style = MaterialTheme.typography.labelMedium.copy(
+                                            color = getRatingColor(rating10),
+                                            fontFamily = SnProFamily
+                                        ),
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                    )
+                                }
                             }
                         }
                     }
+
+                    if (state.genres.isNotEmpty()) {
+                        FlowRow(
+                            modifier = Modifier.padding(top = 8.dp),
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            verticalArrangement = Arrangement.spacedBy(4.dp),
+                            maxLines = 1
+                        ) {
+                            state.genres.forEach { genre ->
+                                Box(
+                                    modifier = Modifier
+                                        .clip(CircleShape)
+                                        .background(chipBg)
+                                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                                ) {
+                                    Text(
+                                        text = genre,
+                                        fontSize = 12.sp,
+                                        color = subtitleColor,
+                                        fontWeight = FontWeight.Medium,
+                                        fontFamily = SnProFamily
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    // Автор и чтец (до трёх строк) стоят выше и не делят строку с кнопкой — иначе длинный
+                    // текст выдавливал «Добавить» за край карточки.
+                    if (isBook) {
+                        Text(
+                            text = state.episodesText,
+                            style = MaterialTheme.typography.labelLarge.copy(
+                                fontSize = 13.sp,
+                                lineHeight = 17.sp,
+                                fontFamily = SnProFamily
+                            ),
+                            color = subtitleColor.copy(alpha = 0.8f),
+                            maxLines = 3,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.padding(top = 8.dp)
+                        )
+                    }
                 }
 
-                // Автор и чтец (до трёх строк) стоят выше и не делят строку с кнопкой — иначе длинный
-                // текст выдавливал «Добавить» за край карточки.
-                if (isBook) {
-                    Text(
-                        text = state.episodesText,
-                        style = MaterialTheme.typography.labelLarge.copy(
-                            fontSize = 13.sp,
-                            lineHeight = 17.sp,
-                            fontFamily = SnProFamily
-                        ),
-                        color = subtitleColor.copy(alpha = 0.8f),
-                        maxLines = 3,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.padding(top = 8.dp)
-                    )
-                }
-
-                Spacer(modifier = Modifier.weight(1f))
+                Spacer(modifier = Modifier.height(6.dp))
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
