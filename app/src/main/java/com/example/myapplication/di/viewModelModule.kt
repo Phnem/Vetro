@@ -43,6 +43,7 @@ val viewModelModule = module {
             mangaBindingStore = get(),
             mangaChapterCacheStore = get(),
             mangaReadingStore = get(),
+            mangaTranslateSettings = get(),
             bookSearch = if (get<com.example.myapplication.audiobooks.AudiobookFeatureGate>().enabled) get() else null,
         )
     }
@@ -135,6 +136,8 @@ val viewModelModule = module {
             readingStore = get(),
             cacheStore = get(),
             downloadStore = get(),
+            translateSettings = get(),
+            tailResolver = get(),
         )
     }
     viewModel { (animeId: String, chapterKey: String) ->
@@ -144,6 +147,10 @@ val viewModelModule = module {
             pageResolver = get(),
             readingStore = get(),
             prefetcher = get(),
+            translateSettings = get(),
+            bindings = get(),
+            workContext = get(),
+            translationService = get(),
         )
     }
     viewModel { (anime: com.example.myapplication.data.models.Anime, episodeNumber: Int) ->

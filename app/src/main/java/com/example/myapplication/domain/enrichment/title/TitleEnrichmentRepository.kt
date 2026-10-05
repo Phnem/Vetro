@@ -1,6 +1,7 @@
 package com.example.myapplication.domain.enrichment.title
 
 import android.util.Log
+import com.example.myapplication.data.local.ReleaseObservationStore
 import com.example.myapplication.data.models.Anime
 import com.example.myapplication.data.models.MediaType
 import com.example.myapplication.network.AniListRemoteDataSource
@@ -10,6 +11,7 @@ import com.example.myapplication.network.LookupResult
 import com.example.myapplication.network.ShikimoriRemoteDataSource
 import com.example.myapplication.network.retryOn429
 import com.example.myapplication.network.enrichment.AniLibriaScheduleClient
+import com.example.myapplication.network.enrichment.AniLibriaScheduleItem
 import com.example.myapplication.network.enrichment.EnrichmentSource
 import com.example.myapplication.network.enrichment.FanartClient
 import com.example.myapplication.network.enrichment.OmdbClient
@@ -48,6 +50,8 @@ class TitleEnrichmentRepository(
     private val fanart: FanartClient,
     private val youTube: YouTubeClient,
     private val aniLibria: AniLibriaScheduleClient,
+    /** Журнал вышедших серий: из него выводится ритм выхода, когда озвучка расписания не даёт. */
+    private val observations: ReleaseObservationStore? = null,
     private val nowMs: () -> Long = System::currentTimeMillis,
     private val zone: () -> ZoneId = ZoneId::systemDefault,
 ) {
@@ -86,16 +90,7 @@ class TitleEnrichmentRepository(
             val id = airing?.anilistId ?: anime.anilistId ?: return@async null
             if (id == anime.anilistId) aniD.await() else aniListEnrichment(id, onFailure)
         }
-        // RU-трек аниме — расписание озвучки AniLibria. Shikimori id совпадает с MAL id, поэтому
-        // сверяем и id записи, и id выходящего сезона.
-        val dubD = async {
-            if (!isAnime || language != AppLanguage.RU) return@async null
-            val ids = setOfNotNull(anime.shikimoriId, anime.malId, airing?.malId)
-            if (ids.isEmpty()) return@async null
-            aniLibria.week(refresh).valueOrNull()?.firstOrNull { item ->
-                (item.shikimoriId != null && item.shikimoriId in ids) || (item.malId != null && item.malId in ids)
-            }
-        }
+        val dubD = async { dubSchedule(anime, language, airing, refresh) }
 
         val tmdbR = tmdbD.await()
         val aniR = aniD.await()
@@ -132,8 +127,12 @@ class TitleEnrichmentRepository(
         val ratings = omdbD.await()
         if (ratings != null) provenance["ratings"] = EnrichmentSource.OMDB
         // В порядке точности: озвучка (RU), TVmaze и AniList — точное время, TMDb — только дата.
+        val dubSchedule = dubD.await()?.let { ReleaseCountdownRules.fromAniLibria(it, now.atZone(zone()).toLocalDate(), zone()) }
         val schedules = listOfNotNull(
-            dubD.await()?.let { ReleaseCountdownRules.fromAniLibria(it, now.atZone(zone()).toLocalDate(), zone()) },
+            // Расписание озвучки есть, а дня выхода в нём нет (или озвучки в нём нет вовсе) — ритм по
+            // дням недели вышедших серий. Стоит ПЕРЕД озвучкой: select решает первым расписанием с данными.
+            if (dubSchedule?.next == null) cadenceSchedule(anime, language, now) else null,
+            dubSchedule,
             tvMazeD.await()?.let(ReleaseCountdownRules::fromTvMaze),
             airingD.await()?.let { ReleaseCountdownRules.fromAniList(it, now) },
             tmdbR?.let(ReleaseCountdownRules::fromTmdb),
@@ -158,6 +157,66 @@ class TitleEnrichmentRepository(
             provenance = provenance,
             incomplete = failed.get(),
         )
+    }
+
+    /**
+     * Только расписание выхода — без картинок, роликов и рейтингов. Для календаря, где таких тайтлов
+     * десятки: [load] на каждый был бы запросами на полсотни ресурсов. Порядок источников тот же.
+     */
+    suspend fun nextRelease(
+        anime: Anime,
+        language: AppLanguage,
+        airing: AiringSeasonRef? = null,
+    ): NextRelease? = coroutineScope {
+        val isAnime = anime.mediaType == MediaType.ANIME
+        val now = Instant.ofEpochMilli(nowMs())
+        val noop = {}
+        val aniD = async { if (isAnime) (airing?.anilistId ?: anime.anilistId)?.let { aniListEnrichment(it, noop) } else null }
+        val dubD = async { dubSchedule(anime, language, airing, refresh = false) }
+        val tmdbD = async {
+            if (anime.mediaType == MediaType.SERIES && anime.tmdbId != null) tmdbBundle(TmdbKind.TV, anime.tmdbId, language, false) else null
+        }
+        val dubSchedule = dubD.await()?.let { ReleaseCountdownRules.fromAniLibria(it, now.atZone(zone()).toLocalDate(), zone()) }
+        val schedules = listOfNotNull(
+            if (dubSchedule?.next == null) cadenceSchedule(anime, language, now) else null,
+            dubSchedule,
+            aniD.await()?.let { ReleaseCountdownRules.fromAniList(it, now) },
+            tmdbD.await()?.let(ReleaseCountdownRules::fromTmdb),
+        )
+        ReleaseCountdownRules.select(language, schedules, now, zone())
+    }
+
+    /**
+     * Запись расписания озвучки AniLibria для тайтла (аниме, русский интерфейс). Shikimori id
+     * совпадает с MAL id, поэтому сверяем и id записи, и id выходящего сезона. Заодно кладёт в журнал
+     * точное время выхода последней серии — материал для [ReleaseCadence].
+     */
+    private suspend fun dubSchedule(
+        anime: Anime,
+        language: AppLanguage,
+        airing: AiringSeasonRef?,
+        refresh: Boolean,
+    ): AniLibriaScheduleItem? {
+        if (anime.mediaType != MediaType.ANIME || language != AppLanguage.RU) return null
+        val ids = setOfNotNull(anime.shikimoriId, anime.malId, airing?.malId)
+        if (ids.isEmpty()) return null
+        val item = aniLibria.week(refresh).valueOrNull()?.firstOrNull { item ->
+            (item.shikimoriId != null && item.shikimoriId in ids) || (item.malId != null && item.malId in ids)
+        } ?: return null
+        val episode = item.lastEpisode
+        val at = item.lastReleasedAt
+        if (episode != null && at != null) {
+            runCatching { observations?.record(anime.id, episode, at.toEpochMilli(), exact = true) }
+        }
+        return item
+    }
+
+    private suspend fun cadenceSchedule(anime: Anime, language: AppLanguage, now: Instant): TrackSchedule? {
+        if (anime.mediaType != MediaType.ANIME || language != AppLanguage.RU) return null
+        val store = observations ?: return null
+        val zone = zone()
+        val forecast = ReleaseCadence.infer(store.get(anime.id), now.atZone(zone).toLocalDate(), zone) ?: return null
+        return ReleaseCountdownRules.fromCadence(forecast)
     }
 
     /**

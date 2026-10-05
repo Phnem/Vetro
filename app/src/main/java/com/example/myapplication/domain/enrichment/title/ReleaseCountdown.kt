@@ -135,6 +135,19 @@ object ReleaseCountdownRules {
         )
     }
 
+    /**
+     * RU-трек по ритму уже вышедших серий ([ReleaseCadence]): источник не называет день выхода
+     * озвучки, но из дней недели прошлых серий он выводится. Только дата, как и у AniLibria.
+     */
+    fun fromCadence(forecast: CadenceForecast): TrackSchedule = TrackSchedule(
+        track = ReleaseTrack.RU,
+        previous = ReleasePoint(date = forecast.lastReleaseDate),
+        next = ReleasePoint(date = forecast.nextDate),
+        nextEpisode = forecast.nextEpisode,
+        finished = false,
+        source = EnrichmentSource.OBSERVED,
+    )
+
     /** Эфир оригинала: русский или английский оригинал — свой трек, остальные — [ReleaseTrack.ORIGINAL]. */
     fun fromTvMaze(show: TvMazeShow): TrackSchedule? {
         val track = originalTrack(show.language) ?: ReleaseTrack.ORIGINAL

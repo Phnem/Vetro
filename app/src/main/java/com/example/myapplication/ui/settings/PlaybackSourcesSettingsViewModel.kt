@@ -56,8 +56,8 @@ data class PlaybackSourcesSettingsUiState(
     val isInstalling: Boolean = false,
     /** Why the last install attempt was refused, shown verbatim so the user can fix it. */
     val installError: String? = null,
-    /** Проверенный пакет v2, ждущий подтверждения установки. */
-    val packagePreview: PackagePreview? = null,
+    /** Проверенные пакеты v2, ждущие подтверждения установки (из подборки — несколько). */
+    val packagePreviews: List<PackagePreview> = emptyList(),
 )
 
 class PlaybackSourcesSettingsViewModel(
@@ -177,17 +177,31 @@ class PlaybackSourcesSettingsViewModel(
     }
 
     /** Пользователь посмотрел, что умеет пакет и куда ходит, и согласился. */
-    fun confirmPackage() {
+    fun confirmPackage(preview: PackagePreview) = confirmPackages(listOf(preview))
+
+    /** «Установить все» для подборки: каждый пакет проверяется правилом обновления заново. */
+    fun confirmAllPackages() = confirmPackages(_uiState.value.packagePreviews)
+
+    private fun confirmPackages(previews: List<PackagePreview>) {
         val sources = customSources ?: return
-        val preview = _uiState.value.packagePreview ?: return
+        if (previews.isEmpty()) return
         viewModelScope.launch {
-            _uiState.update { it.copy(isInstalling = true, packagePreview = null) }
-            applyOutcome(sources, sources.confirm(preview))
+            _uiState.update { state -> state.copy(isInstalling = true, packagePreviews = state.packagePreviews - previews.toSet()) }
+            val outcomes = previews.map { preview -> preview to sources.confirm(preview) }
+            if (outcomes.size == 1) return@launch applyOutcome(sources, outcomes.single().second)
+            val problems = outcomes.mapNotNull { (preview, outcome) ->
+                (outcome as? CustomSourceOutcome.Rejected)?.let { "${preview.id}: ${it.reason}" }
+            }
+            applyOutcome(sources, CustomSourceOutcome.Bundle(outcomes.size - problems.size, emptyList(), problems))
         }
     }
 
-    fun dismissPackage() {
-        _uiState.update { it.copy(packagePreview = null) }
+    fun dismissPackage(preview: PackagePreview) {
+        _uiState.update { it.copy(packagePreviews = it.packagePreviews - preview) }
+    }
+
+    fun dismissAllPackages() {
+        _uiState.update { it.copy(packagePreviews = emptyList()) }
     }
 
     fun refreshCustomSource(key: String) {
@@ -237,7 +251,23 @@ class PlaybackSourcesSettingsViewModel(
             }
 
             is CustomSourceOutcome.ReviewRequired -> _uiState.update {
-                it.copy(isInstalling = false, installError = null, packagePreview = outcome.preview)
+                it.copy(isInstalling = false, installError = null, packagePreviews = listOf(outcome.preview))
+            }
+
+            is CustomSourceOutcome.Bundle -> {
+                refreshCustomSources(sources)
+                _uiState.update {
+                    it.copy(
+                        isInstalling = false,
+                        installError = outcome.problems.takeIf { p -> p.isNotEmpty() }?.joinToString("\n") { p -> "• $p" },
+                        packagePreviews = outcome.previews,
+                        message = when {
+                            outcome.installed > 0 -> PlaybackSourceSettingsMessage.CUSTOM_SOURCE_INSTALLED
+                            outcome.previews.isEmpty() -> PlaybackSourceSettingsMessage.CUSTOM_SOURCE_REJECTED
+                            else -> null
+                        },
+                    )
+                }
             }
         }
     }

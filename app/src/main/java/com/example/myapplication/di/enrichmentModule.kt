@@ -74,8 +74,10 @@ val enrichmentModule = module {
             fanart = get(),
             youTube = get(),
             aniLibria = get(),
+            observations = get(),
         )
     }
+    single { com.example.myapplication.data.local.ReleaseObservationStore(androidContext()) }
 }
 
 private fun rate(perSecond: Double, burst: Double) = TokenBucketRateLimiter(maxTokens = burst, refillTokensPerSecond = perSecond)

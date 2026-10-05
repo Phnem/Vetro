@@ -629,6 +629,8 @@ internal fun ColumnScope.MoreSheetContent(
     }
     SettingRow(strings.favorite, checked = favorite, onChange = { onFavorite() })
     Spacer(Modifier.height(3.dp))
+    SmartRewindRow(strings)
+    Spacer(Modifier.height(3.dp))
     Box(
         Modifier
             .fillMaxWidth()
@@ -722,6 +724,41 @@ private fun SettingRow(title: String, checked: Boolean, onChange: (Boolean) -> U
         Text(title, color = Ink, fontFamily = SnProFamily, fontWeight = FontWeight.SemiBold, fontSize = 15.sp,
             modifier = Modifier.weight(1f))
         IosSwitch(checked = checked, onCheckedChange = onChange)
+    }
+}
+
+/**
+ * Выключатель умной перемотки. Сервис читает тот же файл настроек при каждом возобновлении, поэтому
+ * отдельной команды сессии не нужно: приложение и сервис живут в одном процессе.
+ */
+@Composable
+private fun SmartRewindRow(strings: PlayerStrings) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val prefs = remember(context) {
+        context.getSharedPreferences("audiobook_player_options", android.content.Context.MODE_PRIVATE)
+    }
+    var enabled by remember { mutableStateOf(prefs.getBoolean("smart_rewind", true)) }
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(18.dp))
+            .background(Color.Black.copy(alpha = 0.22f))
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                strings.smartRewind, color = Ink, fontFamily = SnProFamily, fontWeight = FontWeight.SemiBold,
+                fontSize = 15.sp, modifier = Modifier.weight(1f),
+            )
+            IosSwitch(
+                checked = enabled,
+                onCheckedChange = {
+                    enabled = it
+                    prefs.edit().putBoolean("smart_rewind", it).apply()
+                },
+            )
+        }
+        Text(strings.smartRewindHint, color = Muted, fontFamily = SnProFamily, fontSize = 12.sp)
     }
 }
 

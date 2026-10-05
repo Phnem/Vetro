@@ -136,9 +136,20 @@ internal fun kodikReleaseServesSeason(remoteTitles: List<String>, season: Int, s
     if (season in explicit) return true
     val wanted = seasonTitles.map(::normalizeReleaseTitle).filter { it.isNotEmpty() }.toSet()
     if (remoteTitles.any { normalizeReleaseTitle(it) in wanted }) return true
+    // Порядок слов у каталогов разный: AniList «JoJo no Kimyou na Bouken: Steel Ball Run», Kodik
+    // «Steel Ball Run: JoJo no Kimyou na Bouken». Равенство набора слов — не нечёткость: усечённое
+    // название соседнего сезона по-прежнему не проходит.
+    val wantedWords = wanted.map { it.split(' ').toSet() }
+    if (remoteTitles.any { remote ->
+            val words = normalizeReleaseTitle(remote).split(' ').toSet()
+            wantedWords.any { it == words || (it.size >= MIN_WORDS_FOR_CONTAINMENT && words.containsAll(it)) }
+        }
+    ) return true
     val number = Regex("""(?:^|[^\p{L}\p{N}])${season}(?:$|[^\p{L}\p{N}])""")
     return remoteTitles.any { number.containsMatchIn(it) }
 }
+
+private const val MIN_WORDS_FOR_CONTAINMENT = 3
 
 private fun normalizeReleaseTitle(value: String): String =
     value.lowercase().replace('ё', 'е').split(Regex("""[^\p{L}\p{N}]+""")).filter { it.isNotEmpty() }.joinToString(" ")
@@ -176,20 +187,37 @@ class KodikDirectSearch(
         seasonNumber: Int,
         seasonIdentifiable: Boolean,
         limit: Int,
+        /** MAL-id именно этого сезона (у Kodik он же `shikimori_id`); null — id неизвестен. */
+        seasonMalId: Int? = null,
     ): List<KodikIframeCandidate> {
         if (episodeNumber <= 0 || limit <= 0) return emptyList()
         val queries = listOfNotNull(anime.titleRu, anime.title, anime.titleEn)
             .map(String::trim)
             .filter(String::isNotBlank)
             .distinctBy(String::lowercase)
-        if (queries.isEmpty()) return emptyList()
         // Сезон подтверждает только его собственное название (AniList), не русское название
         // франшизы: по нему находятся все релизы, в том числе прошлых сезонов.
         val seasonTitles = listOfNotNull(anime.title, anime.titleEn).takeIf { seasonIdentifiable }.orEmpty()
 
         return withContext(Dispatchers.IO) {
+            // Точное совпадение по id: Kodik нумерует сезоны по-своему (сиквел может лежать под
+            // ключом «6» при нашем «7»), а названия у каталогов расходятся, так что id — единственное
+            // доказательство, не зависящее ни от номера, ни от языка, ни от порядка слов.
+            if (seasonMalId != null) {
+                val byId = search("shikimori_id", seasonMalId.toString())?.let { payload ->
+                    payload.optJSONArray("results").objects()
+                        .filter { it.optString("shikimori_id") == seasonMalId.toString() }
+                        .mapNotNull { toCandidate(it, seasonNumber.coerceAtLeast(1), episodeNumber, true, emptyList(), exactId = true) }
+                        .distinctBy { it.iframeUrl }
+                        .take(limit)
+                }.orEmpty()
+                if (byId.isNotEmpty()) {
+                    Log.i(TAG, "Kodik direct id=$seasonMalId S$seasonNumber E$episodeNumber candidates=${byId.size}")
+                    return@withContext byId
+                }
+            }
             for (query in queries) {
-                val payload = search(query) ?: continue
+                val payload = search("title", query) ?: continue
                 val candidates = pickCandidates(
                     payload = payload,
                     localTitles = queries,
@@ -230,7 +258,7 @@ class KodikDirectSearch(
         return withContext(Dispatchers.IO) {
             val episodesBySeason = LinkedHashMap<Int, Int>()
             for (query in queries) {
-                val payload = search(query) ?: continue
+                val payload = search("title", query) ?: continue
                 payload.optJSONArray("results").objects()
                     .filter { result -> score(queries, result) >= TitleMatcher.MATCH_THRESHOLD }
                     .forEach { result -> collectSeasons(result, episodesBySeason) }
@@ -304,13 +332,15 @@ class KodikDirectSearch(
         episode: Int,
         seasonIdentifiable: Boolean,
         seasonTitles: List<String>,
+        /** Релиз найден по id сезона: номер и название сезона уже не проверяем. */
+        exactId: Boolean = false,
     ): KodikIframeCandidate? {
         val baseLink = normalizeUrl(result.optString("link")) ?: return null
         val isSerial = result.optString("type").contains("serial", ignoreCase = true)
         val titles = remoteTitles(result)
         // Релиз явно другого сезона не годится ни одной ступенью ниже.
-        if (titles.mapNotNull(::explicitReleaseSeason).let { it.isNotEmpty() && season !in it }) return null
-        val confirms = kodikReleaseServesSeason(titles, season, seasonTitles)
+        if (!exactId && titles.mapNotNull(::explicitReleaseSeason).let { it.isNotEmpty() && season !in it }) return null
+        val confirms = exactId || kodikReleaseServesSeason(titles, season, seasonTitles)
 
         val iframe = if (!isSerial) {
             // Фильм/OVA одной серией: отдаём только когда просят первую — иначе это не та серия.
@@ -322,7 +352,8 @@ class KodikDirectSearch(
             selectKodikSerialEpisodeLink(
                 baseLink = baseLink,
                 linksBySeason = result.optJSONObject("seasons")?.let(::parseKodikEpisodeLinks),
-                lastSeason = result.optInt("last_season", 0),
+                // По id номер сезона у Kodik нам ничего не говорит — не сверяем его с нашим.
+                lastSeason = if (exactId) 0 else result.optInt("last_season", 0),
                 lastEpisode = result.optInt("last_episode", 0),
                 season = season,
                 episode = episode,
@@ -342,12 +373,13 @@ class KodikDirectSearch(
 
     // region Сеть и токены
 
-    private suspend fun search(title: String): JSONObject? {
+    /** [param] — `title` либо `shikimori_id`; остальные параметры запроса общие. */
+    private suspend fun search(param: String, value: String): JSONObject? {
         // Сначала токен, который уже сработал в этом процессе: перебор — это лишние запросы
         // на каждую серию, а живой токен меняется куда реже.
         val cached = KodikTokenCache.working
         if (cached != null) {
-            when (val outcome = requestSearch(cached, title)) {
+            when (val outcome = requestSearch(cached, param, value)) {
                 is SearchOutcome.Ok -> return outcome.payload
                 SearchOutcome.TokenRejected -> KodikTokenCache.working = null
                 SearchOutcome.Failed -> return null
@@ -359,7 +391,7 @@ class KodikDirectSearch(
         var allRejected = true
         for (token in tokens) {
             if (token == cached) continue // только что отвергнут — второй раз не спрашиваем
-            when (val outcome = requestSearch(token, title)) {
+            when (val outcome = requestSearch(token, param, value)) {
                 is SearchOutcome.Ok -> {
                     KodikTokenCache.working = token
                     return outcome.payload
@@ -378,10 +410,10 @@ class KodikDirectSearch(
         return null
     }
 
-    private suspend fun requestSearch(token: String, title: String): SearchOutcome = runCatchingCancellable {
+    private suspend fun requestSearch(token: String, param: String, value: String): SearchOutcome = runCatchingCancellable {
         val url = "$API_ORIGIN/search".toHttpUrl().newBuilder()
             .addQueryParameter("token", token)
-            .addQueryParameter("title", title)
+            .addQueryParameter(param, value)
             .addQueryParameter("limit", SEARCH_LIMIT)
             .addQueryParameter("types", "anime,anime-serial")
             .addQueryParameter("with_episodes", "true")

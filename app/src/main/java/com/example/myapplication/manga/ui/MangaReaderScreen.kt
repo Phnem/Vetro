@@ -110,6 +110,16 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
+import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.runtime.produceState
+import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
+import com.example.myapplication.manga.translate.ChapterTranslationHost
+import com.example.myapplication.manga.translate.FailReason
+import com.example.myapplication.manga.translate.PageTranslationResult
+import com.example.myapplication.manga.translate.mangaTranslateStrings
+import com.example.myapplication.network.AppLanguage
 
 /**
  * Ридер главы: постранично или вебтун-лентой, поверх — скрываемый хром (тап по центру).
@@ -166,20 +176,24 @@ fun MangaReaderScreen(
                         modifier = Modifier.align(Alignment.Center),
                     )
 
-                    is MangaReaderUiState.Ready -> ReaderContent(
-                        state = state,
-                        mode = mode,
-                        direction = direction,
-                        cropBorders = cropBorders,
-                        ru = ru,
-                        onPageChanged = onPageChanged,
-                        onLayoutChange = onLayoutChange,
-                        onToggleCrop = onToggleCrop,
-                        onChapters = { chaptersVisible = true },
-                        onPreviousChapter = onPreviousChapter,
-                        onNextChapter = onNextChapter,
-                        onClose = onClose,
-                    )
+                    is MangaReaderUiState.Ready -> CompositionLocalProvider(
+                        LocalChapterTranslation provides state.translation,
+                    ) {
+                        ReaderContent(
+                            state = state,
+                            mode = mode,
+                            direction = direction,
+                            cropBorders = cropBorders,
+                            ru = ru,
+                            onPageChanged = onPageChanged,
+                            onLayoutChange = onLayoutChange,
+                            onToggleCrop = onToggleCrop,
+                            onChapters = { chaptersVisible = true },
+                            onPreviousChapter = onPreviousChapter,
+                            onNextChapter = onNextChapter,
+                            onClose = onClose,
+                        )
+                    }
                 }
             }
         },
@@ -736,6 +750,102 @@ private fun PageImage(
     /** Высота/ширина загруженной картинки — по ней постраничный режим узнаёт вебтун-полосу. */
     onIntrinsicRatio: (Float) -> Unit = {},
 ) {
+    val host = LocalChapterTranslation.current
+    if (host == null) {
+        PageImageContent(page, contentScale, cropBorders, ru, modifier, onIntrinsicRatio)
+        return
+    }
+    // Глава на другом языке: сначала показывается оригинал, и как только страница переведена,
+    // картинка заменяется готовой (она лежит файлом, как у скачанных глав).
+    var attempt by remember(page.url) { mutableIntStateOf(0) }
+    val translation by produceState<PageTranslationUi>(PageTranslationUi.Idle, page.url, host, attempt) {
+        val ready = host.service.cached(host.context, page)
+        if (ready != null) {
+            value = ready.toUi()
+            return@produceState
+        }
+        value = PageTranslationUi.Working
+        value = host.service.translate(host.context, page).toUi()
+    }
+    val shown = (translation as? PageTranslationUi.Done)?.file?.let {
+        page.copy(url = "file://" + it.absolutePath, headers = emptyMap())
+    } ?: page
+    PageImageContent(
+        page = shown,
+        contentScale = contentScale,
+        cropBorders = cropBorders,
+        ru = ru,
+        modifier = modifier,
+        onIntrinsicRatio = onIntrinsicRatio,
+        overlay = { TranslationBadge(translation, ru, onRetry = { attempt++ }) },
+    )
+}
+
+/** Состояние перевода страницы глазами экрана. */
+private sealed interface PageTranslationUi {
+    data object Idle : PageTranslationUi
+    data object Working : PageTranslationUi
+    data class Done(val file: java.io.File) : PageTranslationUi
+    data object NothingToTranslate : PageTranslationUi
+    data class Failed(val reason: FailReason) : PageTranslationUi
+}
+
+private fun PageTranslationResult.toUi(): PageTranslationUi = when (this) {
+    is PageTranslationResult.Ready -> PageTranslationUi.Done(file)
+    PageTranslationResult.NothingToTranslate -> PageTranslationUi.NothingToTranslate
+    is PageTranslationResult.Failed -> PageTranslationUi.Failed(reason)
+}
+
+/** Автоперевод текущей главы; null - глава читается как есть. */
+private val LocalChapterTranslation = staticCompositionLocalOf<ChapterTranslationHost?> { null }
+
+/** Плашка в углу страницы: идёт перевод или не вышло (с повтором). Готовой странице плашки нет. */
+@Composable
+private fun BoxScope.TranslationBadge(state: PageTranslationUi, ru: Boolean, onRetry: () -> Unit) {
+    val strings = remember(ru) { mangaTranslateStrings(if (ru) AppLanguage.RU else AppLanguage.EN) }
+    val text = when (state) {
+        PageTranslationUi.Working -> strings.readerTranslating
+        is PageTranslationUi.Failed -> when (state.reason) {
+            FailReason.NO_AI_KEY -> strings.readerNoKey
+            FailReason.MODELS_MISSING -> strings.readerModels
+            FailReason.RATE_LIMITED -> strings.readerRateLimited
+            else -> strings.readerFailed
+        }
+        else -> return
+    }
+    val failed = state is PageTranslationUi.Failed
+    Row(
+        modifier = Modifier
+            .align(Alignment.TopEnd)
+            .padding(8.dp)
+            .clip(RoundedCornerShape(14.dp))
+            .background(Color.Black.copy(alpha = 0.62f))
+            .then(if (failed) Modifier.clickable { onRetry() } else Modifier)
+            .padding(horizontal = 10.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (!failed) {
+            CircularProgressIndicator(color = BrandOrange, strokeWidth = 1.5.dp, modifier = Modifier.size(12.dp))
+            Spacer(Modifier.width(7.dp))
+        }
+        Text(text = text, color = Color.White, fontSize = 11.sp)
+        if (failed) {
+            Spacer(Modifier.width(8.dp))
+            Text(text = strings.readerRetry, color = BrandOrange, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+        }
+    }
+}
+
+@Composable
+private fun PageImageContent(
+    page: MangaPage,
+    contentScale: ContentScale,
+    cropBorders: Boolean,
+    ru: Boolean,
+    modifier: Modifier = Modifier,
+    onIntrinsicRatio: (Float) -> Unit = {},
+    overlay: @Composable BoxScope.() -> Unit = {},
+) {
     val context = LocalContext.current
     // Номер попытки живёт вместе со страницей и служит cache-bust'ом при перезагрузке.
     var attempt by remember(page.url) { mutableIntStateOf(0) }
@@ -744,7 +854,7 @@ private fun PageImage(
 
     val model = remember(page.url, attempt, cropBorders) {
         ImageRequest.Builder(context)
-            .data(page.url)
+            .data(page.coilData())
             .crossfade(true)
             .apply {
                 // Источники, отдающие картинки только со своим Referer, иначе вернут 403.
@@ -804,6 +914,7 @@ private fun PageImage(
                 CircularProgressIndicator(color = BrandOrange, strokeWidth = 2.dp)
             }
         }
+        overlay()
     }
 }
 

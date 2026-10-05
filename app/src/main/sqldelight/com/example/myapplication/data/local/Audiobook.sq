@@ -207,6 +207,15 @@ insertListenSession:
 INSERT INTO audiobook_listen_session(id, narration_id, started_at, listened_ms, book_ms, device_offline)
 VALUES ?;
 
+-- Статистика: сессии прослушивания для тепловой карты активности.
+listenSessionsSince:
+SELECT started_at, listened_ms FROM audiobook_listen_session WHERE started_at >= ? ORDER BY started_at;
+
+-- Статистика: сколько раз «прошли» каждую книгу (сумма прослушанного / длина) — повторные прослушивания.
+listenTotalsByNarration:
+SELECT narration_id, CAST(SUM(listened_ms) AS INTEGER) AS listened_ms, CAST(MAX(book_ms) AS INTEGER) AS book_ms
+FROM audiobook_listen_session GROUP BY narration_id;
+
 -- «На этой неделе: 4 ч 20 мин» — реальное время прослушивания с момента `since`.
 listenedSince:
 SELECT CAST(COALESCE(SUM(listened_ms), 0) AS INTEGER) FROM audiobook_listen_session WHERE started_at >= ?;

@@ -27,9 +27,9 @@ data class StatsCardSnapshot(
             StatsCardKind.RATING_BY_GENRE -> barData.joinToString("|") {
                 "${it.tagId}:${fmt(it.averageRating)}:${it.titleCount}"
             }
-            StatsCardKind.GENRE_FREQUENCY -> donutData?.slices
-                ?.joinToString("|") { "${it.tagId}:${it.count}" }
-                .orEmpty()
+            StatsCardKind.GENRE_FREQUENCY -> donutData?.let { d ->
+                d.slices.joinToString("|") { "${it.tagId}:${it.count}" } + "/${d.totalTitles}"
+            }.orEmpty()
             StatsCardKind.OVERVIEW -> "$totalAnime:${fmt(avgRating)}:$totalEpisodes:$favorites"
         }
         // Версия промпта в отпечатке: правка формулировки объяснения инвалидирует кэш.
@@ -47,7 +47,7 @@ data class StatsCardSnapshot(
 
     companion object {
         /** Меняем при правке промпта объяснений — форсит перегенерацию кэша. */
-        private const val PROMPT_VERSION = "v3"
+        private const val PROMPT_VERSION = "v4"
 
         fun build(kind: StatsCardKind, animeList: List<Anime>): StatsCardSnapshot = when (kind) {
             StatsCardKind.RATING_BY_GENRE -> StatsCardSnapshot(

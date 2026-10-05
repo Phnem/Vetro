@@ -1,0 +1,8 @@
+// Подключается из app/build.gradle.kts только пока существует папка src/cast.
+// F-Droid запрещает com.google.android.gms, поэтому его рецепт делает `rm: app/src/cast`.
+//
+// Это Groovy, а не .kts, намеренно: lint разбирает каждый .kts как скрипт сборки и на этом
+// падает (findFirCompiledSymbol), а обычный Groovy-скрипт он читает без Kotlin-анализа.
+dependencies {
+    implementation 'com.google.android.gms:play-services-cast-framework:22.3.1'
+}

@@ -90,6 +90,8 @@ import java.time.format.DateTimeFormatter
 import java.util.Locale
 import org.koin.androidx.compose.koinViewModel
 import org.koin.core.parameter.parametersOf
+import com.example.myapplication.manga.translate.ChapterTranslationPlan
+import com.example.myapplication.manga.translate.mangaTranslateStrings
 
 /** Каталог расширений Mihon — временная замена внутреннему экрану, пока нет `mihon-compat`. */
 private const val MIHON_EXTENSIONS_URL = "https://github.com/keiyoushi/extensions"
@@ -552,6 +554,9 @@ private fun ChaptersContent(
                             read = isRead(chapter),
                             downloaded = isDownloaded(chapter),
                             downloading = state.downloading[chapter.key],
+                            aiTranslated = ChapterTranslationPlan.needsTranslation(
+                                chapter, state.binding.preferredLanguage, state.autoTranslate,
+                            ),
                             isDark = isDark,
                             ru = ru,
                             onClick = { onOpen(chapter) },
@@ -616,6 +621,9 @@ private fun ChaptersContent(
                                         read = isRead(chapter),
                                         downloaded = isDownloaded(chapter),
                                         downloading = state.downloading[chapter.key],
+                                        aiTranslated = ChapterTranslationPlan.needsTranslation(
+                                            chapter, state.binding.preferredLanguage, state.autoTranslate,
+                                        ),
                                         isDark = isDark,
                                         ru = ru,
                                         onClick = { onOpen(chapter) },
@@ -1031,6 +1039,8 @@ private fun ChapterRow(
     read: Boolean,
     downloaded: Boolean,
     downloading: DownloadProgress?,
+    /** Глава на языке-оригинале: читается переведённой ИИ, помечается в подписи. */
+    aiTranslated: Boolean,
     isDark: Boolean,
     ru: Boolean,
     onClick: () -> Unit,
@@ -1080,6 +1090,7 @@ private fun ChapterRow(
                     chapter.pageCount.takeIf { it > 0 }?.let { if (ru) "$it стр." else "$it p." },
                     formatChapterDate(chapter.publishedAt, ru),
                     if (downloaded) (if (ru) "офлайн" else "offline") else null,
+                    if (aiTranslated) mangaTranslateStrings(if (ru) AppLanguage.RU else AppLanguage.EN).chapterBadge else null,
                 ).joinToString(" • ")
                 if (subtitle.isNotBlank()) {
                     Text(

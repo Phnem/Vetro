@@ -12,7 +12,9 @@ import com.example.myapplication.manga.data.MangaDownloadStore
 import com.example.myapplication.manga.data.MangaReadingStore
 import com.example.myapplication.manga.domain.MangaChapter
 import com.example.myapplication.manga.domain.MangaItem
-import com.example.myapplication.manga.domain.chaptersForLanguage
+import com.example.myapplication.manga.ja.JaTailResolver
+import com.example.myapplication.manga.translate.ChapterTranslationPlan
+import com.example.myapplication.manga.translate.MangaTranslateSettings
 import com.example.myapplication.manga.domain.chaptersToMarkRead
 import com.example.myapplication.manga.download.MangaDownloadWorker
 import com.example.myapplication.manga.source.MangaSourceEngine
@@ -44,6 +46,8 @@ sealed interface MangaLibraryUiState {
         val downloadedKeys: Set<String> = emptySet(),
         val downloading: Map<String, DownloadProgress> = emptyMap(),
         val refreshing: Boolean = false,
+        /** Включён ли автоперевод: главы-оригиналы в списке помечаются и читаются переведёнными. */
+        val autoTranslate: Boolean = false,
     ) : MangaLibraryUiState
 
     data class Error(val message: String) : MangaLibraryUiState
@@ -67,6 +71,9 @@ class MangaLibraryViewModel(
     private val readingStore: MangaReadingStore,
     private val cacheStore: MangaChapterCacheStore,
     private val downloadStore: MangaDownloadStore,
+    private val translateSettings: MangaTranslateSettings,
+    /** Японская цепочка: дописывает к главам источника свежие бесплатные главы на японском. */
+    private val tailResolver: JaTailResolver,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow<MangaLibraryUiState>(MangaLibraryUiState.Loading)
@@ -78,7 +85,23 @@ class MangaLibraryViewModel(
     private var progressJob: Job? = null
     private var downloadsJob: Job? = null
 
+    private var autoTranslate: Boolean = translateSettings.ui.value.active
+
     init {
+        // Переключатель в настройках меняет состав списка сразу, без перезахода во вкладку.
+        viewModelScope.launch {
+            translateSettings.active.collect { active ->
+                val changed = autoTranslate != active
+                autoTranslate = active
+                val binding = bindingStore.bindingFor(animeId)
+                if (binding != null && _state.value is MangaLibraryUiState.Chapters) {
+                    emitChapters(binding, refreshing = false)
+                    // Включили/выключили автоперевод: японский хвост появляется или исчезает, а он
+                    // живёт в кэше глав - перечитываем список, чтобы кэш и экран совпали.
+                    if (changed) loadChapters(binding, forceRefresh = true)
+                }
+            }
+        }
         viewModelScope.launch {
             bindingStore.ensureLoaded()
             val binding = bindingStore.bindingFor(animeId)
@@ -135,6 +158,8 @@ class MangaLibraryViewModel(
             bindingStore.setPreferredLanguage(animeId, language)
             val binding = bindingStore.bindingFor(animeId) ?: return@launch
             emitChapters(binding, refreshing = false)
+            // Японский хвост считается от последней главы на выбранном языке: сменили язык - пересчитываем.
+            if (autoTranslate) loadChapters(binding, forceRefresh = true)
         }
     }
 
@@ -170,9 +195,10 @@ class MangaLibraryViewModel(
      * Пустой ответ источника при живом кэше — не ошибка, а повод оставить то, что уже есть:
      * оглавление не должно исчезать из-за одной неудачной попытки.
      */
-    private fun loadChapters(binding: MangaBinding, forceRefresh: Boolean = false) {
+    private fun loadChapters(initial: MangaBinding, forceRefresh: Boolean = false) {
         chaptersJob?.cancel()
         chaptersJob = viewModelScope.launch {
+            var binding = initial
             cacheStore.ensureLoaded()
             val cached = cacheStore.entry(binding.sourceId, binding.mangaKey)
             val fresh = cacheStore.isFresh(binding.sourceId, binding.mangaKey)
@@ -186,7 +212,30 @@ class MangaLibraryViewModel(
                 _state.value = MangaLibraryUiState.Loading
             }
 
-            val loaded = engine.chapters(binding.toItem())
+            val fetched = engine.chapters(binding.toItem())
+            // Источник с единственным языком (Remanga - только русский) не даёт выбрать язык вручную,
+            // а без языка хвост строить не от чего: берём этот единственный язык сами.
+            val soleLanguage = fetched.mapNotNull { it.language }.distinct().singleOrNull()
+            if (binding.preferredLanguage == null && soleLanguage != null) {
+                bindingStore.setPreferredLanguage(animeId, soleLanguage)
+                binding = bindingStore.bindingFor(animeId) ?: binding
+            }
+            android.util.Log.i(
+                "JaTail",
+                "chapters of ${binding.title}: fetched=${fetched.size} autoTranslate=$autoTranslate lang=${binding.preferredLanguage} sole=$soleLanguage",
+            )
+            // Японский хвост: бесплатные главы дальше последней главы на языке пользователя.
+            val loaded = if (autoTranslate && fetched.isNotEmpty()) {
+                tailResolver.withTail(
+                    base = fetched,
+                    animeId = animeId,
+                    preferredLanguage = binding.preferredLanguage,
+                    queries = listOf(animeTitleEn, animeTitle, binding.title).filter { it.isNotBlank() }.distinct(),
+                    allowSearch = true,
+                )
+            } else {
+                fetched
+            }
             if (loaded.isEmpty()) {
                 if (cached == null) {
                     _state.value = MangaLibraryUiState.Error(ERROR_NO_CHAPTERS)
@@ -207,7 +256,7 @@ class MangaLibraryViewModel(
         val languages = chapters.mapNotNull { it.language }.distinct().sorted()
         // Тот же отбор, по которому карточка главного экрана считает прогресс чтения: разойдись
         // они — вкладка и карточка показывали бы разное число глав.
-        val filtered = chaptersForLanguage(chapters, binding.preferredLanguage)
+        val filtered = ChapterTranslationPlan.chapters(chapters, binding.preferredLanguage, autoTranslate)
         // Прогресс чтения и загрузки живут в своих потоках — при пересборке списка их не теряем.
         val previous = _state.value as? MangaLibraryUiState.Chapters
         _state.value = MangaLibraryUiState.Chapters(
@@ -218,6 +267,7 @@ class MangaLibraryViewModel(
             downloadedKeys = previous?.downloadedKeys.orEmpty(),
             downloading = previous?.downloading.orEmpty(),
             refreshing = refreshing,
+            autoTranslate = autoTranslate,
         )
     }
 

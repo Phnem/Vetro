@@ -62,7 +62,7 @@ val appModule = module {
     single { AiLlmFallbackRouter(get(), get(), get()) }
     single { InspectImageUseCase(get(), get(), get(), get()) }
     single { AddFromApiUseCase(get(), get(), get(), get(), get()) }
-    single { BatchEpisodeCheckUseCase(repository = get(), localDataSource = get()) }
+    single { BatchEpisodeCheckUseCase(repository = get(), localDataSource = get(), observations = get()) }
     single { com.example.myapplication.data.local.SeriesSeasonsStore(androidContext()) }
     single { com.example.myapplication.media.prefs.ContentPlaybackPreferences(androidContext()) }
     single {
@@ -145,6 +145,28 @@ val appModule = module {
     single { com.example.myapplication.manga.data.MangaChapterCacheStore(androidContext()) }
     single { com.example.myapplication.manga.data.MangaReadingStore(get(named("settings"))) }
     single { com.example.myapplication.manga.data.MangaDownloadStore(androidContext()) }
+    // Автоперевод манги: доступен только в официальной сборке и с подключённым BYOK.
+    single { com.example.myapplication.manga.translate.OfficialBuild(androidContext()) }
+    single { com.example.myapplication.manga.translate.AutoTranslateGate(get(), get()) }
+    single { com.example.myapplication.manga.translate.TranslationModelStore(androidContext(), get()) }
+    single {
+        com.example.myapplication.manga.translate.MangaTranslateSettings(
+            dataStore = get(named("settings")),
+            gate = get(),
+            models = get(),
+            scope = get<com.example.myapplication.AppScope>(),
+        )
+    }
+    single {
+        com.example.myapplication.manga.translate.MangaPageTranslationService(
+            context = androidContext(),
+            client = get(),
+            models = get(),
+            router = get(),
+            scope = get<com.example.myapplication.AppScope>(),
+        )
+    }
+    single { com.example.myapplication.manga.translate.MangaWorkContextProvider(androidContext(), get(), get()) }
     single {
         com.example.myapplication.manga.download.MangaChapterDownloader(
             client = get(),
@@ -183,6 +205,48 @@ val appModule = module {
             rateLimiter = get(named("remanga_rate")),
         )
     }
+    // Японская цепочка: бесплатные главы с сайтов издателей, которых ещё нет на языке пользователя.
+    single { com.example.myapplication.manga.ja.JaHttp(get<okhttp3.OkHttpClient>()) }
+    single(named("ja_sources")) {
+        com.example.myapplication.manga.ja.JapaneseSources.create(get())
+    }
+    // Японское название и номер AniList тайтла: нужны и японской, и английской цепочке.
+    single {
+        com.example.myapplication.manga.ja.NativeTitleResolver(
+            http = get(),
+            store = com.example.myapplication.data.local.JsonMapFileStore(
+                java.io.File(androidContext().filesDir, "manga_ja_titles_v1.json"),
+                com.example.myapplication.manga.ja.NativeEntry.serializer(),
+                "JaTitles",
+            ),
+        )
+    }
+    single {
+        com.example.myapplication.manga.ja.JaTailResolver(
+            sources = get(named("ja_sources")),
+            natives = get<com.example.myapplication.manga.ja.NativeTitleResolver>(),
+            english = com.example.myapplication.manga.ja.MangaDexEnglishTail(
+                catalog = get<com.example.myapplication.manga.source.MangaDexSource>(),
+                source = get<com.example.myapplication.manga.source.MangaDexSource>(),
+                natives = get<com.example.myapplication.manga.ja.NativeTitleResolver>(),
+                matches = com.example.myapplication.data.local.JsonMapFileStore(
+                    java.io.File(androidContext().filesDir, "manga_en_matches_v1.json"),
+                    com.example.myapplication.manga.ja.EnMatch.serializer(),
+                    "EnMatches",
+                ),
+            ),
+            matches = com.example.myapplication.data.local.JsonMapFileStore(
+                java.io.File(androidContext().filesDir, "manga_ja_matches_v1.json"),
+                com.example.myapplication.manga.ja.JaMatch.serializer(),
+                "JaMatches",
+            ),
+            health = com.example.myapplication.data.local.JsonMapFileStore(
+                java.io.File(androidContext().filesDir, "manga_ja_health_v1.json"),
+                com.example.myapplication.manga.ja.JaHealth.serializer(),
+                "JaHealth",
+            ),
+        )
+    }
     single {
         com.example.myapplication.manga.source.MangaSourceEngine(
             // Remanga первым: у русскоязычной коллекции шанс попадания выше.
@@ -190,6 +254,7 @@ val appModule = module {
                 get<com.example.myapplication.manga.source.RemangaSource>(),
                 get<com.example.myapplication.manga.source.MangaDexSource>(),
             ),
+            japaneseSources = get(named("ja_sources")),
         )
     }
     // Новые главы по привязкам — тем же фоновым проходом, что и новые серии.
@@ -198,6 +263,8 @@ val appModule = module {
             bindingStore = get(),
             chapterCache = get(),
             sourceEngine = get(),
+            translateSettings = get(),
+            tailResolver = get(),
         )
     }
 
@@ -349,6 +416,7 @@ val appModule = module {
         )
     }
     single { com.example.myapplication.media.source.movieseries.ProviderHealthStore(androidContext()) }
+    single { com.example.myapplication.media.intelligence.SourceIntelligence(androidContext()) }
     single { com.example.myapplication.media.source.movieseries.custom.CustomSourceStore(androidContext()) }
     // Привязка интерфейса обязательна: Koin разрешает зависимость по ОБЪЯВЛЕННОМУ типу, а
     // CustomSourceRegistry и CustomSourceSettingsService просят InstalledSourceStore. Без этой
@@ -396,6 +464,7 @@ val appModule = module {
                 ),
             ),
             providerHealth = get<com.example.myapplication.media.source.movieseries.ProviderHealthStore>(),
+            intelligence = get(),
             customSources = {
                 get<com.example.myapplication.media.source.movieseries.custom.CustomSourceRegistry>()
                     .providers()
@@ -439,7 +508,24 @@ val appModule = module {
         )
     }
     single { StatsExplanationCacheStore(androidContext()) }
+    single {
+        com.example.myapplication.domain.calendar.ReleaseCalendarRepository(
+            localDataSource = get(),
+            enrichment = get(),
+            animeSeasons = get(),
+            seriesSeasons = get(),
+            observations = get(),
+        )
+    }
     single { StatsCardExplanationUseCase(router = get(), genreRepository = get()) }
+    single {
+        com.example.myapplication.domain.stats.CollectionInsightsLoader(
+            episodeStore = get(),
+            mangaStore = get(),
+            db = get(),
+            localDataSource = get(),
+        )
+    }
     single {
         StatsExplanationCoordinator(
             localDataSource = get(),

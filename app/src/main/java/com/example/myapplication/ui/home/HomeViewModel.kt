@@ -77,6 +77,7 @@ class HomeViewModel(
     private val mangaBindingStore: com.example.myapplication.manga.data.MangaBindingStore,
     private val mangaChapterCacheStore: com.example.myapplication.manga.data.MangaChapterCacheStore,
     private val mangaReadingStore: com.example.myapplication.manga.data.MangaReadingStore,
+    private val mangaTranslateSettings: com.example.myapplication.manga.translate.MangaTranslateSettings? = null,
     /** null — раздел аудиокниг выключен в сборке, вкладки «Книги» в поиске нет. */
     private val bookSearch: com.example.myapplication.audiobooks.data.BookSearchAdder? = null,
 ) : ViewModel() {
@@ -132,15 +133,19 @@ class HomeViewModel(
                     combine(
                         mangaReadingStore.progressFlow(bindings.keys.toList()),
                         mangaChapterCacheStore.flow,
-                    ) { progressByTitle, chapterCache ->
+                        mangaTranslateSettings?.active ?: flowOf(false),
+                    ) { progressByTitle, chapterCache, autoTranslate ->
                         bindings.mapValues { (animeId, binding) ->
                             val cached = chapterCache[
                                 mangaChapterCacheStore.entryKey(binding.sourceId, binding.mangaKey)
                             ]
                             com.example.myapplication.manga.domain.summarizeMangaReading(
-                                chapters = com.example.myapplication.manga.domain.chaptersForLanguage(
+                                // Тот же список, что во вкладке "Главы": с автопереводом к главам языка
+                                // добавляются оригиналы, которых на нём ещё нет.
+                                chapters = com.example.myapplication.manga.translate.ChapterTranslationPlan.chapters(
                                     chapters = cached?.chapters.orEmpty(),
                                     preferredLanguage = binding.preferredLanguage,
+                                    autoTranslate = autoTranslate,
                                 ),
                                 progress = progressByTitle[animeId].orEmpty(),
                             )

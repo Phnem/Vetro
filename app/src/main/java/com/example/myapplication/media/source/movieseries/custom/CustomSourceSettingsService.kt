@@ -22,6 +22,16 @@ sealed interface CustomSourceOutcome {
     data class Rejected(val reason: String) : CustomSourceOutcome
     /** Пакет v2 разобран и проверен; установка — после подтверждения пользователем ([confirm]). */
     data class ReviewRequired(val preview: PackagePreview) : CustomSourceOutcome
+
+    /**
+     * Подборка из нескольких источников: [installed] поставлено сразу (манифесты, аддоны), [previews] —
+     * пакеты v2, ждущие подтверждения, [problems] — «id: причина» для отклонённых.
+     */
+    data class Bundle(
+        val installed: Int,
+        val previews: List<PackagePreview>,
+        val problems: List<String>,
+    ) : CustomSourceOutcome
 }
 
 /**
@@ -40,6 +50,36 @@ class CustomSourceSettingsService(
 
     /** Installs from a definition the user pasted or picked as a file. */
     suspend fun installFromText(text: String, sourceUrl: String? = null): CustomSourceOutcome {
+        installer.bundleItems(text)?.let { return installBundle(it) }
+        return installSingle(text, sourceUrl)
+    }
+
+    /**
+     * Каждый элемент подборки ставится так же, как отдельный файл. Ссылка на подборку элементам не
+     * передаётся: «обновить» один источник по ней означало бы заново импортировать всю подборку.
+     */
+    private suspend fun installBundle(items: List<String>): CustomSourceOutcome {
+        if (items.isEmpty()) return CustomSourceOutcome.Rejected("The file lists no sources")
+        if (items.size > CustomSourceInstaller.MAX_BUNDLE_ITEMS) {
+            return CustomSourceOutcome.Rejected("Too many sources in one file (max ${CustomSourceInstaller.MAX_BUNDLE_ITEMS})")
+        }
+        var installed = 0
+        val previews = mutableListOf<PackagePreview>()
+        val problems = mutableListOf<String>()
+        items.forEachIndexed { i, item ->
+            val label = installer.labelOf(item) ?: item.takeIf { it.startsWith("https://") } ?: "#${i + 1}"
+            val outcome = if (item.startsWith("https://")) installFromUrl(item) else installSingle(item, null)
+            when (outcome) {
+                is CustomSourceOutcome.Installed -> installed++
+                is CustomSourceOutcome.ReviewRequired -> previews += outcome.preview
+                is CustomSourceOutcome.Rejected -> problems += "$label: ${outcome.reason}"
+                is CustomSourceOutcome.Bundle -> problems += "$label: a bundle inside a bundle is not supported"
+            }
+        }
+        return CustomSourceOutcome.Bundle(installed, previews.distinctBy { it.source.key }, problems)
+    }
+
+    private suspend fun installSingle(text: String, sourceUrl: String?): CustomSourceOutcome {
         if (installer.looksLikePackage(text)) {
             val installed = installedFacts(text)
             return when (val parsed = installer.fromPackageJson(text, sourceUrl, installed)) {

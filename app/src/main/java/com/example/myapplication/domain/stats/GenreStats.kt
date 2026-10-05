@@ -5,13 +5,17 @@ import com.example.myapplication.data.models.Anime
 data class TagFrequencySlice(
     val tagId: String,
     val count: Int,
-    /** Доля внутри топ-5: count / top5Sum. Круг на 100% = сумма пяти жанров. */
-    val share: Float
+    /** Доля внутри топ-5: count / top5Sum. Длина дуги кольца: круг = сумма пяти жанров. */
+    val share: Float,
+    /** Доля тайтлов жанра во всей коллекции: count / totalTitles. Жанры пересекаются, сумма > 100%. */
+    val collectionShare: Float
 )
 
 data class DonutChartData(
-    /** Сумма вхождений у топ-5; число в центре кольца. */
+    /** Сумма вхождений у топ-5 — только знаменатель длины дуг. */
     val top5CountSum: Int,
+    /** Тайтлов в коллекции; число в центре кольца (а не сумма жанровых вхождений). */
+    val totalTitles: Int,
     val slices: List<TagFrequencySlice>
 )
 
@@ -22,7 +26,9 @@ data class BarChartEntry(
 )
 
 /**
- * Топ-5 тегов по частоте. Доли: count / top5Sum (без сегмента «Прочее»).
+ * Топ-5 тегов по частоте. Дуги кольца: count / top5Sum (без сегмента «Прочее»); подписи для
+ * человека — «count из totalTitles»: у тайтла несколько жанров, поэтому сумма вхождений
+ * (429) больше числа тайтлов (220).
  */
 fun buildDonutChartData(animeList: List<Anime>): DonutChartData? {
     val allTags = animeList.flatMap { a -> a.tags }
@@ -35,9 +41,14 @@ fun buildDonutChartData(animeList: List<Anime>): DonutChartData? {
     val top5Sum = top5.sumOf { it.value }
     if (top5Sum == 0) return null
     val slices = top5.map { (tag, c) ->
-        TagFrequencySlice(tagId = tag, count = c, share = c.toFloat() / top5Sum)
+        TagFrequencySlice(
+            tagId = tag,
+            count = c,
+            share = c.toFloat() / top5Sum,
+            collectionShare = c.toFloat() / animeList.size,
+        )
     }
-    return DonutChartData(top5CountSum = top5Sum, slices = slices)
+    return DonutChartData(top5CountSum = top5Sum, totalTitles = animeList.size, slices = slices)
 }
 
 /**

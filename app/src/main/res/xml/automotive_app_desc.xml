@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android Auto: Vetro показывается как медиаприложение (аудиокниги), каталог отдаёт AudiobookPlaybackService. -->
+<automotiveApp>
+    <uses name="media" />
+</automotiveApp>

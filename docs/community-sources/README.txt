@@ -14,6 +14,7 @@ https://docs.google.com/forms/d/e/1FAIpQLSeov9HZLYJvjpecngntqbXifCwdSXPf_t5G0PLq
 
 Импорт: Настройки → Дополнительные источники → «Импортировать .vetro» (файл) или поле
 «Ссылка или конфигурация» (ссылка / вставленный JSON / адрес Stremio-аддона).
+Один файл может нести сразу несколько источников — подборку (раздел 6).
 
 
 ======================================================================
@@ -264,7 +265,8 @@ allowInsecureHttp нет  только для адреса в локальной
 
 Аддон в Vetro добавляется ссылкой на его manifest.json — в поле «Ссылка или конфигурация».
 Файл в папке Vetro Stremio — обычный текст: одна ссылка на строку, после «#» — комментарий.
-Импорта такого списка целиком в приложении нет: ссылки добавляются по одной.
+Такой файл импортируется целиком, как подборка (раздел 6): «Импортировать .vetro» или вставить
+текст в поле «Ссылка или конфигурация».
 
 --- Пример файла .vetro-stremio -------------------------------------------------
 
@@ -273,7 +275,43 @@ https://addon.example.com/manifest.json      # что даёт аддон, яз�
 
 
 ======================================================================
-6. ЧАСТЫЕ ПРИЧИНЫ ОТКАЗА (так их пишет приложение)
+6. ПОДБОРКИ: НЕСКОЛЬКО ИСТОЧНИКОВ В ОДНОМ ФАЙЛЕ
+======================================================================
+
+Подборка — это обычный JSON-массив, каждый элемент которого — источник целиком: пакет v2
+(раздел 3), манифест v1 (раздел 4) или строка-ссылка (адрес Stremio-аддона или файла источника).
+Элементы можно смешивать.
+
+--- Пример подборки ---------------------------------------------------------------
+
+[
+  { "format": 2, "id": "X", ... },
+  { "format": 2, "id": "Y", ... },
+  ...
+]
+
+На месте «...» — полный пакет, как в примере раздела 3. Ссылки кладутся строками:
+[ { "format": 2, "id": "X", ... }, "https://addon.example.com/manifest.json" ]
+
+Ещё две формы того же самого:
+  • объект с названием: { "name": "Моя подборка", "sources": [ … ] } — у объекта не должно
+    быть полей "format" и "manifestVersion", иначе он читается как одиночный источник;
+  • обычный текст из ссылок, по одной на строку, «#» — комментарий (формат папки Vetro Stremio).
+
+Правила:
+  • в подборке не больше 50 источников, файл — не больше 2 МБ, каждый пакет внутри — по-прежнему
+    не больше 256 КБ;
+  • каждый элемент проверяется так же, как отдельный файл, и со своими причинами отказа;
+  • манифесты и аддоны ставятся сразу, пакеты v2 ждут подтверждения — по одному или кнопкой
+    «Установить все»;
+  • отклонённые элементы приложение перечисляет как «id: причина», остальные ставятся;
+  • подборка внутри подборки не поддерживается;
+  • источник, вписанный в подборку целиком (JSON), не обновляется по ссылке — новая версия
+    приходит повторным импортом подборки; элементы-ссылки обновляются по своей ссылке.
+
+
+======================================================================
+7. ЧАСТЫЕ ПРИЧИНЫ ОТКАЗА (так их пишет приложение)
 ======================================================================
 
   Unsupported package format N                    — format не 2
@@ -292,6 +330,10 @@ https://addon.example.com/manifest.json      # что даёт аддон, яз�
   Addon does not provide the stream resource      — Stremio без "stream"
   P2P addons are not supported
   Addon does not accept IMDb ids
+  The file lists no sources                       — пустая подборка
+  Too many sources in one file (max 50)
+  a bundle inside a bundle is not supported       — элемент подборки сам подборка
+  Файл больше 2 МБ / The file is larger than 2 MB — файл импорта целиком
 
 
 EN — short version
@@ -304,4 +346,7 @@ and returns complete direct media links (HLS, DASH or a file) on known hosts (ma
 HTML scraping, JavaScript, iframes, link decryption, captchas, torrents, URLs that must be assembled
 from parts, request bodies (GraphQL), XML/RSS/OPDS. Packages currently work for movies and series
 only. Stremio addons need the "stream" resource, movie/series types and IMDb ids, no P2P.
+One file can carry a bundle: a JSON array of sources ([ {package}, {manifest}, "https://…" ]),
+an object { "name", "sources": [ … ] }, or plain text with one link per line. Max 50 sources and
+2 MB per file; each item is checked on its own, v2 packages wait for review ("Install all").
 Sections 3–4 above contain the full field reference and complete examples (fictional hosts).

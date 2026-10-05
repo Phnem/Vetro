@@ -3,6 +3,7 @@ package com.example.myapplication.updates
 import com.example.myapplication.network.retryOn429
 import android.util.Log
 import com.example.myapplication.data.local.AnimeLocalDataSource
+import com.example.myapplication.data.local.ReleaseObservationStore
 import com.example.myapplication.data.models.AiringProgress
 import com.example.myapplication.data.models.Anime
 import com.example.myapplication.data.models.AnimeUpdate
@@ -33,7 +34,9 @@ import kotlinx.coroutines.delay
  */
 class BatchEpisodeCheckUseCase(
     private val repository: AnimeRepository,
-    private val localDataSource: AnimeLocalDataSource
+    private val localDataSource: AnimeLocalDataSource,
+    /** Журнал вышедших серий для ритма выхода (см. ReleaseCadence); null — не ведётся (тесты). */
+    private val observations: ReleaseObservationStore? = null,
 ) {
 
     /**
@@ -53,8 +56,10 @@ class BatchEpisodeCheckUseCase(
 
         val detected = detect(animeOnly, language)
         // Снимок «выходящих сезонов» авторитетен для всего прохода: полная перезапись.
+        val previousAiring = runCatching { localDataSource.getAiringProgressSnapshot() }.getOrElse { emptyMap() }
         runCatching { localDataSource.setAiringProgress(detected.airing) }
             .onFailure { Log.w(TAG, "setAiringProgress failed: ${it.message}") }
+        recordReleaseObservations(previousAiring, detected.airing)
 
         return publishEpisodeUpdates(
             detected = detected.updates,
@@ -67,6 +72,26 @@ class BatchEpisodeCheckUseCase(
             },
             setUpdates = localDataSource::setUpdates,
         )
+    }
+
+    /**
+     * Серия вышла, если число вышедших выросло в том же сезоне с прошлого прохода. Момент — время
+     * этой проверки (приблизительное): проверки идут каждые несколько часов, день недели при этом
+     * почти всегда тот же, что у выхода, а ритм требует лишь совпадения дней у соседних серий.
+     */
+    private suspend fun recordReleaseObservations(
+        previous: Map<String, AiringProgress>,
+        current: List<AiringProgress>,
+    ) {
+        val store = observations ?: return
+        val now = System.currentTimeMillis()
+        for (item in current) {
+            val before = previous[item.animeId] ?: continue
+            if (item.airedEpisodes <= before.airedEpisodes) continue
+            if (before.seasonNumber != null && item.seasonNumber != null && before.seasonNumber != item.seasonNumber) continue
+            runCatching { store.record(item.animeId, item.airedEpisodes, now, exact = false) }
+                .onFailure { Log.w(TAG, "release observation failed: ${it.message}") }
+        }
     }
 
     // ==========================================================

@@ -11,7 +11,10 @@ import androidx.media3.common.PlaybackException
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.HttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.common.MediaItem
 import androidx.media3.session.CommandButton
+import androidx.media3.session.LibraryResult
+import androidx.media3.session.SessionError
 import androidx.media3.session.MediaLibraryService
 import androidx.media3.session.MediaSession
 import androidx.media3.session.SessionCommand
@@ -26,7 +29,9 @@ import com.example.myapplication.audiobooks.domain.model.VariantId
 import com.example.myapplication.audiobooks.domain.timeline.BookTimeline
 import com.example.myapplication.MainActivity
 import com.phnem.vetro.BuildConfig
+import com.google.common.collect.ImmutableList
 import com.google.common.util.concurrent.Futures
+import com.google.common.util.concurrent.SettableFuture
 import com.google.common.util.concurrent.ListenableFuture
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -47,6 +52,10 @@ class AudiobookPlaybackService : MediaLibraryService() {
     private val chain: NarrationChain by inject()
     private val repository: AudiobookRepository by inject()
     private val recoveredChapters: com.example.myapplication.audiobooks.chapters.RecoveredChapterStore by inject()
+    /** Каталог для Android Auto: «Продолжить» и «Библиотека», запуск книги по идентификатору. */
+    private val browseTree by lazy {
+        AudiobookBrowseTree(repository, chain) { Locale.getDefault().language == "ru" }
+    }
     /** Книга, чьё «избранное» сейчас отражает сердце в системной карточке. */
     private var favoriteWork: String? = null
     private var favoriteJob: Job? = null
@@ -89,6 +98,15 @@ class AudiobookPlaybackService : MediaLibraryService() {
         }
     }
     private val playerListener = object : Player.Listener {
+        override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
+            if (!playWhenReady) {
+                // Дочитанный файл - не пауза слушателя: откатывать после него нечего.
+                if (reason != Player.PLAY_WHEN_READY_CHANGE_REASON_END_OF_MEDIA_ITEM) markPaused()
+            } else {
+                applySmartRewind()
+            }
+        }
+
         override fun onIsPlayingChanged(isPlaying: Boolean) {
             sleepTimer.onPlaybackChanged()
             handler.removeCallbacks(updateChapter)
@@ -241,6 +259,44 @@ class AudiobookPlaybackService : MediaLibraryService() {
                 publishMediaButtons()
             }
         }
+    }
+
+    /**
+     * Момент паузы пишется в настройки, а не держится в памяти: сервис умирает, пока вы спите, а
+     * откатывать после ночи надо так же, как после обеда. Часы стенные - uptime после перезагрузки
+     * телефона обнуляется.
+     */
+    private fun markPaused() {
+        getSharedPreferences(PREFS, MODE_PRIVATE).edit().putLong(KEY_PAUSED_AT, System.currentTimeMillis()).apply()
+    }
+
+    /** Возобновление: чем дольше пауза, тем дальше откат ([SmartRewind]); выключатель - в меню плеера. */
+    private fun applySmartRewind() {
+        val prefs = getSharedPreferences(PREFS, MODE_PRIVATE)
+        val pausedAt = prefs.getLong(KEY_PAUSED_AT, 0L)
+        if (pausedAt <= 0L) return
+        prefs.edit().remove(KEY_PAUSED_AT).apply()
+        if (!prefs.getBoolean(KEY_SMART_REWIND, true)) return
+        val pausedMs = System.currentTimeMillis() - pausedAt
+        val position = player.currentPosition
+        val target = SmartRewind.resumePositionMs(position, pausedMs)
+        if (target < position) player.seekTo(target)
+    }
+
+    /** Результат корутины - в ListenableFuture, которого ждёт MediaLibrarySession. */
+    private fun <T> futureOf(block: suspend () -> T): ListenableFuture<T> {
+        val future = SettableFuture.create<T>()
+        recoveryScope.launch {
+            try {
+                future.set(block())
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                future.cancel(false)
+                throw e
+            } catch (e: Exception) {
+                future.setException(e)
+            }
+        }
+        return future
     }
 
     /** Следующая скорость по кругу 1.0 → 1.2 → 1.5 → 1.8 → 2.0 → 1.0 (ровно те, что есть у иконок). */
@@ -490,6 +546,48 @@ class AudiobookPlaybackService : MediaLibraryService() {
             return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
         }
 
+        override fun onGetLibraryRoot(
+            session: MediaLibrarySession,
+            browser: MediaSession.ControllerInfo,
+            params: LibraryParams?,
+        ): ListenableFuture<LibraryResult<MediaItem>> =
+            Futures.immediateFuture(LibraryResult.ofItem(browseTree.root(recent = params?.isRecent == true), params))
+
+        override fun onGetChildren(
+            session: MediaLibrarySession,
+            browser: MediaSession.ControllerInfo,
+            parentId: String,
+            page: Int,
+            pageSize: Int,
+            params: LibraryParams?,
+        ): ListenableFuture<LibraryResult<ImmutableList<MediaItem>>> = futureOf {
+            val all = browseTree.children(parentId)
+            val from = (page * pageSize).coerceAtMost(all.size)
+            val slice = if (pageSize > 0) all.subList(from, (from + pageSize).coerceAtMost(all.size)) else all
+            LibraryResult.ofItemList(ImmutableList.copyOf(slice), params)
+        }
+
+        override fun onGetItem(
+            session: MediaLibrarySession,
+            browser: MediaSession.ControllerInfo,
+            mediaId: String,
+        ): ListenableFuture<LibraryResult<MediaItem>> = futureOf {
+            browseTree.item(mediaId)?.let { LibraryResult.ofItem(it, null) }
+                ?: LibraryResult.ofError(SessionError.ERROR_BAD_VALUE)
+        }
+
+        override fun onSetMediaItems(
+            mediaSession: MediaSession,
+            controller: MediaSession.ControllerInfo,
+            mediaItems: MutableList<MediaItem>,
+            startIndex: Int,
+            startPositionMs: Long,
+        ): ListenableFuture<MediaSession.MediaItemsWithStartPosition> = futureOf {
+            // Auto и голосовой ассистент присылают только идентификатор книги: очередь из файлов,
+            // сохранённое место и источник собираются здесь, а не в машине.
+            browseTree.resolve(mediaItems, startIndex, startPositionMs)
+        }
+
         override fun onPlaybackResumption(
             mediaSession: MediaSession,
             controller: MediaSession.ControllerInfo,
@@ -545,5 +643,8 @@ class AudiobookPlaybackService : MediaLibraryService() {
         const val POSITION_SAVE_INTERVAL_MS = 5_000L
         const val CHAPTER_UPDATE_INTERVAL_MS = 1_000L
         const val PREFS = "audiobook_player_options"
+        const val KEY_PAUSED_AT = "paused_at"
+        /** Выключатель умной перемотки; читает и пишет меню плеера напрямую (тот же процесс). */
+        const val KEY_SMART_REWIND = "smart_rewind"
     }
 }

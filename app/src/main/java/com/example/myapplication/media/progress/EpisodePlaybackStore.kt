@@ -32,6 +32,11 @@ data class EpisodePlaybackProgress(
     val positionMs: Long = 0L,
     val durationMs: Long = 0L,
     val updatedAt: Long = 0L,
+    /**
+     * Сколько раз серию пересматривали после досмотра (см. [REWATCH_GAP_MS]). Считается на
+     * устройстве: в облачную строку прогресса поле не входит, при слиянии берётся большее.
+     */
+    val rewatchCount: Int = 0,
 ) {
     val fraction: Float
         get() = if (durationMs > 0L) {
@@ -155,7 +160,15 @@ class EpisodePlaybackStore(
         writeMutex.withLock {
             edit { preferences ->
                 val current = decode(preferences[preferenceKey]).toMutableMap()
-                current[target] = normalized
+                val previous = current[target]
+                // Возврат: серия была досмотрена, прошёл перерыв, и её открыли заново с начала.
+                // Вторая запись того же просмотра уже видит позицию «не досмотрено» и не считается.
+                val restarted = previous != null && previous.watched &&
+                    normalized.updatedAt - previous.updatedAt >= REWATCH_GAP_MS &&
+                    normalized.positionMs.toDouble() / durationMs <= REWATCH_RESTART_FRACTION
+                current[target] = normalized.copy(
+                    rewatchCount = (previous?.rewatchCount ?: 0) + if (restarted) 1 else 0,
+                )
                 preferences[preferenceKey] = encode(current)
             }
         }
@@ -226,7 +239,9 @@ class EpisodePlaybackStore(
                     for ((episodeKey, value) in incoming) {
                         val local = current[episodeKey]
                         if (local != null && local.updatedAt >= value.updatedAt) continue
-                        current[episodeKey] = value
+                        current[episodeKey] = value.copy(
+                            rewatchCount = maxOf(value.rewatchCount, local?.rewatchCount ?: 0),
+                        )
                         changed = true
                         applied++
                     }
@@ -270,6 +285,12 @@ class EpisodePlaybackStore(
     private companion object {
         /** Меньше минуты в серии — это не просмотр, а проба источника. */
         const val MEANINGFUL_WATCH_MS = 60_000L
+
+        /** Перерыв между досмотром и новым заходом, после которого заход считается пересмотром. */
+        const val REWATCH_GAP_MS = 30L * 60_000L
+
+        /** Пересмотр начинается с начала серии, а не с перемотки к финалу. */
+        const val REWATCH_RESTART_FRACTION = 0.3
         const val PROGRESS_PREFIX = "episode_progress_"
         const val QUALITY_PREFIX = "episode_quality_"
         val MIGRATED_KEY = booleanPreferencesKey("migrated_from_settings_v1")

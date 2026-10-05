@@ -51,12 +51,19 @@ class LocalLibraryImporter(
             manifest?.let { resolver.put(it) }
             val folder = FolderName.parse(book.title)
             val title = folder.title
-            val authors = listOfNotNull(manifest?.let(local::author) ?: folder.author)
+            // «Исполнитель» в тегах — чаще чтец, чем автор. Если принять его за автора, сверка автора
+            // отбросит верное совпадение и обложки не будет, поэтому в поиск идёт только то, что
+            // точно автор: явный тег либо автор из имени папки. Остальное разберёт каталог.
+            val tags = manifest?.let(local::tags)
+            val authors = listOfNotNull(tags?.author ?: folder.author)
             val match = findWork(title, authors)
             val details = match?.let { m ->
                 val source = sources.firstOrNull { it.id == m.ref.source } ?: return@let null
                 (runCatching { source.details(m.ref) }.getOrNull() as? SourceResult.Ok)?.value
             }
+            val matchAuthors = WorkMatch.words(match?.authors.orEmpty())
+            val narrators = folder.narrator?.let(::listOf)
+                ?: tags?.people.orEmpty().filterNot { person -> WorkMatch.words(listOf(person)).any(matchAuthors::contains) }
             repository.saveLocal(
                 workId = book.workId,
                 narrationId = book.narrationId,
@@ -65,7 +72,7 @@ class LocalLibraryImporter(
                 meta = LocalBookMeta(
                     title = title,
                     authors = authors.ifEmpty { match?.authors.orEmpty() },
-                    narrators = folder.narrator?.let(::listOf).orEmpty(),
+                    narrators = narrators,
                     coverUrl = book.artworkUri?.toString() ?: match?.coverUrl,
                     description = details?.description,
                     genres = match?.genres.orEmpty(),

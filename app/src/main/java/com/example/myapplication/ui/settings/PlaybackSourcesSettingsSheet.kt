@@ -132,11 +132,13 @@ fun PlaybackSourcesSettingsSheet(
                 sources = state.customSources,
                 isInstalling = state.isInstalling,
                 installError = state.installError,
-                preview = state.packagePreview,
+                previews = state.packagePreviews,
                 ru = ru,
                 onInstall = viewModel::installCustomSource,
                 onConfirmPackage = viewModel::confirmPackage,
                 onDismissPackage = viewModel::dismissPackage,
+                onConfirmAll = viewModel::confirmAllPackages,
+                onDismissAll = viewModel::dismissAllPackages,
                 onToggle = viewModel::setCustomSourceEnabled,
                 onRefresh = viewModel::refreshCustomSource,
                 onRemove = viewModel::removeCustomSource,
@@ -389,11 +391,13 @@ private fun CustomSourcesSection(
     sources: List<CustomSourceSummary>,
     isInstalling: Boolean,
     installError: String?,
-    preview: PackagePreview?,
+    previews: List<PackagePreview>,
     ru: Boolean,
     onInstall: (String) -> Unit,
-    onConfirmPackage: () -> Unit,
-    onDismissPackage: () -> Unit,
+    onConfirmPackage: (PackagePreview) -> Unit,
+    onDismissPackage: (PackagePreview) -> Unit,
+    onConfirmAll: () -> Unit,
+    onDismissAll: () -> Unit,
     onToggle: (String, Boolean) -> Unit,
     onRefresh: (String) -> Unit,
     onRemove: (String) -> Unit,
@@ -416,17 +420,18 @@ private fun CustomSourcesSection(
         }
         val text = runCatching {
             context.contentResolver.openInputStream(uri)?.use { stream ->
-                stream.readNBytesCompat(CustomSourceInstaller.MAX_PACKAGE_BYTES + 1).toString(Charsets.UTF_8)
+                stream.readNBytesCompat(CustomSourceInstaller.MAX_BUNDLE_BYTES + 1).toString(Charsets.UTF_8)
             }
         }.getOrNull()?.removePrefix("\uFEFF")
-        // Здесь — только «это вообще JSON-объект». Пакет это, манифест или что-то негодное, решает
-        // установщик: он же и называет точную причину отказа.
+        // Здесь — только «это вообще можно импортировать»: источник, подборка или список ссылок. Что
+        // именно внутри и годится ли оно, решает установщик — он же называет точную причину отказа.
         vetroFileError = when {
             text.isNullOrBlank() -> if (ru) "Файл не прочитался" else "Could not read the file"
-            !installer.looksLikeJsonObject(text) -> if (ru) {
-                "Файл не JSON: в нём должен быть один объект { … } без текста до и после"
+            text.length > CustomSourceInstaller.MAX_BUNDLE_BYTES -> if (ru) "Файл больше 2 МБ" else "The file is larger than 2 MB"
+            !installer.looksImportable(text) -> if (ru) {
+                "Файл не JSON: ожидается источник { … }, подборка [ … ] или список ссылок, по одной на строку"
             } else {
-                "Not a JSON file: it must hold a single { … } object with nothing before or after it"
+                "Not a JSON file: expected a source { … }, a bundle [ … ] or a list of links, one per line"
             }
             else -> null
         }
@@ -437,7 +442,7 @@ private fun CustomSourcesSection(
         uri ?: return@rememberLauncherForActivityResult
         val text = runCatching {
             context.contentResolver.openInputStream(uri)?.use { stream ->
-                stream.readNBytesCompat(CustomSourceInstaller.MAX_PACKAGE_BYTES + 1).toString(Charsets.UTF_8)
+                stream.readNBytesCompat(CustomSourceInstaller.MAX_BUNDLE_BYTES + 1).toString(Charsets.UTF_8)
             }
         }.getOrNull()
         if (!text.isNullOrBlank()) onInstall(text)
@@ -542,7 +547,25 @@ private fun CustomSourcesSection(
             Text(if (ru) "Выбрать файл" else "Pick a file", fontFamily = SnProFamily)
         }
     }
-    preview?.let { PackageReviewCard(it, ru, onConfirm = onConfirmPackage, onDismiss = onDismissPackage) }
+    if (previews.size > 1) {
+        Text(
+            text = if (ru) "Пакетов на проверке: ${previews.size}" else "Packages to review: ${previews.size}",
+            style = MaterialTheme.typography.titleMedium,
+            fontFamily = SnProFamily,
+            fontWeight = FontWeight.SemiBold,
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Button(onClick = onConfirmAll, enabled = !isInstalling, shape = SquircleShape(18.dp), modifier = Modifier.weight(1f)) {
+                Text(if (ru) "Установить все" else "Install all", fontFamily = SnProFamily)
+            }
+            OutlinedButton(onClick = onDismissAll, shape = SquircleShape(18.dp), modifier = Modifier.weight(1f)) {
+                Text(if (ru) "Отменить все" else "Dismiss all", fontFamily = SnProFamily)
+            }
+        }
+    }
+    previews.forEach { preview ->
+        PackageReviewCard(preview, ru, onConfirm = { onConfirmPackage(preview) }, onDismiss = { onDismissPackage(preview) })
+    }
 
     if (sources.isNotEmpty()) {
         Spacer(Modifier.height(4.dp))

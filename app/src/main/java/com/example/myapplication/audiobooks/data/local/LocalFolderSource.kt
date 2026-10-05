@@ -272,6 +272,32 @@ class LocalFolderSource(private val context: Context) : ManifestSource {
         }.getOrNull()
     }
 
+    /**
+     * Теги, разложенные по ролям. «Исполнитель» у аудиокниг почти всегда чтец, а не автор, поэтому
+     * автором считается только явный тег (AUTHOR/WRITER), а исполнители отдаются отдельно как
+     * [LocalTags.people]: кто из них кто — решает совпадение с каталогом, а не порядок тегов.
+     */
+    fun tags(manifest: MediaManifest): LocalTags {
+        val uri = manifest.tracks.firstOrNull()?.url?.let(Uri::parse) ?: return LocalTags(null, emptyList())
+        return runCatching {
+            val retriever = MediaMetadataRetriever()
+            try {
+                retriever.setDataSource(context, uri)
+                fun tag(key: Int) = retriever.extractMetadata(key)?.trim()?.takeIf { it.isNotEmpty() }
+                LocalTags(
+                    author = tag(MediaMetadataRetriever.METADATA_KEY_AUTHOR) ?: tag(MediaMetadataRetriever.METADATA_KEY_WRITER),
+                    people = listOfNotNull(
+                        tag(MediaMetadataRetriever.METADATA_KEY_ALBUMARTIST),
+                        tag(MediaMetadataRetriever.METADATA_KEY_ARTIST),
+                        tag(MediaMetadataRetriever.METADATA_KEY_COMPOSER),
+                    ).distinct(),
+                )
+            } finally {
+                retriever.release()
+            }
+        }.getOrDefault(LocalTags(null, emptyList()))
+    }
+
     private fun readAudioMetadata(uri: Uri, name: String): AudioMetadata {
         var durationMs: Long? = null
         var title: String? = null
@@ -347,3 +373,9 @@ class LocalFolderSource(private val context: Context) : ManifestSource {
         val TEXT_EXTENSIONS = setOf("epub", "fb2", "txt")
     }
 }
+
+/**
+ * Теги первого файла книги по ролям. [author] — только явный тег автора; [people] — исполнители и
+ * композиторы, чья роль из тегов неизвестна (у аудиокниг это, как правило, чтец).
+ */
+data class LocalTags(val author: String?, val people: List<String>)

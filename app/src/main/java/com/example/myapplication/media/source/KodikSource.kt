@@ -39,13 +39,16 @@ class KodikSource(
     ): List<VetroHoster> {
         if (episodeNumber <= 0) return emptyList()
         val seasonQuery = anime.seasonSourceQuery(seasonInfo)
+        // MAL-id ИМЕННО этого сезона. Без выбранного сезона берём id самого тайтла; у сезона без
+        // id (строка от источника просмотра) его нет, а id франшизы подставлять нельзя: это первый сезон.
+        val seasonMalId = if (seasonInfo != null) seasonInfo.malId else (anime.malId ?: anime.shikimoriId)
         return withContext(Dispatchers.IO) {
             val (yummy, direct) = coroutineScope {
                 val yummyTask = async(Dispatchers.IO) {
                     // Путь больше не отключается на сезонах без собственного названия:
                     // запрос всегда несёт пригодный набор алиасов.
                     runCatchingCancellable {
-                        yummyCandidates(seasonQuery.anime, episodeNumber, seasonInfo)
+                        yummyCandidates(seasonQuery.anime, episodeNumber, seasonInfo, seasonMalId)
                     }
                         .onFailure { Log.i(TAG, "Yummy path failed: ${it.message}") }
                         .getOrDefault(emptyList<KodikIframeCandidate>())
@@ -59,6 +62,7 @@ class KodikSource(
                             seasonNumber = seasonQuery.seasonNumber,
                             seasonIdentifiable = seasonQuery.seasonIdentifiable,
                             limit = MAX_DUBBINGS,
+                            seasonMalId = seasonMalId,
                         )
                     }
                         .onFailure { Log.i(TAG, "Kodik direct path failed: ${it.message}") }
@@ -103,8 +107,9 @@ class KodikSource(
         anime: Anime,
         episodeNumber: Int,
         seasonInfo: SeasonInfo?,
+        seasonMalId: Int?,
     ): List<KodikIframeCandidate> {
-        val release = findRelease(anime, seasonInfo) ?: return emptyList()
+        val release = findRelease(anime, seasonInfo, seasonMalId) ?: return emptyList()
         val slug = release.optString("anime_url").trim().ifBlank { return emptyList() }
         val details = requestJson("$API_ORIGIN/anime/$slug?need_videos=true")
             ?.optJSONObject("response")
@@ -140,7 +145,7 @@ class KodikSource(
      * Отсеяв неподтверждённые, лестница запросов идёт дальше и может найти нужный релиз
      * английским названием сезона.
      */
-    private suspend fun findRelease(anime: Anime, seasonInfo: SeasonInfo?): JSONObject? {
+    private suspend fun findRelease(anime: Anime, seasonInfo: SeasonInfo?, seasonMalId: Int?): JSONObject? {
         val queries = listOfNotNull(anime.titleRu, anime.title, anime.titleEn)
             .map(String::trim)
             .filter(String::isNotBlank)
@@ -154,6 +159,13 @@ class KodikSource(
                 .build()
             val items = requestJson(url.toString())?.optJSONArray("response").objects()
             val localTitles = queries
+            // Совпал id сезона — релиз тот самый, и названия с номером сезона уже не важны.
+            if (seasonMalId != null) {
+                items.firstOrNull { item ->
+                    val ids = item.optJSONObject("remote_ids")
+                    ids != null && (ids.optInt("myanimelist_id") == seasonMalId || ids.optInt("shikimori_id") == seasonMalId)
+                }?.let { return it }
+            }
             val eligible = items.filter { item ->
                 yummyReleaseServesSeason(
                     releaseTitles = releaseTitles(item),

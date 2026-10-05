@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -229,7 +230,7 @@ fun StatsChartsRow(
                         color = palette.getOrElse(i) { palette[i % palette.size] },
                         name = labelForTag(s.tagId),
                         detail = "%.0f%%  ·  %d".format(
-                            s.share * 100.0,
+                            s.collectionShare * 100.0,
                             s.count
                         ),
                         isDark = isDark
@@ -295,7 +296,7 @@ internal fun GenreLegendItem(
 
 /**
  * Столбчатая диаграмма «качество жанров» на всю высоту контейнера.
- * Шкала — 10-балльная (значок ★ = 2 балла), пять пунктирных линий сетки на уровнях 2/4/6/8/10.
+ * Шкала — 10-балльная, пять пунктирных линий сетки на уровнях 10/8/6/4/2, подписанных цифрами.
  */
 @Composable
 internal fun StatsBarChartCanvas(
@@ -321,22 +322,25 @@ internal fun StatsBarChartCanvas(
         modifier = Modifier.fillMaxSize(),
         verticalAlignment = Alignment.Bottom
     ) {
+        // Метки стоят на тех же пяти линиях сетки (10/8/6/4/2): шкала 10-балльная, как и значения в легенде.
         Column(
             modifier = Modifier
-                .width(26.dp)
+                .width(22.dp)
                 .fillMaxHeight(),
-            verticalArrangement = Arrangement.SpaceBetween,
             horizontalAlignment = Alignment.Start
         ) {
-            for (star in 5 downTo 1) {
-                Text(
-                    text = "${star}★",
-                    style = MaterialTheme.typography.labelSmall.copy(
-                        fontFamily = SnProFamily,
-                        fontSize = 10.sp
-                    ),
-                    color = axisColor
-                )
+            for (level in 10 downTo 2 step 2) {
+                Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                    Text(
+                        text = level.toString(),
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            fontFamily = SnProFamily,
+                            fontSize = 10.sp
+                        ),
+                        color = axisColor,
+                        modifier = Modifier.offset(y = (-6).dp)
+                    )
+                }
             }
         }
         Box(
@@ -350,7 +354,7 @@ internal fun StatsBarChartCanvas(
                 val dash = PathEffect.dashPathEffect(floatArrayOf(6f, 6f), 0f)
                 val stroke = 1.dp.toPx()
                 for (k in 0 until 5) {
-                    val y = size.height * k / 4f
+                    val y = size.height * k / 5f
                     drawLine(
                         color = gridColor,
                         start = Offset(0f, y),
@@ -389,10 +393,12 @@ internal fun StatsBarChartCanvas(
 @Composable
 internal fun StatsDonutChartCanvas(
     data: DonutChartData,
-    sliceColors: List<Color>
+    sliceColors: List<Color>,
+    centerCaption: String? = null
 ) {
     val slices: List<TagFrequencySlice> = data.slices
-    val centerLabel = data.top5CountSum.toString()
+    // В центре — число тайтлов коллекции, а не сумма жанровых вхождений (у тайтла несколько жанров).
+    val centerLabel = data.totalTitles.toString()
     val startAngles = FloatArray(slices.size)
     val fullSweeps = FloatArray(slices.size)
     var accDeg = 0f
@@ -434,13 +440,25 @@ internal fun StatsDonutChartCanvas(
                 )
             }
         }
-        Text(
-            text = centerLabel,
-            style = MaterialTheme.typography.titleLarge.copy(
-                fontWeight = FontWeight.Bold,
-                fontFamily = SnProFamily
-            ),
-            color = MaterialTheme.colorScheme.onSurface
-        )
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(
+                text = centerLabel,
+                style = MaterialTheme.typography.titleLarge.copy(
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = SnProFamily
+                ),
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            if (centerCaption != null) {
+                Text(
+                    text = centerCaption,
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        fontFamily = SnProFamily,
+                        fontSize = 10.sp
+                    ),
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f)
+                )
+            }
+        }
     }
 }

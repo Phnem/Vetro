@@ -2,6 +2,7 @@ package com.example.myapplication.manga.source
 
 import android.util.Log
 import com.example.myapplication.manga.domain.MangaChapter
+import com.example.myapplication.manga.domain.MangaDetails
 import com.example.myapplication.manga.domain.MangaItem
 import com.example.myapplication.manga.domain.MangaPage
 import com.example.myapplication.manga.domain.MangaSourceId
@@ -28,10 +29,16 @@ data class MangaSourceResults(
  */
 class MangaSourceEngine(
     private val sources: List<VetroMangaSource>,
+    /**
+     * Японские источники: главы с них добавляет японская цепочка ([com.example.myapplication.manga.ja.JaTailResolver]),
+     * а страницы открывает этот же движок. В выборе источника и в поиске их нет - [sources] не меняется.
+     */
+    private val japaneseSources: List<VetroMangaSource> = emptyList(),
 ) {
     fun sources(): List<VetroMangaSource> = sources
 
-    fun sourceById(id: MangaSourceId): VetroMangaSource? = sources.firstOrNull { it.id == id }
+    fun sourceById(id: MangaSourceId): VetroMangaSource? =
+        sources.firstOrNull { it.id == id } ?: japaneseSources.firstOrNull { it.id == id }
 
     /** Поиск по всем источникам параллельно — для экрана привязки тайтл↔источник (§8 плана). */
     suspend fun searchAll(query: String): List<MangaSourceResults> {
@@ -58,6 +65,12 @@ class MangaSourceEngine(
         return call(source.name, "chapters", CHAPTERS_TIMEOUT_MS) { source.chapters(manga) }
             .orEmpty()
             .sortedForReading()
+    }
+
+    /** Описание тайтла у источника; null - источник не ответил. */
+    suspend fun details(manga: MangaItem): MangaDetails? {
+        val source = sourceById(manga.sourceId) ?: return null
+        return call(source.name, "details") { source.details(manga) }
     }
 
     suspend fun pages(chapter: MangaChapter): List<MangaPage> {

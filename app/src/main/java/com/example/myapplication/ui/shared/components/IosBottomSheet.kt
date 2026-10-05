@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.wrapContentHeight
@@ -30,6 +31,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
@@ -49,7 +51,8 @@ import kotlinx.coroutines.launch
 
 /**
  * iOS 26 bottom sheet со всей физикой из гайдбука (глава 2):
- *  • фон («вдавливание»): scale 1→0.92, скругление углов 0→[cornerRadius], затемнение 0→0.35–0.45;
+ *  • фон: затемнение 0→0.35–0.6 градиентом (темнее к верху), на всю ширину без боковых полей;
+ *    «вдавливание» (scale + скругление) включается только если [backgroundScaleTarget] < 1;
  *  • grab-индикатор 36×5 поверх контента;
  *  • пружина появления [MotionTokens.sheetPresent]; drag-to-dismiss по скорости/смещению (§2.6);
  *  • принудительный дисмисс [MotionTokens.sheetDismissForced] (критическое затухание, без отскока).
@@ -61,6 +64,9 @@ import kotlinx.coroutines.launch
  *
  * @param sheetHeightFraction доля высоты экрана; `null` — панель по высоте контента (medium-детент).
  * @param sheetContainerColor фон панели; `Color.Transparent` если контент рисует свой фон (Details).
+ *
+ * Панель поднимается над клавиатурой (`imePadding`), так что поля ввода внутри шторки не оказываются
+ * под ней; прокручиваемое содержимое шторки при этом само сжимается по высоте.
  */
 @Composable
 fun IosSheetScaffold(
@@ -70,7 +76,10 @@ fun IosSheetScaffold(
     sheetHeightFraction: Float? = 0.92f,
     cornerRadius: Dp = IosDesign.SheetCorner,
     scrimMaxAlpha: Float? = null,
-    backgroundScaleTarget: Float = 0.92f,
+    // 1f — фон остаётся на всю ширину: прежнее вдавливание до 0.92 оставляло по бокам чёрные
+    // поля, которые на светлой теме и под блюром выглядели как дыры. Глубину теперь даёт
+    // градиентный скрим (темнее к верху) и тень самой панели.
+    backgroundScaleTarget: Float = 1f,
     dragToDismiss: Boolean = true,
     showGrabber: Boolean = true,
     sheetContainerColor: Color? = null,
@@ -94,9 +103,15 @@ fun IosSheetScaffold(
         }
     }
 
-    // Боковой «провал» за вдавленным экраном. Сверху контент остаётся edge-to-edge
-    // (под status bar / вырез камеры) — иначе появляется чёрная полоса в строке состояния.
-    Box(modifier = modifier.fillMaxSize().drawBehind { if (progress.value > 0.001f) drawRect(Color.Black) }) {
+    val recessed = backgroundScaleTarget < 1f
+    // Боковой «провал» за вдавленным экраном — нужен, только пока фон реально уменьшается. Сверху
+    // контент остаётся edge-to-edge (под status bar / вырез камеры) — иначе появляется чёрная
+    // полоса в строке состояния.
+    Box(
+        modifier = modifier.fillMaxSize().drawBehind {
+            if (recessed && progress.value > 0.001f) drawRect(Color.Black)
+        },
+    ) {
         BoxWithConstraints(Modifier.fillMaxSize()) {
             val screenPx = with(density) { maxHeight.toPx() }
             // Прогресс шторки читается только в фазах слоя и отрисовки: раньше он считался прямо
@@ -117,6 +132,7 @@ fun IosSheetScaffold(
                 modifier = Modifier
                     .fillMaxSize()
                     .graphicsLayer {
+                        if (!recessed) return@graphicsLayer
                         val eff = eff()
                         val s = lerp(1f, backgroundScaleTarget, eff)
                         scaleX = s
@@ -132,10 +148,18 @@ fun IosSheetScaffold(
                         )
                     }
                     // iOS затемняет фон по-разному: тёмная тема — сильно, светлая — деликатно.
+                    // К верху скрим плотнее: экран «уходит вглубь» от шторки, а не гаснет равномерно.
                     .drawWithContent {
                         drawContent()
                         val eff = eff()
-                        if (eff > 0f) drawRect(Color.Black, alpha = eff * scrim)
+                        if (eff > 0f) {
+                            drawRect(
+                                Brush.verticalGradient(
+                                    0f to Color.Black.copy(alpha = (scrim * 1.2f).coerceAtMost(1f) * eff),
+                                    1f to Color.Black.copy(alpha = scrim * 0.8f * eff),
+                                ),
+                            )
+                        }
                     },
             ) {
                 content()
@@ -163,10 +187,14 @@ fun IosSheetScaffold(
             }
             Box(
                 modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    // Раньше всех размеров: панель встаёт на верх клавиатуры и сжимается, а не
+                    // уходит под неё. Инсет при этом потребляется — navigationBarsPadding внутри
+                    // шторки не добавит второй отступ поверх клавиатуры.
+                    .imePadding()
                     .fillMaxWidth()
                     .then(heightMod)
                     .heightIn(max = maxHeight * 0.94f)
-                    .align(Alignment.BottomCenter)
                     .onSizeChanged { measuredPanelPx = it.height.toFloat() }
                     // Смещение считаем от СВОЕЙ высоты слоя, а не от panelHeightPx: у панели по
                     // высоте контента (sheetHeightFraction = null) на первых кадрах measuredPanelPx

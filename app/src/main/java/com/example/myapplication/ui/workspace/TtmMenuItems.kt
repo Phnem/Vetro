@@ -3,6 +3,7 @@ package com.example.myapplication.ui.workspace
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Favorite
 import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.CalendarMonth
 import androidx.compose.material.icons.rounded.QueryStats
 import androidx.compose.material.icons.rounded.Sync
 import androidx.compose.material3.Icon
@@ -29,6 +30,7 @@ import com.phnem.vetro.R
 fun ttmMenuItems(
     language: AppLanguage,
     onStats: () -> Unit,
+    onCalendar: () -> Unit,
     onFrame: () -> Unit,
     onSync: () -> Unit,
     onAdd: () -> Unit,
@@ -41,6 +43,12 @@ fun ttmMenuItems(
             onClick = onStats,
         ) { tint ->
             Icon(Icons.Rounded.QueryStats, null, Modifier.size(20.dp), tint)
+        },
+        TtmMenuItem(
+            label = if (ru) "Календарь" else "Calendar",
+            onClick = onCalendar,
+        ) { tint ->
+            Icon(Icons.Rounded.CalendarMonth, null, Modifier.size(20.dp), tint)
         },
         TtmMenuItem(
             label = if (ru) "Кадр" else "Frame",

@@ -23,6 +23,10 @@ fun oauthProp(name: String): String =
 // Device smoke uses one stable side-by-side package and never replaces the user's Vetro install.
 val audiobookSmokeBuild = providers.gradleProperty("audiobookSmokeBuild").orNull == "true"
 
+// Google Cast живёт в src/cast; без неё (F-Droid) вместо него src/nocast с пустой заглушкой.
+val castEnabled = file("src/cast").isDirectory
+if (castEnabled) apply(from = "src/cast/cast-deps.gradle")
+
 sqldelight {
     databases {
         create("AnimeDatabase") {
@@ -40,7 +44,7 @@ android {
         minSdk = 26
         targetSdk = 36
         versionCode = 338
-        versionName = "v3.3.8-Stable"
+        versionName = "v3.3.8-Beta"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         // Whisper (whisper.cpp) — только arm64: там есть dotprod/fp16, на остальных ABI меню честно
@@ -119,6 +123,8 @@ android {
         }
     }
 
+    sourceSets.getByName("main").java.srcDir(if (castEnabled) "src/cast/java" else "src/nocast/java")
+
     buildFeatures {
         compose = true
         buildConfig = true
@@ -155,12 +161,21 @@ android {
 
     packaging {
         jniLibs {
+            // ONNX Runtime привозит библиотеки четырёх ABI; приложению нужен arm64 (x86_64 остаётся
+            // только в debug для эмулятора, см. androidComponents ниже).
+            excludes += setOf("**/armeabi-v7a/libonnxruntime*.so", "**/x86/libonnxruntime*.so")
             // Библиотеки в APK сжаты и распаковываются при установке. Несжатые грузились прямо из
             // APK, но торрент-движок (libtorrent + boost + OpenSSL) — 15 МБ машинного кода, сжатый —
             // 6 МБ: для APK, который скачивают с GitHub, размер загрузки важнее. Место на телефоне
             // после установки почти то же (APK + распакованная библиотека одного ABI).
             useLegacyPackaging = true
         }
+    }
+}
+
+androidComponents {
+    onVariants(selector().withBuildType("release")) { variant ->
+        variant.packaging.jniLibs.excludes.add("**/x86_64/libonnxruntime*.so")
     }
 }
 
@@ -254,9 +269,11 @@ dependencies {
     implementation(libs.libtorrent4j)
     implementation(libs.libtorrent4j.android.arm64)
     debugImplementation(libs.libtorrent4j.android.x64)
+    // Автоперевод манги: детектор текста и manga-ocr на устройстве (см. manga/translate).
+    implementation(libs.onnxruntime.android)
     implementation(libs.work.runtime.ktx)
-    // «Воспроизвести на…»: Google Cast. DLNA/UPnP — свой лёгкий клиент (media/remote/dlna).
-    implementation(libs.play.services.cast.framework)
+    // «Воспроизвести на…»: DLNA/UPnP — свой лёгкий клиент (media/remote/dlna). Google Cast лежит в
+    // src/cast (см. castEnabled): F-Droid удаляет эту папку вместе с проприетарной зависимостью.
     implementation(libs.androidx.mediarouter)
 
     // 8. SQLDelight
@@ -278,6 +295,8 @@ dependencies {
 
     // Test
     testImplementation(libs.junit)
+    // Тот же ONNX Runtime на ПК: конвейер перевода проверяется настоящими моделями (если они скачаны).
+    testImplementation(libs.onnxruntime.jvm)
     testImplementation("io.ktor:ktor-client-mock")
     testImplementation(libs.okhttp.mockwebserver)
     // JVM SQLite driver — прогон SQLDelight-миграций в JUnit-тестах (не android-driver, тому

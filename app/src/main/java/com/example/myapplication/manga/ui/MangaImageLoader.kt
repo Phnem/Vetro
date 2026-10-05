@@ -35,6 +35,9 @@ object MangaImageLoader {
                 // либо ловит OOM, либо упирается в лимит текстуры. Фабрика сама решает,
                 // вмешиваться ли, — обычные страницы идут штатным путём.
                 add(RegionBitmapDecoder.Factory())
+                // Страницы японских источников: их надо не только скачать, но и восстановить.
+                add(DecodedPageKeyer(), DecodedPageRequest::class)
+                add(DecodedPageFetcher.Factory(context), DecodedPageRequest::class)
             }
             .diskCache {
                 DiskCache.Builder()

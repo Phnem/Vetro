@@ -114,7 +114,7 @@ private fun mergeSettingsUi(
         autoNextEpisode = prefs[PlayerSettingsKeys.AUTO_NEXT] ?: true,
         devAdaptiveGlassScroll = prefs[DevPreferencesKeys.ADAPTIVE_GLASS_SCROLL] ?: false,
         devLegacyUi = prefs[DevPreferencesKeys.LEGACY_UI] ?: false,
-        devFullBleedCards = prefs[DevPreferencesKeys.FULL_BLEED_CARDS] ?: false,
+        devFullBleedCards = prefs[DevPreferencesKeys.FULL_BLEED_CARDS] ?: true,
         devGithubUpdatesEnabled = githubUpdatesEnabled,
         isExportingLogs = t.isExportingLogs,
         isExportingPdf = t.isExportingPdf,

@@ -161,6 +161,12 @@ class StreamPlayerActivity : ComponentActivity(), PipHostActivity {
     private val settings: DataStore<Preferences> by inject(named("settings"))
     private val playbackPrefs: com.example.myapplication.media.prefs.ContentPlaybackPreferences by inject()
     private val remote: com.example.myapplication.media.remote.RemotePlaybackManager by inject()
+    private val sourceIntelligence: com.example.myapplication.media.intelligence.SourceIntelligence by inject()
+    private val appScope: com.example.myapplication.AppScope by inject()
+    /** Прошлая ссылка этой серии: по ней видно, что новая сессия - переход на другой источник. */
+    private var lastSessionKey: String? = null
+    private var lastSessionUrl: String? = null
+    private var lastSessionStudio: String? = null
     /** Телевизор как плеер, пока идёт показ на нём: прогресс при выходе пишется с его позиции. */
     private var remoteControl: Player? = null
     private val json = AppStoreJson
@@ -821,6 +827,20 @@ class StreamPlayerActivity : ComponentActivity(), PipHostActivity {
                         val listenerSessionUrl = current.url
                         val listenerSessionResolvedAt = current.resolvedAt
                         activePlayer = player
+                        // Рейтинг источников: сессия на этой ссылке меряется зондом и приписывается провайдеру,
+                        // а озвучка считается сохранённой, если после смены источника она осталась той же или близкой.
+                        val sessionKey = "$animeId|$season|$episode"
+                        val switched = lastSessionKey == sessionKey && lastSessionUrl != null && lastSessionUrl != current.url
+                        val dubKept = if (switched && lastSessionStudio != null && current.sourceName != null) {
+                            dubSimilarity(lastSessionStudio, current.sourceName) >= 2
+                        } else null
+                        lastSessionKey = sessionKey
+                        lastSessionUrl = current.url
+                        lastSessionStudio = current.sourceName
+                        val qualityProbe = com.example.myapplication.media.intelligence.PlaybackQualityProbe(dubKept)
+                        val probeProvider = current.providerKey
+                        val probeLanguage = uiLanguage
+                        player.addListener(qualityProbe)
                         val mediaSession = VideoMediaSession(
                             context = this@StreamPlayerActivity,
                             player = player,
@@ -909,6 +929,14 @@ class StreamPlayerActivity : ComponentActivity(), PipHostActivity {
                         player.addListener(listener)
                         onDispose {
                             player.removeListener(listener)
+                            player.removeListener(qualityProbe)
+                            qualityProbe.finish()?.let { sample ->
+                                if (probeProvider != null) {
+                                    appScope.launch {
+                                        runCatching { sourceIntelligence.recordSession(probeProvider, probeLanguage, sample) }
+                                    }
+                                }
+                            }
                             if (videoSession === mediaSession) videoSession = null
                             mediaSession.release()
                             if (activePlayer === player) activePlayer = null

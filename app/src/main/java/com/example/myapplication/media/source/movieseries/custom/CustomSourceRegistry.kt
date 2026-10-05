@@ -13,6 +13,7 @@ import com.example.myapplication.media.source.sdk.ProviderPackageRuntime
 import com.example.myapplication.media.source.sdk.ProviderPackageValidator
 import io.ktor.client.HttpClient
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.intOrNull
@@ -92,6 +93,38 @@ class CustomSourceInstaller(
     fun looksLikeJsonObject(text: String): Boolean =
         runCatching { json.parseToJsonElement(text) is JsonObject }.getOrDefault(false)
 
+    /** То, что вообще можно импортировать: один источник, подборка или список ссылок. */
+    fun looksImportable(text: String): Boolean = looksLikeJsonObject(text) || bundleItems(text) != null
+
+    /**
+     * Подборка: несколько источников в одном файле. Понимает три формы —
+     *  • массив `[ {…}, {…}, "https://…/manifest.json" ]`;
+     *  • объект `{ "name": "…", "sources": [ … ] }` (без `format`/`manifestVersion` — это не сам источник);
+     *  • обычный текст: ссылки по одной на строку, `#` — комментарий (список Stremio-аддонов).
+     * Элемент — JSON-текст источника или ссылка. Не подборка — null.
+     */
+    fun bundleItems(text: String): List<String>? {
+        val root = runCatching { json.parseToJsonElement(text) }.getOrNull()
+        val array = when {
+            root is JsonArray -> root
+            root is JsonObject && "format" !in root && "manifestVersion" !in root -> root["sources"] as? JsonArray
+            root == null -> return linkList(text)
+            else -> null
+        } ?: return null
+        return array.map { e -> (e as? JsonPrimitive)?.takeIf { it.isString }?.content?.trim() ?: e.toString() }
+    }
+
+    /** Текст из одних https-ссылок (пустые строки и `# комментарии` пропускаются); иначе null. */
+    private fun linkList(text: String): List<String>? {
+        val links = text.lines().map { it.substringBefore('#').trim() }.filter { it.isNotEmpty() }
+        return links.takeIf { it.isNotEmpty() && it.all { l -> l.startsWith("https://") && l.none(Char::isWhitespace) } }
+    }
+
+    /** Подпись элемента подборки для списка отказов: id, если он есть. */
+    fun labelOf(item: String): String? = runCatching {
+        ((json.parseToJsonElement(item) as JsonObject)["id"] as JsonPrimitive).content
+    }.getOrNull()
+
     /** Пакет v2 опознаётся по полю `format` верхнего уровня. */
     fun looksLikePackage(text: String): Boolean = runCatching {
         (json.parseToJsonElement(text) as? JsonObject)?.get("format")?.let { (it as? JsonPrimitive)?.intOrNull } != null
@@ -157,6 +190,10 @@ class CustomSourceInstaller(
 
     companion object {
         const val MAX_PACKAGE_BYTES = 256 * 1024
+
+        /** Подборка целиком: каждый пакет в ней по-прежнему не больше [MAX_PACKAGE_BYTES]. */
+        const val MAX_BUNDLE_BYTES = 2 * 1024 * 1024
+        const val MAX_BUNDLE_ITEMS = 50
 
         fun packageKey(id: String) = "package:$id"
     }

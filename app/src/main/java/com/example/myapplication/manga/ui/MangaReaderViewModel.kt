@@ -4,12 +4,20 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.myapplication.manga.data.ChapterReadingProgress
 import com.example.myapplication.manga.data.MangaReaderMode
+import com.example.myapplication.manga.data.MangaBindingStore
 import com.example.myapplication.manga.data.MangaReadingStore
 import com.example.myapplication.manga.data.PageDirection
 import com.example.myapplication.manga.domain.MangaChapter
 import com.example.myapplication.manga.domain.MangaPage
 import com.example.myapplication.manga.domain.MangaPagePrefetcher
 import com.example.myapplication.manga.download.MangaPageResolver
+import com.example.myapplication.manga.translate.ChapterTranslationContext
+import com.example.myapplication.manga.translate.ChapterTranslationHost
+import com.example.myapplication.manga.translate.ChapterTranslationPlan
+import com.example.myapplication.manga.translate.MangaPageTranslationService
+import com.example.myapplication.manga.translate.MangaTranslateSettings
+import com.example.myapplication.manga.translate.MangaWorkContextProvider
+import com.example.myapplication.network.AppLanguage
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -33,6 +41,8 @@ sealed interface MangaReaderUiState {
         val startOffsetFraction: Float,
         val hasPrevious: Boolean,
         val hasNext: Boolean,
+        /** Не null, когда глава на другом языке и её страницы переводятся на лету. */
+        val translation: ChapterTranslationHost? = null,
     ) : MangaReaderUiState
 
     data class Error(val message: String) : MangaReaderUiState
@@ -50,6 +60,10 @@ class MangaReaderViewModel(
     private val pageResolver: MangaPageResolver,
     private val readingStore: MangaReadingStore,
     private val prefetcher: MangaPagePrefetcher,
+    private val translateSettings: MangaTranslateSettings,
+    private val bindings: MangaBindingStore,
+    private val workContext: MangaWorkContextProvider,
+    private val translationService: MangaPageTranslationService,
 ) : ViewModel() {
 
     /** Оглавление, с которым открыли ридер: его же показывает шторка глав в доке. */
@@ -105,6 +119,7 @@ class MangaReaderViewModel(
             val saved = readingStore.chapterProgress(animeId, chapter.key)?.takeIf { !it.read }
             // Дочитанную главу открываем сначала: продолжать с последней страницы бессмысленно.
             val startPage = saved?.pageIndex?.coerceIn(0, pages.lastIndex) ?: 0
+            val translation = translationHostFor(chapter)
             _state.value = MangaReaderUiState.Ready(
                 chapter = chapter,
                 pages = pages,
@@ -112,7 +127,9 @@ class MangaReaderViewModel(
                 startOffsetFraction = saved?.scrollOffsetFraction ?: 0f,
                 hasPrevious = currentIndex > 0,
                 hasNext = currentIndex < chapters.lastIndex,
+                translation = translation,
             )
+            translation?.let { translationService.prefetch(it.context, pages, startPage) }
             // Первый прогрев — сразу после открытия: ждать свайпа значит показать спиннер на нём.
             prefetch(pages, startPage)
         }
@@ -155,7 +172,39 @@ class MangaReaderViewModel(
                 scrollOffsetFraction = offsetFraction,
             )
         }
-        if (pageChanged) prefetch(ready.pages, pageIndex)
+        if (pageChanged) {
+            prefetch(ready.pages, pageIndex)
+            // Страницы вперёд переводятся заранее, чтобы к свайпу текст уже был по-русски.
+            ready.translation?.let { translationService.prefetch(it.context, ready.pages, pageIndex + 1) }
+        }
+    }
+
+    /**
+     * Нужен ли глава перевод: функция включена и доступна, глава на языке-оригинале, а читатель
+     * выбрал другой язык. Иначе страницы идут как есть.
+     */
+    private suspend fun translationHostFor(chapter: MangaChapter): ChapterTranslationHost? {
+        if (!translateSettings.ui.value.active) return null
+        bindings.ensureLoaded()
+        val preferred = bindings.bindingFor(animeId)?.preferredLanguage
+        if (!ChapterTranslationPlan.needsTranslation(chapter, preferred, autoTranslate = true)) return null
+        val target = when (preferred) {
+            "ru" -> AppLanguage.RU
+            "en" -> AppLanguage.EN
+            else -> return null
+        }
+        return ChapterTranslationHost(
+            translationService,
+            ChapterTranslationContext(
+                sourceId = chapter.sourceId.value,
+                chapterKey = chapter.key,
+                target = target,
+                work = { workContext.contextFor(animeId) },
+                // Японская манга читается справа налево, как бы ни листал читатель.
+                rightToLeft = chapter.language == "ja",
+                sourceLanguage = chapter.language ?: "ja",
+            ),
+        )
     }
 
     fun openNext() = moveBy(1)

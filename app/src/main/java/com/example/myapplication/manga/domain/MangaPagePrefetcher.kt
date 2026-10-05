@@ -6,6 +6,7 @@ import android.util.Log
 import coil3.Image
 import coil3.ImageLoader
 import com.example.myapplication.manga.ui.MangaImageLoader
+import com.example.myapplication.manga.ui.coilData
 import coil3.decode.DecodeResult
 import coil3.decode.Decoder
 import coil3.fetch.SourceFetchResult
@@ -80,7 +81,7 @@ class MangaPagePrefetcher(
         // Скачанная глава уже лежит файлом — гонять её через кэш картинок незачем.
         if (page.isLocal) return
         val request = ImageRequest.Builder(context)
-            .data(page.url)
+            .data(page.coilData())
             .apply {
                 // Те же заголовки, что у настоящей загрузки: без Referer часть источников отдаёт
                 // 403, и прогрев молча складывал бы в кэш ошибки.

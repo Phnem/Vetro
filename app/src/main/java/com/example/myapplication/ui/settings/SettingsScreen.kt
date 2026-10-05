@@ -174,6 +174,7 @@ private sealed interface SettingsOverlaySheet {
     data object PlaybackSources : SettingsOverlaySheet
     data object Contact : SettingsOverlaySheet
     data object UpdateChangelog : SettingsOverlaySheet
+    data object MangaModels : SettingsOverlaySheet
     data class Picker(val key: String) : SettingsOverlaySheet
 }
 
@@ -513,6 +514,14 @@ fun SettingsScreen(
                                     )
                                 },
                                 {
+                                    MangaAutoTranslateRow(
+                                        language = uiState.language,
+                                        isDark = isDark,
+                                        onHaptic = { performHaptic(view, Haptic.Light) },
+                                        onOpenModels = { activeSheet = SettingsOverlaySheet.MangaModels },
+                                    )
+                                },
+                                {
                                     IosRow(
                                         title = playerSettingsStrings.autoSkipTitle,
                                         subtitle = playerSettingsStrings.autoSkipSubtitle,
@@ -815,6 +824,10 @@ fun SettingsScreen(
                         onDismiss = { activeSheet = null },
                     )
                     activeSheet == SettingsOverlaySheet.PlaybackSources -> PlaybackSourcesSettingsSheet(
+                        language = uiState.language,
+                        onDismiss = { activeSheet = null },
+                    )
+                    activeSheet == SettingsOverlaySheet.MangaModels -> MangaModelsSheet(
                         language = uiState.language,
                         onDismiss = { activeSheet = null },
                     )

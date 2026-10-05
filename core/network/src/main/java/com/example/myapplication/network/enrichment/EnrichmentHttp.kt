@@ -134,4 +134,6 @@ internal fun disabled(): LookupResult.Failure =
 enum class EnrichmentSource {
     TMDB, FANART, OMDB, TVMAZE, ANILIST, SHIKIMORI, JIKAN, YOUTUBE, INTRODB, ANIME_SKIP, ANISKIP,
     OPENSUBTITLES, OPEN_LIBRARY, GOOGLE_BOOKS, BOOKBRAINZ, ITUNES, NYT, TASTEDIVE, ANILIBRIA,
+    /** Не внешний сервис: ритм выхода, выведенный по дням недели уже вышедших серий (ReleaseCadence). */
+    OBSERVED,
 }

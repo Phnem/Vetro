@@ -40,6 +40,7 @@ import com.example.myapplication.data.repository.GenreRepository
 import com.example.myapplication.domain.stats.StatsCardKind
 import com.example.myapplication.domain.stats.buildBarChartData
 import com.example.myapplication.domain.stats.buildDonutChartData
+import com.example.myapplication.domain.stats.statsInsightsStrings
 import com.example.myapplication.network.AppLanguage
 import com.example.myapplication.ui.home.StatsBarChartCanvas
 import com.example.myapplication.ui.home.StatsDonutChartCanvas
@@ -53,6 +54,7 @@ import com.example.myapplication.ui.shared.theme.glassFill
 import androidx.compose.ui.graphics.Color
 import org.koin.compose.koinInject
 import java.util.Locale
+import kotlin.math.roundToInt
 
 // ==========================================
 // StatsCardDeckContent — режим «колода» шторки статистики:
@@ -218,6 +220,7 @@ private fun GenreFrequencyCard(
         return
     }
     val palette = StatsGenrePalette
+    val insightStrings = remember(appLanguage) { statsInsightsStrings(appLanguage) }
     Column(modifier = Modifier.fillMaxSize()) {
         Box(
             modifier = Modifier
@@ -226,7 +229,11 @@ private fun GenreFrequencyCard(
                 .padding(vertical = 6.dp),
             contentAlignment = Alignment.Center
         ) {
-            StatsDonutChartCanvas(data = donutData, sliceColors = palette)
+            StatsDonutChartCanvas(
+                data = donutData,
+                sliceColors = palette,
+                centerCaption = insightStrings.donutCenterCaption,
+            )
         }
         Spacer(Modifier.height(10.dp))
         Column {
@@ -234,12 +241,24 @@ private fun GenreFrequencyCard(
                 StatsLegendRow(
                     color = palette.getOrElse(i) { palette[i % palette.size] },
                     name = genreRepository.getLabel(s.tagId, appLanguage),
-                    detail = "%.0f%%  ·  %d".format(s.share * 100.0, s.count),
+                    // «132 из 220 · 60%»: доля от коллекции, а не от суммы жанровых вхождений.
+                    detail = insightStrings.donutLegendDetail(
+                        s.count,
+                        donutData.totalTitles,
+                        (s.collectionShare * 100f).roundToInt(),
+                    ),
                     isDark = isDark,
                     showDivider = i > 0,
                 )
             }
         }
+        Spacer(Modifier.height(6.dp))
+        Text(
+            text = insightStrings.donutFootnote,
+            fontFamily = SnProFamily,
+            fontSize = 10.sp,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f),
+        )
     }
 }
 

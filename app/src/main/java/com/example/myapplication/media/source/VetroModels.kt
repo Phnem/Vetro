@@ -68,6 +68,12 @@ data class VetroVideo(
     /** Non-secret canonical root to which rehydrated credentials may be sent. */
     val credentialScope: PlaybackCredentialScope? = null,
     val resolvedAt: Long = System.currentTimeMillis(),
+    /**
+     * Какой провайдер отдал ссылку (канонический ключ, см. SourceIntelligence.providerKey).
+     * sourceName - студия озвучки, по ней провайдера не определить; плеер по этому полю
+     * приписывает качество просмотра нужному источнику.
+     */
+    val providerKey: String? = null,
 ) {
     init {
         require(url.startsWith("http://") || url.startsWith("https://")) {

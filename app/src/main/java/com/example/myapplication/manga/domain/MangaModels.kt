@@ -1,5 +1,6 @@
 package com.example.myapplication.manga.domain
 
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 /**
@@ -30,6 +31,8 @@ data class MangaItem(
     val status: MangaStatus = MangaStatus.Unknown,
     /** Языки, на которые тайтл переведён у источника (BCP-47-ish коды: `ru`, `en`). */
     val languages: List<String> = emptyList(),
+    /** Автор строкой, как её показывает источник; нужен японским источникам для проверки совпадения. */
+    val author: String? = null,
 )
 
 @Serializable
@@ -79,6 +82,8 @@ data class MangaPage(
     val index: Int,
     val url: String,
     val headers: Map<String, String> = emptyMap(),
+    /** Как восстановить картинку после загрузки; null - файл отдаётся как есть. */
+    val decode: PageDecode? = null,
 ) {
     init {
         require(
@@ -89,6 +94,31 @@ data class MangaPage(
     }
 
     val isLocal: Boolean get() = url.startsWith("file://")
+}
+
+/**
+ * Преобразование, которое веб-просмотрщик издателя делает с картинкой перед показом. Применяется
+ * только к бесплатным главам, которые сайт и так отдаёт любому посетителю.
+ */
+@Serializable
+sealed interface PageDecode {
+    /** GigaViewer: страница порезана на сетку 4x4 блоков (кратных 8 px) и переставлена по диагонали. */
+    @Serializable
+    @SerialName("giga")
+    data object GigaScramble : PageDecode
+
+    /** ComicWalker: байты файла сложены по XOR с повторяющимся ключом [keyHex] (hex-строка). */
+    @Serializable
+    @SerialName("xor")
+    data class Xor(val keyHex: String) : PageDecode
+
+    /**
+     * SpeedBinb (ヤンマガWeb и другие читалки BookLive): страница нарезана на куски с полями и
+     * переставлена. Раскладка зависит от имени файла и двух наборов шаблонов главы: [ctbl] и [ptbl].
+     */
+    @Serializable
+    @SerialName("speedbinb")
+    data class SpeedBinb(val ctbl: List<String>, val ptbl: List<String>) : PageDecode
 }
 
 data class MangaSearchPage(

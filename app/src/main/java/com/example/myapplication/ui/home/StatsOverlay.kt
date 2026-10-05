@@ -82,6 +82,7 @@ import com.example.myapplication.network.AppLanguage
 import com.example.myapplication.ui.shared.theme.isAppInDarkTheme
 import com.example.myapplication.ui.home.stats.StatsCardDeckContent
 import com.example.myapplication.ui.home.stats.StatsCardDetailContent
+import com.example.myapplication.ui.home.stats.StatsInsightsSection
 import androidx.compose.foundation.layout.offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.graphicsLayer
@@ -291,6 +292,14 @@ private fun StatsContent(
                             onCardTap = onCardTap
                         )
                     }
+
+                    Spacer(Modifier.height(24.dp))
+
+                    StatsInsightsSection(
+                        animeList = animeList,
+                        appLanguage = appLanguage,
+                        isDark = isDark,
+                    )
 
                     Spacer(Modifier.height(20.dp))
 

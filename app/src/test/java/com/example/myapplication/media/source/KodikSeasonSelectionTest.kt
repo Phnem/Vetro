@@ -211,4 +211,34 @@ class KodikSeasonSelectionTest {
         assertEquals(4, explicitReleaseSeason("Re:Zero Season 4"))
         assertNull(explicitReleaseSeason("Перерождение в аристократа со способностью анализа"))
     }
+
+    /** Регрессия 05.10: JoJo SBR (сезон 7) не находился — Kodik пишет «Steel Ball Run: JoJo no …». */
+    @Test
+    fun `season title matches a release that orders the same words differently`() {
+        val seasonTitles = listOf("JoJo no Kimyou na Bouken: Steel Ball Run")
+        val release = listOf("Steel Ball Run: JoJo no Kimyou na Bouken", "Невероятное приключение ДжоДжо: Гонка «Стальной шар»")
+        assertEquals(true, kodikReleaseServesSeason(release, season = 7, seasonTitles = seasonTitles))
+        // Усечённое название другого сезона по-прежнему не подтверждает этот.
+        assertEquals(false, kodikReleaseServesSeason(listOf("JoJo no Kimyou na Bouken: Stone Ocean"), season = 7, seasonTitles = seasonTitles))
+        assertEquals(false, kodikReleaseServesSeason(listOf("JoJo no Kimyou na Bouken"), season = 7, seasonTitles = seasonTitles))
+    }
+
+    /** У Kodik сиквел лежит под своим ключом (SBR — «6» при нашем «7»): единственный сезон релиза. */
+    @Test
+    fun `id-matched release serves the requested season whatever key Kodik uses`() {
+        val sbr = linkedMapOf(6 to mapOf(1 to "https://kodik.example/seria/1", 3 to "https://kodik.example/seria/3"))
+        assertEquals(
+            "https://kodik.example/seria/3",
+            selectKodikSerialEpisodeLink(
+                baseLink = "https://kodik.example/serial",
+                linksBySeason = sbr,
+                lastSeason = 0,
+                lastEpisode = 3,
+                season = 7,
+                episode = 3,
+                seasonIdentifiable = true,
+                releaseConfirmsSeason = true,
+            ),
+        )
+    }
 }

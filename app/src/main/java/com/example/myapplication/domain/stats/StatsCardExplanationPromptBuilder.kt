@@ -30,9 +30,11 @@ object StatsCardExplanationPromptBuilder {
                     "rating on a 10-point scale; each bar's height is that genre's mean rating, and " +
                     "genres with too few titles are excluded." + common
             StatsCardKind.GENRE_FREQUENCY ->
-                "This is a donut chart of your top-5 most-watched anime genres by share of your " +
-                    "collection; each segment's size is how large a fraction of your watched titles " +
-                    "belongs to that genre, and the number in the center is the total across these genres." + common
+                "This is a donut chart of your top-5 most-watched anime genres; each segment's size " +
+                    "is that genre's part among the genre tags of these five, the legend gives how many " +
+                    "of your titles carry the genre and what share of the whole collection that is. A title " +
+                    "has several genres, so the shares add up to more than 100%. The number in the center " +
+                    "is the total number of titles in your collection." + common
             StatsCardKind.OVERVIEW ->
                 "These are 4 headline stats of your anime collection: total titles watched, average " +
                     "rating you gave (10-point scale), total episodes watched, and favorites count." + common
@@ -43,9 +45,12 @@ object StatsCardExplanationPromptBuilder {
                 "${genreRepository.getLabel(it.tagId, language)}: " +
                     "${String.format(Locale.US, "%.2f", it.averageRating)} (${it.titleCount} titles)"
             }
-            StatsCardKind.GENRE_FREQUENCY -> snapshot.donutData?.slices?.joinToString("\n") {
-                "${genreRepository.getLabel(it.tagId, language)}: " +
-                    "${(it.share * 100).roundToInt()}% (${it.count} titles)"
+            StatsCardKind.GENRE_FREQUENCY -> snapshot.donutData?.let { donut ->
+                donut.slices.joinToString("\n") {
+                    "${genreRepository.getLabel(it.tagId, language)}: " +
+                        "${it.count} of ${donut.totalTitles} titles " +
+                        "(${(it.collectionShare * 100).roundToInt()}% of the collection)"
+                }
             }.orEmpty()
             StatsCardKind.OVERVIEW -> listOf(
                 "Total titles: ${snapshot.totalAnime}",

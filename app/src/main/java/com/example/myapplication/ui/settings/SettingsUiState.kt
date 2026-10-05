@@ -26,7 +26,7 @@ data class SettingsUiState(
     /** Классический интерфейс вместо нового (по умолчанию — новый), см. `DevPreferencesKeys.LEGACY_UI`. */
     val devLegacyUi: Boolean = false,
     /** Карточки с обложкой на всю площадь, см. `DevPreferencesKeys.FULL_BLEED_CARDS`. */
-    val devFullBleedCards: Boolean = false,
+    val devFullBleedCards: Boolean = true,
     val devGithubUpdatesEnabled: Boolean = false,
     val isExportingLogs: Boolean = false,
     val isExportingPdf: Boolean = false,

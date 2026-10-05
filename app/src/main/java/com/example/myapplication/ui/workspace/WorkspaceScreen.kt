@@ -52,10 +52,12 @@ import com.example.myapplication.NotificationSyncOverlay
 import com.example.myapplication.ui.home.HomeScreen
 import com.example.myapplication.ui.home.HomeViewModel
 import com.example.myapplication.ui.home.CapsuleDockInset
+import com.example.myapplication.ui.calendar.ReleaseCalendarOverlay
 import com.example.myapplication.ui.home.StatsOverlay
 import com.example.myapplication.ui.settings.SettingsScreen
 import com.example.myapplication.ui.settings.SettingsViewModel
 import com.example.myapplication.ui.navigation.navigateToAddEdit
+import com.example.myapplication.ui.navigation.navigateToDetails
 import com.example.myapplication.ui.navigation.navigateToInspect
 import com.example.myapplication.ui.navigation.navigateToWelcome
 import com.example.myapplication.ui.shared.DONATION_URL
@@ -119,6 +121,7 @@ fun WorkspaceScreen(
     // Статистика переехала из верхнего дока в меню, поэтому и рисуется теперь здесь: страница
     // коллекции к ней больше отношения не имеет.
     var showStats by remember { mutableStateOf(false) }
+    var showCalendar by remember { mutableStateOf(false) }
     // Какое окно открыто пунктом меню — его корень морфит из гнезда «Ещё» и обратно. Saveable:
     // пока окно на экране, рабочая область снята с композиции, а на возврате ключ обязан быть
     // тем же, иначе окну не во что схлопнуться.
@@ -166,7 +169,7 @@ fun WorkspaceScreen(
     // фона просим узел перезаписать её — тем же приёмом, что в списке главной (см. GlassBackdropRecovery).
     val backdropRedraw = remember { mutableIntStateOf(0) }
     GlassBackdropRecovery(
-        overlayActive = menuOpen || showSyncPanel || showStats,
+        overlayActive = menuOpen || showSyncPanel || showStats || showCalendar,
         effectsSettled = true,
         onRedraw = { backdropRedraw.intValue++ },
     )
@@ -281,6 +284,14 @@ fun WorkspaceScreen(
             )
         }
 
+        if (showCalendar) {
+            ReleaseCalendarOverlay(
+                language = language,
+                onOpenTitle = { id -> navController.navigateToDetails(id) },
+                onDismiss = { showCalendar = false },
+            )
+        }
+
         TtmMenu(
             expanded = menuOpen,
             origin = menuOrigin,
@@ -289,6 +300,7 @@ fun WorkspaceScreen(
             items = remember(language) { ttmMenuItems(
                 language = language,
                 onStats = { showStats = true },
+                onCalendar = { showCalendar = true },
                 onFrame = {
                     menuWindowKey = MENU_WINDOW_INSPECT
                     navController.navigateToInspect()

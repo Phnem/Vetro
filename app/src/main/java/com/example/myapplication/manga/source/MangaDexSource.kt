@@ -1,6 +1,7 @@
 package com.example.myapplication.manga.source
 
 import com.example.myapplication.manga.domain.MangaChapter
+import com.example.myapplication.manga.ja.AniListLookup
 import com.example.myapplication.manga.domain.MangaDetails
 import com.example.myapplication.manga.domain.MangaItem
 import com.example.myapplication.manga.domain.MangaPage
@@ -29,7 +30,7 @@ import java.time.OffsetDateTime
 class MangaDexSource(
     private val client: HttpClient,
     private val rateLimiter: TokenBucketRateLimiter,
-) : VetroMangaSource {
+) : VetroMangaSource, AniListLookup {
 
     override val id = MangaSourceId("mangadex")
     override val name = "MangaDex"
@@ -50,6 +51,26 @@ class MangaDexSource(
             items = items,
             hasNextPage = offset + items.size < response.total,
         )
+    }
+
+    /**
+     * Тайтл MangaDex с этим номером AniList. Названия не сравниваются: у MangaDex в карточке лежит
+     * ссылка на AniList (`links.al`), и совпасть по ней может только та же самая манга, а не тёзка.
+     * Ищем по каждому из [titles], пока не попадём; тайтл без такой ссылки так не находится.
+     */
+    override suspend fun findByAniList(aniListId: Int, titles: List<String>): MangaItem? {
+        val wanted = aniListId.toString()
+        for (title in titles.filter { it.isNotBlank() }.distinct()) {
+            val response: MangaListResponse = request("$API/manga") {
+                parameter("title", title)
+                parameter("limit", SEARCH_LIMIT)
+                parameter("order[relevance]", "desc")
+                parameter("includes[]", "cover_art")
+                contentRatings()
+            }
+            response.data.firstOrNull { it.attributes.links["al"] == wanted }?.let { return it.toItem() }
+        }
+        return null
     }
 
     override suspend fun details(manga: MangaItem): MangaDetails {
@@ -202,6 +223,8 @@ private data class MangaAttributesDto(
     val status: String? = null,
     val tags: List<TagDto> = emptyList(),
     val availableTranslatedLanguages: List<String?> = emptyList(),
+    /** Ссылки на другие каталоги: `al` - номер в AniList, `mal` - в MyAnimeList. */
+    val links: Map<String, String> = emptyMap(),
 )
 
 @Serializable

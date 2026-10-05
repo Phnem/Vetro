@@ -4,7 +4,9 @@ import android.util.Log
 import com.example.myapplication.manga.data.MangaBindingStore
 import com.example.myapplication.manga.data.MangaChapterCacheStore
 import com.example.myapplication.manga.domain.MangaChapter
+import com.example.myapplication.manga.ja.JaTailResolver
 import com.example.myapplication.manga.source.MangaSourceEngine
+import com.example.myapplication.manga.translate.MangaTranslateSettings
 import kotlinx.coroutines.delay
 
 /**
@@ -70,6 +72,8 @@ class MangaUpdateCheckUseCase(
     private val bindingStore: MangaBindingStore,
     private val chapterCache: MangaChapterCacheStore,
     private val sourceEngine: MangaSourceEngine,
+    private val translateSettings: MangaTranslateSettings,
+    private val tailResolver: JaTailResolver,
 ) {
 
     suspend fun detect(budget: Int = DEFAULT_BUDGET): List<MangaUpdate> {
@@ -91,11 +95,24 @@ class MangaUpdateCheckUseCase(
             // Пауза до запроса, а не после находки: без неё 25 привязок уходили бы в источник
             // очередью без единого зазора в самом частом случае — когда нового ничего нет.
             if (checked > 1) delay(ITEM_DELAY_MS)
-            val fetched = runCatching { sourceEngine.chapters(binding.toItem()) }
+            val fromSource = runCatching { sourceEngine.chapters(binding.toItem()) }
                 .onFailure { Log.w(TAG, "chapters failed for \"${binding.title}\": ${it.message}") }
                 .getOrNull()
                 .orEmpty()
-            if (fetched.isEmpty()) continue
+            if (fromSource.isEmpty()) continue
+            // Кэш общий с экраном глав: если там лежит японский хвост, фон его не затирает. Поиск
+            // серии здесь не запускаем - только уже найденное совпадение.
+            val fetched = if (translateSettings.ui.value.active) {
+                tailResolver.withTail(
+                    base = fromSource,
+                    animeId = binding.animeId,
+                    preferredLanguage = binding.preferredLanguage,
+                    queries = listOf(binding.title),
+                    allowSearch = false,
+                )
+            } else {
+                fromSource
+            }
 
             val cached = chapterCache.entry(binding.sourceId, binding.mangaKey)
             chapterCache.put(binding.sourceId, binding.mangaKey, fetched)

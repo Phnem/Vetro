@@ -33,10 +33,18 @@ data class ChapterReadingProgress(
      */
     val scrollOffsetFraction: Float? = null,
     val updatedAt: Long = 0L,
+    /**
+     * Сколько раз главу перечитывали после прочтения: вернулись к началу спустя
+     * [REREAD_GAP_MS]. Считается на устройстве, в облако не уходит.
+     */
+    val rereads: Int = 0,
 ) {
     val fraction: Float
         get() = if (pageCount > 0) ((pageIndex + 1).toFloat() / pageCount).coerceIn(0f, 1f) else 0f
 }
+
+/** Перерыв после прочтения, за которым возврат к началу главы считается перечитыванием. */
+private const val REREAD_GAP_MS = 30L * 60_000L
 
 /**
  * Как листается ридер. Настройка **на тайтл**: в одной коллекции соседствуют вебтуны и обычная
@@ -188,12 +196,18 @@ class MangaReadingStore(
         val page = pageIndex.coerceIn(0, pageCount - 1)
         updateSnapshot(animeId) { snapshot ->
             val current = snapshot.progress().toMutableMap()
+            val previous = current[chapterKey]
+            val now = System.currentTimeMillis()
+            // Односложные главы (1–2 страницы) не различают «начало» и «конец» — возврат в них не ловим.
+            val restarted = previous != null && previous.read && pageCount > 2 && page <= 1 &&
+                now - previous.updatedAt >= REREAD_GAP_MS
             current[chapterKey] = ChapterReadingProgress(
                 pageIndex = page,
                 pageCount = pageCount,
-                read = current[chapterKey]?.read == true || page >= pageCount - 1,
+                read = previous?.read == true || page >= pageCount - 1,
                 scrollOffsetFraction = scrollOffsetFraction?.coerceIn(0f, 1f),
-                updatedAt = System.currentTimeMillis(),
+                updatedAt = now,
+                rereads = (previous?.rereads ?: 0) + if (restarted) 1 else 0,
             )
             snapshot.withProgress(current)
         }
@@ -210,6 +224,7 @@ class MangaReadingStore(
                     pageCount = count,
                     read = true,
                     updatedAt = System.currentTimeMillis(),
+                    rereads = current[chapterKey]?.rereads ?: 0,
                 )
             } else {
                 current.remove(chapterKey)
@@ -291,7 +306,10 @@ class MangaReadingStore(
                     for ((chapterKey, value) in incoming) {
                         val local = current[chapterKey]
                         if (local != null && local.updatedAt >= value.updatedAt) continue
-                        current[chapterKey] = value.copy(read = value.read || local?.read == true)
+                        current[chapterKey] = value.copy(
+                            read = value.read || local?.read == true,
+                            rereads = maxOf(value.rereads, local?.rereads ?: 0),
+                        )
                         changed = true
                         applied++
                     }

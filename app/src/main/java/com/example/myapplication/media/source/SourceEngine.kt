@@ -5,6 +5,8 @@ import com.example.myapplication.data.local.WebLinksStore
 import com.example.myapplication.data.models.Anime
 import com.example.myapplication.domain.seasons.SeasonInfo
 import com.example.myapplication.domain.seasons.forSourceLookup
+import com.example.myapplication.media.intelligence.SourceIntelligence
+import com.example.myapplication.media.intelligence.SourceScoring
 import com.example.myapplication.media.source.movieseries.MovieSeriesStreamingProvider
 import com.example.myapplication.media.source.movieseries.NoProviderHealth
 import com.example.myapplication.media.source.movieseries.ProviderHealthRegistry
@@ -30,6 +32,8 @@ class SourceEngine(
     private val providerHealth: ProviderHealthRegistry = NoProviderHealth,
     /** User-installed sources, resolved per request so settings changes apply without a restart. */
     private val customSources: suspend () -> List<MovieSeriesStreamingProvider> = { emptyList() },
+    /** Рейтинг источников на этом устройстве: исходы пишутся сюда, порядок берётся отсюда. */
+    private val intelligence: SourceIntelligence? = null,
 ) {
     suspend fun resolveHosters(
         anime: Anime,
@@ -52,6 +56,7 @@ class SourceEngine(
         if (route == PlaybackRoute.None) return PlaybackResolution.NotConfigured(request.mediaType)
         if (route.movieSeriesLanguage != null) return resolveMovieSeries(request)
 
+        runCatching { intelligence?.ensureLoaded() }
         val batch = when (route) {
             PlaybackRoute.AnimeRu -> resolveRu(request.anime, request.episodeNumber, request.seasonInfo)
             PlaybackRoute.AnimeEn -> resolveEn(request.anime, request.episodeNumber, request.seasonInfo)
@@ -68,7 +73,25 @@ class SourceEngine(
                 "${request.anime.title} S${request.seasonNumber}E${request.episodeNumber} " +
                 "[${request.language}]",
         )
-        return playbackResolution(normalized, batch.hadFailure)
+        return playbackResolution(orderByLearnedScore(normalized, request.language), batch.hadFailure)
+    }
+
+    /**
+     * Источники, которые у этого пользователя работают лучше, идут первыми. Порядок стабильный и
+     * грубый (десятки баллов, не единицы): оценка шумит, а переставлять источники из-за одного
+     * удачного просмотра нельзя. Дальше список ранжирует разрешение и надёжность формата - выученный
+     * порядок решает между равными.
+     */
+    private fun orderByLearnedScore(hosters: List<VetroHoster>, language: AppLanguage): List<VetroHoster> {
+        val learned = intelligence ?: return hosters
+        fun tier(hoster: VetroHoster): Int {
+            val provider = hoster.videos.orEmpty().firstNotNullOfOrNull { it.providerKey }
+                ?: return SourceScoring.NEUTRAL / 10
+            return learned.scoreOf(provider, language).value / 10
+        }
+        return hosters.withIndex()
+            .sortedWith(compareByDescending<IndexedValue<VetroHoster>> { tier(it.value) }.thenBy { it.index })
+            .map { it.value }
     }
 
     private suspend fun resolveMovieSeries(request: PlaybackRequest): PlaybackResolution {
@@ -104,7 +127,8 @@ class SourceEngine(
         // They run in the same parallel batch as the other sources: as a separate first batch they
         // added up to EXACT_SOURCE_TIMEOUT_MS before any other source even started.
         val attempts = runCalls(
-            buildList {
+            language = AppLanguage.RU,
+            calls = buildList {
                 if (seasonSpecificAniUrl != null) {
                     add(
                         PlaybackProviderCall("known source", EXACT_SOURCE_TIMEOUT_MS) {
@@ -157,7 +181,7 @@ class SourceEngine(
             return SourceBatch(resolved, attempts.any { it.failed })
         }
 
-        val direct = resolveDirectFallback(links.map { it.url })
+        val direct = resolveDirectFallback(links.map { it.url }, AppLanguage.RU)
         return SourceBatch(resolved + direct.value.orEmpty(), attempts.any { it.failed } || direct.failed)
     }
 
@@ -167,7 +191,8 @@ class SourceEngine(
         seasonInfo: SeasonInfo?,
     ): SourceBatch {
         val attempts = runCalls(
-            listOf(
+            language = AppLanguage.EN,
+            calls = listOf(
                 // AnimeHeaven needs three sequential page loads (search → title → gate).
                 PlaybackProviderCall("AnimeHeaven", EN_SOURCE_TIMEOUT_MS) {
                     animeHeavenSource.resolveEpisode(anime, episodeNumber, seasonInfo)
@@ -191,18 +216,19 @@ class SourceEngine(
 
         webLinksStore.ensureLoaded()
         val links = webLinksStore.flow.value[anime.id]?.enLinks.orEmpty()
-        val direct = resolveDirectFallback(links.map { it.url })
+        val direct = resolveDirectFallback(links.map { it.url }, AppLanguage.EN)
         return SourceBatch(
             referenceHosters + direct.value.orEmpty(),
             native.failed || jutReference.failed || direct.failed,
         )
     }
 
-    private suspend fun resolveDirectFallback(urls: List<String>): SourceAttempt<List<VetroHoster>> {
+    private suspend fun resolveDirectFallback(urls: List<String>, language: AppLanguage): SourceAttempt<List<VetroHoster>> {
         val direct = urls.firstOrNull(urlSource::canResolveDirect)
             ?: return SourceAttempt(label = "direct URL", value = emptyList())
         return runCalls(
-            listOf(
+            language = language,
+            calls = listOf(
                 PlaybackProviderCall("direct URL", DIRECT_TIMEOUT_MS) {
                     urlSource.resolveFromWebUrl(direct)
                 }
@@ -215,9 +241,10 @@ class SourceEngine(
      * неотличимо от того, что его вообще не запускали, и отказ разбирался по сырым строкам Ktor.
      */
     private suspend fun runCalls(
+        language: AppLanguage,
         calls: List<PlaybackProviderCall<List<VetroHoster>>>,
     ): List<SourceAttempt<List<VetroHoster>>> =
-        runPlaybackProviderCascade(calls).onEach { attempt ->
+        runPlaybackProviderCascade(calls).map { learnFrom(it, language) }.onEach { attempt ->
             when {
                 attempt.timedOut -> Log.w(TAG, "${attempt.label} timed out")
                 attempt.failed -> Log.w(TAG, "${attempt.label} failed")
@@ -232,6 +259,29 @@ class SourceEngine(
                     "$playable playable video(s), ${attempt.elapsedMs}ms",
             )
         }
+
+    /**
+     * Исход вызова - в рейтинг источников, а видео - с пометкой, чей провайдер их отдал (плеер по
+     * ней припишет буферизацию и старт нужному источнику). Пустой ответ без ошибки значит
+     * "у источника нет такого тайтла", а не поломку, поэтому не наказывается.
+     */
+    private suspend fun learnFrom(
+        attempt: SourceAttempt<List<VetroHoster>>,
+        language: AppLanguage,
+    ): SourceAttempt<List<VetroHoster>> {
+        val provider = SourceIntelligence.providerKey(attempt.label) ?: return attempt
+        val hosters = attempt.value.orEmpty()
+        val playable = hosters.hasPlayableVideo()
+        when {
+            playable -> runCatching { intelligence?.recordResolve(provider, language, ok = true, latencyMs = attempt.elapsedMs) }
+            attempt.failed -> runCatching { intelligence?.recordResolve(provider, language, ok = false, latencyMs = attempt.elapsedMs) }
+        }
+        if (!playable) return attempt
+        val tagged = hosters.map { hoster ->
+            hoster.copy(videos = hoster.videos?.map { video -> video.copy(providerKey = video.providerKey ?: provider) })
+        }
+        return attempt.copy(value = tagged)
+    }
 
     suspend fun resolveBestVideo(hosters: List<VetroHoster>): VetroVideo? {
         val flat = hosters.flatMap { it.videos.orEmpty() }
