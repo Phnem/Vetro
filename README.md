@@ -29,7 +29,7 @@ Vetro is an Android media library. Build a personal collection, follow new episo
 
 Vetro does not host any media. It connects to catalogues and sources that you choose, including your own servers.
 
-> **Current development build:** `v3.3.6-Stable`. The app is actively evolving; source availability can vary by region.
+> **Current development build:** `v3.3.8-Beta`. The app is actively evolving; source availability can vary by region.
 
 ## Trailer
 
@@ -48,7 +48,7 @@ Vetro does not host any media. It connects to catalogues and sources that you ch
 - Anime, films, TV series, manga, manhwa and audiobooks in one library.
 - Add titles from search with cover art, genres, descriptions and a 0.0–10.0 score; favourites, notes and watch or reading progress.
 - Filter by content type, sort, and search locally or online.
-- Statistics with short AI-written explanations (optional), and a recommendations deck you swipe through.
+- Statistics with short AI-written explanations (optional), plus insights: an activity heatmap, a month-by-month curve, rewatch/reread/relisten counts, finished-vs-dropped rates per genre and your last 90 days against the whole collection. A recommendations deck you swipe through.
 - Background enrichment fills in missing titles, IDs and links, and keeps episode counts current.
 
 ### Always know what's new
@@ -57,6 +57,7 @@ Vetro does not host any media. It connects to catalogues and sources that you ch
 - Progress is counted by season: cards show `S3 E12` instead of a franchise-wide total.
 - New episodes arrive as a stack of notification cards. They fold into a bell next to the dock and open as a notification centre.
 - Titles that are airing or have unread episodes stay at the top of the library, under favourites.
+- A release calendar in the dock's menu: every airing title on its day, a stack of covers when several come out together. When no source names the day of a dub's next episode, Vetro learns it from the weekdays of the episodes that already came out.
 - Details show a countdown to the next episode, a trailer, critic ratings, the title logo, backdrop art and Russian dub studios.
 
 ### Watch
@@ -64,9 +65,10 @@ Vetro does not host any media. It connects to catalogues and sources that you ch
 - A built-in player with picture-in-picture, episode navigation, auto-next and intro skipping.
 - Gestures: double-tap seek that accumulates, hold for 2×, pinch to zoom, brightness and volume on vertical swipes, and undo for an accidental seek.
 - If a source fails mid-episode, playback moves to another one and keeps the chosen dub.
+- Source Intelligence: Vetro scores every source on your device (answer rate, speed, startup, buffering, real resolution, dub continuity) and tries the ones that work best for you first.
 - Films and series have their own source cascade, separate for Russian and English.
 - Add your own sources: direct links, WebDAV, self-hosted media servers, add-on catalogues and declarative provider packages. Imported packages run sandboxed and are signature-checked.
-- **Play on…**: send an episode to a TV over Google Cast or DLNA and control it from Vetro. A secure local proxy handles streams the TV can't open directly.
+- **Play on…**: send an episode to a TV over DLNA, or over Google Cast in the GitHub build, and control it from Vetro. A secure local proxy handles streams the TV can't open directly.
 - A system media card with poster, `S2 E5`, seek and episode buttons.
 - Download single episodes or whole seasons for offline playback, with resumable HLS downloads.
 
@@ -83,6 +85,8 @@ Vetro does not host any media. It connects to catalogues and sources that you ch
 - Some sources stream while the file is still downloading.
 - Add your own audiobook folders; the library then groups them into one shelf per author.
 - Sleep timer, skip silence (Off / Light / Normal / Aggressive), playback speed, bookmarks, undo seek and a mini player.
+- Smart rewind: after a long pause the book steps back 5–30 seconds, more the longer you were away.
+- Android Auto: browse Continue listening and your Library from the car screen and start a book where you stopped.
 - Chapters are recovered for books that ship without them: from CUE sheets, pauses in the audio or speech recognition.
 - Subtitles from the book's own text, kept in sync with the narrator.
 - A rich system media card: book, author, chapter, cover, speed and favourite buttons.
@@ -90,6 +94,7 @@ Vetro does not host any media. It connects to catalogues and sources that you ch
 ### Read manga and manhwa
 
 - Chapters from supported sources, offline downloads, and vertical webtoon or paged layouts.
+- Auto-translation (**in testing and refinement**; official GitHub builds with your own AI key): when the next chapters haven't come out in your language yet, Vetro finds them in Japanese on the publishers' own free-to-read sites, or in English on MangaDex, and translates them page by page in the reader. Only chapters a site gives to everyone without signing in are used. Japanese pages are read on the device and only the recognised lines go to your AI provider, with the title and its description as context; English pages are read by your AI provider, so the page image is sent to it. The small recognition models (about 128 MB) are downloaded from Hugging Face when you switch it on. Chapters that already have a translation in your language are always read as published.
 - Page direction, layout and scan-margin cropping are remembered per title; reading progress shows on library cards.
 
 ### Make it yours
@@ -122,6 +127,8 @@ Choose the distribution channel you prefer:
   <a href="https://f-droid.org/packages/com.phnem.vetro"><img src="https://img.shields.io/badge/Get%20it%20on-F--Droid-3DDC84?style=for-the-badge&logo=android&logoColor=white" alt="F-Droid" height="40" /></a>
   <a href="obtainium://app/add?url=https://github.com/Phnem/Vetro"><img src="https://img.shields.io/badge/Get%20it%20on-Obtainium-orange?style=for-the-badge" alt="Obtainium" height="40" /></a>
 </p>
+
+The F-Droid build contains no proprietary Google libraries, so Google Cast is available only in the GitHub, Obtainium and Komi Store builds; DLNA works everywhere.
 
 Vetro runs on Android 8.0 (API 26) and newer. On-device subtitle recognition and torrent-based audiobook sources need a 64-bit ARM (arm64) device.
 
@@ -156,7 +163,7 @@ Vetro is a Kotlin and Jetpack Compose Android application with unidirectional st
 - **State and DI:** immutable UI state, Kotlin Flow, ViewModels and Koin.
 - **Data:** SQLDelight, DataStore, small JSON file caches, and WorkManager for downloads, sync and background checks.
 - **Network:** Ktor on a single shared OkHttp client, Apollo GraphQL, per-host rate limiting and circuit breakers.
-- **Playback:** AndroidX Media3 / ExoPlayer; Google Cast and DLNA for remote playback; libtorrent4j for streaming torrent sources.
+- **Playback:** AndroidX Media3 / ExoPlayer; DLNA (and Google Cast in the GitHub build) for remote playback; libtorrent4j for streaming torrent sources.
 - **Native:** whisper.cpp built with the NDK for on-device speech recognition.
 - **Performance:** a shipped baseline profile, narrow R8 rules and ast-grep UI guardrails (`scripts/lint-ui.sh`).
 
