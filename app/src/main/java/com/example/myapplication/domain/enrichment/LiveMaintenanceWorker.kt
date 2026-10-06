@@ -5,10 +5,12 @@ import android.content.Context
 import android.util.Log
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.edit
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.example.myapplication.data.ai.AiCredentialsStore
 import com.example.myapplication.data.local.AnimeLocalDataSource
+import com.example.myapplication.data.local.DevPreferencesKeys
 import com.example.myapplication.data.models.Anime
 import com.example.myapplication.domain.settings.RepairAnimeDbUseCase
 import com.example.myapplication.domain.settings.RepairDbSessionLog
@@ -60,6 +62,9 @@ class LiveMaintenanceWorker(
 
             val language = readLanguage()
 
+            // Раньше всего: записи, привязанные к чужому тайтлу, иначе всё остальное «чинит» их по чужим id.
+            auditForeignMatchesOnce(language)
+
             // Ссылки «Где смотреть» тянет отдельный воркер — здесь лишь периодический триггер (6 ч).
             coordinator.enqueueWebLinkEnrichment()
 
@@ -85,6 +90,20 @@ class LiveMaintenanceWorker(
         } catch (e: Exception) {
             Log.w(TAG, "Live maintenance run failed", e)
             Result.failure()
+        }
+    }
+
+    /**
+     * Разовая очистка записей, которые прежний подбор привязал к постороннему тайтлу (id, английское
+     * название, обложка). Флаг ставится, только когда проверены все записи: сбой сети — повтор в
+     * следующий заход.
+     */
+    private suspend fun auditForeignMatchesOnce(language: AppLanguage) {
+        val done = settingsDataStore.data.first()[DevPreferencesKeys.FOREIGN_MATCH_AUDIT_DONE] == true
+        if (done || isStopped) return
+        val complete = repairUseCase.auditForeignMatches(language, RepairDbSessionLog())
+        if (complete) {
+            settingsDataStore.edit { it[DevPreferencesKeys.FOREIGN_MATCH_AUDIT_DONE] = true }
         }
     }
 

@@ -70,9 +70,18 @@ class CollectionEnrichmentCoordinator(
     /** Старт приложения: планируем периодику + догон ссылок «Где смотреть». */
     fun ensureScheduled() {
         scope.launch {
-            if (isLiveMaintenanceEnabled()) schedulePeriodic()
+            if (isLiveMaintenanceEnabled()) {
+                schedulePeriodic()
+                // Разовая очистка чужих привязок не ждёт периодику (6 ч): сразу после обновления.
+                if (!isForeignMatchAuditDone()) enqueueImmediateScan()
+            }
         }
         enqueueWebLinkEnrichment()
+    }
+
+    private suspend fun isForeignMatchAuditDone(): Boolean {
+        val prefs = runCatching { settingsDataStore.data.first() }.getOrNull() ?: return true
+        return prefs[DevPreferencesKeys.FOREIGN_MATCH_AUDIT_DONE] == true
     }
 
     // ==========================================================

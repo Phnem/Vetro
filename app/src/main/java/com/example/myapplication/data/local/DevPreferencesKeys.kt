@@ -13,6 +13,9 @@ object DevPreferencesKeys {
      */
     val LIVE_MAINTENANCE_ENABLED = booleanPreferencesKey("live_maintenance_enabled")
 
+    /** Разовая проверка записей, привязанных к чужому тайтлу (см. RepairAnimeDbUseCase.auditForeignMatches). */
+    val FOREIGN_MATCH_AUDIT_DONE = booleanPreferencesKey("foreign_match_audit_v1_done")
+
     /** Фоновый скан нашёл > порога пропусков → показать незакрываемый диалог при открытии настроек. */
     val PENDING_FULL_ENRICHMENT_PROMPT = booleanPreferencesKey("pending_full_enrichment_prompt")
     val PENDING_FULL_ENRICHMENT_GAP_COUNT = intPreferencesKey("pending_full_enrichment_gap_count")

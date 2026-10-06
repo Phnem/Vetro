@@ -153,32 +153,49 @@ class RepairAnimeDbUseCase(
      * (чужие данные от своих не отличить иначе). Дальше обычный проход заполнит пробелы заново
      * уже исправленным подбором.
      */
+    /**
+     * Разовая проверка для фонового воркера. true — каждая запись проверена до конца (нет ответа
+     * сети — не проверена), и повторять проход не нужно.
+     */
+    suspend fun auditForeignMatches(language: AppLanguage, sessionLog: RepairDbSessionLog): Boolean =
+        runCatching { purgeForeignMatches(repository.getAllAnimeSnapshot(), language, sessionLog) }
+            .onFailure { e -> sessionLog.warn("Foreign match audit failed", e) }
+            .getOrDefault(false)
+
+    /** @return true, если каждый подозрительный тайтл удалось проверить (без сбоев сети и записи). */
     private suspend fun purgeForeignMatches(
         all: List<Anime>,
         language: AppLanguage,
         sessionLog: RepairDbSessionLog,
-    ) {
+    ): Boolean {
         val suspects = all.filter { anime ->
             anime.mediaType == MediaType.ANIME &&
                 (anime.shikimoriId != null || anime.malId != null) &&
                 russianNamesOf(anime).isNotEmpty()
         }
-        if (suspects.isEmpty()) return
+        if (suspects.isEmpty()) return true
         sessionLog.info("Foreign match audit: ${suspects.size} candidates")
 
         var purged = 0
+        var unverified = 0
         for ((index, anime) in suspects.withIndex()) {
             // id Shikimori у аниме совпадает с MAL id, поэтому malId годится, когда shikimoriId нет.
             val lookupId = anime.shikimoriId ?: anime.malId ?: continue
             val remote = repository.russianTitleByShikimoriId(lookupId).getOrNull()
-            if (remote != null && isForeignMatch(russianNamesOf(anime), remote)) {
-                runCatching { purgeForeignMatch(anime, lookupId, language, sessionLog) }
-                    .onSuccess { purged++ }
-                    .onFailure { e -> sessionLog.warn("Foreign match purge failed for \"${anime.title}\"", e) }
+            when {
+                remote == null -> unverified++
+                isForeignMatch(russianNamesOf(anime), remote) ->
+                    runCatching { purgeForeignMatch(anime, lookupId, language, sessionLog) }
+                        .onSuccess { purged++ }
+                        .onFailure { e ->
+                            unverified++
+                            sessionLog.warn("Foreign match purge failed for \"${anime.title}\"", e)
+                        }
             }
             if (index < suspects.lastIndex) delay(ITEM_DELAY_MS)
         }
-        sessionLog.info("Foreign match audit done: purged=$purged of ${suspects.size}")
+        sessionLog.info("Foreign match audit done: purged=$purged, unverified=$unverified of ${suspects.size}")
+        return unverified == 0
     }
 
     private fun russianNamesOf(anime: Anime): List<String> =
