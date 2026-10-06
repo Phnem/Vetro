@@ -21,7 +21,7 @@ val viewModelModule = module {
             legacyCollectionSafMigrator = get(),
             migrationManager = get(),
             authRepository = get(),
-            appUpdateRepository = get(),
+            appUpdateManager = get(),
             imageCompressionMigrator = get(),
             startupSweeps = get(),
         )
@@ -67,7 +67,6 @@ val viewModelModule = module {
     viewModel {
         SettingsViewModel(
             repository = get(),
-            appUpdateRepository = get(),
             settingsDataStore = get(named("settings")),
             databaseFactory = get(),
             importAnimeDbUseCase = get(),

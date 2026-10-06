@@ -3,6 +3,7 @@ New.
 • Release calendar. Source Intelligence tries the sources that work best for you first.
 • Audiobooks: Android Auto and smart rewind.
 • Manga auto-translation, in testing and refinement: Japanese and English chapters.
+• Auto-update in the GitHub build, signature-checked.
 Fixes.
 • Glass on the search bar no longer turns black.
 • The episode list marks everything you have watched.

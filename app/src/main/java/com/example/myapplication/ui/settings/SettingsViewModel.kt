@@ -27,8 +27,6 @@ import com.example.myapplication.network.AppContentType
 import com.example.myapplication.network.AppLanguage
 import com.example.myapplication.data.models.AppTheme
 import com.example.myapplication.data.models.AppUpdateSnapshot
-import com.example.myapplication.data.models.AppUpdateStatus
-import com.example.myapplication.data.models.toUiStatus
 import com.phnem.vetro.BuildConfig
 import com.example.myapplication.data.local.CollectionPdfGenerator
 import com.example.myapplication.data.local.DevPreferencesKeys
@@ -64,15 +62,10 @@ private val KEY_DEV_MIRROR_DB = booleanPreferencesKey("dev_mirror_db_to_document
 private val KEY_DEV_HIDE_SHARE = booleanPreferencesKey("dev_hide_share_button")
 private val KEY_DEV_FPS_OVERLAY = booleanPreferencesKey("dev_fps_overlay")
 private const val LOG_TAG = "SettingsViewModel"
-private const val UPDATE_APK_NAME = "vetro-update.apk"
-const val FDROID_UPDATE_WEBSITE_URL = "https://phnem.github.io/Vetro-Studio/collection"
 
 private data class SettingsTransientState(
-    val isUpdateChangelogLoading: Boolean = false,
-    val updateChangelogError: String? = null,
     /** Package [versionName] for UI; not persisted. */
     val currentVersionDisplay: String = "",
-    val updateSheetShownFromSettingsThisSession: Boolean = false,
     val isExportingLogs: Boolean = false,
     val isExportingPdf: Boolean = false,
     val isImportingDb: Boolean = false,
@@ -87,22 +80,12 @@ private data class SettingsTransientState(
     val titleDubbingMessage: String? = null,
     val showTitleDubbingNoAiDialog: Boolean = false,
     val fullEnrichmentPromptGapCount: Int? = null,
-    val isApkDownloading: Boolean = false,
-    val apkDownloadProgress: Float = 0f,
-    val pendingApkPathForInstall: String? = null,
 )
 
 private fun mergeSettingsUi(
     prefs: Preferences,
-    snap: AppUpdateSnapshot,
     t: SettingsTransientState,
 ): SettingsUiState {
-    val githubUpdatesEnabled = prefs[DevPreferencesKeys.GITHUB_UPDATES_ENABLED] == true
-    val updateStatus =
-        if (!githubUpdatesEnabled) AppUpdateStatus.IDLE
-        else if (t.isUpdateChangelogLoading) AppUpdateStatus.LOADING
-        else snap.persistedKind.toUiStatus()
-
     return SettingsUiState(
         language = AppLanguagePrefs.from(prefs),
         theme = AppThemePrefs.from(prefs),
@@ -115,7 +98,6 @@ private fun mergeSettingsUi(
         devAdaptiveGlassScroll = prefs[DevPreferencesKeys.ADAPTIVE_GLASS_SCROLL] ?: false,
         devLegacyUi = prefs[DevPreferencesKeys.LEGACY_UI] ?: false,
         devFullBleedCards = prefs[DevPreferencesKeys.FULL_BLEED_CARDS] ?: true,
-        devGithubUpdatesEnabled = githubUpdatesEnabled,
         isExportingLogs = t.isExportingLogs,
         isExportingPdf = t.isExportingPdf,
         isImportingDb = t.isImportingDb,
@@ -130,24 +112,12 @@ private fun mergeSettingsUi(
         showTitleDubbingNoAiDialog = t.showTitleDubbingNoAiDialog,
         liveMaintenanceEnabled = prefs[DevPreferencesKeys.LIVE_MAINTENANCE_ENABLED] ?: true,
         fullEnrichmentPromptGapCount = t.fullEnrichmentPromptGapCount,
-        updateStatus = updateStatus,
         currentVersion = t.currentVersionDisplay,
-        latestVersion = snap.latestTag,
-        latestDownloadUrl = snap.latestDownloadUrl,
-        updateChangelogMarkdown = snap.updateChangelogMarkdown,
-        isUpdateChangelogLoading = t.isUpdateChangelogLoading,
-        updateChangelogError = t.updateChangelogError,
-        latestApkSizeBytes = snap.latestApkSizeBytes,
-        isApkDownloading = t.isApkDownloading,
-        apkDownloadProgress = t.apkDownloadProgress,
-        pendingApkPathForInstall = t.pendingApkPathForInstall,
-        latestReleaseHtmlUrl = snap.latestHtmlUrl,
     )
 }
 
 class SettingsViewModel(
     private val repository: AnimeRepository,
-    private val appUpdateRepository: AppUpdateRepository,
     private val settingsDataStore: DataStore<Preferences>,
     private val databaseFactory: SQLDelightDatabaseFactory,
     private val importAnimeDbUseCase: ImportAnimeDbUseCase,
@@ -163,44 +133,11 @@ class SettingsViewModel(
 
     val uiState: StateFlow<SettingsUiState> = combine(
         settingsDataStore.data,
-        appUpdateRepository.appUpdateSnapshot,
         _transient,
-    ) { prefs, snap, tr -> mergeSettingsUi(prefs, snap, tr) }
+    ) { prefs, tr -> mergeSettingsUi(prefs, tr) }
         // Подписка на файл настроек живёт, пока экран на виду (+5 с на поворот): в фоне её
         // будила каждая запись прогресса плеера. Последнее значение stateIn сохраняет.
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SettingsUiState())
-
-    /** When true, [MainActivity] may show the global update sheet (not on splash, not deduped by settings). */
-    val startupUpdateOverlayEligible: StateFlow<Boolean> = combine(
-        appUpdateRepository.appUpdateSnapshot,
-        settingsDataStore.data,
-        _transient,
-    ) { snap, prefs, tr ->
-        val githubEnabled = prefs[DevPreferencesKeys.GITHUB_UPDATES_ENABLED] == true
-        githubEnabled && snap.startupOverlayEligible && !tr.updateSheetShownFromSettingsThisSession
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
-
-    private var downloadReceiverRegistered = false
-    private var activeDownloadId: Long = -1L
-    private var progressJob: Job? = null
-
-    private val downloadCompleteReceiver = object : BroadcastReceiver() {
-        override fun onReceive(context: Context?, intent: Intent?) {
-            val id = intent?.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1L) ?: -1L
-            if (id != activeDownloadId || id == -1L) return
-            val ctx = context ?: return
-            val dm = ctx.getSystemService(Context.DOWNLOAD_SERVICE) as? DownloadManager ?: return
-            dm.query(DownloadManager.Query().setFilterById(id))?.use { c ->
-                if (!c.moveToFirst()) return@use
-                val status = c.getInt(c.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS))
-                if (status == DownloadManager.STATUS_SUCCESSFUL) {
-                    onDownloadSuccessful(ctx)
-                } else {
-                    onDownloadFailedCleanup()
-                }
-            }
-        }
-    }
 
     init {
         dropRetiredUiFlags()
@@ -259,16 +196,6 @@ class SettingsViewModel(
                     }
                 }
             }
-        }
-    }
-
-    fun notifyUpdateChangelogSheetPresentedFromSettings() {
-        _transient.update { it.copy(updateSheetShownFromSettingsThisSession = true) }
-    }
-
-    fun dismissStartupUpdateOverlayPersisted() {
-        viewModelScope.launch {
-            appUpdateRepository.dismissStartupOverlayForCurrentRelease()
         }
     }
 
@@ -359,225 +286,6 @@ class SettingsViewModel(
                 DevPreferencesKeys.RETIRED_UI_FLAGS.forEach { key -> prefs.remove(key) }
             }
         }
-    }
-
-    fun setDevGithubUpdatesEnabled(enabled: Boolean) {
-        viewModelScope.launch {
-            settingsDataStore.edit { it[DevPreferencesKeys.GITHUB_UPDATES_ENABLED] = enabled }
-        }
-    }
-
-    fun openFdroidUpdateWebsite(context: Context) {
-        runCatching {
-            context.startActivity(
-                Intent(Intent.ACTION_VIEW, Uri.parse(FDROID_UPDATE_WEBSITE_URL))
-                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            )
-        }
-    }
-
-    private suspend fun ensureCurrentVersionFromPackage(context: Context) {
-        if (_transient.value.currentVersionDisplay.isNotEmpty()) return
-        val v = runCatching {
-            val pInfo = context.packageManager.getPackageInfo(context.packageName, 0)
-            pInfo.versionName ?: "v1.0.0"
-        }.getOrElse { "v1.0.0" }
-        _transient.update { it.copy(currentVersionDisplay = v) }
-    }
-
-    fun loadUpdateChangelog(context: Context) {
-        if (_transient.value.isUpdateChangelogLoading) return
-        viewModelScope.launch {
-            val githubEnabled =
-                settingsDataStore.data.first()[DevPreferencesKeys.GITHUB_UPDATES_ENABLED] == true
-            if (!githubEnabled) return@launch
-            ensureCurrentVersionFromPackage(context)
-            val lang = AppLanguagePrefs.current(settingsDataStore)
-            val strings = getStrings(lang)
-            _transient.update {
-                it.copy(
-                    isUpdateChangelogLoading = true,
-                    updateChangelogError = null,
-                )
-            }
-            val ok = appUpdateRepository.refreshAppUpdate(force = true)
-            _transient.update {
-                it.copy(
-                    isUpdateChangelogLoading = false,
-                    updateChangelogError = if (!ok) {
-                        strings.updateChangelogLoadError
-                    } else {
-                        null
-                    },
-                )
-            }
-        }
-    }
-
-    fun startApkDownload(context: Context) {
-        val url = uiState.value.latestDownloadUrl?.takeIf { it.isNotBlank() } ?: run {
-            openLatestReleaseInBrowser(context)
-            return
-        }
-        val appCtx = context.applicationContext
-        val dir = appCtx.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS) ?: return
-        dir.mkdirs()
-        val target = File(dir, UPDATE_APK_NAME)
-        if (target.exists()) target.delete()
-
-        val request = DownloadManager.Request(Uri.parse(url)).apply {
-            setTitle("Vetro")
-            setDestinationInExternalFilesDir(appCtx, Environment.DIRECTORY_DOWNLOADS, UPDATE_APK_NAME)
-            setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
-        }
-        val dm = appCtx.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
-        progressJob?.cancel()
-        unregisterDownloadReceiver()
-        activeDownloadId = dm.enqueue(request)
-        registerDownloadReceiver(appCtx)
-        _transient.update { it.copy(isApkDownloading = true, apkDownloadProgress = 0f) }
-        trackDownloadProgress(appCtx, activeDownloadId)
-    }
-
-    fun openLatestReleaseInBrowser(context: Context) {
-        val apkUrl = uiState.value.latestDownloadUrl?.takeIf { it.isNotBlank() }
-        val page = uiState.value.latestReleaseHtmlUrl?.takeIf { it.isNotBlank() }
-            ?: "https://github.com/${BuildConfig.GITHUB_OWNER}/${BuildConfig.GITHUB_REPO}/releases"
-        val target = apkUrl ?: page
-        runCatching {
-            context.startActivity(
-                Intent(Intent.ACTION_VIEW, Uri.parse(target)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            )
-        }
-    }
-
-    fun manageUnknownAppSourcesIntent(context: Context): Intent =
-        Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES)
-            .setData(Uri.parse("package:${context.packageName}"))
-
-    fun onReturnedFromInstallSettings(context: Context) {
-        val path = _transient.value.pendingApkPathForInstall ?: return
-        val file = File(path)
-        if (!file.exists()) {
-            _transient.update { it.copy(pendingApkPathForInstall = null) }
-            return
-        }
-        if (!context.packageManager.canRequestPackageInstalls()) {
-            return
-        }
-        if (launchPackageInstaller(context, file)) {
-            _transient.update { it.copy(pendingApkPathForInstall = null) }
-        }
-    }
-
-    private fun registerDownloadReceiver(appCtx: Context) {
-        if (downloadReceiverRegistered) return
-        val filter = IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            appCtx.registerReceiver(downloadCompleteReceiver, filter, Context.RECEIVER_EXPORTED)
-        } else {
-            @Suppress("DEPRECATION")
-            appCtx.registerReceiver(downloadCompleteReceiver, filter)
-        }
-        downloadReceiverRegistered = true
-    }
-
-    private fun unregisterDownloadReceiver() {
-        if (!downloadReceiverRegistered) return
-        runCatching { app.unregisterReceiver(downloadCompleteReceiver) }
-        downloadReceiverRegistered = false
-    }
-
-    private fun trackDownloadProgress(appCtx: Context, downloadId: Long) {
-        progressJob?.cancel()
-        progressJob = viewModelScope.launch {
-            val dm = appCtx.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
-            var lastPercent = -1
-            while (isActive) {
-                // Запрос к провайдеру загрузок — это IPC и курсор, главному потоку он ни к чему.
-                val poll = withContext(Dispatchers.IO) { queryApkDownload(dm, downloadId) }
-                when (poll) {
-                    // Провайдер не ответил курсором — как и раньше, спрашиваем снова.
-                    null -> Unit
-                    ApkDownloadPoll.Gone, ApkDownloadPoll.Succeeded -> return@launch
-                    ApkDownloadPoll.Failed -> {
-                        onDownloadFailedCleanup()
-                        return@launch
-                    }
-                    is ApkDownloadPoll.Running -> {
-                        // Стейт настроек обновляется только при смене процента, а не 4 раза в
-                        // секунду одним и тем же значением.
-                        val percent = (poll.fraction * 100).toInt()
-                        if (percent != lastPercent) {
-                            lastPercent = percent
-                            _transient.update { it.copy(apkDownloadProgress = poll.fraction) }
-                        }
-                    }
-                }
-                delay(250)
-            }
-        }
-    }
-
-    private fun onDownloadSuccessful(ctx: Context) {
-        progressJob?.cancel()
-        progressJob = null
-        unregisterDownloadReceiver()
-        activeDownloadId = -1L
-        val dir = ctx.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS)
-        val file = dir?.let { File(it, UPDATE_APK_NAME) }
-        if (file == null || !file.exists()) {
-            onDownloadFailedCleanup()
-            return
-        }
-        _transient.update {
-            it.copy(
-                isApkDownloading = false,
-                apkDownloadProgress = 1f,
-                pendingApkPathForInstall = file.absolutePath
-            )
-        }
-        if (launchPackageInstaller(ctx, file)) {
-            _transient.update { it.copy(pendingApkPathForInstall = null) }
-        }
-    }
-
-    private fun onDownloadFailedCleanup() {
-        progressJob?.cancel()
-        progressJob = null
-        unregisterDownloadReceiver()
-        activeDownloadId = -1L
-        _transient.update { it.copy(isApkDownloading = false, apkDownloadProgress = 0f) }
-    }
-
-    private fun launchPackageInstaller(context: Context, file: File): Boolean {
-        if (!context.packageManager.canRequestPackageInstalls()) {
-            _transient.update { it.copy(pendingApkPathForInstall = file.absolutePath) }
-            return false
-        }
-        return runCatching {
-            val uri = FileProvider.getUriForFile(
-                context,
-                "${context.packageName}.fileprovider",
-                file
-            )
-            val i = Intent(Intent.ACTION_VIEW).apply {
-                setDataAndType(uri, "application/vnd.android.package-archive")
-                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            }
-            context.startActivity(i)
-            true
-        }.getOrElse { e ->
-            Log.w(LOG_TAG, "launchPackageInstaller failed", e)
-            false
-        }
-    }
-
-    override fun onCleared() {
-        progressJob?.cancel()
-        unregisterDownloadReceiver()
-        super.onCleared()
     }
 
     fun shareWithDb(context: Context) {
@@ -858,26 +566,3 @@ private fun filterSystemViewFrameRateSpam(log: String): String =
             "setRequestedFrameRate" in line && "frameRate=NaN" in line
         }
         .joinToString("\n")
-
-private sealed interface ApkDownloadPoll {
-    data object Gone : ApkDownloadPoll
-    data object Succeeded : ApkDownloadPoll
-    data object Failed : ApkDownloadPoll
-    data class Running(val fraction: Float) : ApkDownloadPoll
-}
-
-private fun queryApkDownload(dm: DownloadManager, downloadId: Long): ApkDownloadPoll? =
-    dm.query(DownloadManager.Query().setFilterById(downloadId))?.use { c ->
-        if (!c.moveToFirst()) return@use ApkDownloadPoll.Gone
-        when (c.getInt(c.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS))) {
-            DownloadManager.STATUS_SUCCESSFUL -> ApkDownloadPoll.Succeeded
-            DownloadManager.STATUS_FAILED -> ApkDownloadPoll.Failed
-            else -> {
-                val soFar = c.getLong(c.getColumnIndexOrThrow(DownloadManager.COLUMN_BYTES_DOWNLOADED_SO_FAR))
-                val total = c.getLong(c.getColumnIndexOrThrow(DownloadManager.COLUMN_TOTAL_SIZE_BYTES))
-                ApkDownloadPoll.Running(
-                    if (total > 0L) (soFar.toFloat() / total.toFloat()).coerceIn(0f, 1f) else 0f,
-                )
-            }
-        }
-    }

@@ -85,6 +85,11 @@
             android:supportsPictureInPicture="true"
             android:theme="@style/Theme.MyApplication" />
 
+        <!-- Итог установки обновления от системы (PackageInstaller): приходит только через PendingIntent. -->
+        <receiver
+            android:name=".update.InstallResultReceiver"
+            android:exported="false" />
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"

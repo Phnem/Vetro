@@ -111,7 +111,6 @@ import androidx.navigation.NavController
 import com.example.myapplication.ui.shared.theme.isAppInDarkTheme
 import com.phnem.vetro.R
 import com.example.myapplication.data.models.AppTheme
-import com.example.myapplication.data.models.AppUpdateStatus
 import com.example.myapplication.data.models.UiStrings
 import com.example.myapplication.network.AppLanguage
 import com.example.myapplication.ui.navigation.navigateToWelcome
@@ -135,7 +134,6 @@ import com.example.myapplication.ui.shared.theme.IosDesign
 import com.example.myapplication.ui.shared.theme.SnProFamily
 import com.example.myapplication.ui.shared.theme.SquircleShape
 import com.example.myapplication.utils.DevRepairDbStrings
-import com.example.myapplication.utils.GithubUpdateStrings
 import com.example.myapplication.utils.formatApkSizeLabel
 import com.example.myapplication.utils.getAiConnectStrings
 import com.example.myapplication.utils.getDevRepairDbStrings
@@ -143,7 +141,6 @@ import com.example.myapplication.utils.getTitleDubbingStrings
 import com.example.myapplication.utils.TitleDubbingStrings
 import com.example.myapplication.utils.getCollectionEnrichmentStrings
 import com.example.myapplication.utils.getPlayerSettingsStrings
-import com.example.myapplication.utils.getGithubUpdateStrings
 import com.example.myapplication.utils.getStrings
 import com.example.myapplication.utils.Haptic
 import com.example.myapplication.utils.performHaptic
@@ -173,7 +170,7 @@ private sealed interface SettingsOverlaySheet {
     data object Enrichment : SettingsOverlaySheet
     data object PlaybackSources : SettingsOverlaySheet
     data object Contact : SettingsOverlaySheet
-    data object UpdateChangelog : SettingsOverlaySheet
+    data object Update : SettingsOverlaySheet
     data object MangaModels : SettingsOverlaySheet
     data class Picker(val key: String) : SettingsOverlaySheet
 }
@@ -219,14 +216,14 @@ fun SettingsScreen(
     val strings = getStrings(uiState.language)
     val devRepairStrings = getDevRepairDbStrings(uiState.language)
     val titleDubbingStrings = getTitleDubbingStrings(uiState.language)
-    val githubUpdateStrings = getGithubUpdateStrings(uiState.language)
+    val updateStrings = remember(uiState.language) { com.example.myapplication.update.updateStrings(uiState.language) }
+    val updateManager: com.example.myapplication.update.AppUpdateManager = org.koin.compose.koinInject()
+    val updateState by updateManager.state.collectAsStateWithLifecycle()
     val aiConnectStrings = getAiConnectStrings(uiState.language)
     val enrichmentStrings = getCollectionEnrichmentStrings(uiState.language)
     val playerSettingsStrings = getPlayerSettingsStrings(uiState.language)
 
     var activeSheet by remember { mutableStateOf<SettingsOverlaySheet?>(null) }
-    var showFdroidUpdateDialog by remember { mutableStateOf(false) }
-    var showGithubUpdatesEnableDialog by remember { mutableStateOf(false) }
     var showDeveloperSection by rememberSaveable { mutableStateOf(false) }
     // Активный picker-лист: "lang" | "theme" | "content" | null.
 
@@ -234,13 +231,8 @@ fun SettingsScreen(
         contract = ActivityResultContracts.GetContent()
     ) { uri -> uri?.let { viewModel.importDbFromFile(context, it) } }
 
-    val installPermissionLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.StartActivityForResult()
-    ) { viewModel.onReturnedFromInstallSettings(context) }
-
     val anyOverlayVisible = activeSheet != null ||
-        uiState.showRepairDbLogDialog || uiState.showTitleDubbingNoAiDialog ||
-        showFdroidUpdateDialog || showGithubUpdatesEnableDialog
+        uiState.showRepairDbLogDialog || uiState.showTitleDubbingNoAiDialog
     LaunchedEffect(anyOverlayVisible) { onOverlayVisibleChange(anyOverlayVisible) }
 
     // Автоскрытие и экономный режим стекла для дока рабочей области: он соседний узел и про
@@ -257,8 +249,6 @@ fun SettingsScreen(
 
     BackHandler(enabled = anyOverlayVisible) {
         when {
-            showGithubUpdatesEnableDialog -> showGithubUpdatesEnableDialog = false
-            showFdroidUpdateDialog -> showFdroidUpdateDialog = false
             uiState.showTitleDubbingNoAiDialog -> viewModel.dismissTitleDubbingNoAiDialog()
             uiState.showRepairDbLogDialog -> viewModel.discardRepairDbLog()
             else -> activeSheet = null
@@ -306,27 +296,6 @@ fun SettingsScreen(
                 activeSheet = SettingsOverlaySheet.AiConnect
             },
             onDismiss = { performHaptic(view, Haptic.Light); viewModel.dismissTitleDubbingNoAiDialog() },
-        )
-    }
-    if (showFdroidUpdateDialog) {
-        FdroidUpdateWarningDialog(
-            strings = githubUpdateStrings,
-            onDismiss = { performHaptic(view, Haptic.Light); showFdroidUpdateDialog = false },
-            onContinue = {
-                performHaptic(view, Haptic.Light); showFdroidUpdateDialog = false
-                viewModel.openFdroidUpdateWebsite(context)
-            },
-        )
-    }
-    if (showGithubUpdatesEnableDialog) {
-        FdroidUpdateWarningDialog(
-            strings = githubUpdateStrings,
-            onDismiss = { performHaptic(view, Haptic.Light); showGithubUpdatesEnableDialog = false },
-            onContinue = {
-                performHaptic(view, Haptic.Light); showGithubUpdatesEnableDialog = false
-                showDeveloperSection = false
-                viewModel.setDevGithubUpdatesEnabled(true)
-            },
         )
     }
     uiState.fullEnrichmentPromptGapCount?.let { gapCount ->
@@ -574,26 +543,24 @@ fun SettingsScreen(
 
                     // ГРУППА: О приложении.
                     item(key = "group_about") {
-                        val sizeLabel = formatApkSizeLabel(
-                            uiState.latestApkSizeBytes, uiState.language, strings.updateApkSizeUnit,
-                        )
-                        val updateAvailable = uiState.devGithubUpdatesEnabled &&
-                            uiState.updateStatus == AppUpdateStatus.UPDATE_AVAILABLE
-                        val updateValue: String? = when {
-                            !uiState.devGithubUpdatesEnabled -> uiState.currentVersion
-                            uiState.isApkDownloading ->
-                                (uiState.apkDownloadProgress * 100).toInt().toString() + "%"
-                            uiState.updateStatus == AppUpdateStatus.LOADING -> strings.updateTileChecking
-                            updateAvailable -> uiState.latestVersion ?: sizeLabel
-                            uiState.updateStatus == AppUpdateStatus.ERROR -> "!"
-                            else -> uiState.currentVersion
+                        val updateAvailable = updateState is com.example.myapplication.update.UpdateState.Available ||
+                            updateState is com.example.myapplication.update.UpdateState.Ready ||
+                            updateState is com.example.myapplication.update.UpdateState.NeedsPermission
+                        val updateValue: String? = when (val u = updateState) {
+                            is com.example.myapplication.update.UpdateState.Checking -> updateStrings.rowChecking
+                            is com.example.myapplication.update.UpdateState.Available -> updateStrings.rowAvailable(u.release.tag)
+                            is com.example.myapplication.update.UpdateState.Downloading -> updateStrings.rowDownloading((u.fraction * 100).toInt())
+                            is com.example.myapplication.update.UpdateState.Ready,
+                            is com.example.myapplication.update.UpdateState.NeedsPermission -> updateStrings.rowReady
+                            is com.example.myapplication.update.UpdateState.Failed -> updateStrings.rowFailed
+                            else -> null
                         }
                         IosListGroup(
                             isDark = isDark,
                             rows = listOf(
                                 {
                                     IosRow(
-                                        title = if (updateAvailable) strings.updateTileAvailable else strings.checkForUpdateTitle,
+                                        title = updateStrings.rowTitle,
                                         isDark = isDark,
                                         iconRes = R.drawable.hugeicon_update,
                                         iconWell = false,
@@ -602,13 +569,9 @@ fun SettingsScreen(
                                         showChevron = true,
                                         onClick = {
                                             performHaptic(view, Haptic.Light)
-                                            if (uiState.devGithubUpdatesEnabled) {
-                                                activeSheet = SettingsOverlaySheet.UpdateChangelog
-                                                viewModel.notifyUpdateChangelogSheetPresentedFromSettings()
-                                                viewModel.loadUpdateChangelog(context)
-                                            } else {
-                                                showFdroidUpdateDialog = true
-                                            }
+                                            // Окно уже открыто здесь: предложение при запуске для этого релиза не нужно.
+                                            updateManager.dismissStartupOffer()
+                                            activeSheet = SettingsOverlaySheet.Update
                                         },
                                     )
                                 },
@@ -652,7 +615,6 @@ fun SettingsScreen(
                         ) {
                             DeveloperGroups(
                                 strings = strings,
-                                githubUpdateStrings = githubUpdateStrings,
                                 uiState = uiState,
                                 isDark = isDark,
                                 onMirrorDbToggle = { performHaptic(view, Haptic.Light); viewModel.setDevMirrorDb(it) },
@@ -664,11 +626,6 @@ fun SettingsScreen(
                                     viewModel.setDevLegacyUi(enabled) { (context as? Activity)?.recreate() }
                                 },
                                 onFullBleedCardsToggle = { performHaptic(view, Haptic.Light); viewModel.setDevFullBleedCards(it) },
-                                onGithubUpdatesToggle = { enabled ->
-                                    performHaptic(view, Haptic.Light)
-                                    if (enabled) showGithubUpdatesEnableDialog = true
-                                    else viewModel.setDevGithubUpdatesEnabled(false)
-                                },
                                 onExportLogs = { performHaptic(view, Haptic.Light); viewModel.exportLogs(context) },
                                 onExportPdf = { performHaptic(view, Haptic.Light); viewModel.exportCollectionPdf(context) },
                                 onImportDb = { performHaptic(view, Haptic.Light); importDbPicker.launch("*/*") },
@@ -834,10 +791,10 @@ fun SettingsScreen(
                     activeSheet == SettingsOverlaySheet.Contact -> ContactSheet(
                         onDismiss = { activeSheet = null },
                     )
-                    activeSheet == SettingsOverlaySheet.UpdateChangelog -> UpdateChangelogSheet(
-                        viewModel = viewModel,
+                    activeSheet == SettingsOverlaySheet.Update -> com.example.myapplication.ui.update.UpdateSheet(
+                        language = uiState.language,
+                        manual = true,
                         onDismiss = { activeSheet = null },
-                        installPermissionLauncher = installPermissionLauncher,
                     )
                 }
             }
@@ -918,7 +875,6 @@ private fun SegIcon(icon: ImageVector, selected: Boolean, isDark: Boolean) {
 @Composable
 private fun DeveloperGroups(
     strings: UiStrings,
-    githubUpdateStrings: GithubUpdateStrings,
     uiState: SettingsUiState,
     isDark: Boolean,
     onMirrorDbToggle: (Boolean) -> Unit,
@@ -927,7 +883,6 @@ private fun DeveloperGroups(
     onAdaptiveGlassToggle: (Boolean) -> Unit,
     onLegacyUiToggle: (Boolean) -> Unit,
     onFullBleedCardsToggle: (Boolean) -> Unit,
-    onGithubUpdatesToggle: (Boolean) -> Unit,
     onExportLogs: () -> Unit,
     onExportPdf: () -> Unit,
     onImportDb: () -> Unit,
@@ -938,16 +893,6 @@ private fun DeveloperGroups(
             isDark = isDark,
             header = strings.devSectionTitle,
             rows = listOf(
-                {
-                    IosRow(
-                        title = githubUpdateStrings.devTitle,
-                        subtitle = githubUpdateStrings.devSubtitle,
-                        isDark = isDark,
-                        icon = Icons.Outlined.SystemUpdate,
-                        iconBackground = devIcon,
-                        trailing = { IosSwitch(checked = uiState.devGithubUpdatesEnabled, onCheckedChange = onGithubUpdatesToggle) },
-                    )
-                },
                 {
                     IosRow(
                         title = strings.devMirrorDbTitle,
@@ -1118,44 +1063,6 @@ private fun TitleDubbingNoAiDialog(
                     muted = muted,
                     onDismiss = onDismiss,
                     onConfirm = onConnect,
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun FdroidUpdateWarningDialog(
-    strings: GithubUpdateStrings,
-    onDismiss: () -> Unit,
-    onContinue: () -> Unit,
-) {
-    val isDark = isAppInDarkTheme()
-    val accent = if (isDark) BrandOrangeBright else BrandDeepRed
-    val surface = IosDesign.rowBackground(isDark)
-    val onSurface = MaterialTheme.colorScheme.onSurface
-    val muted = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f)
-    val shape = SquircleShape(IosDesign.RadiusMd)
-
-    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
-        IosDialogAnimatedContent {
-            Surface(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 40.dp),
-                shape = shape,
-                color = surface,
-                tonalElevation = 0.dp,
-                shadowElevation = if (isDark) 0.dp else 8.dp,
-            ) {
-                DialogBody(
-                    title = strings.warningTitle,
-                    body = strings.warningBody,
-                    cancel = strings.warningCancel,
-                    confirm = strings.warningContinue,
-                    accent = accent,
-                    onSurface = onSurface,
-                    muted = muted,
-                    onDismiss = onDismiss,
-                    onConfirm = onContinue,
                 )
             }
         }

@@ -51,6 +51,36 @@ val appModule = module {
     single { ResolveStatsFooterPhraseUseCase(catalog = get(), settingsDataStore = get(named("settings"))) }
     single<AnimeRepository> { AnimeRepository(apiService = get(), localDataSource = get()) }
     single { AppUpdateRepository(settingsDataStore = get(named("settings")), animeRepository = get()) }
+    // Обновление приложения: режим решает подпись (UpdatePolicy), всё остальное живёт в AppUpdateManager.
+    single { com.example.myapplication.update.UpdatePolicy(get()) }
+    single {
+        com.example.myapplication.update.UpdateDownloader(
+            // Отдельная копия клиента: файл в десятки мегабайт по слабой сети не должен упираться в
+            // короткие таймауты общего клиента.
+            client = get<okhttp3.OkHttpClient>().newBuilder()
+                .connectTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
+                .readTimeout(60, java.util.concurrent.TimeUnit.SECONDS)
+                .callTimeout(0, java.util.concurrent.TimeUnit.SECONDS)
+                .build(),
+            dir = java.io.File(androidContext().filesDir, "updates"),
+        )
+    }
+    single { com.example.myapplication.update.ApkVerifier(androidContext()) }
+    single { com.example.myapplication.update.UpdateInstaller(androidContext()) }
+    single { com.example.myapplication.update.UpdateNotifier(androidContext()) }
+    single {
+        com.example.myapplication.update.AppUpdateManager(
+            context = androidContext(),
+            policy = get(),
+            repository = get(),
+            downloader = get(),
+            verifier = get(),
+            installer = get(),
+            notifier = get(),
+            settingsDataStore = get(named("settings")),
+            scope = get<com.example.myapplication.AppScope>(),
+        )
+    }
     single<GenreRepository> { GenreRepository() }
     // Стопка обновлений → колокольчик: живёт до смерти процесса, то есть до холодного старта.
     single { com.example.myapplication.ui.home.updates.EpisodeNotificationTray() }

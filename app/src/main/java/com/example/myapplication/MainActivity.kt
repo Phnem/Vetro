@@ -51,7 +51,8 @@ import com.example.myapplication.notifications.EXTRA_OPEN_ANIME_ID
 import kotlinx.coroutines.flow.MutableStateFlow
 import com.example.myapplication.sync.supabase.SupabaseAuthDeeplinkHandler
 import io.github.jan.supabase.SupabaseClient
-import com.example.myapplication.ui.settings.UpdateChangelogSheet
+import com.example.myapplication.ui.shared.components.IosSheetScaffold
+import com.example.myapplication.ui.update.UpdateSheet
 import com.example.myapplication.ui.debug.FpsOverlay
 import com.example.myapplication.ui.shared.LocalAdaptiveGlassEnabled
 import com.example.myapplication.ui.shared.LocalModernUi
@@ -102,13 +103,8 @@ class MainActivity : ComponentActivity() {
             val settingsViewModel: SettingsViewModel =
                 koinViewModel(viewModelStoreOwner = this@MainActivity)
             val settingsState by settingsViewModel.uiState.collectAsStateWithLifecycle()
-            val startupOverlayEligible by settingsViewModel.startupUpdateOverlayEligible.collectAsStateWithLifecycle()
-
-            val installPermissionLauncher = rememberLauncherForActivityResult(
-                contract = ActivityResultContracts.StartActivityForResult()
-            ) {
-                settingsViewModel.onReturnedFromInstallSettings(context)
-            }
+            val updateManager: com.example.myapplication.update.AppUpdateManager = org.koin.compose.koinInject()
+            val startupOverlayEligible by updateManager.startupOffer.collectAsStateWithLifecycle(initialValue = false)
 
             val useDarkTheme = when (settingsState.theme) {
                 AppTheme.LIGHT -> false
@@ -145,18 +141,19 @@ class MainActivity : ComponentActivity() {
                 }
 
                 var showStartupUpdateOverlay by remember { mutableStateOf(false) }
+                // Показываем, когда пользователю есть что сделать; убираем, только когда с релизом покончено
+                // (иначе окно исчезало бы в тот момент, когда он нажал «Обновить» и пошла загрузка).
+                val startupOverlayKeep by updateManager.startupOfferKeep.collectAsStateWithLifecycle(initialValue = false)
                 LaunchedEffect(startupOverlayEligible, splashVisible) {
-                    val shouldOffer = startupOverlayEligible && !splashVisible
-                    if (!startupOverlayEligible) {
-                        showStartupUpdateOverlay = false
-                    } else if (shouldOffer) {
-                        showStartupUpdateOverlay = true
-                    }
+                    if (startupOverlayEligible && !splashVisible) showStartupUpdateOverlay = true
+                }
+                LaunchedEffect(startupOverlayKeep) {
+                    if (!startupOverlayKeep) showStartupUpdateOverlay = false
                 }
 
                 fun dismissStartupUpdateOverlay() {
                     showStartupUpdateOverlay = false
-                    settingsViewModel.dismissStartupUpdateOverlayPersisted()
+                    updateManager.dismissStartupOffer()
                 }
 
                 BackHandler(enabled = showStartupUpdateOverlay) {
@@ -180,54 +177,27 @@ class MainActivity : ComponentActivity() {
                         .fillMaxSize()
                         .background(MaterialTheme.colorScheme.background)
                 ) {
-                    AppNavGraph(
-                        navController = navController,
-                        settingsViewModel = settingsViewModel,
-                        startupSplash = startupSplash,
+                    // Предложение обновиться - та же iOS-шторка, что и в настройках (а не отдельная
+                    // карточка со своим скримом): одна панель на всё приложение.
+                    IosSheetScaffold(
+                        sheetVisible = overlayVisible,
+                        onDismiss = { dismissStartupUpdateOverlay() },
+                        sheetHeightFraction = null,
+                        content = {
+                            AppNavGraph(
+                                navController = navController,
+                                settingsViewModel = settingsViewModel,
+                                startupSplash = startupSplash,
+                            )
+                        },
+                        sheetContent = {
+                            UpdateSheet(
+                                language = settingsState.language,
+                                manual = false,
+                                onDismiss = { dismissStartupUpdateOverlay() },
+                            )
+                        },
                     )
-
-                    AnimatedVisibility(
-                        visible = overlayVisible,
-                        enter = SettingsOverlayMotion.scrimFadeIn,
-                        exit = SettingsOverlayMotion.scrimFadeOut,
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .background(Color.Black.copy(alpha = 0.35f))
-                                .clickable(
-                                    indication = null,
-                                    interactionSource = remember { MutableInteractionSource() },
-                                ) { dismissStartupUpdateOverlay() },
-                        )
-                    }
-                    AnimatedVisibility(
-                        visible = overlayVisible,
-                        enter = SettingsOverlayMotion.panelFadeInScaleIn(),
-                        exit = SettingsOverlayMotion.panelFadeOutScaleOut(),
-                    ) {
-                        Box(
-                            modifier = Modifier.fillMaxSize(),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth(0.9f)
-                                    .wrapContentHeight()
-                                    .clickable(
-                                        indication = null,
-                                        interactionSource = remember { MutableInteractionSource() },
-                                    ) { },
-                            ) {
-                                UpdateChangelogSheet(
-                                    viewModel = settingsViewModel,
-                                    onDismiss = { dismissStartupUpdateOverlay() },
-                                    installPermissionLauncher = installPermissionLauncher,
-                                    sharedModifier = Modifier.fillMaxWidth(),
-                                )
-                            }
-                        }
-                    }
 
                     if (settingsState.devFpsOverlay) {
                         FpsOverlay(modifier = Modifier.align(Alignment.TopStart))

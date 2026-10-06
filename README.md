@@ -130,6 +130,8 @@ Choose the distribution channel you prefer:
 
 The F-Droid build contains no proprietary Google libraries, so Google Cast is available only in the GitHub, Obtainium and Komi Store builds; DLNA works everywhere.
 
+Updates follow the signature, not a switch. A build signed with the author's key updates itself: Vetro checks the releases in the background, downloads a new one over Wi‑Fi, verifies its size, SHA-256 and signature, and installs it. **Settings → Check for updates** shows what is happening. A build signed with any other key, such as the F-Droid one, never updates itself and the option cannot be turned on: F-Droid delivers its updates. Versions are compared by their numbers alone: the suffix (Beta, Stable) does not matter, and a tag marked Alpha is never offered.
+
 Vetro runs on Android 8.0 (API 26) and newer. On-device subtitle recognition and torrent-based audiobook sources need a 64-bit ARM (arm64) device.
 
 ## Build from source

@@ -22,6 +22,7 @@ private val KEY_LATEST_TAG = stringPreferencesKey("app_update_latest_tag")
 private val KEY_DOWNLOAD_URL = stringPreferencesKey("app_update_download_url")
 private val KEY_HTML_URL = stringPreferencesKey("app_update_html_url")
 private val KEY_APK_SIZE = longPreferencesKey("app_update_apk_size_bytes")
+private val KEY_SHA256 = stringPreferencesKey("app_update_latest_sha256")
 private val KEY_CHANGELOG_MD = stringPreferencesKey("app_update_changelog_markdown")
 private val KEY_LAST_CHECK_MS = longPreferencesKey("app_update_last_success_check_ms")
 private val KEY_STARTUP_DISMISSED_TAG = stringPreferencesKey("app_update_startup_sheet_dismissed_tag")
@@ -37,18 +38,15 @@ class AppUpdateRepository(
         .map { prefs -> prefs.toSnapshot() }
         .distinctUntilChanged()
 
-    suspend fun refreshAppUpdate(force: Boolean): Boolean = withContext(Dispatchers.IO) {
+    suspend fun refreshAppUpdate(force: Boolean, localVersion: String): Boolean = withContext(Dispatchers.IO) {
         val now = System.currentTimeMillis()
         val prefs = settingsDataStore.data.first()
-        if (prefs[DevPreferencesKeys.GITHUB_UPDATES_ENABLED] != true) {
-            return@withContext true
-        }
         val last = prefs[KEY_LAST_CHECK_MS] ?: 0L
         if (!force && last > 0L && (now - last) < AUTO_CHECK_THROTTLE_MS) {
             return@withContext true
         }
 
-        val localVer = BuildConfig.VERSION_NAME.orEmpty().ifBlank { "1.0.0" }
+        val localVer = localVersion.ifBlank { "1.0.0" }
 
         var success = false
         animeRepository.checkGithubUpdate(
@@ -69,6 +67,7 @@ class AppUpdateRepository(
                         ed[KEY_DOWNLOAD_URL] = release.downloadUrl
                         ed[KEY_HTML_URL] = release.htmlUrl
                         ed[KEY_APK_SIZE] = release.apkAsset?.size?.takeIf { s -> s > 0L } ?: 0L
+                        release.sha256?.let { sha -> ed[KEY_SHA256] = sha } ?: ed.remove(KEY_SHA256)
                         release.body?.let { body -> ed[KEY_CHANGELOG_MD] = body }
                             ?: ed.remove(KEY_CHANGELOG_MD)
                         ed[KEY_LAST_CHECK_MS] = now
@@ -78,6 +77,7 @@ class AppUpdateRepository(
                         ed.remove(KEY_DOWNLOAD_URL)
                         ed.remove(KEY_HTML_URL)
                         ed[KEY_APK_SIZE] = 0L
+                        ed.remove(KEY_SHA256)
                         ed.remove(KEY_CHANGELOG_MD)
                         ed[KEY_LAST_CHECK_MS] = now
                     }
@@ -112,6 +112,7 @@ class AppUpdateRepository(
             latestDownloadUrl = this[KEY_DOWNLOAD_URL],
             latestHtmlUrl = this[KEY_HTML_URL],
             latestApkSizeBytes = size.takeIf { it > 0L },
+            latestSha256 = this[KEY_SHA256],
             updateChangelogMarkdown = this[KEY_CHANGELOG_MD],
             lastSuccessfulCheckEpochMs = this[KEY_LAST_CHECK_MS] ?: 0L,
             startupDismissedTag = this[KEY_STARTUP_DISMISSED_TAG],

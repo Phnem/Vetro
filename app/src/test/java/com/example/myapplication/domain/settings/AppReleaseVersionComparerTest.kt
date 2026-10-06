@@ -39,6 +39,23 @@ class AppReleaseVersionComparerTest {
     }
 
     @Test
+    fun suffix_never_decides_only_the_numbers() {
+        assertTrue(AppReleaseVersionComparer.isRemoteSemanticallyNewer("v3.3.8-Beta", "v3.3.9-Stable"))
+        assertTrue(AppReleaseVersionComparer.isRemoteSemanticallyNewer("v3.3.8-Stable", "v3.3.9-Beta"))
+        assertTrue(AppReleaseVersionComparer.isRemoteSemanticallyNewer("v3.3.9-Beta", "v3.4.0-Stable"))
+        assertTrue(AppReleaseVersionComparer.isRemoteSemanticallyNewer("v3.9.9-Beta", "v4.0.0-Beta"))
+        assertFalse(AppReleaseVersionComparer.isRemoteSemanticallyNewer("v3.3.8-Beta", "v3.3.8-Stable"))
+        assertFalse(AppReleaseVersionComparer.isRemoteSemanticallyNewer("v3.3.8-Stable", "v3.3.8-Beta"))
+    }
+
+    @Test
+    fun alpha_remote_is_ignored() {
+        assertFalse(AppReleaseVersionComparer.isRemoteSemanticallyNewer("v3.3.8-Beta", "v3.3.9-Alpha"))
+        assertFalse(AppReleaseVersionComparer.isRemoteSemanticallyNewer("v3.3.8-Beta", "v4.0.0-alpha.2"))
+        assertTrue(AppReleaseVersionComparer.isRemoteSemanticallyNewer("v3.3.8-Alpha", "v3.3.9-Beta"))
+    }
+
+    @Test
     fun uppercase_v_prefix_parses_like_lowercase() {
         assertFalse(AppReleaseVersionComparer.isRemoteSemanticallyNewer("V3.3.4-Beta", "v3.3.4-Beta"))
         assertFalse(AppReleaseVersionComparer.isRemoteSemanticallyNewer("V3.3.4-Beta", "v3.3.3-Alpha"))

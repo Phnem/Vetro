@@ -919,38 +919,6 @@ fun getWelcomeStrings(lang: AppLanguage): WelcomeStrings = when (lang) {
     AppLanguage.EN -> EnglishWelcomeStrings
 }
 
-data class GithubUpdateStrings(
-    val devTitle: String,
-    val devSubtitle: String,
-    val warningTitle: String,
-    val warningBody: String,
-    val warningCancel: String,
-    val warningContinue: String,
-)
-
-private val RussianGithubUpdateStrings = GithubUpdateStrings(
-    devTitle = "Обновления через GitHub",
-    devSubtitle = "Проверка релизов и установка APK из GitHub. Выключено по умолчанию — для сборок F-Droid, где обновления через магазин.",
-    warningTitle = "Обновление приложения",
-    warningBody = "Если вы установили это приложение из F-Droid, обновляться нужно только там — встроенная проверка GitHub для такой сборки не работает.\n\nЕсли версия установлена с GitHub — включите переключатель «Обновления через GitHub» в меню разработчика.",
-    warningCancel = "Отмена",
-    warningContinue = "Продолжить",
-)
-
-private val EnglishGithubUpdateStrings = GithubUpdateStrings(
-    devTitle = "GitHub updates",
-    devSubtitle = "Check releases and install APKs from GitHub. Off by default for F-Droid builds that update via the store.",
-    warningTitle = "App update",
-    warningBody = "If you installed this app from F-Droid, you must update it there only — built-in GitHub checks do not work for that build.\n\nIf you installed from GitHub, enable the \"GitHub updates\" switch in the developer menu.",
-    warningCancel = "Cancel",
-    warningContinue = "Continue",
-)
-
-fun getGithubUpdateStrings(lang: AppLanguage): GithubUpdateStrings = when (lang) {
-    AppLanguage.RU -> RussianGithubUpdateStrings
-    AppLanguage.EN -> EnglishGithubUpdateStrings
-}
-
 data class AddEditCommentStrings(
     val addButton: String,
     val placeholder: String,

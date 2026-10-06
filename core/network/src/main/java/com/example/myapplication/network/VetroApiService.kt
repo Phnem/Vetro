@@ -711,21 +711,7 @@ class VetroApiService(
     override suspend fun checkGithubUpdate(owner: String, repo: String): Result<GithubReleaseInfo?> {
         return runCatching {
             val response = httpClient.get("https://api.github.com/repos/$owner/$repo/releases").bodyAsText()
-            val arr = json.parseToJsonElement(response).jsonArray
-            val root = arr.firstOrNull()?.jsonObject ?: return@runCatching null
-            val tagName = root["tag_name"]?.jsonPrimitive?.content ?: ""
-            val htmlUrl = root["html_url"]?.jsonPrimitive?.content ?: ""
-            val body = root["body"]?.jsonPrimitive?.content
-            val assets = root["assets"]?.jsonArray
-            val assetObj = assets?.firstOrNull()?.jsonObject
-            val downloadUrl = assetObj?.get("browser_download_url")?.jsonPrimitive?.content ?: ""
-            val sizeBytes = assetObj?.get("size")?.jsonPrimitive?.content?.toLongOrNull() ?: 0L
-            val apkAsset = if (downloadUrl.isNotEmpty()) {
-                GithubAsset(browserDownloadUrl = downloadUrl, size = sizeBytes)
-            } else {
-                null
-            }
-            if (tagName.isNotEmpty()) GithubReleaseInfo(tagName, htmlUrl, downloadUrl, body, apkAsset) else null
+            GithubReleaseParser.parse(response)
         }
     }
 

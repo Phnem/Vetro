@@ -9,7 +9,7 @@ import com.example.myapplication.data.local.LegacyCollectionSafMigrator
 import com.example.myapplication.data.local.LegacyStorageMigrator
 import com.example.myapplication.data.local.MigrationManager
 import com.example.myapplication.data.local.StartupSweeps
-import com.example.myapplication.data.repository.AppUpdateRepository
+import com.example.myapplication.update.AppUpdateManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -32,7 +32,7 @@ class SplashViewModel(
     private val legacyCollectionSafMigrator: LegacyCollectionSafMigrator,
     private val migrationManager: MigrationManager,
     private val authRepository: AuthRepository,
-    private val appUpdateRepository: AppUpdateRepository,
+    private val appUpdateManager: AppUpdateManager,
     private val imageCompressionMigrator: ImageCompressionMigrator,
     private val startupSweeps: StartupSweeps,
 ) : ViewModel() {
@@ -148,7 +148,7 @@ class SplashViewModel(
         }
 
         viewModelScope.launch(Dispatchers.IO) {
-            runCatching { appUpdateRepository.refreshAppUpdate(force = false) }
+            runCatching { appUpdateManager.check(force = false) }
         }
 
         val route = if (authRepository.isGuest || authRepository.awaitSessionRestored()) "home" else "welcome"

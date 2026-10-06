@@ -53,6 +53,12 @@ class VetroApplication : Application(), SingletonImageLoader.Factory {
             // (по умолчанию — да). Постановка с KEEP — повторный вызов безвреден.
             koin.get<com.example.myapplication.domain.enrichment.CollectionEnrichmentCoordinator>()
                 .ensureScheduled()
+            // Автообновление: только в сборке, подписанной ключом автора (иначе расписание снимается).
+            com.example.myapplication.update.AppUpdateScheduler.sync(
+                this@VetroApplication,
+                koin.get<com.example.myapplication.update.UpdatePolicy>().mode,
+            )
+            koin.get<com.example.myapplication.update.AppUpdateManager>().refreshInBackground()
         }
     }
 

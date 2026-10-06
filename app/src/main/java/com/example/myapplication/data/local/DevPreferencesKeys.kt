@@ -6,8 +6,6 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 
 object DevPreferencesKeys {
     val ADAPTIVE_GLASS_SCROLL = booleanPreferencesKey("dev_adaptive_glass_scroll")
-    /** When false (default), GitHub release checks and in-app APK updates are disabled (F-Droid mode). */
-    val GITHUB_UPDATES_ENABLED = booleanPreferencesKey("dev_github_updates_enabled")
 
     /**
      * Live Maintenance (фоновое обновление обогащения коллекции). Отсутствие ключа трактуется как ВКЛ —
@@ -52,5 +50,7 @@ object DevPreferencesKeys {
         booleanPreferencesKey("temp_player_promo_v333_dismissed"),
         booleanPreferencesKey("use_native_media_engine"),
         booleanPreferencesKey("title_dubbing_ever_enabled"),
+        // v3.3.8: переключатель «Обновления через GitHub» убран, режим решает подпись приложения.
+        booleanPreferencesKey("dev_github_updates_enabled"),
     )
 }

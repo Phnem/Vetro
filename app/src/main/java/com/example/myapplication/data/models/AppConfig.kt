@@ -6,4 +6,3 @@ enum class SortOption {
     EPISODES,
     TITLE
 }
-enum class AppUpdateStatus { IDLE, LOADING, NO_UPDATE, UPDATE_AVAILABLE, ERROR }
