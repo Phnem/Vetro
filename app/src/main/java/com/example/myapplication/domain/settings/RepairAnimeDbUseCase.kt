@@ -58,6 +58,11 @@ class RepairAnimeDbUseCase(
         sessionLog: RepairDbSessionLog,
         onProgress: (processed: Int, total: Int) -> Unit = { _, _ -> },
     ): RepairAnimeDbResult {
+        // Сначала снять чужую привязку (id/обложка от постороннего тайтла), иначе дальнейшие проходы
+        // будут «чинить» запись по чужим id.
+        runCatching { purgeForeignMatches(repository.getAllAnimeSnapshot(), language, sessionLog) }
+            .onFailure { e -> sessionLog.warn("Foreign match audit failed", e) }
+
         // Отдельный проход: сверить и починить malId по настоящему myanimelist_id из Shikimori
         // (легаси-порча — у части записей malId == shikimoriId, это РАЗНЫЕ id → чужое аниме в MAL/AniList).
         reconcileMalIds(repository.getAllAnimeSnapshot(), sessionLog)
@@ -135,6 +140,95 @@ class RepairAnimeDbUseCase(
             if (index < suspects.lastIndex) delay(ITEM_DELAY_MS)
         }
         sessionLog.info("MAL id reconcile done: fixed=$fixed of ${suspects.size}")
+    }
+
+    /**
+     * Снимает чужую привязку. Раньше «относительный» матч брал первый ответ AniList/MAL/Kitsu на
+     * кириллический запрос — постороннее аниме (так у разных записей появлялся один и тот же
+     * «Psyren»): запись получала его id, английское название, обложку, жанры и оценку.
+     *
+     * Запись считается испорченной, только если у неё русское название, есть внешний id, а название
+     * по этому id с ним не имеет ничего общего ([isForeignMatch]). Тогда id и английское название
+     * снимаются, а обложка, жанры и оценка — только если они совпадают с данными чужого тайтла
+     * (чужие данные от своих не отличить иначе). Дальше обычный проход заполнит пробелы заново
+     * уже исправленным подбором.
+     */
+    private suspend fun purgeForeignMatches(
+        all: List<Anime>,
+        language: AppLanguage,
+        sessionLog: RepairDbSessionLog,
+    ) {
+        val suspects = all.filter { anime ->
+            anime.mediaType == MediaType.ANIME &&
+                (anime.shikimoriId != null || anime.malId != null) &&
+                russianNamesOf(anime).isNotEmpty()
+        }
+        if (suspects.isEmpty()) return
+        sessionLog.info("Foreign match audit: ${suspects.size} candidates")
+
+        var purged = 0
+        for ((index, anime) in suspects.withIndex()) {
+            // id Shikimori у аниме совпадает с MAL id, поэтому malId годится, когда shikimoriId нет.
+            val lookupId = anime.shikimoriId ?: anime.malId ?: continue
+            val remote = repository.russianTitleByShikimoriId(lookupId).getOrNull()
+            if (remote != null && isForeignMatch(russianNamesOf(anime), remote)) {
+                runCatching { purgeForeignMatch(anime, lookupId, language, sessionLog) }
+                    .onSuccess { purged++ }
+                    .onFailure { e -> sessionLog.warn("Foreign match purge failed for \"${anime.title}\"", e) }
+            }
+            if (index < suspects.lastIndex) delay(ITEM_DELAY_MS)
+        }
+        sessionLog.info("Foreign match audit done: purged=$purged of ${suspects.size}")
+    }
+
+    private fun russianNamesOf(anime: Anime): List<String> =
+        listOfNotNull(anime.titleRu, anime.title).filter(::containsCyrillic).distinct()
+
+    private suspend fun purgeForeignMatch(
+        anime: Anime,
+        lookupId: Int,
+        language: AppLanguage,
+        sessionLog: RepairDbSessionLog,
+    ) {
+        val foreign = repository.shikimoriById(lookupId, language).getOrNull()
+        val foreignTags = foreign?.let { mapApiGenresToTagIds(it.genres, genreRepository) }.orEmpty()
+        val foreignRating = foreign?.let { apiRatingTo10(it.rating) }
+        val ownsForeignTags = foreignTags.isNotEmpty() && anime.tags == foreignTags
+        val ownsForeignRating = foreignRating != null && foreignRating > 0f && anime.rating == foreignRating
+
+        sessionLog.info(
+            "Foreign match \"${anime.title}\": ids anilist=${anime.anilistId} mal=${anime.malId} " +
+                "shikimori=${anime.shikimoriId}, titleEn=\"${anime.titleEn}\" → cleared",
+        )
+        saveAnimeUseCase(
+            SaveAnimeParams(
+                animeId = anime.id,
+                title = anime.title,
+                titleEn = null,
+                titleRu = anime.titleRu,
+                episodes = anime.episodes,
+                rating = if (ownsForeignRating) 0f else anime.rating,
+                imageUri = null,
+                currentImageFileName = null,
+                orderIndex = anime.orderIndex,
+                dateAdded = anime.dateAdded,
+                isFavorite = anime.isFavorite,
+                selectedTags = if (ownsForeignTags) emptyList() else anime.tags,
+                categoryType = anime.categoryType,
+                mediaType = anime.mediaType,
+                comment = anime.comment,
+                anilistId = null,
+                malId = null,
+                shikimoriId = null,
+                anilistNotFoundAt = null,
+                malNotFoundAt = null,
+                shikimoriNotFoundAt = null,
+                tmdbId = anime.tmdbId,
+                kinopoiskId = anime.kinopoiskId,
+                tmdbNotFoundAt = anime.tmdbNotFoundAt,
+                kinopoiskNotFoundAt = anime.kinopoiskNotFoundAt,
+            ),
+        ).getOrThrow()
     }
 
     /** internal: live-обогащение чинит по одной записи тем же кодом, что и полный проход. */
@@ -341,7 +435,7 @@ class RepairAnimeDbUseCase(
         val match = if (strict) {
             pickBestMatch(anime.title, results)
         } else {
-            pickRelaxed(anime.title, results)?.also {
+            pickRelaxed(anime.title, results, ruAware = true)?.also {
                 sessionLog.debug("Shikimori relaxed match for \"${anime.title}\"")
             }
         }
@@ -386,10 +480,13 @@ class RepairAnimeDbUseCase(
                     language = language,
                     isManga = anime.mediaType == com.example.myapplication.data.models.MediaType.MANGA,
                 )
-            ).getOrNull()?.toApiSearchResult()?.let {
-                sessionLog.debug("fetchDetails fallback for \"${anime.title}\" via ${it.source}")
-                return it
-            }
+            ).getOrNull()?.toApiSearchResult()
+                // Запасной поиск по деталям тоже не вправе отдавать постороннее аниме.
+                ?.takeIf { pickBestMatch(anime.title, listOf(it)) != null }
+                ?.let {
+                    sessionLog.debug("fetchDetails fallback for \"${anime.title}\" via ${it.source}")
+                    return it
+                }
             return null
         }
 
@@ -445,7 +542,7 @@ class RepairAnimeDbUseCase(
     ): ApiSearchResult? {
         val results = repository.searchAnimeAnilibriaOnly(anime.title).getOrNull().orEmpty()
         if (strict) return pickBestMatch(anime.title, results)
-        return pickRelaxed(anime.title, results).also {
+        return pickRelaxed(anime.title, results, ruAware = true).also {
             if (it != null) sessionLog.debug("AniLibria relaxed match for \"${anime.title}\"")
         }
     }
@@ -585,22 +682,15 @@ class RepairAnimeDbUseCase(
         return true
     }
 
-    private fun pickBestMatch(localTitle: String, results: List<ApiSearchResult>): ApiSearchResult? {
-        if (results.isEmpty()) return null
-        return results
-            .map { result ->
-                val candidates = listOfNotNull(result.title, result.altTitle)
-                result to TitleMatcher.bestScore(localTitle, candidates)
-            }
-            .filter { (_, score) -> score >= TitleMatcher.MATCH_THRESHOLD }
-            .maxByOrNull { (_, score) -> score }
-            ?.first
-    }
+    private fun pickBestMatch(localTitle: String, results: List<ApiSearchResult>): ApiSearchResult? =
+        pickStrictMatch(localTitle, results)
 
-    private fun pickRelaxed(localTitle: String, results: List<ApiSearchResult>): ApiSearchResult? {
-        if (results.isEmpty()) return null
-        return pickBestMatch(localTitle, results) ?: results.firstOrNull()
-    }
+    /** [ruAware] — каталог понимает русский запрос (Shikimori, AniLibria); AniList, MAL и Kitsu — нет. */
+    private fun pickRelaxed(
+        localTitle: String,
+        results: List<ApiSearchResult>,
+        ruAware: Boolean = false,
+    ): ApiSearchResult? = pickRelaxedMatch(localTitle, results, ruAware)
 
     private fun AnimeDetails.toApiSearchResult(): ApiSearchResult = ApiSearchResult(
         title = title,

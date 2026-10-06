@@ -3,9 +3,58 @@ package com.example.myapplication.domain.settings
 import com.example.myapplication.data.models.Anime
 import com.example.myapplication.data.models.MediaType
 import com.example.myapplication.network.ApiSearchResult
+import com.example.myapplication.network.EnrichedTitles
 import com.example.myapplication.network.LookupResult
+import com.example.myapplication.sync.TitleMatcher
 
 private const val NOT_FOUND_TTL_MS = 14L * 24 * 60 * 60 * 1000
+
+/** Ниже этого балла название записи и название по её внешнему id — разные тайтлы. */
+internal const val FOREIGN_MATCH_SCORE_FLOOR = 0.3
+
+/** Ниже этого балла «похожий» ответ русскоязычного каталога на кириллический запрос — не наш тайтл. */
+private const val RELAXED_CYRILLIC_SCORE_FLOOR = 0.5
+
+internal fun containsCyrillic(text: String): Boolean = text.any { it in 'Ѐ'..'ӿ' }
+
+/** Совпадение названия записи с названиями кандидата не ниже порога [TitleMatcher.MATCH_THRESHOLD]. */
+internal fun pickStrictMatch(localTitle: String, results: List<ApiSearchResult>): ApiSearchResult? =
+    results
+        .map { result -> result to TitleMatcher.bestScore(localTitle, listOfNotNull(result.title, result.altTitle)) }
+        .filter { (_, score) -> score >= TitleMatcher.MATCH_THRESHOLD }
+        .maxByOrNull { (_, score) -> score }
+        ?.first
+
+/**
+ * Строгий матч, а если его нет — первый ответ каталога. Первый ответ годится, только когда запрос
+ * и каталог говорят на одном языке: поиск по кириллице в AniList, MAL и Kitsu возвращает
+ * постороннее популярное аниме, и запись получала его обложку, жанры и id. Русскоязычный каталог
+ * ([ruAware]) на кириллический запрос отвечает осмысленно, но и ему нужен хоть какой-то балл.
+ */
+internal fun pickRelaxedMatch(
+    localTitle: String,
+    results: List<ApiSearchResult>,
+    ruAware: Boolean,
+): ApiSearchResult? {
+    if (results.isEmpty()) return null
+    pickStrictMatch(localTitle, results)?.let { return it }
+    if (!containsCyrillic(localTitle)) return results.firstOrNull()
+    if (!ruAware) return null
+    val first = results.first()
+    val score = TitleMatcher.bestScore(localTitle, listOfNotNull(first.title, first.altTitle))
+    return first.takeIf { score >= RELAXED_CYRILLIC_SCORE_FLOOR }
+}
+
+/**
+ * Привязана ли запись с русским названием к чужому тайтлу: название по её внешнему id не имеет
+ * с ним ничего общего. Считаем только по русскому названию записи: английское могли подменить
+ * тем же чужим тайтлом.
+ */
+internal fun isForeignMatch(localRussianNames: List<String>, remote: EnrichedTitles): Boolean {
+    val remoteNames = remote.matchCandidates()
+    if (remoteNames.isEmpty() || localRussianNames.isEmpty()) return false
+    return localRussianNames.maxOf { TitleMatcher.bestScore(it, remoteNames) } < FOREIGN_MATCH_SCORE_FLOOR
+}
 
 /** Pure gap classification shared by full repair and live maintenance. */
 internal fun classifyRepairGaps(

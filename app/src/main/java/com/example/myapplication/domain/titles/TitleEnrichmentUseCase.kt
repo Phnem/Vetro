@@ -61,6 +61,11 @@ class TitleEnrichmentUseCase(
         }
         idAttempts.firstOrNull { it.englishOrNull != null }?.let { return it }
 
+        // Кириллический запрос AniList и Jikan не понимают и отвечают произвольным популярным аниме.
+        // Ищем по Shikimori (он понимает русский), берём только строгое совпадение, а английское
+        // название достаём уже по MAL id найденного тайтла.
+        if (containsCyrillic(anime.title)) return resolveByRussianTitle(anime) ?: idAttempts.firstOrNull()
+
         val aniMatch = pickBestMatch(anime.title, repository.enrichTitlesBySearch(anime.title).getOrNull().orEmpty())
         if (aniMatch?.englishOrNull != null) return aniMatch
 
@@ -82,23 +87,27 @@ class TitleEnrichmentUseCase(
         }
     }
 
-    private fun pickBestMatch(localTitle: String, candidates: List<EnrichedTitles>): EnrichedTitles? {
-        if (candidates.isEmpty()) return null
-        val byScore = candidates
+    /**
+     * Русское название -> Shikimori -> английское название по MAL id найденного тайтла. Только
+     * строгое совпадение: «первый ответ поиска» подставлял чужое аниме (и его id) любой записи,
+     * чьё название не нашлось.
+     */
+    private suspend fun resolveByRussianTitle(anime: Anime): EnrichedTitles? {
+        val match = pickBestMatch(anime.title, repository.russianTitlesBySearch(anime.title).getOrNull().orEmpty())
+            ?: return null
+        val malId = match.malId ?: return match
+        val withEnglish = repository.enrichTitlesByIds(null, malId).getOrNull()?.takeIf { it.englishOrNull != null }
+            ?: repository.malTitlesById(malId).getOrNull()?.takeIf { it.englishOrNull != null }
+        return withEnglish?.copy(shikimoriId = match.shikimoriId, russian = match.russian) ?: match
+    }
+
+    /** Совпадение по названию не ниже порога; без совпадения null, а не «лучший из плохих». */
+    private fun pickBestMatch(localTitle: String, candidates: List<EnrichedTitles>): EnrichedTitles? =
+        candidates
             .map { it to TitleMatcher.bestScore(localTitle, it.matchCandidates()) }
             .filter { it.second >= TitleMatcher.MATCH_THRESHOLD }
             .maxByOrNull { it.second }
             ?.first
-        if (byScore != null) return byScore
-
-        // Кросс-скрипт: локальный RU-title vs english/romaji кандидаты даёт score ≈ 0.
-        // Берём лучший ответ API с непустым english (ранг поиска уже релевантен запросу).
-        if (containsCyrillic(localTitle)) {
-            return candidates.firstOrNull { it.englishOrNull != null }
-                ?: candidates.firstOrNull()
-        }
-        return null
-    }
 
     private fun containsCyrillic(text: String): Boolean =
         text.any { it in '\u0400'..'\u04FF' }
