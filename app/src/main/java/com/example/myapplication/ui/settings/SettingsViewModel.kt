@@ -261,18 +261,6 @@ class SettingsViewModel(
         }
     }
 
-    /**
-     * Переключение классического интерфейса. [onApplied] вызывается после записи — экран
-     * пересоздаёт активити: смена режима меняет структуру дерева над `layerBackdrop`, и живое
-     * переключение могло бы на кадр оставить стекло плоским.
-     */
-    fun setDevLegacyUi(enabled: Boolean, onApplied: () -> Unit) {
-        viewModelScope.launch {
-            settingsDataStore.edit { it[DevPreferencesKeys.LEGACY_UI] = enabled }
-            onApplied()
-        }
-    }
-
     fun setDevFullBleedCards(enabled: Boolean) {
         viewModelScope.launch {
             settingsDataStore.edit { it[DevPreferencesKeys.FULL_BLEED_CARDS] = enabled }

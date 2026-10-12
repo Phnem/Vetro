@@ -3,7 +3,6 @@ package com.example.myapplication.ui.settings
 import com.example.myapplication.ui.shared.theme.IosScroll
 import com.example.myapplication.ui.shared.glassControl
 import com.example.myapplication.ui.shared.rememberPinnableBackdrop
-import android.app.Activity
 import android.content.Intent
 import android.widget.Toast
 import androidx.core.net.toUri
@@ -60,7 +59,6 @@ import androidx.compose.material.icons.filled.FastForward
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Sync
-import androidx.compose.material.icons.filled.ViewCarousel
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.outlined.BrightnessAuto
 import androidx.compose.material.icons.outlined.Category
@@ -621,10 +619,6 @@ fun SettingsScreen(
                                 onHideShareToggle = { performHaptic(view, Haptic.Light); viewModel.setDevHideShare(it) },
                                 onFpsOverlayToggle = { performHaptic(view, Haptic.Light); viewModel.setDevFpsOverlay(it) },
                                 onAdaptiveGlassToggle = { performHaptic(view, Haptic.Light); viewModel.setDevAdaptiveGlassScroll(it) },
-                                onLegacyUiToggle = { enabled ->
-                                    performHaptic(view, Haptic.Light)
-                                    viewModel.setDevLegacyUi(enabled) { (context as? Activity)?.recreate() }
-                                },
                                 onFullBleedCardsToggle = { performHaptic(view, Haptic.Light); viewModel.setDevFullBleedCards(it) },
                                 onExportLogs = { performHaptic(view, Haptic.Light); viewModel.exportLogs(context) },
                                 onExportPdf = { performHaptic(view, Haptic.Light); viewModel.exportCollectionPdf(context) },
@@ -881,7 +875,6 @@ private fun DeveloperGroups(
     onHideShareToggle: (Boolean) -> Unit,
     onFpsOverlayToggle: (Boolean) -> Unit,
     onAdaptiveGlassToggle: (Boolean) -> Unit,
-    onLegacyUiToggle: (Boolean) -> Unit,
     onFullBleedCardsToggle: (Boolean) -> Unit,
     onExportLogs: () -> Unit,
     onExportPdf: () -> Unit,
@@ -926,27 +919,6 @@ private fun DeveloperGroups(
                 {
                     // Подписи зашиты здесь, а не в UiStrings: там 252 поля из 254 допустимых
                     // (за пределом RELEASE падает с VerifyError в clinit).
-                    val ru = strings.languageName == "RU"
-                    IosRow(
-                        title = if (ru) "Классический интерфейс" else "Classic interface",
-                        subtitle = if (ru) {
-                            "Старый док, жидкое стекло, окна вместо страниц"
-                        } else {
-                            "Old dock, liquid glass, screens instead of pages"
-                        },
-                        isDark = isDark,
-                        icon = Icons.Filled.ViewCarousel,
-                        iconBackground = devIcon,
-                        trailing = {
-                            IosSwitch(
-                                checked = uiState.devLegacyUi,
-                                onCheckedChange = onLegacyUiToggle,
-                            )
-                        },
-                    )
-                },
-                {
-                    // Подписи здесь по той же причине, что у «Классического интерфейса» выше.
                     val ru = strings.languageName == "RU"
                     IosRow(
                         title = if (ru) "Карточки с обложкой" else "Full-cover cards",
