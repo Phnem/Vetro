@@ -1,0 +1,3 @@
+Fixes.
+• Updating no longer hangs on "Installing": if the system installer stays silent (seen on HyperOS), Vetro drops the stuck session and opens the regular installer.
+• The update flow now writes a log, so a failed update can be explained.
