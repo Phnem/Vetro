@@ -3,6 +3,9 @@ package com.example.myapplication.audiobooks.ui
 import com.example.myapplication.di.AUDIOBOOK_SOURCES
 import org.koin.core.qualifier.named
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import com.example.myapplication.audiobooks.data.BookCoverManager
 import com.example.myapplication.audiobooks.data.remote.web.SiteText
 import com.example.myapplication.audiobooks.domain.source.WorkMatch
 import com.example.myapplication.audiobooks.domain.source.AudiobookSearch
@@ -270,8 +273,37 @@ fun AudiobookPlayerHost(language: AppLanguage = AppLanguage.RU, modifier: Modifi
     val markers by remember(book?.narrationId) {
         book?.narrationId?.value?.let(markerStore::markers) ?: flowOf(emptyList())
     }.collectAsState(initial = emptyList())
+    // Обложка живёт в БД: её смена («Ещё → обновить / импортировать») видна и в плеере, и на полках
+    // сразу, а не только после перезапуска книги — метаданные текущего трека остаются прежними.
+    val covers: BookCoverManager = koinInject()
+    val storedCover by remember(book?.workId) {
+        book?.workId?.let(repository::coverUrl) ?: flowOf(null)
+    }.collectAsState(initial = null)
+    var coverBusy by remember { mutableStateOf(false) }
+    fun announceCover(result: BookCoverManager.Result) {
+        val message = when (result) {
+            is BookCoverManager.Result.Changed ->
+                if (result.coverUrl.startsWith("collection-attachment://")) strings.coverImported else strings.coverChanged
+            is BookCoverManager.Result.ChangedOnDevice -> strings.coverImportedLocal
+            BookCoverManager.Result.NothingNew -> strings.coverNoOthers
+            BookCoverManager.Result.Failed -> strings.coverFailed
+        }
+        Toast.makeText(context, message, Toast.LENGTH_LONG).show()
+    }
+    val importCoverPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { picked ->
+        val workId = book?.workId
+        if (picked != null && workId != null) {
+            coverBusy = true
+            scope.launch {
+                val result = covers.import(workId, picked)
+                coverBusy = false
+                announceCover(result)
+            }
+        }
+    }
     val controller = state.controller
     if (book == null || controller == null) return
+    val shownBook = storedCover?.let { book.copy(artworkUri = it) } ?: book
 
     val isFull = expanded
     val sheetVisible = remember { MutableTransitionState(false) }
@@ -356,7 +388,7 @@ fun AudiobookPlayerHost(language: AppLanguage = AppLanguage.RU, modifier: Modifi
             // Обложка и затемнение записываются в бэкдроп: стеклянные кнопки обеих форм преломляют их.
             Box(Modifier.fillMaxSize().layerBackdrop(backdrop)) {
                 BookArt(
-                    uri = book.artworkUri,
+                    uri = shownBook.artworkUri,
                     modifier = Modifier
                         .fillMaxSize()
                         .graphicsLayer {
@@ -395,7 +427,7 @@ fun AudiobookPlayerHost(language: AppLanguage = AppLanguage.RU, modifier: Modifi
             val miniVisible by remember { derivedStateOf { expansion.value < 0.4f } }
             if (miniVisible) {
                 MiniPlayerContent(
-                    book = book,
+                    book = shownBook,
                     state = state,
                     strings = strings,
                     backdrop = backdrop,
@@ -431,7 +463,7 @@ fun AudiobookPlayerHost(language: AppLanguage = AppLanguage.RU, modifier: Modifi
             val fullVisible by remember { derivedStateOf { expansion.value > 0.05f } }
             if (fullVisible) {
                 FullPlayerContent(
-                    book = book,
+                    book = shownBook,
                     state = state,
                     strings = strings,
                     backdrop = backdrop,
@@ -510,6 +542,20 @@ fun AudiobookPlayerHost(language: AppLanguage = AppLanguage.RU, modifier: Modifi
                             onMarkers = { openSheet(PlayerSheet.MARKERS) },
                             subtitlesLabel = variant?.let { subtitleStrings.title + " · " + subtitleStrings.menuValue(subtitleModes[it] ?: AudiobookSubtitleMode.OFF) },
                             onSubtitles = { openSheet(PlayerSheet.SUBTITLES) },
+                            coverBusy = coverBusy,
+                            onReloadCover = {
+                                val workId = book.workId
+                                if (workId != null) {
+                                    coverBusy = true
+                                    Toast.makeText(context, strings.coverSearching, Toast.LENGTH_SHORT).show()
+                                    scope.launch {
+                                        val result = covers.reload(workId)
+                                        coverBusy = false
+                                        announceCover(result)
+                                    }
+                                }
+                            },
+                            onImportCover = { importCoverPicker.launch("image/*") },
                         )
                         PlayerSheet.SUBTITLES -> if (variant != null) SubtitlesSheetContent(
                             variant = variant,

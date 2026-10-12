@@ -130,6 +130,15 @@ UPDATE audiobook_work SET is_favorite = :favorite WHERE work_id = :workId;
 workFavorite:
 SELECT is_favorite FROM audiobook_work WHERE work_id = ?;
 
+workCover:
+SELECT cover_url FROM audiobook_work WHERE work_id = ?;
+
+-- Палитра и blurhash считаются по картинке на устройстве: у новой обложки их сбрасываем.
+setWorkCover:
+UPDATE audiobook_work
+SET cover_url = :coverUrl, cover_palette_json = NULL, cover_blurhash = NULL, updated_at = :updatedAt
+WHERE work_id = :workId;
+
 workById:
 SELECT * FROM audiobook_work WHERE work_id = ?;
 

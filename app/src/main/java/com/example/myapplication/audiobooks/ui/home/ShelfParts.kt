@@ -21,9 +21,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
@@ -180,14 +184,14 @@ internal fun FanShelfCard(
                 val bookIndex = FanBookIndex[slot]
                 val book = books.getOrNull(bookIndex)
                 if (book == null) {
-                    // Скелет: то же место и поворот, что у будущей обложки, — полка не «прыгает».
-                    Box(
-                        Modifier
+                    // Шаблон вместо пустышки: то же место и поворот, что у будущей обложки, — полка
+                    // не «прыгает», а пустой веер выглядит как три книги, а не как дырки.
+                    PlaceholderBook(
+                        style = PlaceholderStyles[slot],
+                        modifier = Modifier
                             .offset(x = pose.dx, y = pose.dy)
                             .size(ShelfCoverWidth * 0.86f, ShelfCoverHeight * 0.86f)
-                            .graphicsLayer { rotationZ = pose.rotation }
-                            .clip(RoundedCornerShape(CoverRadius))
-                            .background(ink.copy(alpha = 0.06f)),
+                            .graphicsLayer { rotationZ = pose.rotation },
                     )
                     return@forEachIndexed
                 }
@@ -201,6 +205,75 @@ internal fun FanShelfCard(
                 )
             }
         }
+    }
+}
+
+/** Три карточки с постера «Recommended»: оранжевая, кремовая с тёмным кантом, тёмная с кремовым. */
+internal enum class PlaceholderStyle { ORANGE, CREAM, DARK }
+
+/** По слотам [FanPoses]: слева оранжевая, справа тёмная, посередине (сверху) кремовая. */
+internal val PlaceholderStyles = listOf(PlaceholderStyle.ORANGE, PlaceholderStyle.DARK, PlaceholderStyle.CREAM)
+
+private val PlaceholderCream = Color(0xFFF5ECDC)
+private val PlaceholderInk = Color(0xFF161616)
+
+/**
+ * Шаблон обложки для места, где книги ещё нет (загрузка, полка из одной-двух книг): круг и три
+ * строки текста, как на постере. Рисуется по размеру, поэтому годится для любой обложки 2:3.
+ */
+@Composable
+internal fun PlaceholderBook(style: PlaceholderStyle, modifier: Modifier = Modifier) {
+    val shape = RoundedCornerShape(CoverRadius)
+    Box(
+        modifier
+            .shadow(6.dp, shape, clip = false, ambientColor = Color.Black, spotColor = Color.Black)
+            .drawBehind { drawPlaceholderBook(style) },
+    )
+}
+
+private fun DrawScope.drawPlaceholderBook(style: PlaceholderStyle) {
+    val w = size.width
+    val h = size.height
+    val corner = CornerRadius(CoverRadius.toPx())
+    val (card, circle, line) = when (style) {
+        PlaceholderStyle.ORANGE -> Triple(BrandOrange, PlaceholderInk, PlaceholderCream)
+        PlaceholderStyle.CREAM -> Triple(PlaceholderCream, BrandOrange, PlaceholderInk)
+        PlaceholderStyle.DARK -> Triple(PlaceholderInk, BrandOrange, PlaceholderCream)
+    }
+    drawRoundRect(card, cornerRadius = corner)
+    when (style) {
+        PlaceholderStyle.CREAM -> {
+            val stroke = 2.5.dp.toPx()
+            drawRoundRect(
+                PlaceholderInk,
+                topLeft = Offset(stroke / 2, stroke / 2),
+                size = Size(w - stroke, h - stroke),
+                cornerRadius = corner,
+                style = Stroke(stroke),
+            )
+        }
+        PlaceholderStyle.DARK -> {
+            val stroke = 1.dp.toPx()
+            drawRoundRect(
+                PlaceholderCream.copy(alpha = 0.85f),
+                topLeft = Offset(stroke / 2, stroke / 2),
+                size = Size(w - stroke, h - stroke),
+                cornerRadius = corner,
+                style = Stroke(stroke),
+            )
+        }
+        PlaceholderStyle.ORANGE -> Unit
+    }
+    drawCircle(circle, radius = w * 0.23f, center = Offset(w * 0.5f, h * 0.34f))
+    val barHeight = h * 0.045f
+    val barRadius = CornerRadius(barHeight / 2)
+    listOf(0.62f to 0.76f, 0.72f to 0.76f, 0.82f to 0.5f).forEach { (y, width) ->
+        drawRoundRect(
+            line,
+            topLeft = Offset(w * 0.12f, h * y),
+            size = Size(w * width, barHeight),
+            cornerRadius = barRadius,
+        )
     }
 }
 

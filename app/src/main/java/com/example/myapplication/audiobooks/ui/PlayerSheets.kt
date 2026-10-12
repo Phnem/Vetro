@@ -614,6 +614,10 @@ internal fun ColumnScope.MoreSheetContent(
     /** «Субтитры · Текст книги»; null — пункта нет. */
     subtitlesLabel: String? = null,
     onSubtitles: () -> Unit = {},
+    /** Идёт поиск другой обложки или загрузка своей: кнопки неактивны, чтобы не запускать второй раз. */
+    coverBusy: Boolean = false,
+    onReloadCover: () -> Unit = {},
+    onImportCover: () -> Unit = {},
 ) {
     val controller = state.controller ?: return
     SheetTitle(strings.moreTitle)
@@ -627,6 +631,10 @@ internal fun ColumnScope.MoreSheetContent(
         NavRow(strings.backToMarker(markerCount), R.drawable.ph_bookmark_simple_fill, onMarkers)
         Spacer(Modifier.height(3.dp))
     }
+    ActionRow(strings.reloadCover, R.drawable.ph_arrow_clockwise, enabled = !coverBusy, onClick = onReloadCover)
+    Spacer(Modifier.height(3.dp))
+    ActionRow(strings.importCover, R.drawable.ph_folder_plus, enabled = !coverBusy, onClick = onImportCover)
+    Spacer(Modifier.height(3.dp))
     SettingRow(strings.favorite, checked = favorite, onChange = { onFavorite() })
     Spacer(Modifier.height(3.dp))
     SmartRewindRow(strings)
@@ -639,6 +647,26 @@ internal fun ColumnScope.MoreSheetContent(
             .padding(horizontal = 16.dp, vertical = 14.dp),
     ) {
         SkipSilenceLevels(state, strings, controller)
+    }
+}
+
+/** Строка-действие: делает дело сразу, без перехода на другой лист (поэтому без стрелки). */
+@Composable
+private fun ActionRow(title: String, icon: Int, enabled: Boolean, onClick: () -> Unit) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(18.dp))
+            .background(Color.Black.copy(alpha = 0.22f))
+            .clickable(enabled = enabled, onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        val tint = if (enabled) Ink else Muted
+        PhIcon(icon, 18.dp, tint)
+        Spacer(Modifier.width(12.dp))
+        Text(title, color = tint, fontFamily = SnProFamily, fontWeight = FontWeight.SemiBold, fontSize = 15.sp,
+            modifier = Modifier.weight(1f))
     }
 }
 

@@ -52,6 +52,14 @@ class BookWorkEnrichment(
         )
     }
 
+    /** Только обложка произведения (для «обновить обложку»): без описания и лишних запросов Google Books. */
+    suspend fun coverUrl(title: String, authors: List<String>): String? {
+        val works = (openLibrary.searchWorks(title) as? LookupResult.Found)?.value ?: return null
+        val work = BookWorkMatching.best(works, title, authors) ?: return null
+        val coverId = work.matchedEdition?.coverIds?.firstOrNull() ?: work.coverId
+        return coverId?.let { OpenLibraryClient.coverUrl(it) }
+    }
+
     /**
      * Описание на языке интерфейса: Google Books по ISBN издания (у русских изданий — русская
      * аннотация), затем описание произведения Open Library — оно почти всегда английское, поэтому

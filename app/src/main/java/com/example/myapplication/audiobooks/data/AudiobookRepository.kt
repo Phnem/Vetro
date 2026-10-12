@@ -288,6 +288,20 @@ class AudiobookRepository(
         q.setWorkFavorite(favorite = if (favorite) 1 else 0, workId = workId.value)
     }
 
+    /** Обложка произведения; плеер, полки и страница книги читают её отсюда и обновляются сразу. */
+    fun coverUrl(workId: WorkId): Flow<String?> =
+        q.workCover(workId.value).asFlow().mapToList(Dispatchers.IO).map { it.firstOrNull()?.cover_url }
+
+    /** Название, авторы и обложка — всё, что нужно, чтобы искать другую обложку. */
+    suspend fun coverInfo(workId: WorkId): WorkCoverInfo? = io {
+        q.workById(workId.value).executeAsOneOrNull()?.let { WorkCoverInfo(it.title, decode(it.authors_json), it.cover_url) }
+    }
+
+    /** Новая обложка произведения (адрес сайта, `collection-attachment://` или `file://`). */
+    suspend fun setCover(workId: WorkId, coverUrl: String) = io {
+        q.setWorkCover(coverUrl = coverUrl, updatedAt = nowMs(), workId = workId.value)
+    }
+
     /** Копии одной озвучки на разных сайтах — звенья цепочки запасных (порядок задаёт вызывающий). */
     suspend fun variants(narrationId: NarrationId): List<VariantLink> = io {
         q.variantsByNarration(narrationId.value).executeAsList().map { v ->
@@ -442,3 +456,6 @@ data class ContinueItem(
     val chapterIndex: Int,
     val speed: Float,
 )
+
+/** Что известно о произведении для поиска другой обложки. */
+data class WorkCoverInfo(val title: String, val authors: List<String>, val coverUrl: String?)

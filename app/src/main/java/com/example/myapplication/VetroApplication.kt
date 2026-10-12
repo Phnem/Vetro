@@ -74,6 +74,12 @@ class VetroApplication : Application(), SingletonImageLoader.Factory {
                         callFactory = { org.koin.core.context.GlobalContext.get().get<okhttp3.OkHttpClient>() },
                     ),
                 )
+                // Загруженные вручную обложки книг лежат в облаке: collection-attachment://<id>.
+                add(
+                    com.example.myapplication.sync.supabase.CloudAttachmentFetcher.Factory {
+                        org.koin.core.context.GlobalContext.get().get()
+                    },
+                )
             }
             .memoryCache {
                 MemoryCache.Builder()

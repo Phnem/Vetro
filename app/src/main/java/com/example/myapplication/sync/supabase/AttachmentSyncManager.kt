@@ -94,38 +94,10 @@ class AttachmentSyncManager(
             val attachmentId = UUID.randomUUID().toString()
             val fileName = "$attachmentId.webp"
             val compressedBytes = compressImageToWebP(rawFileBytes)
-            val sizeBytes = compressedBytes.size.toLong()
-            val request = PresignUploadRequest(
-                attachmentId = attachmentId,
-                noteId = animeId,
-                blockId = animeId,
-                filename = fileName,
-                mimeType = "image/webp",
-                sizeBytes = sizeBytes
-            )
-            
-            val functionResponse = supabase.functions.invoke("r2-presign-upload") {
-                val jsonString = json.encodeToString(request)
-                setBody(TextContent(jsonString, ContentType.Application.Json))
-            }
-            val presignResponse = json.decodeFromString<PresignUploadResponse>(functionResponse.bodyAsText())
-
             // Прошлые обложки этого тайтла — до вставки новой записи (для чистки R2 ниже).
             val previousAttachments = db.attachmentQueries.getAttachmentsForAnime(animeId).executeAsList()
 
-            // 2. Upload with HttpURLConnection
-            val url = java.net.URL(presignResponse.uploadUrl)
-            val connection = (url.openConnection() as java.net.HttpURLConnection).applyTimeouts()
-            connection.requestMethod = "PUT"
-            connection.doOutput = true
-            connection.setRequestProperty("Content-Type", "image/webp")
-            connection.outputStream.use { it.write(compressedBytes) }
-
-            val responseCode = connection.responseCode
-            if (responseCode !in 200..299) {
-                android.util.Log.w(TAG, "R2 PUT failed for $animeId: HTTP $responseCode")
-                return@withContext null
-            }
+            if (!putToR2(attachmentId, animeId, fileName, compressedBytes)) return@withContext null
 
             val cloudUrl = "collection-attachment://$attachmentId"
 
@@ -139,10 +111,6 @@ class AttachmentSyncManager(
                 updated_at = System.currentTimeMillis()
             )
 
-            // 4. Cache locally
-            val cachedFile = File(syncCacheDir, fileName)
-            cachedFile.writeBytes(compressedBytes)
-
             // 5. Экономия R2: прошлые обложки тайтла осиротели — новая канонична.
             //    Best-effort, ошибки не роняют загрузку.
             previousAttachments
@@ -155,6 +123,62 @@ class AttachmentSyncManager(
             return@withContext cloudUrl
         } catch (e: Exception) {
             android.util.Log.w(TAG, "uploadAttachment failed for $animeId: ${safeSyncError(e)}")
+            null
+        }
+    }
+
+    /**
+     * Общая часть загрузки: presign через Edge Function, PUT в R2, копия в локальный кэш. Сервер ключует
+     * файл по `userId/attachmentId` и [ownerId] не использует, поэтому подходит и обложкам книг.
+     * Исключения сети уходят вызывающему — у каждого свой try/catch.
+     */
+    private suspend fun putToR2(attachmentId: String, ownerId: String, fileName: String, bytes: ByteArray): Boolean {
+        val request = PresignUploadRequest(
+            attachmentId = attachmentId,
+            noteId = ownerId,
+            blockId = ownerId,
+            filename = fileName,
+            mimeType = "image/webp",
+            sizeBytes = bytes.size.toLong()
+        )
+        val functionResponse = supabase.functions.invoke("r2-presign-upload") {
+            val jsonString = json.encodeToString(request)
+            setBody(TextContent(jsonString, ContentType.Application.Json))
+        }
+        val presignResponse = json.decodeFromString<PresignUploadResponse>(functionResponse.bodyAsText())
+
+        val connection = (java.net.URL(presignResponse.uploadUrl).openConnection() as java.net.HttpURLConnection).applyTimeouts()
+        connection.requestMethod = "PUT"
+        connection.doOutput = true
+        connection.setRequestProperty("Content-Type", "image/webp")
+        connection.outputStream.use { it.write(bytes) }
+
+        val responseCode = connection.responseCode
+        if (responseCode !in 200..299) {
+            android.util.Log.w(TAG, "R2 PUT failed for $ownerId: HTTP $responseCode")
+            return false
+        }
+        File(syncCacheDir, fileName).writeBytes(bytes)
+        return true
+    }
+
+    /** То же сжатие, что внутри [uploadAttachment]: нужно, когда копию картинки хранят и локально. */
+    fun compressForUpload(originalBytes: ByteArray): ByteArray = compressImageToWebP(originalBytes)
+
+    /**
+     * Картинка не из коллекции аниме (обложка книги): та же R2, но без записи в `attachment` — у неё
+     * внешний ключ на `anime`. [webpBytes] уже сжаты ([compressForUpload]). Возвращает
+     * `collection-attachment://<id>` либо null, если загрузка не удалась (нет аккаунта, нет сети).
+     */
+    suspend fun uploadStandaloneImage(ownerId: String, webpBytes: ByteArray): String? = withContext(Dispatchers.IO) {
+        try {
+            val attachmentId = UUID.randomUUID().toString()
+            if (!putToR2(attachmentId, ownerId, "$attachmentId.webp", webpBytes)) return@withContext null
+            "collection-attachment://$attachmentId"
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            android.util.Log.w(TAG, "uploadStandaloneImage failed for $ownerId: ${safeSyncError(e)}")
             null
         }
     }

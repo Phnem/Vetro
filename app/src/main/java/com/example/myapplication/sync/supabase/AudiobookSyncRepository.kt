@@ -139,7 +139,9 @@ class AudiobookSyncRepository(
                 language = remote.language,
                 year = remote.year?.toLong(),
                 is_collection = if (remote.is_collection) 1 else 0,
-                cover_url = remote.cover_url,
+                // Обложка-файл на этом устройстве (облако было недоступно при импорте) — осознанный
+                // выбор пользователя: чужая из облака её не затирает.
+                cover_url = local?.cover_url?.takeIf { it.startsWith(LOCAL_COVER_PREFIX) } ?: remote.cover_url,
                 // Палитра и blurhash — производные от обложки, считаются на устройстве.
                 cover_palette_json = local?.cover_palette_json,
                 cover_blurhash = local?.cover_blurhash,
@@ -197,7 +199,8 @@ class AudiobookSyncRepository(
             language = work.language,
             year = work.year?.toInt(),
             is_collection = work.is_collection != 0L,
-            cover_url = work.cover_url,
+            // file:// есть только на этом телефоне: другим устройствам он ничего не даст.
+            cover_url = work.cover_url?.takeUnless { it.startsWith(LOCAL_COVER_PREFIX) },
             selected_narration_id = work.selected_narration_id,
             is_favorite = work.is_favorite != 0L,
             in_library = work.in_library != 0L,
@@ -391,6 +394,8 @@ class AudiobookSyncRepository(
         const val PROGRESS_ENTITY = "audiobook_progress"
         const val BOOKMARKS_ENTITY = "audiobook_bookmarks"
         const val WORK_PREFIX = "work:"
+        /** Обложка-файл, загруженная только на это устройство (см. BookCoverManager). */
+        const val LOCAL_COVER_PREFIX = "file:"
         const val BOOKMARKS_PREFIX = "bookmarks:"
         const val PROGRESS_WATERMARK = "progress_push_watermark"
         const val CHUNK_SIZE = 200

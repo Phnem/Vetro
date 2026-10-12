@@ -158,6 +158,8 @@ val audiobookModule = module {
     }
     single { com.example.myapplication.audiobooks.ui.AudiobookSubtitleModes(androidContext()) }
     single { AudiobookRepository(get()) }
+    // Ручная смена обложки книги: «обновить» (другая картинка) и «импорт» (файл → облако).
+    single { com.example.myapplication.audiobooks.data.BookCoverManager(androidContext(), get(), get(), get(), get(), get()) }
     single {
         BooksCatalog(
             sources = get(named(SOURCES)),
