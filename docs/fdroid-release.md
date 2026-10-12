@@ -32,8 +32,8 @@ DLNA. GitHub, Obtainium and Komi Store builds are unchanged.
 Add `rm` to the build entry (and keep it for every later one), so the scanner never sees the folder:
 
 ```yaml
-  - versionName: v3.3.8-Beta
-    versionCode: 338
+  - versionName: v3.3.9-Stable
+    versionCode: 339
     commit: <tag commit>
     subdir: app
     submodules: true        # whisper.cpp is a git submodule

@@ -1,7 +1,7 @@
 # Vetro
 
 <p align="center">
-  <img src="images/hero.png" alt="Vetro" width="760" />
+  <img src="images/promo/vetro-banner-16x9.png" alt="Vetro — your whole library: anime, movies, series, manga and audiobooks in one place" width="760" />
 </p>
 
 <p align="center">
@@ -29,7 +29,7 @@ Vetro is an Android media library. Build a personal collection, follow new episo
 
 Vetro does not host any media. It connects to catalogues and sources that you choose, including your own servers.
 
-> **Current development build:** `v3.3.8-Beta`. The app is actively evolving; source availability can vary by region.
+> **Current development build:** `v3.3.9-Stable`. The app is actively evolving; source availability can vary by region.
 
 ## Trailer
 
@@ -54,7 +54,7 @@ Vetro does not host any media. It connects to catalogues and sources that you ch
 ### Always know what's new
 
 - Episode checks across several anime and TV catalogues.
-- Progress is counted by season: cards show `S3 E12` instead of a franchise-wide total.
+- Progress is counted by season: cards show `S3 E12` instead of a franchise-wide total. A new episode is never marked as watched for you: the counter moves only when you (or the player) move it.
 - New episodes arrive as a stack of notification cards. They fold into a bell next to the dock and open as a notification centre.
 - Titles that are airing or have unread episodes stay at the top of the library, under favourites.
 - A release calendar in the dock's menu: every airing title on its day, a stack of covers when several come out together. When no source names the day of a dub's next episode, Vetro learns it from the weekdays of the episodes that already came out.
@@ -90,6 +90,7 @@ Vetro does not host any media. It connects to catalogues and sources that you ch
 - Chapters are recovered for books that ship without them: from CUE sheets, pauses in the audio or speech recognition.
 - Subtitles from the book's own text, kept in sync with the narrator.
 - A rich system media card: book, author, chapter, cover, speed and favourite buttons.
+- Your own covers: **Reload cover** finds another picture for a book, **Import cover** takes an image from a file. An imported cover is uploaded to your cloud and shows up on every device.
 
 ### Read manga and manhwa
 

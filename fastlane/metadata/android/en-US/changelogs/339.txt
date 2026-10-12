@@ -1,0 +1,6 @@
+Fixes.
+• New episodes are no longer marked as watched for you.
+• Season 2 of Black Clover and other titles with "ё" in the name find their streams again.
+• Glass on the search bar and the docks should stop turning black.
+New.
+• Audiobooks: Reload cover and Import cover (synced to your cloud); template covers on empty shelves.
