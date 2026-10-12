@@ -10,6 +10,8 @@ import com.example.myapplication.ui.home.updates.NotificationBellAnchor
 import com.example.myapplication.ui.home.updates.EpisodeNotificationTray
 import androidx.compose.runtime.snapshotFlow
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.animation.core.tween
 import com.example.myapplication.ui.shared.frostedGlass
@@ -467,9 +469,25 @@ fun HomeScreen(
         animationSpec = MotionTokens.sheetPresent(),
         label = "homePush",
     )
+    // Свайп страниц рабочей области: страница едет с масштабом, скруглением и клипом (workspacePageMotion) —
+    // это тоже предок layerBackdrop, и запись, сделанная на ходу, выходит пустой (стекло поиска,
+    // верхнего дока и кнопки «вверх» чернеет до первого скролла; нижний док не страдает: его
+    // backdrop лежит выше страниц). Пока страницы едут, перезапись откладывается.
+    val pageSwipeInProgress = com.example.myapplication.ui.shared.LocalBackdropPinned.current
     // Для восстановления стекла важен только момент «анимации над layerBackdrop доиграли».
     val effectsSettled by remember {
-        derivedStateOf { blurAmount.value <= 0.dp && homePushProgress.value <= 0.001f }
+        derivedStateOf {
+            blurAmount.value <= 0.dp && homePushProgress.value <= 0.001f && !pageSwipeInProgress()
+        }
+    }
+    // Страховка: перечень оверлеев в overlayActive неизбежно отстаёт от новых окон и анимаций, а
+    // пустую запись видно только глазами. Поэтому не по флагам, а по самому факту: предки
+    // layerBackdrop доиграли — записываем слой заново.
+    LaunchedEffect(Unit) {
+        snapshotFlow { effectsSettled }
+            .distinctUntilChanged()
+            .drop(1)
+            .collect { settled -> if (settled) backdropRedrawPending.value = true }
     }
     LaunchedEffect(backdropRedrawPending.value, effectsSettled) {
         if (!backdropRedrawPending.value || !effectsSettled) return@LaunchedEffect
