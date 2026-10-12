@@ -18,4 +18,11 @@ class TitleNormalizationTest {
         assertEquals("rezero", titleKey("Re:Zero"))
         assertEquals("атакатитанов", titleKey("Атака титанов"))
     }
+
+    @Test
+    fun `yo and ye are the same letter for matching`() {
+        assertEquals(normalizeTitleWords("Чёрный клевер"), normalizeTitleWords("Черный клевер"))
+        assertEquals(titleKey("Задача трёх тел"), titleKey("Задача трех тел"))
+        assertEquals(true, isTitleSimilar("Черный клевер", "Чёрный клевер"))
+    }
 }

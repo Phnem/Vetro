@@ -3,13 +3,20 @@ package com.example.myapplication.network
 private val NON_ALNUM_RUN = Regex("[^\\p{L}\\p{N}]+")
 
 /**
- * Название как слова: нижний регистр, всё, кроме букв и цифр, заменено одиночными пробелами,
- * края обрезаны. Для сравнения по токенам.
+ * Нижний регистр с «ё» → «е». Русские каталоги расходятся в этой букве: у пользователя
+ * «Черный клевер», у Kodik «Чёрный клевер», и без свёртки они не совпадали как слова
+ * (балл 0,80 при пороге 0,85) — второй сезон не находился.
  */
-fun normalizeTitleWords(value: String): String = value.lowercase().replace(NON_ALNUM_RUN, " ").trim()
+private fun String.foldedLowercase(): String = lowercase().replace('ё', 'е')
 
-/** Название как ключ: нижний регистр, только буквы и цифры. Для дедупликации и «содержит». */
-fun titleKey(value: String): String = value.lowercase().replace(NON_ALNUM_RUN, "")
+/**
+ * Название как слова: нижний регистр, «ё» = «е», всё, кроме букв и цифр, заменено одиночными
+ * пробелами, края обрезаны. Для сравнения по токенам.
+ */
+fun normalizeTitleWords(value: String): String = value.foldedLowercase().replace(NON_ALNUM_RUN, " ").trim()
+
+/** Название как ключ: нижний регистр, «ё» = «е», только буквы и цифры. Для дедупликации и «содержит». */
+fun titleKey(value: String): String = value.foldedLowercase().replace(NON_ALNUM_RUN, "")
 
 /**
  * Расстояние Левенштейна — одна реализация на всё приложение (раньше их было три, одна строила
@@ -45,10 +52,10 @@ fun levenshteinSimilarity(a: String, b: String): Double {
  * Returns true when two titles are "close enough" to be considered duplicates.
  */
 internal fun isTitleSimilar(a: String, b: String): Boolean {
-    val q = a.lowercase().replace(Regex("[^\\p{L}\\p{N}]"), "")
+    val q = titleKey(a)
     if (q.isEmpty()) return false
     if (b.isBlank()) return false
-    val normalized = b.lowercase().replace(Regex("[^\\p{L}\\p{N}]"), "")
+    val normalized = titleKey(b)
     if (normalized.isEmpty()) return false
     if (normalized.contains(q) || q.contains(normalized)) return true
     val dist = levenshtein(q, normalized)

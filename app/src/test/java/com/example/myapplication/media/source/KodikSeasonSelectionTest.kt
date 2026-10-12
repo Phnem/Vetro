@@ -241,4 +241,34 @@ class KodikSeasonSelectionTest {
             ),
         )
     }
+
+    /**
+     * «Черный клевер» (с «е») и Kodik «Чёрный клевер [ТВ-2]»: без свёртки «ё» балл был 0,80 при пороге
+     * 0,85, и релиз второго сезона отбрасывался — серия 1 не находилась, хотя на Kodik она есть.
+     */
+    @Test
+    fun `russian title without yo matches the Kodik release of the second season`() {
+        val season2 = listOf("Чёрный клевер [ТВ-2]", "Black Clover 2", "Чёрный клевер 2")
+        val season1 = listOf("Чёрный клевер [ТВ-1]", "Black Clover")
+
+        assertEquals(true, com.example.myapplication.sync.TitleMatcher.bestScore("Черный клевер", season2) >= com.example.myapplication.sync.TitleMatcher.MATCH_THRESHOLD)
+        // Строка сезона без названия (её дала jut.su): релиз доказывается номером в своём названии.
+        assertEquals(true, kodikReleaseServesSeason(season2, season = 2, seasonTitles = emptyList()))
+        assertEquals(false, kodikReleaseServesSeason(season1, season = 2, seasonTitles = emptyList()))
+
+        val links = linkedMapOf(2 to mapOf(1 to "https://kodik.example/seria/1", 2 to "https://kodik.example/seria/2"))
+        assertEquals(
+            "https://kodik.example/seria/1",
+            selectKodikSerialEpisodeLink(
+                baseLink = "https://kodik.example/serial",
+                linksBySeason = links,
+                lastSeason = 2,
+                lastEpisode = 2,
+                season = 2,
+                episode = 1,
+                seasonIdentifiable = false,
+                releaseConfirmsSeason = true,
+            ),
+        )
+    }
 }
