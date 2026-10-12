@@ -616,12 +616,13 @@ class HomeViewModel(
     private suspend fun readLanguageFromSettings(): AppLanguage = AppLanguagePrefs.current(settingsDataStore)
 
     /**
-     * Смахнули карточку «вышла новая серия». Серия уже проставлена автоматически
-     * при проверке — здесь только убираем плашку (и её пуш из шторки).
+     * Смахнули (или открыли) карточку «вышла новая серия»: убираем плашку и её пуш из шторки,
+     * а число серий запоминаем — иначе следующая проверка вернула бы то же уведомление.
+     * Счётчик просмотренных серий записи не меняется.
      */
     fun dismissUpdate(update: AnimeUpdate, ctx: Context) {
         viewModelScope.launch {
-            localDataSource.removeUpdate(update.animeId)
+            localDataSource.markUpdatesRead(listOf(update))
             cancelAnimeUpdateNotification(ctx, update.animeId)
         }
     }

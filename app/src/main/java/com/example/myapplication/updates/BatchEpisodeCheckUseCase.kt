@@ -42,10 +42,11 @@ class BatchEpisodeCheckUseCase(
     /**
      * Полный проход: детект → авто-применение → merge с текущими плашками → персист.
      *
-     * Новые серии проставляются в коллекцию САМИ (подтверждение пользователя больше
-     * не спрашивается). Строки `anime_update` остаются как лента уведомлений «вышла
-     * новая серия»: они живут, пока пользователь не смахнёт карточку, и показывают
-     * «было → стало».
+     * Счётчик серий записи НЕ трогаем: это то, что пользователь посмотрел, а вышедшая серия
+     * просмотренной не становится (раньше проверка сама дописывала счётчик, и экран серий
+     * помечал непросмотренные как просмотренные). Строки `anime_update` — лента уведомлений
+     * «вышла новая серия»: живут, пока пользователь не смахнёт или не откроет карточку, после
+     * чего число запоминается в `ignored_update`, чтобы следующая проверка не вернула её.
      *
      * @return только НОВЫЕ события (их нужно показать в системных уведомлениях).
      */
@@ -64,12 +65,7 @@ class BatchEpisodeCheckUseCase(
         return publishEpisodeUpdates(
             detected = detected.updates,
             getExisting = localDataSource::getUpdates,
-            applyEpisodes = apply@{ update ->
-                val anime = localDataSource.getAnimeById(update.animeId) ?: return@apply
-                if (anime.episodes >= update.newEpisodes) return@apply
-                localDataSource.updateAnime(anime.copy(episodes = update.newEpisodes))
-                Log.d(TAG, "Auto-applied: \"${anime.title}\" ${anime.episodes} -> ${update.newEpisodes}")
-            },
+            getAcknowledged = { runCatching { localDataSource.getIgnoredMap() }.getOrElse { emptyMap() } },
             setUpdates = localDataSource::setUpdates,
         )
     }
