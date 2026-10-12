@@ -5,6 +5,8 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageInstaller
 import android.os.Build
+import android.util.Log
+import androidx.core.content.FileProvider
 import java.io.File
 
 /**
@@ -27,6 +29,8 @@ class UpdateInstaller(private val context: Context) {
      */
     fun install(file: File): Boolean = runCatching {
         val installer = context.packageManager.packageInstaller
+        // Недоигранные сессии прошлых попыток (в том числе зависшие) не нужны: начинаем с чистого листа.
+        abandonOwnSessions()
         val params = PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL).apply {
             setAppPackageName(context.packageName)
             setSize(file.length())
@@ -52,9 +56,44 @@ class UpdateInstaller(private val context: Context) {
             session.commit(pending.intentSender)
         }
         true
-    }.getOrElse { false }
+    }.getOrElse {
+        Log.w(TAG, "could not create or commit the install session", it)
+        false
+    }
+
+    /**
+     * Бросить все незавершённые сессии этого приложения. На HyperOS сессия может молча застрять после
+     * `commit`: система начинает установку, но ни окна подтверждения, ни результата не присылает.
+     */
+    fun abandonOwnSessions() {
+        val installer = context.packageManager.packageInstaller
+        runCatching {
+            installer.mySessions.forEach { info ->
+                Log.i(TAG, "abandon session ${info.sessionId} (progress ${info.progress})")
+                runCatching { installer.abandonSession(info.sessionId) }
+            }
+        }.onFailure { Log.w(TAG, "could not list own sessions", it) }
+    }
+
+    /**
+     * Обычная установка файла системным установщиком (окно «Установить?»), как работало до сессий.
+     * Запасной путь, когда сессия зависла: свой экран установщика есть на любой прошивке.
+     */
+    fun openWithSystemInstaller(file: File): Boolean = runCatching {
+        val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+        val intent = Intent(Intent.ACTION_VIEW)
+            .setDataAndType(uri, "application/vnd.android.package-archive")
+            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
+        context.startActivity(intent)
+        Log.i(TAG, "opened ${file.name} with the system installer")
+        true
+    }.getOrElse {
+        Log.w(TAG, "could not open the system installer", it)
+        false
+    }
 
     private companion object {
+        const val TAG = "AppUpdate"
         const val SESSION_ENTRY = "vetro-update.apk"
     }
 }

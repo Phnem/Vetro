@@ -2,4 +2,6 @@
 <paths>
     <cache-path name="share_cache" path="share/" />
     <external-files-path name="apk_downloads" path="Download/" />
+    <!-- APK обновления: его отдают системному установщику, если сессия зависла (см. UpdateInstaller). -->
+    <files-path name="app_updates" path="updates/" />
 </paths>

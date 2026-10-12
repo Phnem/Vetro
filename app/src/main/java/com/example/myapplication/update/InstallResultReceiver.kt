@@ -23,6 +23,7 @@ class InstallResultReceiver : BroadcastReceiver() {
             @Suppress("DEPRECATION")
             intent.getParcelableExtra(Intent.EXTRA_INTENT)
         }
+        android.util.Log.i("AppUpdate", "result broadcast: status=$status confirm=${confirm != null}")
         val koin = GlobalContext.getOrNull() ?: return
         koin.get<AppUpdateManager>().onInstallResult(status, message, confirm)
     }
