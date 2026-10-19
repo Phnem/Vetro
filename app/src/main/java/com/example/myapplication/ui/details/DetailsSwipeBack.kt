@@ -16,6 +16,10 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
+import com.example.myapplication.ui.shared.back.ExteraBackRouter
+import com.example.myapplication.ui.shared.back.LocalExteraBackRouter
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
@@ -65,11 +69,28 @@ fun Modifier.detailsSwipeBack(pagerState: PagerState, enabled: Boolean): Modifie
     val density = LocalDensity.current
     val rtl = LocalLayoutDirection.current == LayoutDirection.Rtl
     val currentEnabled by rememberUpdatedState(enabled)
-    val connection = remember(pagerState, dispatcher, density, rtl) {
-        DetailsSwipeBackConnection(pagerState, dispatcher, density, rtl) { currentEnabled }
+    // Не null только в режиме «назад как в extera»: события идут через роутер, и страница
+    // получает вертикальную координату пальца (в прежнем режиме она не нужна, остаётся 0).
+    val router = LocalExteraBackRouter.current
+    val connection = remember(pagerState, dispatcher, router, density, rtl) {
+        DetailsSwipeBackConnection(pagerState, dispatcher, router, density, rtl) { currentEnabled }
     }
     return this
         .onSizeChanged { connection.widthPx = it.width.toFloat() }
+        .then(
+            if (router != null) {
+                Modifier.pointerInput(connection) {
+                    awaitPointerEventScope {
+                        while (true) {
+                            val event = awaitPointerEvent(PointerEventPass.Initial)
+                            event.changes.firstOrNull()?.let { connection.touchY = it.position.y }
+                        }
+                    }
+                }
+            } else {
+                Modifier
+            },
+        )
         .nestedScroll(connection)
 }
 
@@ -77,12 +98,16 @@ fun Modifier.detailsSwipeBack(pagerState: PagerState, enabled: Boolean): Modifie
 private class DetailsSwipeBackConnection(
     private val pagerState: PagerState,
     private val dispatcher: OnBackPressedDispatcher,
+    private val router: ExteraBackRouter?,
     private val density: Density,
     private val rtl: Boolean,
     private val enabled: () -> Boolean,
 ) : NestedScrollConnection {
 
     var widthPx: Float = 1f
+
+    /** Координата пальца по Y; пишется только в режиме extera (через [router]). */
+    var touchY: Float = 0f
 
     /** Жест уже классифицирован: null — ещё нет касания, true — может стать «назад». */
     private var armed: Boolean? = null
@@ -116,7 +141,7 @@ private class DetailsSwipeBackConnection(
         if (!active) {
             active = true
             SwipeBackGesture.active = true
-            dispatcher.dispatchOnBackStarted(event(0f))
+            if (router != null) router.started(event(0f)) else dispatcher.dispatchOnBackStarted(event(0f))
         }
         dragged += towardBack
         progress()
@@ -132,7 +157,11 @@ private class DetailsSwipeBackConnection(
                 containerSize = widthPx,
                 velocity = velocityDp.coerceAtLeast(0f),
             ) && velocityDp > -MotionTokens.DismissVelocityThresholdDpPerSec
-            if (commit) dispatcher.onBackPressed() else dispatcher.dispatchOnBackCancelled()
+            if (commit) {
+                if (router != null) router.invoked() else dispatcher.onBackPressed()
+            } else {
+                if (router != null) router.cancelled() else dispatcher.dispatchOnBackCancelled()
+            }
             // Переход доигрывает на тех же линейных кривых — флаг снимаем, когда он закончился.
             delay(SwipeBackGesture.LINEAR_MS.toLong() + SETTLE_MARGIN_MS)
         }
@@ -148,12 +177,12 @@ private class DetailsSwipeBackConnection(
 
     private fun progress() {
         val p = (dragged / widthPx).coerceIn(0f, 1f)
-        dispatcher.dispatchOnBackProgressed(event(p))
+        if (router != null) router.progressed(event(p)) else dispatcher.dispatchOnBackProgressed(event(p))
     }
 
     private fun event(progress: Float) = BackEventCompat(
         touchX = if (rtl) widthPx * (1f - progress) else widthPx * progress,
-        touchY = 0f,
+        touchY = touchY,
         progress = progress,
         swipeEdge = if (rtl) BackEventCompat.EDGE_RIGHT else BackEventCompat.EDGE_LEFT,
     )

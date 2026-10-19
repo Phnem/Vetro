@@ -38,11 +38,20 @@ class AppUpdateRepository(
         .map { prefs -> prefs.toSnapshot() }
         .distinctUntilChanged()
 
-    suspend fun refreshAppUpdate(force: Boolean, localVersion: String): Boolean = withContext(Dispatchers.IO) {
+    /**
+     * @param maxAgeMs пока прошлая успешная проверка не старше этого, GitHub не спрашиваем (при
+     *  [force] = false). Запуск и возврат в приложение ставят короткий срок: релиз, вышедший после
+     *  прошлой проверки, иначе не находился бы до четырёх часов.
+     */
+    suspend fun refreshAppUpdate(
+        force: Boolean,
+        localVersion: String,
+        maxAgeMs: Long = AUTO_CHECK_THROTTLE_MS,
+    ): Boolean = withContext(Dispatchers.IO) {
         val now = System.currentTimeMillis()
         val prefs = settingsDataStore.data.first()
         val last = prefs[KEY_LAST_CHECK_MS] ?: 0L
-        if (!force && last > 0L && (now - last) < AUTO_CHECK_THROTTLE_MS) {
+        if (!force && last > 0L && (now - last) < maxAgeMs) {
             return@withContext true
         }
 

@@ -7,6 +7,9 @@ import io.ktor.http.isSuccess
 import kotlinx.coroutines.CancellationException
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 
+/** Как источник подключён: от этого зависит, на какой карточке панели он лежит. */
+enum class CustomSourceFamily { VETRO, STREMIO }
+
 /** One installed source as the settings screen sees it. */
 data class CustomSourceSummary(
     val key: String,
@@ -14,6 +17,7 @@ data class CustomSourceSummary(
     val kindLabel: String,
     val enabled: Boolean,
     val sourceUrl: String?,
+    val family: CustomSourceFamily = CustomSourceFamily.VETRO,
 )
 
 /** What happened when the user tried to add or refresh a source. */
@@ -166,4 +170,5 @@ private fun InstalledSource.toSummary(): CustomSourceSummary = CustomSourceSumma
     },
     enabled = enabled,
     sourceUrl = sourceUrl,
+    family = if (definition is InstalledSourceDefinition.Stremio) CustomSourceFamily.STREMIO else CustomSourceFamily.VETRO,
 )

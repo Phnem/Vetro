@@ -29,6 +29,7 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.example.myapplication.ui.shared.back.rememberExteraSheetBack
 import com.example.myapplication.ui.shared.theme.IosDesign
 import com.example.myapplication.ui.shared.theme.MotionTokens
 import com.example.myapplication.ui.shared.theme.OverlayThemeTokens
@@ -113,6 +114,10 @@ fun MotionBottomSheet(
 
     var panelHeight by remember { mutableFloatStateOf(0f) }
 
+    // Режим «назад как в extera» (dev-флаг): null, пока выключен — тогда «назад» ведёт BackHandler
+    // вызывающего, как раньше. Включённый, жест сжимает и уводит панель так же, как страницы.
+    val sheetBack = rememberExteraSheetBack(enabled = visibleState.targetState, onDismiss = onDismiss)
+
     Box(modifier = modifier.fillMaxSize()) {
         Box(
             modifier = Modifier
@@ -145,6 +150,7 @@ fun MotionBottomSheet(
                     // Запас под тень: иначе в нулевой точке над кромкой торчала бы её полоска.
                     val travel = panelHeight + SHADOW_ALLOWANCE.toPx()
                     translationY = (1f - shell.value) * travel
+                    sheetBack?.applyTo(this, topCorner.toPx())
                 }
                 .iosSheetContainer(shape, isDark, containerColor),
         ) {

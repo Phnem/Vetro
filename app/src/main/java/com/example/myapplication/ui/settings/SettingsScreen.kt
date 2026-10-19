@@ -311,6 +311,8 @@ fun SettingsScreen(
         // Раньше здесь стоял Transparent, и каждая шторка рисовала свою плавающую карточку.
         sheetContainerColor = null,
         showGrabber = true,
+        // Режим extera: поля вокруг вдавленного экрана настроек — тот же градиент, что у списка.
+        backdropBrush = settingsBackground,
         content = {
       Box(modifier = Modifier.fillMaxSize()) {
         // Единый backdrop: список настроек пишет в него свой контент через layerBackdrop,
@@ -620,6 +622,7 @@ fun SettingsScreen(
                                 onFpsOverlayToggle = { performHaptic(view, Haptic.Light); viewModel.setDevFpsOverlay(it) },
                                 onAdaptiveGlassToggle = { performHaptic(view, Haptic.Light); viewModel.setDevAdaptiveGlassScroll(it) },
                                 onFullBleedCardsToggle = { performHaptic(view, Haptic.Light); viewModel.setDevFullBleedCards(it) },
+                                onExteraBackToggle = { performHaptic(view, Haptic.Light); viewModel.setDevExteraBack(it) },
                                 onExportLogs = { performHaptic(view, Haptic.Light); viewModel.exportLogs(context) },
                                 onExportPdf = { performHaptic(view, Haptic.Light); viewModel.exportCollectionPdf(context) },
                                 onImportDb = { performHaptic(view, Haptic.Light); importDbPicker.launch("*/*") },
@@ -876,6 +879,7 @@ private fun DeveloperGroups(
     onFpsOverlayToggle: (Boolean) -> Unit,
     onAdaptiveGlassToggle: (Boolean) -> Unit,
     onFullBleedCardsToggle: (Boolean) -> Unit,
+    onExteraBackToggle: (Boolean) -> Unit,
     onExportLogs: () -> Unit,
     onExportPdf: () -> Unit,
     onImportDb: () -> Unit,
@@ -934,6 +938,26 @@ private fun DeveloperGroups(
                             IosSwitch(
                                 checked = uiState.devFullBleedCards,
                                 onCheckedChange = onFullBleedCardsToggle,
+                            )
+                        },
+                    )
+                },
+                {
+                    val ru = strings.languageName == "RU"
+                    IosRow(
+                        title = if (ru) "Анимация «назад» как в extera" else "Extera-style back animation",
+                        subtitle = if (ru) {
+                            "Страница сжимается и едет за пальцем, шторки — тот же принцип"
+                        } else {
+                            "Page shrinks and follows the finger; sheets use the same motion"
+                        },
+                        isDark = isDark,
+                        icon = Icons.Filled.Code,
+                        iconBackground = devIcon,
+                        trailing = {
+                            IosSwitch(
+                                checked = uiState.devExteraBack,
+                                onCheckedChange = onExteraBackToggle,
                             )
                         },
                     )

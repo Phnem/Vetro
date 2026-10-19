@@ -46,6 +46,7 @@ __pycache__/
 # Claude Code local state (skills are tracked, worktrees/settings are not)
 .claude/worktrees/
 .claude/settings.local.json
+**/.cache/
 
 # Stray artifacts from mistyped git commands
 /-remote --tags origin

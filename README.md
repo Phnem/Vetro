@@ -29,7 +29,7 @@ Vetro is an Android media library. Build a personal collection, follow new episo
 
 Vetro does not host any media. It connects to catalogues and sources that you choose, including your own servers.
 
-> **Current development build:** `v3.4.1-Beta`. The app is actively evolving; source availability can vary by region.
+> **Current development build:** `v3.4.2`. The app is actively evolving; source availability can vary by region.
 
 ## Trailer
 

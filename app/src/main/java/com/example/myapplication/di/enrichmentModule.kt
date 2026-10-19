@@ -90,6 +90,13 @@ val enrichmentModule = module {
     single { TmdbTitlesClient(get(), rate(perSecond = 4.0, burst = 8.0)) }
     // VETRO-TAIL[title-id-source]: новый источник id/названий — `single<TitleIdContributor> { … }` строкой ниже.
     // Ничего больше менять не нужно: getAll() подхватит его сам (см. docs/agents/tails.md).
+    single<TitleIdContributor>(named("vfmodule-id-contributor")) {
+        com.example.myapplication.media.source.vfmodule.VfTitleIdContributor(
+            allohaExtractor = get(),
+            playersClient = get(),
+            allohaTokenProvider = { com.example.myapplication.media.source.vfmodule.AllohaExtractor.DEFAULT_TOKEN },
+        )
+    }
     single { TitleIdResolver(get(), get(), get(), get(), get(), get(), contributors = getAll<TitleIdContributor>()) }
     single { com.example.myapplication.domain.enrichment.TitleInfoEnricher(get(), get()) }
 

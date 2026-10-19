@@ -1,0 +1,6 @@
+New.
+• Back gesture like in exteraGram: the page shrinks, follows your finger and rounds its corners while the screen underneath is dimmed. It drives leaving the title page, the book page and the bottom sheets. On by default; a switch in Developer Settings returns the old animation.
+• Playback sources: a card for each way to connect — your own server, subtitles, a Stremio add-on link, a Vetro package.
+Fixes.
+• Updates: the check on launch and on return to the app now finds a fresh release within 10 minutes instead of up to four hours.
+• Updates download faster: the file is fetched in parallel parts and written in larger blocks, and the system finishes optimizing the app in the background.

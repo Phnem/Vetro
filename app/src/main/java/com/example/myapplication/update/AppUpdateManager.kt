@@ -88,6 +88,7 @@ class AppUpdateManager(
 
     private val downloadMutex = Mutex()
     private var downloadJob: Job? = null
+    private var backgroundRefresh: Job? = null
 
     /** Сторож установки: «Устанавливаем» не должно висеть вечно, если система не ответила. */
     private var installWatchdog: Job? = null
@@ -103,12 +104,16 @@ class AppUpdateManager(
      * (кнопка «Проверить сейчас») спрашивает всегда и показывает [UpdateState.Checking].
      * @return false, если связаться не удалось.
      */
-    suspend fun check(force: Boolean): Boolean {
+    suspend fun check(force: Boolean, maxAgeMs: Long? = null): Boolean {
         if (!policy.isAuto) return false
         val busy = _state.value
         if (busy is UpdateState.Downloading || busy is UpdateState.Installing || busy is UpdateState.Checking) return true
         if (force) _state.value = UpdateState.Checking
-        val ok = repository.refreshAppUpdate(force, localVersion)
+        val ok = if (maxAgeMs != null) {
+            repository.refreshAppUpdate(force, localVersion, maxAgeMs)
+        } else {
+            repository.refreshAppUpdate(force, localVersion)
+        }
         if (!ok) {
             _state.value = UpdateState.Failed(null, UpdateFailure.CHECK)
             return false
@@ -117,11 +122,15 @@ class AppUpdateManager(
         return true
     }
 
-    /** Проверка при запуске приложения и возвращении в него: тихая, с загрузкой по Wi‑Fi. */
+    /**
+     * Проверка при запуске приложения и возвращении в него: тихая, с загрузкой по Wi‑Fi. Срок давности
+     * короткий ([LAUNCH_CHECK_MAX_AGE_MS]): общий четырёхчасовой прятал свежий релиз, вышедший после
+     * прошлой проверки, и пользователю приходилось искать его вручную.
+     */
     fun refreshInBackground() {
-        if (!policy.isAuto) return
-        scope.launch {
-            check(force = false)
+        if (!policy.isAuto || backgroundRefresh?.isActive == true) return
+        backgroundRefresh = scope.launch {
+            check(force = false, maxAgeMs = LAUNCH_CHECK_MAX_AGE_MS)
             autoDownloadIfAllowed()
         }
     }
@@ -383,15 +392,18 @@ class AppUpdateManager(
             info.importance == ActivityManager.RunningAppProcessInfo.IMPORTANCE_VISIBLE
     }
 
-    private companion object {
-        const val TAG = "AppUpdate"
-        const val SPEED_WINDOW_MS = 600L
+    companion object {
+        private const val TAG = "AppUpdate"
+        private const val SPEED_WINDOW_MS = 600L
+
+        /** Не старше этого прошлая проверка, чтобы запуск или возврат в приложение не ходил в GitHub зря. */
+        const val LAUNCH_CHECK_MAX_AGE_MS = 10L * 60L * 1000L
 
         /** Сколько ждём ответа системы после передачи пакета. */
-        const val RESULT_TIMEOUT_MS = 45_000L
+        private const val RESULT_TIMEOUT_MS = 45_000L
 
         /** Сколько ждём решения пользователя в системном окне подтверждения. */
-        const val CONFIRM_TIMEOUT_MS = 180_000L
+        private const val CONFIRM_TIMEOUT_MS = 180_000L
     }
 }
 

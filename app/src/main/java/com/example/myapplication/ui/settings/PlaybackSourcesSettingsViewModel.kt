@@ -10,6 +10,7 @@ import com.example.myapplication.media.source.PlaybackSourceSettingsService
 import com.example.myapplication.media.source.movieseries.custom.CustomSourceOutcome
 import com.example.myapplication.media.source.movieseries.custom.CustomSourceSettingsService
 import com.example.myapplication.media.source.movieseries.custom.CustomSourceSummary
+import com.example.myapplication.media.source.movieseries.custom.StremioLink
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -157,6 +158,25 @@ class PlaybackSourcesSettingsViewModel(
         val text = input.removePrefix("\uFEFF").trim()
         if (text.isEmpty()) return
         viewModelScope.launch { installCustomSourceNow(sources, text) }
+    }
+
+    /**
+     * Поле аддона Stremio: `stremio://…` и адрес сервера приводятся к адресу манифеста, дальше —
+     * обычная установка с теми же проверками (https, без P2P, без настройки на сайте аддона).
+     */
+    fun installStremio(input: String) {
+        val sources = customSources ?: return
+        val link = StremioLink.normalize(input)
+        if (link == null) {
+            _uiState.update {
+                it.copy(
+                    installError = "Paste the link to the addon (its manifest.json)",
+                    message = PlaybackSourceSettingsMessage.CUSTOM_SOURCE_REJECTED,
+                )
+            }
+            return
+        }
+        viewModelScope.launch { installCustomSourceNow(sources, link) }
     }
 
     fun setCustomSourceEnabled(key: String, enabled: Boolean) {

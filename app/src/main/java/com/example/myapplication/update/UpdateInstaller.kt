@@ -4,6 +4,7 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageInstaller
+import android.content.pm.PackageManager
 import android.os.Build
 import android.util.Log
 import androidx.core.content.FileProvider
@@ -37,12 +38,17 @@ class UpdateInstaller(private val context: Context) {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 setRequireUserAction(PackageInstaller.SessionParams.USER_ACTION_NOT_REQUIRED)
             }
+            // Пользователь ждёт на экране: система не компилирует пакет при установке (меньше времени и
+            // нагрева), а доделывает это позже в фоне. Цена - первые запуски после обновления на JIT.
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                setInstallScenario(PackageManager.INSTALL_SCENARIO_FAST)
+            }
         }
         val sessionId = installer.createSession(params)
         installer.openSession(sessionId).use { session ->
             file.inputStream().use { input ->
                 session.openWrite(SESSION_ENTRY, 0, file.length()).use { out ->
-                    input.copyTo(out)
+                    input.copyTo(out, COPY_BUFFER_BYTES)
                     session.fsync(out)
                 }
             }
@@ -95,5 +101,8 @@ class UpdateInstaller(private val context: Context) {
     private companion object {
         const val TAG = "AppUpdate"
         const val SESSION_ENTRY = "vetro-update.apk"
+
+        /** Копия APK в сессию: с буфером по умолчанию (8 КБ) 34 МБ уходили четырьмя тысячами записей. */
+        const val COPY_BUFFER_BYTES = 256 * 1024
     }
 }

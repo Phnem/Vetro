@@ -4,8 +4,7 @@ import com.example.myapplication.media.subtitles.whisper.ModelState
 import com.example.myapplication.media.subtitles.whisper.WhisperModel
 import com.example.myapplication.media.subtitles.whisper.WhisperModelStore
 import org.koin.compose.koinInject
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.compose.BackHandler
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
 import android.net.Uri
@@ -16,7 +15,12 @@ import com.example.myapplication.media.source.sdk.PackageCapability
 import com.example.myapplication.media.source.sdk.PackageMediaType
 import com.example.myapplication.media.source.sdk.PackageOrigin
 import com.example.myapplication.ui.shared.theme.IosScroll
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -76,6 +80,12 @@ fun PlaybackSourcesSettingsSheet(
     }
     val ru = language == AppLanguage.RU
     val editor = state.editor
+    // Главная панель — список карточек по способам подключения; нажатие открывает страницу типа.
+    var openType by rememberSaveable { mutableStateOf<String?>(null) }
+    val type = ConnectionTypes.firstOrNull { it.id == openType }
+    val host = ConnectionHost(state, ru, viewModel)
+    val goBack: () -> Unit = { if (editor != null) viewModel.closeEditor() else openType = null }
+    BackHandler(enabled = editor != null || type != null, onBack = goBack)
     // Цвет содержимого задаём явно. Хост листа его не объявляет, а умолчание `LocalContentColor` —
     // чёрный: на тёмной теме заголовок и названия источников сливались с фоном. Полагаться на то,
     // что цвет «придёт сверху», нельзя — сюда он не приходит.
@@ -89,14 +99,14 @@ fun PlaybackSourcesSettingsSheet(
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            if (editor != null) {
-                TextButton(onClick = viewModel::closeEditor) {
+            if (editor != null || type != null) {
+                TextButton(onClick = goBack) {
                     Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
                     Text(if (ru) "Назад" else "Back", fontFamily = SnProFamily)
                 }
             }
             Text(
-                text = if (ru) "Дополнительные источники" else "Additional sources",
+                text = type?.title?.pick(ru) ?: if (ru) "Дополнительные источники" else "Additional sources",
                 style = MaterialTheme.typography.headlineSmall,
                 fontFamily = SnProFamily,
                 fontWeight = FontWeight.SemiBold,
@@ -110,42 +120,7 @@ fun PlaybackSourcesSettingsSheet(
             }
         }
 
-        if (editor == null) {
-            Text(
-                text = if (ru) {
-                    "Подключите свою медиатеку. Пароли и токены хранятся только в зашифрованном хранилище устройства."
-                } else {
-                    "Connect your own media library. Passwords and tokens stay in encrypted device storage."
-                },
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                fontFamily = SnProFamily,
-            )
-            state.sources.forEach { source ->
-                SourceSummaryRow(
-                    source = source,
-                    ru = ru,
-                    onClick = { viewModel.openEditor(source.kind) },
-                )
-            }
-
-            CustomSourcesSection(
-                sources = state.customSources,
-                isInstalling = state.isInstalling,
-                installError = state.installError,
-                previews = state.packagePreviews,
-                ru = ru,
-                onInstall = viewModel::installCustomSource,
-                onConfirmPackage = viewModel::confirmPackage,
-                onDismissPackage = viewModel::dismissPackage,
-                onConfirmAll = viewModel::confirmAllPackages,
-                onDismissAll = viewModel::dismissAllPackages,
-                onToggle = viewModel::setCustomSourceEnabled,
-                onRefresh = viewModel::refreshCustomSource,
-                onRemove = viewModel::removeCustomSource,
-            )
-
-            WhisperModelsSection(ru = ru)
-        } else {
+        if (editor != null) {
             SourceEditor(
                 editor = editor,
                 configured = state.sources.firstOrNull { it.kind == editor.kind }?.configured == true,
@@ -156,6 +131,29 @@ fun PlaybackSourcesSettingsSheet(
                 onSave = viewModel::saveEditor,
                 onRemove = { viewModel.remove(editor.kind) },
             )
+        } else {
+            PackageReviewSection(host)
+            if (type == null) {
+                Text(
+                    text = if (ru) {
+                        "Выберите, как подключить источник. Пароли и токены хранятся только в зашифрованном хранилище устройства."
+                    } else {
+                        "Pick how to connect a source. Passwords and tokens stay in encrypted device storage."
+                    },
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontFamily = SnProFamily,
+                )
+                ConnectionTypes.forEach { connection ->
+                    ConnectionTypeCard(
+                        type = connection,
+                        state = state,
+                        ru = ru,
+                        onClick = { openType = connection.id },
+                    )
+                }
+            } else {
+                type.page(host)
+            }
         }
 
         state.message?.let { message ->
@@ -173,8 +171,60 @@ fun PlaybackSourcesSettingsSheet(
     }
 }
 
+/** Карточка способа подключения: значок, название, пояснение и статус («Подключено: 2»). */
 @Composable
-private fun SourceSummaryRow(
+private fun ConnectionTypeCard(
+    type: ConnectionType,
+    state: PlaybackSourcesSettingsUiState,
+    ru: Boolean,
+    onClick: () -> Unit,
+) {
+    val accent = MaterialTheme.colorScheme.primary
+    val status = type.status(state, ru)
+    Surface(
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
+        shape = SquircleShape(22.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
+    ) {
+        Row(
+            modifier = Modifier.padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(46.dp)
+                    .clip(SquircleShape(14.dp))
+                    .background(accent.copy(alpha = 0.14f)),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(type.icon, contentDescription = null, tint = accent, modifier = Modifier.size(24.dp))
+            }
+            Spacer(Modifier.width(14.dp))
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(type.title.pick(ru), fontFamily = SnProFamily, fontWeight = FontWeight.SemiBold)
+                Text(
+                    type.summary.pick(ru),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontFamily = SnProFamily,
+                )
+                if (status != null) {
+                    Text(
+                        status,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = accent,
+                        fontFamily = SnProFamily,
+                        fontWeight = FontWeight.Medium,
+                    )
+                }
+            }
+            Icon(Icons.Filled.ChevronRight, contentDescription = null)
+        }
+    }
+}
+
+@Composable
+internal fun SourceSummaryRow(
     source: PlaybackSourceConfigurationSummary,
     ru: Boolean,
     onClick: () -> Unit,
@@ -380,221 +430,15 @@ private fun ToggleRow(title: String, checked: Boolean, onCheckedChange: (Boolean
     }
 }
 
-/**
- * Add and manage sources the user installed themselves.
- *
- * One field takes either a link or a pasted definition: making the user first declare which one they
- * have is a question the app can answer by looking at the text.
- */
-@Composable
-private fun CustomSourcesSection(
-    sources: List<CustomSourceSummary>,
-    isInstalling: Boolean,
-    installError: String?,
-    previews: List<PackagePreview>,
-    ru: Boolean,
-    onInstall: (String) -> Unit,
-    onConfirmPackage: (PackagePreview) -> Unit,
-    onDismissPackage: (PackagePreview) -> Unit,
-    onConfirmAll: () -> Unit,
-    onDismissAll: () -> Unit,
-    onToggle: (String, Boolean) -> Unit,
-    onRefresh: (String) -> Unit,
-    onRemove: (String) -> Unit,
-) {
-    var input by rememberSaveable { mutableStateOf("") }
-    val context = LocalContext.current
-    val installer = remember { CustomSourceInstaller() }
-    // Ошибка самой кнопки .vetro (не тот файл) — до установщика такой файл не доходит.
-    var vetroFileError by rememberSaveable { mutableStateOf<String?>(null) }
-    // У .vetro нет MIME-типа, по фильтру «application/json» пикер его бы не показал: берём любой
-    // файл и проверяем расширение и содержимое уже после выбора.
-    val pickVetroFile = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        uri ?: return@rememberLauncherForActivityResult
-        val name = displayName(context, uri)
-        if (name != null && !name.endsWith(".vetro", ignoreCase = true) &&
-            !name.endsWith(".vetro-source", ignoreCase = true)
-        ) {
-            vetroFileError = if (ru) "Это не файл .vetro: $name" else "Not a .vetro file: $name"
-            return@rememberLauncherForActivityResult
-        }
-        val text = runCatching {
-            context.contentResolver.openInputStream(uri)?.use { stream ->
-                stream.readNBytesCompat(CustomSourceInstaller.MAX_BUNDLE_BYTES + 1).toString(Charsets.UTF_8)
-            }
-        }.getOrNull()?.removePrefix("\uFEFF")
-        // Здесь — только «это вообще можно импортировать»: источник, подборка или список ссылок. Что
-        // именно внутри и годится ли оно, решает установщик — он же называет точную причину отказа.
-        vetroFileError = when {
-            text.isNullOrBlank() -> if (ru) "Файл не прочитался" else "Could not read the file"
-            text.length > CustomSourceInstaller.MAX_BUNDLE_BYTES -> if (ru) "Файл больше 2 МБ" else "The file is larger than 2 MB"
-            !installer.looksImportable(text) -> if (ru) {
-                "Файл не JSON: ожидается источник { … }, подборка [ … ] или список ссылок, по одной на строку"
-            } else {
-                "Not a JSON file: expected a source { … }, a bundle [ … ] or a list of links, one per line"
-            }
-            else -> null
-        }
-        if (vetroFileError == null && text != null) onInstall(text)
-    }
-    // Пакет из файла: читается целиком (он небольшой, лимит проверит установщик) и идёт тем же путём.
-    val pickFile = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        uri ?: return@rememberLauncherForActivityResult
-        val text = runCatching {
-            context.contentResolver.openInputStream(uri)?.use { stream ->
-                stream.readNBytesCompat(CustomSourceInstaller.MAX_BUNDLE_BYTES + 1).toString(Charsets.UTF_8)
-            }
-        }.getOrNull()
-        if (!text.isNullOrBlank()) onInstall(text)
-    }
-
-    Spacer(Modifier.height(4.dp))
-    Button(
-        onClick = {
-            vetroFileError = null
-            pickVetroFile.launch(arrayOf("*/*"))
-        },
-        enabled = !isInstalling,
-        shape = SquircleShape(18.dp),
-        modifier = Modifier.fillMaxWidth(),
-    ) {
-        Text(if (ru) "Импортировать .vetro" else "Import .vetro", fontFamily = SnProFamily)
-    }
-    Text(
-        text = if (ru) {
-            "Файл пакета источников Vetro. Перед установкой покажем, что источник умеет и к каким сайтам обращается."
-        } else {
-            "A Vetro source package file. Before installing you'll see what the source can do and which sites it talks to."
-        },
-        style = MaterialTheme.typography.bodySmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        fontFamily = SnProFamily,
-    )
-    vetroFileError?.let { reason ->
-        Text(text = reason, color = MaterialTheme.colorScheme.error, fontFamily = SnProFamily)
-    }
-    val uriHandler = LocalUriHandler.current
-    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        OutlinedButton(
-            onClick = { runCatching { uriHandler.openUri(COMMUNITY_SOURCES_URL) } },
-            shape = SquircleShape(18.dp),
-            modifier = Modifier.weight(1f),
-        ) {
-            Text("Community sources", fontFamily = SnProFamily, maxLines = 1)
-        }
-        OutlinedButton(
-            onClick = { runCatching { uriHandler.openUri(SUBMIT_SOURCE_URL) } },
-            shape = SquircleShape(18.dp),
-            modifier = Modifier.weight(1f),
-        ) {
-            Text(if (ru) "Предложить источник" else "Submit a source", fontFamily = SnProFamily, maxLines = 1)
-        }
-    }
-
-    Spacer(Modifier.height(4.dp))
-    Text(
-        text = if (ru) "Добавить источник" else "Add a source",
-        style = MaterialTheme.typography.titleMedium,
-        fontFamily = SnProFamily,
-        fontWeight = FontWeight.SemiBold,
-    )
-    Text(
-        text = if (ru) {
-            "Вставьте ссылку на конфигурацию источника или сам файл конфигурации, либо выберите файл. " +
-                "Поддерживаются пакет Vetro, манифест Vetro и аддон Stremio."
-        } else {
-            "Paste a link to a source configuration or the configuration itself, or pick a file. " +
-                "Vetro packages, Vetro manifests and Stremio addons are supported."
-        },
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        fontFamily = SnProFamily,
-    )
-    OutlinedTextField(
-        value = input,
-        onValueChange = { input = it },
-        singleLine = false,
-        label = { Text(if (ru) "Ссылка или конфигурация" else "Link or configuration") },
-        isError = installError != null,
-        modifier = Modifier.fillMaxWidth(),
-    )
-    installError?.let { reason ->
-        Text(
-            text = reason,
-            color = MaterialTheme.colorScheme.error,
-            fontFamily = SnProFamily,
-        )
-    }
-    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        Button(
-            onClick = {
-                onInstall(input)
-                input = ""
-            },
-            enabled = !isInstalling && input.isNotBlank(),
-            shape = SquircleShape(18.dp),
-        ) {
-            if (isInstalling) {
-                CircularProgressIndicator(modifier = Modifier.height(18.dp), strokeWidth = 2.dp)
-            } else {
-                Text(if (ru) "Добавить" else "Add", fontFamily = SnProFamily)
-            }
-        }
-        OutlinedButton(
-            onClick = { pickFile.launch(arrayOf("application/json", "application/octet-stream", "text/plain")) },
-            enabled = !isInstalling,
-            shape = SquircleShape(18.dp),
-        ) {
-            Text(if (ru) "Выбрать файл" else "Pick a file", fontFamily = SnProFamily)
-        }
-    }
-    if (previews.size > 1) {
-        Text(
-            text = if (ru) "Пакетов на проверке: ${previews.size}" else "Packages to review: ${previews.size}",
-            style = MaterialTheme.typography.titleMedium,
-            fontFamily = SnProFamily,
-            fontWeight = FontWeight.SemiBold,
-        )
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            Button(onClick = onConfirmAll, enabled = !isInstalling, shape = SquircleShape(18.dp), modifier = Modifier.weight(1f)) {
-                Text(if (ru) "Установить все" else "Install all", fontFamily = SnProFamily)
-            }
-            OutlinedButton(onClick = onDismissAll, shape = SquircleShape(18.dp), modifier = Modifier.weight(1f)) {
-                Text(if (ru) "Отменить все" else "Dismiss all", fontFamily = SnProFamily)
-            }
-        }
-    }
-    previews.forEach { preview ->
-        PackageReviewCard(preview, ru, onConfirm = { onConfirmPackage(preview) }, onDismiss = { onDismissPackage(preview) })
-    }
-
-    if (sources.isNotEmpty()) {
-        Spacer(Modifier.height(4.dp))
-        Text(
-            text = if (ru) "Мои источники" else "My sources",
-            style = MaterialTheme.typography.titleMedium,
-            fontFamily = SnProFamily,
-            fontWeight = FontWeight.SemiBold,
-        )
-        sources.forEach { source ->
-            CustomSourceRow(
-                source = source,
-                ru = ru,
-                onToggle = { enabled -> onToggle(source.key, enabled) },
-                onRefresh = { onRefresh(source.key) },
-                onRemove = { onRemove(source.key) },
-            )
-        }
-    }
-}
 
 /** Общая папка проверенных пакетов источников; та же ссылка — в README репозитория. */
-private const val COMMUNITY_SOURCES_URL = "https://drive.google.com/drive/folders/1pUrXV6LYuEcoi6fMrsQpk9VXlWUhVo5f?usp=sharing"
+internal const val COMMUNITY_SOURCES_URL = "https://drive.google.com/drive/folders/1pUrXV6LYuEcoi6fMrsQpk9VXlWUhVo5f?usp=sharing"
 
 /** Форма, через которую сообщество присылает источники на проверку. */
-private const val SUBMIT_SOURCE_URL = "https://docs.google.com/forms/d/e/1FAIpQLSeov9HZLYJvjpecngntqbXifCwdSXPf_t5G0PLqaob0t6pb-A/viewform"
+internal const val SUBMIT_SOURCE_URL = "https://docs.google.com/forms/d/e/1FAIpQLSeov9HZLYJvjpecngntqbXifCwdSXPf_t5G0PLqaob0t6pb-A/viewform"
 
 /** Имя выбранного файла из провайдера документов; null — провайдер имени не отдал. */
-private fun displayName(context: android.content.Context, uri: Uri): String? = runCatching {
+internal fun displayName(context: android.content.Context, uri: Uri): String? = runCatching {
     context.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { c ->
         if (c.moveToFirst()) c.getString(0) else null
     }
@@ -605,7 +449,7 @@ private fun displayName(context: android.content.Context, uri: Uri): String? = r
  * плеера, где понятно, зачем модель нужна; здесь — только то, что уже лежит на телефоне.
  */
 @Composable
-private fun WhisperModelsSection(ru: Boolean) {
+internal fun WhisperModelsSection(ru: Boolean) {
     val store = koinInject<WhisperModelStore>()
     val states by store.states.collectAsStateWithLifecycle()
     val present = WhisperModel.entries.filter { states[it] !is ModelState.Absent && states[it] != null }
@@ -664,7 +508,7 @@ private fun WhisperModelsSection(ru: Boolean) {
  * кем подписан. Ничего не установлено, пока пользователь не нажал «Установить».
  */
 @Composable
-private fun PackageReviewCard(
+internal fun PackageReviewCard(
     preview: PackagePreview,
     ru: Boolean,
     onConfirm: () -> Unit,
@@ -746,7 +590,7 @@ private fun capabilityLabel(capability: PackageCapability, ru: Boolean): String 
 }
 
 /** `InputStream.readNBytes` появился только в Java 11 / API 33. */
-private fun java.io.InputStream.readNBytesCompat(limit: Int): ByteArray {
+internal fun java.io.InputStream.readNBytesCompat(limit: Int): ByteArray {
     val out = java.io.ByteArrayOutputStream()
     val buffer = ByteArray(8 * 1024)
     while (out.size() < limit) {
@@ -758,7 +602,7 @@ private fun java.io.InputStream.readNBytesCompat(limit: Int): ByteArray {
 }
 
 @Composable
-private fun CustomSourceRow(
+internal fun CustomSourceRow(
     source: CustomSourceSummary,
     ru: Boolean,
     onToggle: (Boolean) -> Unit,

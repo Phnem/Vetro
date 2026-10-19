@@ -31,6 +31,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
@@ -40,6 +43,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.util.lerp
+import com.example.myapplication.ui.shared.back.rememberExteraSheetBack
 import com.example.myapplication.ui.shared.theme.isAppInDarkTheme
 import com.example.myapplication.ui.shared.theme.IosDesign
 import com.example.myapplication.ui.shared.theme.MotionTokens
@@ -83,6 +87,10 @@ fun IosSheetScaffold(
     dragToDismiss: Boolean = true,
     showGrabber: Boolean = true,
     sheetContainerColor: Color? = null,
+    // Фон экрана под шторкой для режима extera: им закрашиваются поля по бокам вдавленного
+    // контента (тем же градиентом и в том же масштабе, чтобы шва не было). По умолчанию —
+    // общий градиент экранов приложения.
+    backdropBrush: Brush? = null,
     content: @Composable () -> Unit,
     sheetContent: @Composable () -> Unit,
 ) {
@@ -92,6 +100,10 @@ fun IosSheetScaffold(
     val progress = remember { Animatable(0f) }
     var dragPx by remember { mutableFloatStateOf(0f) }
     var measuredPanelPx by remember { mutableFloatStateOf(0f) }
+
+    // Режим «назад как в extera» (dev-флаг): null, пока выключен — тогда ниже ничего не меняется.
+    val sheetBack = rememberExteraSheetBack(enabled = sheetVisible, onDismiss = onDismiss)
+    val extera = sheetBack != null
 
     LaunchedEffect(sheetVisible) {
         if (sheetVisible) {
@@ -103,13 +115,16 @@ fun IosSheetScaffold(
         }
     }
 
-    val recessed = backgroundScaleTarget < 1f
+    // В режиме extera фон вдавливается всегда (тот же принцип, что у страниц: сжатие + скругление
+    // + скрим), а за ним вместо чёрного — градиент экрана, который скрим затемняет вместе с ним.
+    val bgScaleTarget = if (extera && backgroundScaleTarget >= 1f) EXTERA_BACKGROUND_SCALE else backgroundScaleTarget
+    val recessed = bgScaleTarget < 1f
     // Боковой «провал» за вдавленным экраном — нужен, только пока фон реально уменьшается. Сверху
     // контент остаётся edge-to-edge (под status bar / вырез камеры) — иначе появляется чёрная
     // полоса в строке состояния.
     Box(
         modifier = modifier.fillMaxSize().drawBehind {
-            if (recessed && progress.value > 0.001f) drawRect(Color.Black)
+            if (recessed && !extera && progress.value > 0.001f) drawRect(Color.Black)
         },
     ) {
         BoxWithConstraints(Modifier.fillMaxSize()) {
@@ -127,14 +142,42 @@ fun IosSheetScaffold(
             val sheetShown by remember { derivedStateOf { progress.value > 0.001f } }
             val scrim = scrimMaxAlpha ?: OverlayThemeTokens.scrimAlpha(isDark)
 
+            // Режим extera: поля вокруг вдавленного фона — тот же градиент экрана, сжатый вместе с
+            // контентом (строка в строку, поэтому шва нет), а полоса под ним — нижний цвет градиента.
+            if (extera) {
+                val marginBrush = backdropBrush ?: remember(isDark) { IosDesign.screenGradient(isDark) }
+                val marginBottom = IosDesign.groupedBackground(isDark)
+                Box(
+                    Modifier.fillMaxSize().drawBehind {
+                        val e = eff()
+                        if (e > 0.001f) {
+                            val s = lerp(1f, bgScaleTarget, e * (1f - 0.5f * (sheetBack?.pull ?: 0f)))
+                            scale(s, s, pivot = Offset(size.width / 2f, 0f)) {
+                                drawRect(
+                                    brush = marginBrush,
+                                    topLeft = Offset(-size.width, 0f),
+                                    size = Size(size.width * 3f, size.height),
+                                )
+                                drawRect(
+                                    color = marginBottom,
+                                    topLeft = Offset(-size.width, size.height),
+                                    size = Size(size.width * 3f, size.height),
+                                )
+                            }
+                        }
+                    },
+                )
+            }
+
             // --- Фон: scale от верхнего края, скругление только снизу ---
             Box(
                 modifier = Modifier
                     .fillMaxSize()
                     .graphicsLayer {
                         if (!recessed) return@graphicsLayer
-                        val eff = eff()
-                        val s = lerp(1f, backgroundScaleTarget, eff)
+                        // Пока шторку тянет жест «назад», фон отпускает вдавливание вместе с ней.
+                        val eff = eff() * (1f - 0.5f * (sheetBack?.pull ?: 0f))
+                        val s = lerp(1f, bgScaleTarget, eff)
                         scaleX = s
                         scaleY = s
                         transformOrigin = TransformOrigin(0.5f, 0f)
@@ -152,7 +195,8 @@ fun IosSheetScaffold(
                     .drawWithContent {
                         drawContent()
                         val eff = eff()
-                        if (eff > 0f) {
+                        // В режиме extera скрим рисуется отдельным слоем ниже, на весь экран.
+                        if (eff > 0f && !extera) {
                             drawRect(
                                 Brush.verticalGradient(
                                     0f to Color.Black.copy(alpha = (scrim * 1.2f).coerceAtMost(1f) * eff),
@@ -163,6 +207,23 @@ fun IosSheetScaffold(
                     },
             ) {
                 content()
+            }
+
+            // Режим extera: скрим на весь экран, включая поля по бокам вдавленного фона.
+            if (extera) {
+                Box(
+                    Modifier.fillMaxSize().drawBehind {
+                        val eff = eff()
+                        if (eff > 0f) {
+                            drawRect(
+                                Brush.verticalGradient(
+                                    0f to Color.Black.copy(alpha = (scrim * 1.2f).coerceAtMost(1f) * eff),
+                                    1f to Color.Black.copy(alpha = scrim * 0.8f * eff),
+                                ),
+                            )
+                        }
+                    },
+                )
             }
 
             // Слой-ловушка тапа по фону → закрыть.
@@ -196,6 +257,15 @@ fun IosSheetScaffold(
                     .then(heightMod)
                     .heightIn(max = maxHeight * 0.94f)
                     .onSizeChanged { measuredPanelPx = it.height.toFloat() }
+                    // Режим extera: поза жеста «назад» (сжатие, отрыв от края, скругление) — внешним
+                    // слоем, поверх выезда панели ниже.
+                    .then(
+                        if (sheetBack != null) {
+                            Modifier.graphicsLayer { sheetBack.applyTo(this, cornerRadius.toPx()) }
+                        } else {
+                            Modifier
+                        },
+                    )
                     // Смещение считаем от СВОЕЙ высоты слоя, а не от panelHeightPx: у панели по
                     // высоте контента (sheetHeightFraction = null) на первых кадрах measuredPanelPx
                     // ещё 0, и panelHeightPx подставляет догадку 0.9 экрана. Панель стартовала с
@@ -254,6 +324,9 @@ fun IosSheetScaffold(
         }
     }
 }
+
+/** Во сколько сжимается фон под шторкой в режиме extera (там же 0.85 у закрывающейся страницы). */
+private const val EXTERA_BACKGROUND_SCALE = 0.93f
 
 /** Высота, которую резервирует grab-индикатор сверху панели — отступ для списочного контента. */
 val GrabberReservedTop: Dp = 22.dp

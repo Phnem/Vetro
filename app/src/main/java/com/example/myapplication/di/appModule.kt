@@ -56,8 +56,10 @@ val appModule = module {
     single {
         com.example.myapplication.update.UpdateDownloader(
             // Отдельная копия клиента: файл в десятки мегабайт по слабой сети не должен упираться в
-            // короткие таймауты общего клиента.
+            // короткие таймауты общего клиента. HTTP/1.1 - чтобы параллельные куски файла шли разными
+            // TCP-соединениями: по HTTP/2 они сложились бы в одно, и скорость не выросла бы.
             client = get<okhttp3.OkHttpClient>().newBuilder()
+                .protocols(listOf(okhttp3.Protocol.HTTP_1_1))
                 .connectTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
                 .readTimeout(60, java.util.concurrent.TimeUnit.SECONDS)
                 .callTimeout(0, java.util.concurrent.TimeUnit.SECONDS)
@@ -518,6 +520,25 @@ val appModule = module {
                 ),
                 // VETRO-TAIL[stream-provider]: новый легальный источник кино/сериалов —
                 // класс MovieSeriesStreamingProvider + строка здесь (порядок = приоритет).
+                get<com.example.myapplication.media.source.vfmodule.AllohaProvider>(),
+                get<com.example.myapplication.media.source.vfmodule.HdvbProvider>(),
+                get<com.example.myapplication.media.source.vfmodule.CollapsProvider>(),
+                get<com.example.myapplication.media.source.vfmodule.CvhProvider>(),
+                get<com.example.myapplication.media.source.vfmodule.RedHeadSoundProvider>(),
+                get<com.example.myapplication.media.source.vfmodule.LumexProvider>(),
+                get<com.example.myapplication.media.source.vfmodule.RewallProvider>(),
+                get<com.example.myapplication.media.source.vfmodule.FanCdnProvider>(),
+                get<com.example.myapplication.media.source.vfmodule.VibixProvider>(),
+                get<com.example.myapplication.media.source.vfmodule.VideoSeedProvider>(),
+                get<com.example.myapplication.media.source.vfmodule.KinoPubProvider>(),
+                get<com.example.myapplication.media.source.vfmodule.KinobaseProvider>(),
+                get<com.example.myapplication.media.source.vfmodule.FanSerialsProvider>(),
+                get<com.example.myapplication.media.source.vfmodule.AnimeLibProvider>(),
+                get<com.example.myapplication.media.source.vfmodule.DdbbProvider>(),
+                get<com.example.myapplication.media.source.vfmodule.AniboomProvider>(),
+                get<com.example.myapplication.media.source.vfmodule.SibnetProvider>(),
+                get<com.example.myapplication.media.source.vfmodule.VkVideoProvider>(),
+                get<com.example.myapplication.media.source.vfmodule.VeoVeoProvider>(),
             ),
             providerHealth = get<com.example.myapplication.media.source.movieseries.ProviderHealthStore>(),
             intelligence = get(),

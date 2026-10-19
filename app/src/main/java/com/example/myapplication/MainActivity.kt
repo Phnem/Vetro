@@ -57,6 +57,8 @@ import com.example.myapplication.ui.debug.FpsOverlay
 import com.example.myapplication.ui.shared.LocalAdaptiveGlassEnabled
 import com.example.myapplication.ui.shared.LocalModernUi
 import com.example.myapplication.ui.shared.LocalFullBleedCards
+import com.example.myapplication.ui.shared.back.LocalExteraBackEnabled
+import com.example.myapplication.ui.shared.back.ProvideExteraBack
 import com.example.myapplication.ui.shared.LocalWorkspaceSearch
 import com.example.myapplication.ui.shared.WorkspaceSearchState
 import com.example.myapplication.ui.shared.theme.OneUiTheme
@@ -70,6 +72,8 @@ class MainActivity : ComponentActivity() {
     private val externalListSyncCoordinator: ExternalListSyncCoordinator by inject()
     private val supabaseClient: SupabaseClient by inject()
     private val animeLocalData: com.example.myapplication.data.local.AnimeLocalDataSource by inject()
+    private val appUpdateManager: com.example.myapplication.update.AppUpdateManager by inject()
+    private var startedOnce = false
 
     /** id тайтла из тапа по пушу «вышла новая серия»; открываем Details, когда граф готов. */
     private val pendingAnimeId = MutableStateFlow<String?>(null)
@@ -168,6 +172,7 @@ class MainActivity : ComponentActivity() {
                     LocalAdaptiveGlassEnabled provides settingsState.devAdaptiveGlassScroll,
                     LocalModernUi provides settingsState.modernUi,
                     LocalFullBleedCards provides settingsState.devFullBleedCards,
+                    LocalExteraBackEnabled provides settingsState.devExteraBack,
                     LocalWorkspaceSearch provides workspaceSearch,
                     // iOS-«резинка» на краю всех списков и скроллов приложения (IosScroll.kt).
                     LocalOverscrollFactory provides overscrollFactory,
@@ -184,11 +189,14 @@ class MainActivity : ComponentActivity() {
                         onDismiss = { dismissStartupUpdateOverlay() },
                         sheetHeightFraction = null,
                         content = {
-                            AppNavGraph(
-                                navController = navController,
-                                settingsViewModel = settingsViewModel,
-                                startupSplash = startupSplash,
-                            )
+                            // Dev-флаг «назад как в extera»: пока выключен, слой пропускает всё как есть.
+                            ProvideExteraBack(enabled = settingsState.devExteraBack) {
+                                AppNavGraph(
+                                    navController = navController,
+                                    settingsViewModel = settingsViewModel,
+                                    startupSplash = startupSplash,
+                                )
+                            }
                         },
                         sheetContent = {
                             UpdateSheet(
@@ -206,6 +214,17 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    /**
+     * Первый запуск проверяет обновление сам (сплэш и отложенный старт приложения); здесь - возвраты
+     * из фона: приложение могло пролежать в памяти днями, а релиз выйти за это время. Срок давности
+     * проверки короткий, поэтому лишних походов в GitHub нет.
+     */
+    override fun onStart() {
+        super.onStart()
+        if (startedOnce) appUpdateManager.refreshInBackground()
+        startedOnce = true
     }
 
     override fun onNewIntent(intent: Intent) {

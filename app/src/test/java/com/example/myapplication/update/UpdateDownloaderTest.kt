@@ -102,6 +102,81 @@ class UpdateDownloaderTest {
         assertTrue(payload.contentEquals(file.readBytes()))
     }
 
+    // ---- загрузка несколькими соединениями ----
+
+    /** Сервер с настоящими диапазонами `bytes=a-b`: отвечает 206 ровно с запрошенным куском. */
+    private fun serveWithBoundedRanges(seenRanges: MutableList<String?> = java.util.Collections.synchronizedList(mutableListOf())) {
+        server.dispatcher = object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest): MockResponse {
+                val range = request.getHeader("Range")
+                seenRanges += range
+                if (range == null) return MockResponse().setBody(Buffer().write(payload))
+                val spec = range.removePrefix("bytes=")
+                val from = spec.substringBefore('-').toInt()
+                val to = spec.substringAfter('-').ifEmpty { null }?.toInt() ?: (payload.size - 1)
+                return MockResponse()
+                    .setResponseCode(206)
+                    .setHeader("Content-Range", "bytes $from-$to/${payload.size}")
+                    .setBody(Buffer().write(payload, from, to - from + 1))
+            }
+        }
+    }
+
+    private fun parallelDownloader() =
+        UpdateDownloader(
+            OkHttpClient(), dir, bufferSize = 8 * 1024, segments = 4, parallelMinBytes = 100_000, retryDelayMs = 0,
+        )
+
+    @Test
+    fun a_large_file_is_fetched_in_four_ranges_and_assembled_whole() = runBlocking {
+        val ranges = java.util.Collections.synchronizedList(mutableListOf<String?>())
+        serveWithBoundedRanges(ranges)
+        val steps = mutableListOf<Pair<Long, Long>>()
+        val file = parallelDownloader().download(release()) { done, total -> steps += done to total }
+        assertTrue(payload.contentEquals(file.readBytes()))
+        assertEquals(4, ranges.size)
+        assertTrue(ranges.all { it != null && Regex("bytes=\\d+-\\d+").matches(it) })
+        assertEquals(payload.size.toLong(), steps.last().first)
+        assertEquals(listOf("vetro-v3.3.8-Beta.apk"), dir.list()!!.toList())
+    }
+
+    @Test
+    fun an_interrupted_segment_continues_from_where_it_stopped() = runBlocking {
+        val ranges = java.util.Collections.synchronizedList(mutableListOf<String?>())
+        serveWithBoundedRanges(ranges)
+        val chunk = (payload.size + 3) / 4
+        // Первый кусок уже наполовину на диске.
+        File(dir, "vetro-v3.3.8-Beta.apk.part.0").writeBytes(payload.copyOfRange(0, 20_000))
+        val file = parallelDownloader().download(release()) { _, _ -> }
+        assertTrue(payload.contentEquals(file.readBytes()))
+        assertTrue(ranges.contains("bytes=20000-${chunk - 1}"))
+        assertFalse(ranges.contains("bytes=0-${chunk - 1}"))
+    }
+
+    @Test
+    fun a_server_that_ignores_range_falls_back_to_a_single_stream() = runBlocking {
+        server.dispatcher = object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest) = MockResponse().setBody(Buffer().write(payload))
+        }
+        val file = parallelDownloader().download(release()) { _, _ -> }
+        assertTrue(payload.contentEquals(file.readBytes()))
+        assertEquals(listOf("vetro-v3.3.8-Beta.apk"), dir.list()!!.toList())
+    }
+
+    @Test
+    fun a_server_error_on_every_segment_is_an_io_failure() = runBlocking {
+        server.dispatcher = object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest) = MockResponse().setResponseCode(503)
+        }
+        try {
+            parallelDownloader().download(release()) { _, _ -> }
+            fail("expected an IOException")
+        } catch (e: java.io.IOException) {
+            assertTrue(e !is UpdateIntegrityException)
+        }
+        assertNull(downloader.downloaded("v3.3.8-Beta"))
+    }
+
     @Test
     fun a_wrong_checksum_is_rejected_and_nothing_is_left_behind() = runBlocking {
         serveWithRanges()

@@ -30,6 +30,7 @@ class VetroApplication : Application(), SingletonImageLoader.Factory {
                 coreNetworkModule,
                 com.example.myapplication.sync.supabase.supabaseModule,
                 appModule,
+                com.example.myapplication.media.source.vfmodule.vfModule,
                 audiobookModule,
                 com.example.myapplication.di.enrichmentModule,
                 com.example.myapplication.di.whisperModule,

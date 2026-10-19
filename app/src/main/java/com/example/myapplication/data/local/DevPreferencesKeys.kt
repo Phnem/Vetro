@@ -44,6 +44,14 @@ object DevPreferencesKeys {
      */
     val FULL_BLEED_CARDS = booleanPreferencesKey("dev_full_bleed_cards")
 
+    /**
+     * Анимация «назад» в стиле exteraGram (интенсивность 2): страница уменьшается до 0.85, едет за
+     * пальцем и по вертикали, скругляется, а страница под ней проявляется со скримом. Та же
+     * логика (масштаб, вдавливание фона, скругление) ведёт и шторки. Отсутствие ключа = ВКЛ (с
+     * 2026-10-19); выключенный флаг возвращает прежние анимации. См. `ui/shared/back/ExteraBack.kt`.
+     */
+    val EXTERA_BACK = booleanPreferencesKey("dev_extera_back")
+
     /** Ключи удалённых настроек — стираются из файла настроек при старте (см. [LEGACY_UI]). */
     val RETIRED_UI_FLAGS = listOf(
         booleanPreferencesKey("dev_select_dock_navigation"),

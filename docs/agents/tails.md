@@ -14,6 +14,7 @@ grep -rn "VETRO-TAIL\[" app core --include=*.kt
 |---|---|---|
 | `title-id-source` | Источник id/названий/описания/постера (каталоги, словари, индексы) | Класс `TitleIdContributor` (core/network/.../ids/TitleIdContributor.kt) + `single<TitleIdContributor> { … }` в `enrichmentModule`. Резолвер подхватывает через `getAll()` |
 | `stream-provider` | Легальный источник кино/сериалов | Класс `MovieSeriesStreamingProvider` + строка в `movieSeriesSources` (`appModule`), порядок = приоритет |
+| `connection-type` | Новый способ подключения источников (карточка + страница в панели «Дополнительные источники») | Объект `ConnectionType` и строка в `ConnectionTypes` (`ui/settings/ConnectionTypes.kt`). Только протокол или описание (JSON/HTTP), без загрузки чужого кода в приложение |
 | `manga-source` | Источник манги | Класс `MangaSource` + строка в списке `MangaSourceEngine` (`appModule`) |
 
 Правила хвоста:

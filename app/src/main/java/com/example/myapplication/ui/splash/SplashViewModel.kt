@@ -148,7 +148,12 @@ class SplashViewModel(
         }
 
         viewModelScope.launch(Dispatchers.IO) {
-            runCatching { appUpdateManager.check(force = false) }
+            runCatching {
+                appUpdateManager.check(
+                    force = false,
+                    maxAgeMs = com.example.myapplication.update.AppUpdateManager.LAUNCH_CHECK_MAX_AGE_MS,
+                )
+            }
         }
 
         val route = if (authRepository.isGuest || authRepository.awaitSessionRestored()) "home" else "welcome"

@@ -2,6 +2,11 @@ package com.example.myapplication.ui.navigation
 
 import com.example.myapplication.ui.details.SwipeBackGesture
 import androidx.compose.animation.EnterExitState
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import com.example.myapplication.ui.shared.back.ExteraRevealedPage
+import com.example.myapplication.ui.shared.back.LocalExteraBackEnabled
+import com.example.myapplication.ui.shared.back.exteraClosingPage
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionLayout
 import androidx.compose.foundation.layout.Box
@@ -134,6 +139,10 @@ fun AppNavGraph(
     fun workspaceModal(entry: NavBackStackEntry) =
         settingsViewModel.uiState.value.modernUi && entry.isWorkspaceModal()
 
+    // Режим «назад как в extera» (dev-флаг): тоже читается в момент перехода. Включённый, он
+    // отдаёт движение страниц слоям из ui/shared/back, а переходы NavHost делает пустыми.
+    fun exteraBack() = settingsViewModel.uiState.value.devExteraBack
+
     SharedTransitionLayout {
         Box(Modifier.fillMaxSize()) {
         // Граф появляется, когда сплэш решил, куда идти, — ещё под сплэшем (StartupSplash.kt).
@@ -235,7 +244,10 @@ fun AppNavGraph(
                     }
                 },
                 popEnterTransition = {
-                    if (initialState.destination.isDetailsDestination()) {
+                    if (exteraBack() && initialState.destination.isDetailsDestination()) {
+                        // Нижнюю страницу двигает ExteraRevealedPage; переход пустой.
+                        EnterTransition.None
+                    } else if (initialState.destination.isDetailsDestination()) {
                         homeDepressPopEnter()
                     } else if (workspaceModal(initialState)) {
                         homeDimPopEnter()
@@ -248,21 +260,35 @@ fun AppNavGraph(
                 // Две навигации никогда не смонтированы одновременно — иначе задвоятся ключи
                 // shared-element (иконки старого дока и экраны-цели).
                 val settingsState by settingsViewModel.uiState.collectAsStateWithLifecycle()
-                if (settingsState.modernUi) {
-                    WorkspaceScreen(
+                val homeBody: @Composable () -> Unit = {
+                    if (settingsState.modernUi) {
+                        WorkspaceScreen(
+                            navController = navController,
+                            homeViewModel = homeViewModel,
+                            settingsViewModel = settingsViewModel,
+                            sharedTransitionScope = this@SharedTransitionLayout,
+                            animatedVisibilityScope = this,
+                        )
+                    } else {
+                        HomeScreen(
+                            navController = navController,
+                            viewModel = homeViewModel,
+                            sharedTransitionScope = this@SharedTransitionLayout,
+                            animatedVisibilityScope = this,
+                        )
+                    }
+                }
+                if (LocalExteraBackEnabled.current) {
+                    // Режим «назад как в extera»: под уходящими деталями главная сжата, сдвинута и
+                    // затемнена скримом, пока жест не отпустят.
+                    ExteraRevealedPage(
+                        transition = transition,
                         navController = navController,
-                        homeViewModel = homeViewModel,
-                        settingsViewModel = settingsViewModel,
-                        sharedTransitionScope = this@SharedTransitionLayout,
-                        animatedVisibilityScope = this,
+                        isExteraPage = { it.destination.isDetailsDestination() },
+                        content = homeBody,
                     )
                 } else {
-                    HomeScreen(
-                        navController = navController,
-                        viewModel = homeViewModel,
-                        sharedTransitionScope = this@SharedTransitionLayout,
-                        animatedVisibilityScope = this,
-                    )
+                    homeBody()
                 }
             }
 
@@ -277,7 +303,10 @@ fun AppNavGraph(
                     )
                 },
                 popExitTransition = {
-                    if (SwipeBackGesture.active) {
+                    if (exteraBack()) {
+                        // Окно уводит exteraClosingPage; переход пустой.
+                        ExitTransition.None
+                    } else if (SwipeBackGesture.active) {
                         // Окно идёт за пальцем 1:1 — линейно; см. SwipeBackGesture.
                         slideOutHorizontally(
                             targetOffsetX = { it },
@@ -297,16 +326,21 @@ fun AppNavGraph(
                 // по прогрессу перехода, predictive back сикает его вместе с жестом.
                 // Читается в слое, а не в композиции: иначе весь Details пересобирался на каждом
                 // кадре жеста «назад».
-                val windowCorner = transition.animateDp(label = "detailsWindowCorner") { state ->
+                val extera = LocalExteraBackEnabled.current
+                val windowCorner = if (extera) null else transition.animateDp(label = "detailsWindowCorner") { state ->
                     if (state == EnterExitState.Visible) 0.dp else 42.dp
                 }
                 DetailsScreen(
                     navController = navController,
                     animeId = route.animeId,
                     openEpisodes = route.openEpisodes,
-                    modifier = Modifier.graphicsLayer {
-                        shape = RoundedCornerShape(windowCorner.value)
-                        clip = true
+                    modifier = if (extera) {
+                        Modifier.exteraClosingPage(transition, backStackEntry, navController)
+                    } else {
+                        Modifier.graphicsLayer {
+                            shape = RoundedCornerShape(windowCorner!!.value)
+                            clip = true
+                        }
                     },
                 )
             }
@@ -317,12 +351,17 @@ fun AppNavGraph(
                     slideInHorizontally(initialOffsetX = { it }, animationSpec = MotionTokens.sheetOffset)
                 },
                 popExitTransition = {
-                    slideOutHorizontally(targetOffsetX = { it }, animationSpec = MotionTokens.tweenStandard())
+                    if (exteraBack()) {
+                        ExitTransition.None
+                    } else {
+                        slideOutHorizontally(targetOffsetX = { it }, animationSpec = MotionTokens.tweenStandard())
+                    }
                 },
             ) { backStackEntry ->
                 val route = backStackEntry.toRoute<BookDetailsRoute>()
                 val bookLanguage by homeViewModel.uiLanguage.collectAsStateWithLifecycle()
-                val windowCorner = transition.animateDp(label = "bookWindowCorner") { state ->
+                val extera = LocalExteraBackEnabled.current
+                val windowCorner = if (extera) null else transition.animateDp(label = "bookWindowCorner") { state ->
                     if (state == EnterExitState.Visible) 0.dp else 42.dp
                 }
                 BookDetailsScreen(
@@ -333,9 +372,13 @@ fun AppNavGraph(
                     language = bookLanguage,
                     onBack = { navController.popBackStack() },
                     onOpenBook = { b -> navController.navigateToBook(b.ref.source.value, b.ref.key, b.title, b.coverUrl) },
-                    modifier = Modifier.graphicsLayer {
-                        shape = RoundedCornerShape(windowCorner.value)
-                        clip = true
+                    modifier = if (extera) {
+                        Modifier.exteraClosingPage(transition, backStackEntry, navController)
+                    } else {
+                        Modifier.graphicsLayer {
+                            shape = RoundedCornerShape(windowCorner!!.value)
+                            clip = true
+                        }
                     },
                 )
             }
