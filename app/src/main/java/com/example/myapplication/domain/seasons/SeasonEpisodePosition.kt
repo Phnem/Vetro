@@ -94,3 +94,27 @@ fun watchedPositionFromCount(count: Int, seasons: List<SeasonInfo>, ownSeasonNum
     val last = regular.last()
     return SeasonEpisode(last.seasonNumber, last.episodes)
 }
+
+/**
+ * Докуда тайтл просмотрен — единое правило для карточки и экрана серий, чтобы они не расходились.
+ *
+ * Берётся дальняя из двух отметок: позиция из счётчика `Anime.episodes` и самая дальняя
+ * ДОСМОТРЕННАЯ серия из прогресса воспроизведения ([playbackFurthest]). Недосмотренная серия
+ * (пара минут в плеере) в счёт не идёт — иначе карточка пишет «2 из 12», а в списке серий вторая
+ * серия не отмечена.
+ *
+ * У сериалов (SERIES) и фильмов счётчик означает «сколько вышло» (его пишет проверка серий
+ * TMDB), а не «сколько посмотрел», поэтому для них [countsAsWatched] = false и считается только
+ * прогресс воспроизведения: иначе каждая вышедшая серия сразу выглядела бы просмотренной.
+ */
+fun watchedThroughPosition(
+    countsAsWatched: Boolean,
+    count: Int,
+    seasons: List<SeasonInfo>,
+    ownSeasonNumber: Int?,
+    playbackFurthest: SeasonEpisode?,
+): SeasonEpisode? {
+    val fromCount = if (countsAsWatched) watchedPositionFromCount(count, seasons, ownSeasonNumber) else null
+    return listOfNotNull(fromCount, playbackFurthest)
+        .maxWithOrNull(compareBy({ it.season }, { it.episode }))
+}

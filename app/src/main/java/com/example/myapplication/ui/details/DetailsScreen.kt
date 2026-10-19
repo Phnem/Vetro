@@ -124,6 +124,14 @@ fun DetailsScreen(
         return
     }
 
+    // Ответы на действия меню «⋯» (просмотрено / обложка / источник неверен).
+    val appContext = LocalContext.current.applicationContext
+    LaunchedEffect(viewModel) {
+        viewModel.messages.collect { text ->
+            android.widget.Toast.makeText(appContext, text, android.widget.Toast.LENGTH_SHORT).show()
+        }
+    }
+
     val screenBg = MaterialTheme.colorScheme.background
     val backdrop = rememberLayerBackdrop {
         drawRect(screenBg)
@@ -157,7 +165,11 @@ fun DetailsScreen(
     val episodeMenuViewModel: EpisodeMenuViewModel? = if (isManga) {
         null
     } else {
-        koinViewModel(key = "episode_menu_${current.id}") { parametersOf(episodeAnime) }
+        // Ключ включает привязку к каталогам: после «Источник неверен» или дозагрузки ID (KP/IMDb/TMDB)
+        // меню серий должно искать источники просмотра уже по актуальным данным тайтла.
+        koinViewModel(
+            key = "episode_menu_${current.id}_${current.anilistId}_${current.malId}_${current.kinopoiskId}_${current.imdbId}_${current.tmdbId}_${current.titleEn}_${current.titleRu}",
+        ) { parametersOf(episodeAnime) }
     }
 
 
@@ -247,6 +259,30 @@ fun DetailsScreen(
                 .statusBarsPadding()
                 .padding(top = 12.dp, start = 16.dp)
                 .zIndex(4f),
+        )
+
+        // Меню работает с каталогами аниме (обложки, id, «просмотрено» по сериям), у манги его нет.
+        if (!isManga) {
+            DetailsOverflowMenu(
+                backdrop = backdrop,
+                isDark = isDark,
+                ru = language == AppLanguage.RU,
+                onMarkWatched = viewModel::markWatched,
+                onChangeCover = viewModel::openCoverPicker,
+                onWrongSource = viewModel::openSourcePicker,
+            )
+        }
+
+        val picker by viewModel.picker.collectAsStateWithLifecycle()
+        DetailsPickerSheet(
+            state = picker,
+            ru = language == AppLanguage.RU,
+            isDark = isDark,
+            onDismiss = viewModel::dismissPicker,
+            onPickCover = viewModel::pickCover,
+            onPickSource = viewModel::pickSource,
+            onNoneOfThese = viewModel::rejectSource,
+            onSearch = viewModel::searchSources,
         )
 
         DetailsMiniDock(
@@ -943,6 +979,8 @@ internal fun DetailsGlassBackButton(
     isDark: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    icon: androidx.compose.ui.graphics.vector.ImageVector = Icons.AutoMirrored.Filled.ArrowBack,
+    contentDescription: String = "Back",
 ) {
     val barTint = if (isDark) Color.White.copy(alpha = 0.10f) else Color.White.copy(alpha = 0.14f)
     val barBorder = Color.White.copy(alpha = if (isDark) 0.22f else 0.28f)
@@ -970,8 +1008,8 @@ internal fun DetailsGlassBackButton(
         contentAlignment = Alignment.Center,
     ) {
         Icon(
-            Icons.AutoMirrored.Filled.ArrowBack,
-            contentDescription = "Back",
+            icon,
+            contentDescription = contentDescription,
             // Белая стрелка — для прозрачного «жидкого» стекла поверх арта. Матовая подложка
             // (glassControl в новом интерфейсе) в светлой теме почти белая: стрелка на ней терялась.
             tint = if (LocalModernUi.current) MaterialTheme.colorScheme.onSurface else Color.White,

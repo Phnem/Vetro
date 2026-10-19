@@ -175,6 +175,32 @@ class EpisodePlaybackStore(
     }
 
     /**
+     * Ручная отметка «просмотрено» (досмотрел где-то ещё): серии без записи или недосмотренные
+     * становятся досмотренными, уже досмотренные не трогаются, чтобы не стирать счётчик пересмотров.
+     */
+    suspend fun markWatched(animeId: String, episodes: Collection<PlaybackEpisodeKey>) {
+        if (episodes.isEmpty()) return
+        val preferenceKey = progressKey(animeId)
+        val now = System.currentTimeMillis()
+        writeMutex.withLock {
+            edit { preferences ->
+                val current = decode(preferences[preferenceKey]).toMutableMap()
+                for (key in episodes) {
+                    val previous = current[key]
+                    if (previous?.watched == true) continue
+                    current[key] = EpisodePlaybackProgress(
+                        positionMs = MANUAL_MARK_DURATION_MS,
+                        durationMs = MANUAL_MARK_DURATION_MS,
+                        updatedAt = now,
+                        rewatchCount = previous?.rewatchCount ?: 0,
+                    )
+                }
+                preferences[preferenceKey] = encode(current)
+            }
+        }
+    }
+
+    /**
      * Дальше всего продвинутая серия по каждому тайтлу: animeId → (сезон, серия).
      *
      * Один Flow на всю коллекцию, а не [progressFlow] на каждую запись: ключ прогресса — хэш от
@@ -186,13 +212,16 @@ class EpisodePlaybackStore(
      * случайное открытие серии (проверить, играет ли источник) оставляет запись с позицией в
      * пару секунд — по ней прогресс просмотра рисовать нельзя.
      */
-    fun furthestEpisodeFlow(animeIds: List<String>): Flow<Map<String, PlaybackEpisodeKey>> {
+    fun furthestEpisodeFlow(
+        animeIds: List<String>,
+        completedOnly: Boolean = false,
+    ): Flow<Map<String, PlaybackEpisodeKey>> {
         val keys = animeIds.associateWith { progressKey(it) }
         return data.map { preferences ->
             buildMap {
                 for ((animeId, key) in keys) {
                     val furthest = decode(preferences[key])
-                        .filterValues { it.watched || it.positionMs >= MEANINGFUL_WATCH_MS }
+                        .filterValues { it.watched || (!completedOnly && it.positionMs >= MEANINGFUL_WATCH_MS) }
                         .keys
                         .maxWithOrNull(compareBy({ it.season }, { it.episode }))
                     if (furthest != null) put(animeId, furthest)
@@ -286,6 +315,9 @@ class EpisodePlaybackStore(
         /** Меньше минуты в серии — это не просмотр, а проба источника. */
         const val MEANINGFUL_WATCH_MS = 60_000L
 
+        /** Длительность условной записи для серии, отмеченной вручную: длина типовой серии. */
+        const val MANUAL_MARK_DURATION_MS = 24L * 60_000L
+
         /** Перерыв между досмотром и новым заходом, после которого заход считается пересмотром. */
         const val REWATCH_GAP_MS = 30L * 60_000L
 
@@ -322,5 +354,11 @@ fun isEpisodeWatched(
     val safePosition = positionMs.coerceAtMost(durationMs)
     val fraction = safePosition.toDouble() / durationMs.toDouble()
     val remaining = durationMs - safePosition
-    return fraction >= completionRatio || remaining <= creditsTailMs
+    // Хвост титров засчитываем только у настоящей серии и после её середины: у короткого ролика
+    // (заглушка источника, трейлер, свежая серия с неполным файлом) «до конца меньше 105 секунд»
+    // верно с самой первой секунды, и серия становилась просмотренной, едва её открыли.
+    val tailApplies = durationMs >= MIN_EPISODE_FOR_CREDITS_TAIL_MS && fraction >= 0.5
+    return fraction >= completionRatio || (tailApplies && remaining <= creditsTailMs)
 }
+
+private const val MIN_EPISODE_FOR_CREDITS_TAIL_MS = 8L * 60_000L

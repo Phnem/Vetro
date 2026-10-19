@@ -96,7 +96,9 @@ class HomeViewModel(
         localDataSource.observeAllAnime()
             .map { list -> list.map { anime -> anime.id } }
             .distinctUntilChanged()
-            .flatMapLatest { ids -> episodePlaybackStore.furthestEpisodeFlow(ids) }
+            // Только ДОСМОТРЕННЫЕ серии — как «Просмотрено» в меню серий. Раньше карточка считала и
+            // серию, отыгранную дольше минуты, и «2 из 12» расходилось с отметками в списке серий.
+            .flatMapLatest { ids -> episodePlaybackStore.furthestEpisodeFlow(ids, completedOnly = true) }
             .map { furthest -> furthest.filterValues { it.episode > 0 } }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
 

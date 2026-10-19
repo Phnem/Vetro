@@ -28,6 +28,9 @@ ANILIST_CLIENT_SECRET=
 #   выше (см. .scratch/movie-series-infra/spec.md → Non-functional requirements).
 TMDB_API_KEY=
 KINOPOISK_API_KEY=
+# ПоискКино (api.poiskkino.dev, бывший kinopoisk.dev): русские названия/описания + id TMDB и IMDb.
+#   Бесплатный ключ (200 запросов в сутки) выдаёт Telegram-бот @poiskkinodev_bot.
+POISKKINO_API_KEY=
 
 # --- Vetro Collection Sync (Supabase + Google / GitHub) ---
 # Callback в приложение (НЕ путать с GitHub OAuth App callback):

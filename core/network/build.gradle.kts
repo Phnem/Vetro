@@ -31,6 +31,13 @@ android {
             "KINOPOISK_API_KEY",
             "\"${localProperties.getProperty("KINOPOISK_API_KEY", "")}\""
         )
+        // ПоискКино (api.poiskkino.dev): бесплатный ключ 200 запросов/сутки из Telegram-бота
+        // @poiskkinodev_bot. Пустой ключ — провайдер выключен.
+        buildConfigField(
+            "String",
+            "POISKKINO_API_KEY",
+            "\"${localProperties.getProperty("POISKKINO_API_KEY", "")}\""
+        )
         // Ключи API обогащения (Часть A, .scratch/sources-expansion). Пустой ключ — модуль молча
         // выключен. Как и у TMDB, строка попадает в APK: бесплатные ключи с лимитом, серверный прокси
         // — в бэклоге. Для Anime-Skip по умолчанию — общий client id из их документации.

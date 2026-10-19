@@ -102,7 +102,7 @@ val appModule = module {
             localDataSource = get(),
         )
     }
-    single { SeriesEpisodeCheckUseCase(repository = get(), localDataSource = get(), seasonsStore = get()) }
+    single { SeriesEpisodeCheckUseCase(repository = get(), localDataSource = get(), seasonsStore = get(), tvMaze = get()) }
     single {
         EpisodeUpdateCheckCoordinator(
             animeCheck = get(),
@@ -117,7 +117,7 @@ val appModule = module {
     single { TitleDubbingCoordinator(androidContext()) }
     single { ImportAnimeDbUseCase(get()) }
     single { ShikimoriPlaceholderPurge(httpClient = get(), imageStorage = get()) }
-    single { RepairAnimeDbUseCase(get(), get(), get(), get(), get(), get()) }
+    single { RepairAnimeDbUseCase(get(), get(), get(), get(), get(), get(), get<com.example.myapplication.domain.enrichment.TitleInfoEnricher>()) }
     single { RepairDbCoordinator(androidContext()) }
     single { EnrichmentGapJournal(androidContext()) }
     single { CollectionGapDetector(localDataSource = get(), repairUseCase = get(), journal = get()) }
@@ -235,6 +235,20 @@ val appModule = module {
             rateLimiter = get(named("remanga_rate")),
         )
     }
+    single { com.example.myapplication.domain.enrichment.TitleCandidateSearch(repository = get()) }
+    single(named("inkstory_rate")) {
+        // Inkstory лимиты не публикует: оглавление приходит одним ответом, поэтому спокойный темп.
+        com.example.myapplication.network.TokenBucketRateLimiter(
+            maxTokens = 2.0,
+            refillTokensPerSecond = 2.0,
+        )
+    }
+    single {
+        com.example.myapplication.manga.source.InkstorySource(
+            client = get(),
+            rateLimiter = get(named("inkstory_rate")),
+        )
+    }
     // Японская цепочка: бесплатные главы с сайтов издателей, которых ещё нет на языке пользователя.
     single { com.example.myapplication.manga.ja.JaHttp(get<okhttp3.OkHttpClient>()) }
     single(named("ja_sources")) {
@@ -282,7 +296,9 @@ val appModule = module {
             // Remanga первым: у русскоязычной коллекции шанс попадания выше.
             sources = listOf(
                 get<com.example.myapplication.manga.source.RemangaSource>(),
+                get<com.example.myapplication.manga.source.InkstorySource>(),
                 get<com.example.myapplication.manga.source.MangaDexSource>(),
+                // VETRO-TAIL[manga-source]: новый источник манги — класс MangaSource + строка здесь.
             ),
             japaneseSources = get(named("ja_sources")),
         )
@@ -492,6 +508,16 @@ val appModule = module {
                 com.example.myapplication.media.source.movieseries.InternetArchiveFilmsProvider(
                     client = get<io.ktor.client.HttpClient>(),
                 ),
+                // Бесплатные источники без входа: Rutube (только каналы правообладателей) и «Смотрим»
+                // (только бесплатный тариф). Платные сервисы подключаются в «Дополнительных источниках».
+                com.example.myapplication.media.source.movieseries.RutubeProvider(
+                    client = get<io.ktor.client.HttpClient>(),
+                ),
+                com.example.myapplication.media.source.movieseries.SmotrimProvider(
+                    client = get<io.ktor.client.HttpClient>(),
+                ),
+                // VETRO-TAIL[stream-provider]: новый легальный источник кино/сериалов —
+                // класс MovieSeriesStreamingProvider + строка здесь (порядок = приоритет).
             ),
             providerHealth = get<com.example.myapplication.media.source.movieseries.ProviderHealthStore>(),
             intelligence = get(),

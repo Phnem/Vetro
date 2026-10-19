@@ -2,6 +2,8 @@ package com.example.myapplication.domain.settings
 
 import com.example.myapplication.data.models.Anime
 import com.example.myapplication.data.models.MediaType
+import com.example.myapplication.domain.enrichment.TitleInfoEnricher
+import com.example.myapplication.domain.enrichment.isSourceRejected
 import com.example.myapplication.data.repository.AnimeRepository
 import com.example.myapplication.data.repository.GenreRepository
 import com.example.myapplication.data.repository.ImageStorageRepository
@@ -51,6 +53,8 @@ class RepairAnimeDbUseCase(
     private val genreRepository: GenreRepository,
     private val placeholderPurge: ShikimoriPlaceholderPurge,
     private val movieSeriesRepository: MovieSeriesRepository,
+    /** Слой сопоставления id и названий; null — запись чинится только прежними источниками. */
+    private val titleInfoEnricher: TitleInfoEnricher? = null,
 ) {
     suspend operator fun invoke(
         language: AppLanguage,
@@ -250,11 +254,30 @@ class RepairAnimeDbUseCase(
 
     /** internal: live-обогащение чинит по одной записи тем же кодом, что и полный проход. */
     internal suspend fun repairOne(
-        anime: Anime,
+        stored: Anime,
         language: AppLanguage,
         contentType: AppContentType,
         sessionLog: RepairDbSessionLog,
     ) {
+        // Информационный слой идёт первым: найденные id и русское название делают дальнейший подбор
+        // и просмотр точнее, а ещё закрывают пробелы, из-за которых запись иначе пошла бы в долгий
+        // поиск по названию. Только фильмы и сериалы; у аниме своя иерархия каталогов.
+        val anime = if (titleInfoEnricher != null &&
+            (stored.mediaType == MediaType.MOVIE || stored.mediaType == MediaType.SERIES)
+        ) {
+            val outcome = titleInfoEnricher.enrich(stored)
+            if (outcome.changedFields.isNotEmpty()) {
+                sessionLog.info(
+                    "Info layer \"${stored.title}\": ${outcome.changedFields.joinToString()} " +
+                        "via ${outcome.resolved?.sources?.joinToString().orEmpty()}",
+                )
+            }
+            outcome.anime
+        } else {
+            stored
+        }
+        // «Источник неверен»: автоподбор по названию вернул бы ту же чужую запись.
+        if (anime.mediaType == MediaType.ANIME && anime.isSourceRejected()) return
         val initialGaps = detectGaps(anime)
         val isMovieSeries = anime.mediaType == MediaType.MOVIE || anime.mediaType == MediaType.SERIES
         if (!initialGaps.needsRepair && !(isMovieSeries && anime.hasSavedMovieSeriesId())) return

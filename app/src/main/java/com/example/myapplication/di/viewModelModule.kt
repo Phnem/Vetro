@@ -111,6 +111,12 @@ val viewModelModule = module {
             seasonEpisodesResolver = get(),
             seasonCatchUp = get(),
             titleEnrichment = get(),
+            localDataSource = get(),
+            playbackStore = get(),
+            titleCandidates = get(),
+            titleInfoEnricher = get(),
+            seriesSeasonsStore = get(),
+            seriesEpisodeCheck = get(),
         )
     }
     viewModel { (anime: com.example.myapplication.data.models.Anime) ->

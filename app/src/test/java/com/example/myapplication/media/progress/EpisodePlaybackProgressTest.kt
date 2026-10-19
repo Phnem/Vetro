@@ -21,6 +21,14 @@ class EpisodePlaybackProgressTest {
     }
 
     @Test
+    fun short_clip_is_not_watched_just_because_the_tail_is_short() {
+        // Заглушка источника или трейлер на 90 секунд: «до конца меньше 105 с» верно с первой секунды.
+        assertFalse(isEpisodeWatched(positionMs = 1_000L, durationMs = 90_000L))
+        assertFalse(isEpisodeWatched(positionMs = 5_000L, durationMs = 5 * 60_000L))
+        assertTrue(isEpisodeWatched(positionMs = 80_000L, durationMs = 90_000L))
+    }
+
+    @Test
     fun unknown_duration_is_never_watched() {
         assertFalse(isEpisodeWatched(positionMs = 10_000L, durationMs = 0L))
     }

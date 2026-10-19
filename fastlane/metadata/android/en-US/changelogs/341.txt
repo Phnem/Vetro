@@ -1,0 +1,9 @@
+Big update for movies and series.
+• Titles are matched across catalogs (Wikidata, PoiskKino/Kinopoisk, TMDB, Wikipedia): Russian and English names, descriptions and ids are filled in when you open a card or run Fix DB.
+• Series seasons: when TMDB has no season layout, Vetro falls back to TVmaze, so more shows get season and episode counts.
+• Free sources: Rutube (rights-holder channels) and Smotrim (free content) are searched next to Internet Archive.
+• Details: a glass "⋯" menu — mark as watched, change the cover from other catalogs, and "wrong source" with a list of candidate titles.
+Fixes.
+• One rule for "watched" on the card and in the episode menu; just-aired episodes are no longer marked as watched.
+New.
+• Manga: Inkstory source.

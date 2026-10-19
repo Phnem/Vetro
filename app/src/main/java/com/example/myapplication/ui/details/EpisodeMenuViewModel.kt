@@ -772,11 +772,18 @@ class EpisodeMenuViewModel(
         val ownSeason = seasons.firstOrNull { s ->
             (anime.anilistId != null && s.anilistId == anime.anilistId) || (anime.malId != null && s.malId == anime.malId)
         }?.seasonNumber
-        val fromCount = com.example.myapplication.domain.seasons.watchedPositionFromCount(anime.episodes, seasons, ownSeason)
-            ?.let { EpisodeKey(it.season, it.episode) }
         val fromPlayback = playback.filterValues { it.watched }.keys
             .maxWithOrNull(compareBy<EpisodeKey>({ it.season }, { it.episode }))
-        return listOfNotNull(fromCount, fromPlayback).maxWithOrNull(compareBy({ it.season }, { it.episode }))
+            ?.let { com.example.myapplication.domain.seasons.SeasonEpisode(it.season, it.episode) }
+        // Тот же расчёт, что у карточки главной (HomeViewModel.watchedMarks): у сериалов счётчик
+        // означает «вышло», а не «посмотрено», и в отметку не входит.
+        return com.example.myapplication.domain.seasons.watchedThroughPosition(
+            countsAsWatched = anime.mediaType != MediaType.SERIES && anime.mediaType != MediaType.MOVIE,
+            count = anime.episodes,
+            seasons = seasons,
+            ownSeasonNumber = ownSeason,
+            playbackFurthest = fromPlayback,
+        )?.let { EpisodeKey(it.season, it.episode) }
     }
 
     private fun currentAction(key: EpisodeKey): EpisodeActionState =

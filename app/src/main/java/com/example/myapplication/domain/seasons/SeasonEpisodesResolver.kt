@@ -8,6 +8,7 @@ import com.example.myapplication.data.local.AnimeLocalDataSource
 import com.example.myapplication.data.local.SeasonEpisodesStore
 import com.example.myapplication.data.models.Anime
 import com.example.myapplication.data.models.MediaType
+import com.example.myapplication.domain.enrichment.isSourceRejected
 import com.example.myapplication.data.repository.AnimeRepository
 import com.example.myapplication.network.ApiSearchResult
 import com.example.myapplication.network.AppLanguage
@@ -111,6 +112,9 @@ class SeasonEpisodesResolver(
         anime: Anime,
         includeStoredStreaming: Boolean = true,
     ): SeasonEpisodesEntry? {
+        // Пользователь пометил привязку к каталогу как ошибочную: искать тайтл по названию заново
+        // значит вернуть чужие сезоны (так появлялся «Psyren» у разных записей).
+        if (anime.isSourceRejected()) return null
         val self = findSeedNode(anime)
             ?: return fallbackSingleSeason(anime)
 

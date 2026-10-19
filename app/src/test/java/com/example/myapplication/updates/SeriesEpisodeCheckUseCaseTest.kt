@@ -3,12 +3,15 @@ package com.example.myapplication.updates
 import com.example.myapplication.data.models.Anime
 import com.example.myapplication.data.models.AnimeUpdate
 import com.example.myapplication.data.models.MediaType
+import com.example.myapplication.domain.seasons.SeasonEpisodesEntry
+import com.example.myapplication.domain.seasons.SeasonInfo
 import com.example.myapplication.network.LookupResult
 import com.example.myapplication.network.tmdb.SeriesEpisodeState
 import com.example.myapplication.network.tmdb.SeriesStatus
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.time.Clock
@@ -96,6 +99,28 @@ class SeriesEpisodeCheckUseCaseTest {
         assertEquals(listOf(fresh.single(), animeEvent), store.storedUpdates)
     }
 
+    @Test
+    fun `ensureSeasonsResolved falls back to TVmaze when TMDB fails`() = runBlocking {
+        val house = series(episodes = 176, tmdbId = 1408)
+        val store = FakeSeriesEpisodeStore(house, normalized = true)
+        val fallbackEntry = SeasonEpisodesEntry(
+            animeId = house.id,
+            seasons = (1..8).map { SeasonInfo(seasonNumber = it, episodes = 22, source = "TVmaze") },
+            complete = true,
+            resolvedAt = 1000L,
+        )
+        val source = FakeSeriesEpisodeSource(resolvedTmdbId = 1408, releasedEpisodes = 176).apply {
+            failEpisodeState = true
+            fallback = fallbackEntry
+        }
+
+        SeriesEpisodeCheckUseCase(store, source, Clock.systemUTC()).ensureSeasonsResolved(house)
+
+        assertNotNull(store.seasonsEntry)
+        assertEquals(8, store.seasonsEntry?.seasons?.size)
+        assertEquals("TVmaze", store.seasonsEntry?.seasons?.first()?.source)
+    }
+
     private fun series(episodes: Int, tmdbId: Int?) = Anime(
         id = "series",
         title = "Dark",
@@ -117,10 +142,12 @@ private class FakeSeriesEpisodeStore(
 ) : SeriesEpisodeStore {
     var anime = initial
     var storedUpdates: List<AnimeUpdate> = emptyList()
+    var seasonsEntry: SeasonEpisodesEntry? = null
 
     override fun getAllSeries(): List<Anime> = listOf(anime)
     override fun isNormalized(animeId: String): Boolean = normalized
     override fun getUpdates(): List<AnimeUpdate> = storedUpdates
+    override fun getSeasons(animeId: String): SeasonEpisodesEntry? = seasonsEntry?.takeIf { it.animeId == animeId }
 
     override suspend fun normalize(anime: Anime, releasedEpisodes: Int) {
         this.anime = anime.copy(episodes = releasedEpisodes)
@@ -138,6 +165,10 @@ private class FakeSeriesEpisodeStore(
     override suspend fun setUpdates(updates: List<AnimeUpdate>) {
         this.storedUpdates = updates
     }
+
+    override suspend fun setSeasons(entry: SeasonEpisodesEntry) {
+        this.seasonsEntry = entry
+    }
 }
 
 private class FakeSeriesEpisodeSource(
@@ -145,6 +176,7 @@ private class FakeSeriesEpisodeSource(
     var releasedEpisodes: Int,
 ) : SeriesEpisodeSource {
     var failEpisodeState: Boolean = false
+    var fallback: SeasonEpisodesEntry? = null
 
     override suspend fun resolveTmdbId(anime: Anime): Int? = resolvedTmdbId
 
@@ -158,4 +190,6 @@ private class FakeSeriesEpisodeSource(
                 status = SeriesStatus.ONGOING,
             )
         )
+
+    override suspend fun fallbackSeasons(anime: Anime, clock: Clock): SeasonEpisodesEntry? = fallback
 }

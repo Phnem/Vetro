@@ -57,6 +57,11 @@ class SeasonEpisodesStore(context: Context) {
         }
     }
 
+    /** Сбросить расклад одного тайтла (привязка к каталогу признана ошибочной). */
+    suspend fun remove(animeId: String) {
+        store.update { map -> map - animeId }
+    }
+
     /** Убрать записи тайтлов, которых больше нет в коллекции. */
     suspend fun retainOnly(existingIds: Set<String>) {
         store.update { map -> map.filterKeys { it in existingIds } }

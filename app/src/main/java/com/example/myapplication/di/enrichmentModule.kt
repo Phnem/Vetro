@@ -21,9 +21,18 @@ import com.example.myapplication.network.enrichment.TasteDiveClient
 import com.example.myapplication.network.enrichment.TmdbEnrichmentClient
 import com.example.myapplication.network.enrichment.TvMazeClient
 import com.example.myapplication.network.enrichment.YouTubeClient
+import com.example.myapplication.network.ids.AnimeIdMap
+import com.example.myapplication.network.ids.ArmClient
+import com.example.myapplication.network.ids.PoiskKinoClient
+import com.example.myapplication.network.ids.TitleIdContributor
+import com.example.myapplication.network.ids.TitleIdResolver
+import com.example.myapplication.network.ids.TmdbTitlesClient
+import com.example.myapplication.network.ids.WikidataClient
+import com.example.myapplication.network.ids.WikipediaClient
 import io.ktor.client.HttpClient
 import java.io.File
 import org.koin.android.ext.koin.androidContext
+import org.koin.core.qualifier.named
 import org.koin.dsl.module
 
 /**
@@ -61,6 +70,28 @@ val enrichmentModule = module {
     single { NytBooksClient(get(), rate(perSecond = 5.0 / 60.0, burst = 2.0)) }
     single { TasteDiveClient(get(), rate(perSecond = 1.0, burst = 3.0)) }
     single { AniLibriaScheduleClient(get(), rate(perSecond = 1.0, burst = 2.0)) }
+
+    // Слой сопоставления id и названий: Wikidata, карта аниме Fribb, ARM, ПоискКино, Википедия и TMDB
+    // сводятся в TitleIdResolver. Карта аниме (~13 МБ разобранного JSON) — в своём кэше, чтобы не
+    // вытеснять мелкие ответы общего.
+    single(named("id_map_http")) {
+        EnrichmentHttp(
+            get<HttpClient>(),
+            EnrichmentCache(File(androidContext().cacheDir, "id-map"), maxBytes = 64L * 1024 * 1024),
+            get(),
+        )
+    }
+    single { WikidataClient(get(), rate(perSecond = 1.0, burst = 2.0)) }
+    single { AnimeIdMap(get(named("id_map_http")), rate(perSecond = 0.2, burst = 1.0)) }
+    single { ArmClient(get(), rate(perSecond = 1.0, burst = 3.0)) }
+    // ПоискКино: 200 запросов в сутки на бесплатном ключе — лимитер мягкий, главное держит кэш.
+    single { PoiskKinoClient(get(), rate(perSecond = 2.0, burst = 4.0)) }
+    single { WikipediaClient(get(), rate(perSecond = 5.0, burst = 10.0)) }
+    single { TmdbTitlesClient(get(), rate(perSecond = 4.0, burst = 8.0)) }
+    // VETRO-TAIL[title-id-source]: новый источник id/названий — `single<TitleIdContributor> { … }` строкой ниже.
+    // Ничего больше менять не нужно: getAll() подхватит его сам (см. docs/agents/tails.md).
+    single { TitleIdResolver(get(), get(), get(), get(), get(), get(), contributors = getAll<TitleIdContributor>()) }
+    single { com.example.myapplication.domain.enrichment.TitleInfoEnricher(get(), get()) }
 
     single { com.example.myapplication.audiobooks.domain.enrichment.BookWorkEnrichment(get(), get()) }
 

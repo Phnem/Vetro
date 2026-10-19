@@ -91,3 +91,6 @@ keystore.properties
 /CONTEXT.md
 /Design.md
 /experiments/
+
+# Local API keys
+*.env

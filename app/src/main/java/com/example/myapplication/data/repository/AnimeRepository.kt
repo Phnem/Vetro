@@ -171,6 +171,27 @@ class AnimeRepository(
         localDataSource.setMalId(animeId, malId)
     }
 
+    /** Идентификаторы и названия, найденные слоем сопоставления (TitleInfoEnricher). */
+    suspend fun setTmdbId(animeId: String, tmdbId: Int) {
+        localDataSource.setTmdbId(animeId, tmdbId)
+    }
+
+    suspend fun setKinopoiskId(animeId: String, kinopoiskId: Int) {
+        localDataSource.setKinopoiskId(animeId, kinopoiskId)
+    }
+
+    suspend fun setImdbId(animeId: String, imdbId: String) {
+        localDataSource.setImdbId(animeId, imdbId)
+    }
+
+    suspend fun setTitleRu(animeId: String, titleRu: String) {
+        localDataSource.setTitleRu(animeId, titleRu)
+    }
+
+    suspend fun setTitleEn(animeId: String, titleEn: String) {
+        localDataSource.setTitleEn(animeId, titleEn)
+    }
+
     suspend fun markTmdbNotFound(animeId: String, atMillis: Long) {
         localDataSource.markTmdbNotFound(animeId, atMillis)
     }

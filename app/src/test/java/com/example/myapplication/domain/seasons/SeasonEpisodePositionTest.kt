@@ -17,6 +17,25 @@ class SeasonEpisodePositionTest {
     private fun airing(season: Int?, aired: Int, total: Int? = 12) = AiringProgress("a", season, aired, total, 0L)
 
     @Test
+    fun `series counter means released and never counts as watched`() {
+        val seasons = listOf(season(1, 10), season(2, 8))
+        // Счётчик сериала = «вышло 18»: без этого правила S2 E8 сразу выглядела бы просмотренной.
+        assertNull(watchedThroughPosition(false, 18, seasons, null, null))
+        assertEquals(
+            SeasonEpisode(1, 3),
+            watchedThroughPosition(false, 18, seasons, null, SeasonEpisode(1, 3)),
+        )
+    }
+
+    @Test
+    fun `anime watched position is the furthest of counter and finished episodes`() {
+        val seasons = listOf(season(1, 12), season(2, 12))
+        assertEquals(SeasonEpisode(1, 5), watchedThroughPosition(true, 5, seasons, null, null))
+        assertEquals(SeasonEpisode(2, 2), watchedThroughPosition(true, 5, seasons, null, SeasonEpisode(2, 2)))
+        assertEquals(SeasonEpisode(1, 5), watchedThroughPosition(true, 5, seasons, null, SeasonEpisode(1, 3)))
+    }
+
+    @Test
     fun `finished layout gives the last regular season and its episodes`() {
         val l = layout(season(1, 12), season(2, 24), season(SPECIAL_SEASON_BASE, 1, special = true))
         assertEquals(SeasonEpisode(2, 24), latestSeasonEpisode(l, null))
