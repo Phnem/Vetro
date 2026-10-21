@@ -1,8 +1,10 @@
 package com.example.myapplication.ui.shared.components.rating
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -27,6 +29,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -52,11 +55,24 @@ fun RatingOverlayHost(
     state: RatingSliderState,
     ru: Boolean,
     modifier: Modifier = Modifier,
+    /**
+     * Открыт ли бабл. По умолчанию — пока палец ведёт трек в форме (AddEdit) или держит строку
+     * серии. У пикера по тапу на рейтинг карточки палец в момент открытия уже поднят, поэтому
+     * открытием и закрытием управляет вызывающий.
+     */
+    shown: Boolean = state.isDragging,
+    /**
+     * Не null — трек внутри бабла живой: палец ставит значение, отпускание его фиксирует.
+     * Null — бабл только показывает состояние, жестом владеет кто-то другой.
+     */
+    onCommitted: ((Float) -> Unit)? = null,
+    /** Тап мимо трека и системный «назад» закрывают живой бабл без сохранения. */
+    onOutsideTap: (() -> Unit)? = null,
 ) {
     // progress: 0 = свёрнут в слайдер, 1 = полноэкранный бабл.
     val progress = remember { Animatable(0f) }
-    LaunchedEffect(state.isDragging) {
-        if (state.isDragging) {
+    LaunchedEffect(shown) {
+        if (shown) {
             progress.animateTo(1f, spring(dampingRatio = 0.82f, stiffness = 320f))
         } else {
             // Дать «желе» (releaseBounce) отыграть в баблe перед втягиванием.
@@ -65,8 +81,12 @@ fun RatingOverlayHost(
         }
     }
 
-    val visible = state.isDragging || progress.value > 0.001f
+    val visible = shown || progress.value > 0.001f
     if (!visible) return
+
+    if (onOutsideTap != null) {
+        BackHandler(enabled = shown, onBack = onOutsideTap)
+    }
 
     BoxWithConstraints(modifier = modifier.fillMaxSize()) {
         val screenWpx = constraints.maxWidth.toFloat()
@@ -86,6 +106,17 @@ fun RatingOverlayHost(
         Box(
             modifier = Modifier
                 .fillMaxSize()
+                // Живой бабл модален: тап мимо трека закрывает его, а не проваливается в экран
+                // под ним. Трек гасит свой down сам, так что до этого обработчика он не доходит.
+                .then(
+                    if (onOutsideTap != null) {
+                        Modifier.pointerInput(onOutsideTap) {
+                            detectTapGestures { onOutsideTap() }
+                        }
+                    } else {
+                        Modifier
+                    },
+                )
                 .graphicsLayer {
                     val p = progress.value
                     val anchor = state.anchorBoundsInRoot
@@ -165,11 +196,12 @@ fun RatingOverlayHost(
                 state = state,
                 mode = RatingTrackMode.Expanded,
                 ru = ru,
+                onCommitted = onCommitted,
                 inkLabels = true,
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .navigationBarsPadding()
-                    .padding(horizontal = 28.dp)
+                    .padding(horizontal = RatingExpandedSidePadding)
                     .padding(bottom = 40.dp),
             )
         }

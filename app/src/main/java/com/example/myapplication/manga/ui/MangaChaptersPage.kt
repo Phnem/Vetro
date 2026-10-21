@@ -700,7 +700,7 @@ private fun groupRowShape(index: Int, size: Int, insideVolume: Boolean): Shape {
     // У тома верх карточки уже скруглён шапкой, поэтому первая строка под ней — почти прямая.
     val top = if (index == 0 && !insideVolume) big else small
     val bottom = if (index == size - 1) big else small
-    return SquircleCornerShape(topStart = top, topEnd = top, bottomEnd = bottom, bottomStart = bottom)
+    return androidx.compose.foundation.shape.RoundedCornerShape(topStart = top, topEnd = top, bottomEnd = bottom, bottomStart = bottom)
 }
 
 @Composable

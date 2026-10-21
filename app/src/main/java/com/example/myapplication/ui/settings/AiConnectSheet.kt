@@ -88,7 +88,7 @@ fun AiConnectSheet(
             .fillMaxWidth()
             .heightIn(max = 640.dp)
             .verticalScroll(rememberScrollState(), flingBehavior = IosScroll.flingBehavior())
-            .padding(horizontal = 20.dp)
+            .padding(horizontal = IosDesign.SheetSideInset)
             .padding(top = IosDesign.SheetContentTop, bottom = 24.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {

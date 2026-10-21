@@ -7,6 +7,8 @@ import com.example.myapplication.manga.data.ChapterReadingProgress
 import com.example.myapplication.manga.data.MangaReadingStore
 import com.example.myapplication.media.progress.EpisodePlaybackProgress
 import com.example.myapplication.media.progress.EpisodePlaybackStore
+import com.example.myapplication.media.progress.EpisodeRating
+import com.example.myapplication.media.progress.EpisodeRatingStore
 import com.example.myapplication.media.progress.PlaybackEpisodeKey
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.postgrest.postgrest
@@ -16,8 +18,8 @@ import java.time.Instant
 import java.time.OffsetDateTime
 
 /**
- * Синхронизация прогресса просмотра серий и чтения глав с Supabase
- * (`episode_progress` / `manga_progress`).
+ * Синхронизация прогресса просмотра серий, чтения глав и личных оценок серий с Supabase
+ * (`episode_progress` / `manga_progress` / `episode_ratings`).
  *
  * Обе стороны — DataStore, не SQLDelight, поэтому паттерн [SyncRepository] переиспользован не
  * дословно:
@@ -40,6 +42,7 @@ class ProgressSyncRepository(
     private val authRepository: AuthRepository,
     private val episodeStore: EpisodePlaybackStore,
     private val mangaStore: MangaReadingStore,
+    private val ratingStore: EpisodeRatingStore,
 ) {
     private val syncPrefs = context.getSharedPreferences("sync_prefs", Context.MODE_PRIVATE)
 
@@ -56,10 +59,14 @@ class ProgressSyncRepository(
                 .onFailure { Log.w(TAG, "Push episode progress failed: ${safeSyncError(it)}") }
             runCatching { pushChapters(userId, animeIds) }
                 .onFailure { Log.w(TAG, "Push manga progress failed: ${safeSyncError(it)}") }
+            runCatching { pushRatings(userId, animeIds) }
+                .onFailure { Log.w(TAG, "Push episode ratings failed: ${safeSyncError(it)}") }
             runCatching { pullEpisodes(userId) }
                 .onFailure { Log.w(TAG, "Pull episode progress failed: ${safeSyncError(it)}") }
             runCatching { pullChapters(userId) }
                 .onFailure { Log.w(TAG, "Pull manga progress failed: ${safeSyncError(it)}") }
+            runCatching { pullRatings(userId) }
+                .onFailure { Log.w(TAG, "Pull episode ratings failed: ${safeSyncError(it)}") }
         }.onFailure { Log.e(TAG, "Progress sync failed: ${safeSyncError(it)}") }
     }
 
@@ -141,6 +148,61 @@ class ProgressSyncRepository(
         Log.i(TAG, "Pulled ${rows.size} episode progress row(s), applied $applied")
     }
 
+    /**
+     * Оценки серий едут отдельной таблицей и отдельным водяным знаком: у них свой `updatedAt`,
+     * не связанный с позицией воспроизведения (см. [EpisodeRatingStore]).
+     */
+    private suspend fun pushRatings(userId: String, animeIds: List<String>) {
+        val watermark = syncPrefs.getLong(pushKey(RATING_ENTITY, userId), 0L)
+        var maxUpdatedAt = watermark
+        val dtos = ratingStore.snapshotAll(animeIds).flatMap { (animeId, ratings) ->
+            ratings.mapNotNull { (episodeKey, value) ->
+                if (value.updatedAt <= watermark) return@mapNotNull null
+                if (value.updatedAt > maxUpdatedAt) maxUpdatedAt = value.updatedAt
+                EpisodeRatingDto(
+                    user_id = userId,
+                    anime_id = animeId,
+                    season = episodeKey.season,
+                    episode = episodeKey.episode,
+                    rating = value.stored,
+                    updated_at = Instant.ofEpochMilli(value.updatedAt).toString(),
+                )
+            }
+        }
+        if (dtos.isEmpty()) return
+        dtos.chunked(CHUNK_SIZE).forEach { supabase.postgrest[RATING_ENTITY].upsert(it) }
+        syncPrefs.edit().putLong(pushKey(RATING_ENTITY, userId), maxUpdatedAt).apply()
+        Log.i(TAG, "Pushed ${dtos.size} episode rating(s)")
+    }
+
+    private suspend fun pullRatings(userId: String) {
+        val cursorMs = db.syncQueries.getCursor(RATING_ENTITY).executeAsOneOrNull() ?: 0L
+        val rows = supabase.postgrest[RATING_ENTITY]
+            .select {
+                filter {
+                    eq("user_id", userId)
+                    gt("updated_at", Instant.ofEpochMilli(cursorMs).toString())
+                }
+            }
+            .decodeList<EpisodeRatingDto>()
+        if (rows.isEmpty()) return
+
+        var maxUpdatedAt = cursorMs
+        val byAnime = rows.groupBy { it.anime_id }.mapValues { (_, group) ->
+            group.associate { row ->
+                val updatedMs = parseInstant(row.updated_at)
+                if (updatedMs > maxUpdatedAt) maxUpdatedAt = updatedMs
+                PlaybackEpisodeKey(row.season, row.episode) to EpisodeRating(
+                    stored = row.rating,
+                    updatedAt = updatedMs,
+                )
+            }
+        }
+        val applied = ratingStore.mergeRemote(byAnime)
+        db.syncQueries.setCursor(RATING_ENTITY, maxUpdatedAt)
+        Log.i(TAG, "Pulled ${rows.size} episode rating(s), applied $applied")
+    }
+
     private suspend fun pullChapters(userId: String) {
         val cursorMs = db.syncQueries.getCursor(MANGA_ENTITY).executeAsOneOrNull() ?: 0L
         val rows = supabase.postgrest[MANGA_ENTITY]
@@ -176,6 +238,7 @@ class ProgressSyncRepository(
         const val TAG = "ProgressSync"
         const val EPISODE_ENTITY = "episode_progress"
         const val MANGA_ENTITY = "manga_progress"
+        const val RATING_ENTITY = "episode_ratings"
 
         /** Прогресс копится сотнями строк — upsert режется, чтобы не упереться в лимит тела. */
         const val CHUNK_SIZE = 200

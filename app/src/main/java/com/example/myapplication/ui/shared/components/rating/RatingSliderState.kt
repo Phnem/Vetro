@@ -46,6 +46,26 @@ class RatingSliderState(initialRating: Float) {
         isDragging = true
     }
 
+    /**
+     * Жест начался не на самом треке (удержание на строке серии): бабл открывается со значения,
+     * которое было у серии, а не с позиции пальца. Сначала ставим значение, потом открываем —
+     * иначе первый кадр бабла успел бы показать прошлое лицо.
+     */
+    suspend fun beginDragFrom(startValue: Float) {
+        val snapped = (startValue.coerceIn(0f, 10f) * 10).roundToInt() / 10f
+        committedRating = snapped
+        liveT.snapTo(snapped)
+        isDragging = true
+    }
+
+    /**
+     * Отмена без сохранения (палец не двигали или жест сорвали). Лицо в уходящем бабле не
+     * трогаем: пока он втягивается, оно должно оставаться тем, что видел палец.
+     */
+    fun cancelDrag() {
+        isDragging = false
+    }
+
     /** ACTION_MOVE: только snapTo — нулевая задержка от пальца, никакого сглаживания. */
     suspend fun onDrag(newT: Float) {
         liveT.snapTo(newT.coerceIn(0f, 10f))

@@ -1,0 +1,8 @@
+New.
+• Watch status in Details: Planned, Watching, Completed, Rewatching, On Hold, Dropped, Not Started. Until you pick one, titles you are in the middle of show as Watching and everything else as Completed.
+• Sort and filters grew up: filter by status and genre (up to three each, or All), and by release year, rating and episode count with two-handle glass sliders.
+• New bottom sheets: floating panels with a soft shadow and a thin edge line over a lighter dim. Page swipes are off while a sheet is open, and pulling the content down from its top closes the sheet.
+Fixes.
+• Updates: the downloaded file goes straight to the system installer, so the long wait before the install dialog is gone, and the last part of the download no longer crawls.
+• Smoother sheets and scrolling: a heavy per-frame clip under the sheets was removed.
+• The AI connect, enrichment and account sheets are as wide as the others; the active item in the media type sheet uses the brand color.

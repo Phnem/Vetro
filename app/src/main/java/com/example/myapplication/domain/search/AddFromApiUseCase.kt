@@ -94,6 +94,7 @@ internal fun buildSaveAnimeParams(
         shikimoriId = identity.shikimoriId,
         tmdbId = identity.tmdbId,
         kinopoiskId = identity.kinopoiskId,
+        releaseYear = result.seasonYear?.takeIf { it > 0 },
     )
 }
 

@@ -7,6 +7,7 @@ import com.example.myapplication.data.models.Anime
 import com.example.myapplication.data.models.AnimeUpdate
 import com.example.myapplication.data.models.MediaType
 import com.example.myapplication.data.models.RatingScale
+import com.example.myapplication.data.models.WatchStatus
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -108,6 +109,8 @@ class AnimeLocalDataSource(
                 tmdb_not_found_at = anime.tmdbNotFoundAt,
                 kinopoisk_not_found_at = anime.kinopoiskNotFoundAt,
                 imdb_id = anime.imdbId,
+                watch_status = anime.watchStatus?.name,
+                release_year = anime.releaseYear?.toLong(),
                 id = anime.id
             )
 
@@ -297,6 +300,43 @@ class AnimeLocalDataSource(
     /** Строки без EN-названия и без отметки попытки — кандидаты для обогащения (Stage 7/8). */
     fun getAnimeNeedingTitleEn(limit: Int): List<Anime> =
         db().animeQueries.selectNeedingTitleEn(limit.toLong(), ::concatRowToAnime).executeAsList()
+
+    /**
+     * Записывает статус просмотра; null возвращает запись к «авто» (статус по прогрессу).
+     * Точечный UPDATE, а не [updateAnime]: не перезаписывает остальные колонки устаревшей копией.
+     */
+    suspend fun setWatchStatus(animeId: String, status: WatchStatus?): Unit = withContext(Dispatchers.IO) {
+        db().animeQueries.setWatchStatus(
+            watch_status = status?.name,
+            updatedAt = System.currentTimeMillis(),
+            id = animeId,
+        )
+        mirrorCoordinator.requestExportIfEnabled()
+    }
+
+    /** Год релиза для фильтра библиотеки; 0 = источник года не дал (повторно не ищем). */
+    suspend fun setReleaseYear(animeId: String, year: Int): Unit = withContext(Dispatchers.IO) {
+        db().animeQueries.setReleaseYear(release_year = year.toLong(), id = animeId)
+    }
+
+    /**
+     * Годы пачкой в одной транзакции: каждая запись в `anime` будит подписчиков списка коллекции, и
+     * сорок отдельных записей подряд сорок раз пересобирали бы главную, пока пользователь на ней.
+     */
+    suspend fun setReleaseYears(years: Map<String, Int>): Unit = withContext(Dispatchers.IO) {
+        if (years.isEmpty()) return@withContext
+        db().animeQueries.transaction {
+            years.forEach { (id, year) -> db().animeQueries.setReleaseYear(release_year = year.toLong(), id = id) }
+        }
+    }
+
+    /** Записи без года релиза и без отметки «искали» — кандидаты для фонового догона года. */
+    fun getAnimeNeedingReleaseYear(limit: Int): List<Anime> =
+        db().animeQueries.selectNeedingReleaseYear(limit.toLong(), ::concatRowToAnime).executeAsList()
+
+    /** Сколько записей ещё ждут года релиза. */
+    fun countAnimeNeedingReleaseYear(): Int =
+        db().animeQueries.countNeedingReleaseYear().executeAsOne().toInt()
 
     /** Сколько записей ещё ждут EN-названия (для прогресса дубляжа). */
     fun countAnimeNeedingTitleEn(): Int {

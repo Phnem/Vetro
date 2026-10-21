@@ -174,6 +174,15 @@ class SourceEngine(
                             .map { it.copy(videos = emptyList()) }
                     }
                 )
+                // VFT Торренты (Rutor, RuTracker, Nyaa, Jackett): позволяет воспроизводить и скачивать раздачи аниме
+                movieSeriesSources.firstOrNull { it.id.value == "vft_torrents" }?.let { torrentProvider ->
+                    add(
+                        PlaybackProviderCall(torrentProvider.displayName, SOURCE_TIMEOUT_MS) {
+                            val res = torrentProvider.resolve(PlaybackRequest(anime, episodeNumber, seasonInfo, AppLanguage.RU))
+                            (res as? com.example.myapplication.media.source.movieseries.ProviderResolution.Found)?.hosters.orEmpty()
+                        }
+                    )
+                }
             }
         )
         val resolved = attempts.flatMap { it.value.orEmpty() }
@@ -192,34 +201,41 @@ class SourceEngine(
     ): SourceBatch {
         val attempts = runCalls(
             language = AppLanguage.EN,
-            calls = listOf(
+            calls = buildList {
                 // AnimeHeaven needs three sequential page loads (search → title → gate).
-                PlaybackProviderCall("AnimeHeaven", EN_SOURCE_TIMEOUT_MS) {
-                    animeHeavenSource.resolveEpisode(anime, episodeNumber, seasonInfo)
-                },
-                PlaybackProviderCall("jut.su reference", SOURCE_TIMEOUT_MS) {
-                    jutSuSource.resolveEpisode(anime, episodeNumber, seasonInfo)
-                        .map { it.copy(videos = emptyList()) }
-                },
-            )
+                add(
+                    PlaybackProviderCall("AnimeHeaven", EN_SOURCE_TIMEOUT_MS) {
+                        animeHeavenSource.resolveEpisode(anime, episodeNumber, seasonInfo)
+                    }
+                )
+                add(
+                    PlaybackProviderCall("jut.su reference", SOURCE_TIMEOUT_MS) {
+                        jutSuSource.resolveEpisode(anime, episodeNumber, seasonInfo)
+                            .map { it.copy(videos = emptyList()) }
+                    }
+                )
+                // VFT Торренты (Nyaa, The Pirate Bay, Jackett): раздачи на английском / оригинальном японском
+                movieSeriesSources.firstOrNull { it.id.value == "vft_torrents" }?.let { torrentProvider ->
+                    add(
+                        PlaybackProviderCall(torrentProvider.displayName, SOURCE_TIMEOUT_MS) {
+                            val res = torrentProvider.resolve(PlaybackRequest(anime, episodeNumber, seasonInfo, AppLanguage.EN))
+                            (res as? com.example.myapplication.media.source.movieseries.ProviderResolution.Found)?.hosters.orEmpty()
+                        }
+                    )
+                }
+            }
         )
-        val native = attempts[0]
-        val jutReference = attempts[1]
-        val nativeHosters = native.value.orEmpty()
-        val referenceHosters = jutReference.value.orEmpty()
-        if (nativeHosters.hasPlayableVideo()) {
-            return SourceBatch(
-                nativeHosters + referenceHosters,
-                native.failed || jutReference.failed,
-            )
+        val resolved = attempts.flatMap { it.value.orEmpty() }
+        if (resolved.hasPlayableVideo()) {
+            return SourceBatch(resolved, attempts.any { it.failed })
         }
 
         webLinksStore.ensureLoaded()
         val links = webLinksStore.flow.value[anime.id]?.enLinks.orEmpty()
         val direct = resolveDirectFallback(links.map { it.url }, AppLanguage.EN)
         return SourceBatch(
-            referenceHosters + direct.value.orEmpty(),
-            native.failed || jutReference.failed || direct.failed,
+            resolved + direct.value.orEmpty(),
+            attempts.any { it.failed } || direct.failed,
         )
     }
 

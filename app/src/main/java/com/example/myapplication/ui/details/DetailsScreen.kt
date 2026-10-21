@@ -68,6 +68,7 @@ import coil3.request.crossfade
 import com.example.myapplication.domain.seasons.shortLabel
 import com.example.myapplication.data.models.Anime
 import com.example.myapplication.data.models.MediaType
+import com.example.myapplication.data.models.WatchStatus
 import com.example.myapplication.manga.ui.MangaChaptersPage
 import com.example.myapplication.manga.ui.rememberMangaContinueReading
 import com.example.myapplication.ui.shared.theme.isAppInDarkTheme
@@ -75,8 +76,12 @@ import com.example.myapplication.network.AppLanguage
 import com.example.myapplication.ui.shared.GlassPreset
 import com.example.myapplication.ui.shared.adaptiveGlassBackdrop
 import com.example.myapplication.ui.shared.rememberAdaptiveGlassEffects
+import com.example.myapplication.ui.shared.components.rating.RatingOverlayHost
+import com.example.myapplication.ui.shared.components.rating.RatingSliderState
 import com.example.myapplication.ui.shared.theme.MotionTokens
 import com.example.myapplication.ui.shared.components.GrabberHandle
+import com.example.myapplication.ui.shared.components.accent
+import com.example.myapplication.ui.shared.components.icon
 import com.example.myapplication.ui.shared.theme.BrandOrangeBright
 import com.example.myapplication.ui.shared.theme.SnProFamily
 import com.example.myapplication.utils.Haptic
@@ -116,6 +121,7 @@ fun DetailsScreen(
     val webLinks by viewModel.webLinks.collectAsStateWithLifecycle()
     val seasons by viewModel.seasons.collectAsStateWithLifecycle()
     val enrichment by viewModel.enrichment.collectAsStateWithLifecycle()
+    val watchStatus by viewModel.effectiveWatchStatus.collectAsStateWithLifecycle()
     val isDark = isAppInDarkTheme()
 
     val current = anime
@@ -139,6 +145,9 @@ fun DetailsScreen(
     }
     val scope = rememberCoroutineScope()
     val view = LocalView.current
+    // Бабл оценки серии: жест удержания на строке серии двигает это состояние, а сам бабл
+    // рисуется ниже, последним ребёнком корня — поверх мини-дока и кнопок.
+    val episodeRatingSlider = remember { RatingSliderState(0f) }
     val pagerState = rememberPagerState(
         initialPage = if (openEpisodes) 1 else 0,
         pageCount = { 2 },
@@ -189,7 +198,7 @@ fun DetailsScreen(
                 overscrollEffect = null,
                 state = pagerState,
                 // Свайп вправо со страницы «Детали» — назад на главную (как в iOS, от любой точки).
-                modifier = Modifier.fillMaxSize().detailsSwipeBack(pagerState, enabled = true),
+                modifier = Modifier.fillMaxSize().detailsSwipeBack(pagerState, enabled = !com.example.myapplication.ui.shared.SheetGate.anyOpen),
                 beyondViewportPageCount = 1,
             ) { page ->
                 when (page) {
@@ -220,6 +229,11 @@ fun DetailsScreen(
                             performHaptic(view, Haptic.Light)
                             openEpisodes()
                         },
+                        onOpenStatus = {
+                            performHaptic(view, Haptic.Light)
+                            viewModel.openStatusPicker()
+                        },
+                        watchStatus = watchStatus,
                         onHeroUnderStatusBar = { heroUnderStatusBar = it },
                     )
 
@@ -245,6 +259,7 @@ fun DetailsScreen(
                         fallbackEpisodes = current.episodes,
                         posterPath = viewModel.getImgPath(current.imageFileName),
                         viewModel = checkNotNull(episodeMenuViewModel),
+                        ratingSlider = episodeRatingSlider,
                     )
                 }
             }
@@ -283,6 +298,7 @@ fun DetailsScreen(
             onPickSource = viewModel::pickSource,
             onNoneOfThese = viewModel::rejectSource,
             onSearch = viewModel::searchSources,
+            onPickStatus = viewModel::pickStatus,
         )
 
         DetailsMiniDock(
@@ -342,6 +358,16 @@ fun DetailsScreen(
                 )
             }
         }
+
+        // Бабл оценки серии — последним и с самым высоким zIndex: закрывает мини-док и кнопки.
+        // Жестом не владеет: палец остаётся на строке серии, бабл только рисует состояние.
+        if (!isManga) {
+            RatingOverlayHost(
+                state = episodeRatingSlider,
+                ru = language == AppLanguage.RU,
+                modifier = Modifier.zIndex(10f),
+            )
+        }
     }
 }
 
@@ -366,6 +392,8 @@ private fun DetailsInfoPage(
     onDownload: () -> Unit,
     onToggleFavorite: () -> Unit,
     onOpenSeason: () -> Unit,
+    onOpenStatus: () -> Unit,
+    watchStatus: WatchStatus?,
     onHeroUnderStatusBar: (Boolean) -> Unit,
 ) {
     val context = LocalContext.current
@@ -493,6 +521,17 @@ private fun DetailsInfoPage(
                 ),
                 color = onBg,
             )
+
+            // Статус просмотра: тап открывает выбор. Без ручного выбора показывается выведенный из прогресса.
+            if (watchStatus != null) {
+                Spacer(Modifier.height(12.dp))
+                WatchStatusChip(
+                    status = watchStatus,
+                    ru = ru,
+                    isDark = isDark,
+                    onClick = onOpenStatus,
+                )
+            }
 
             // Строки мета-чипов «дата · рейтинг · серии» здесь больше нет: дата дублировала
             // карточку «Релиз», число серий — карточку «Эпизоды», а рейтинг переехал в сетку
@@ -908,6 +947,47 @@ private fun rememberPosterAccent(imgPath: String?): Color {
     }
     return accent
 }
+/** Пилюля статуса просмотра под названием: цвет и иконка по статусу, шеврон намекает, что она нажимается. */
+@Composable
+private fun WatchStatusChip(status: WatchStatus, ru: Boolean, isDark: Boolean, onClick: () -> Unit) {
+    val accent = status.accent(neutral = if (isDark) Color.White.copy(alpha = 0.78f) else Color.Black.copy(alpha = 0.66f))
+    Row(
+        modifier = Modifier
+            .clip(CircleShape)
+            .background(accent.copy(alpha = if (isDark) 0.20f else 0.13f))
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = onClick,
+            )
+            .padding(start = 12.dp, end = 8.dp, top = 7.dp, bottom = 7.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            imageVector = status.icon(),
+            contentDescription = null,
+            tint = accent,
+            modifier = Modifier.size(16.dp),
+        )
+        Spacer(Modifier.width(6.dp))
+        Text(
+            text = status.label(ru),
+            style = MaterialTheme.typography.labelLarge.copy(
+                fontFamily = SnProFamily,
+                fontWeight = FontWeight.SemiBold,
+            ),
+            color = accent,
+        )
+        Spacer(Modifier.width(2.dp))
+        Icon(
+            imageVector = Icons.Rounded.KeyboardArrowDown,
+            contentDescription = null,
+            tint = accent.copy(alpha = 0.7f),
+            modifier = Modifier.size(18.dp),
+        )
+    }
+}
+
 @Composable
 private fun MetaChip(text: String, chipBg: Color, fg: Color) {
     Box(

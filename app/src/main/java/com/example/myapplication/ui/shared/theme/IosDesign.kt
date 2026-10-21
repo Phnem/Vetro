@@ -44,6 +44,9 @@ object IosDesign {
      */
     val SheetContentTop = 30.dp
 
+    /** Боковой отступ содержимого шторки: карточки и поля тянутся на всю ширину, как в шторках выбора и сортировки. */
+    val SheetSideInset = 16.dp
+
     /** iOS icon-well для строки списка: контейнер 32dp, скругление 9dp, белая пиктограмма 18dp. */
     val ListIconSize = 32.dp
     val ListIconRadius = 9.dp

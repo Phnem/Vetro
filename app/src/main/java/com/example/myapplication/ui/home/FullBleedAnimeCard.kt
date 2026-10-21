@@ -33,6 +33,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
@@ -102,6 +103,7 @@ internal fun FullBleedAnimeCardBody(
     onClick: (() -> Unit)?,
     onLongClick: (() -> Unit)?,
     onEditClick: (() -> Unit)?,
+    onRatingClick: ((Rect) -> Unit)?,
 ) {
     val isDark = isAppInDarkTheme()
     val borderBrush = if (state.isFavorite) {
@@ -206,6 +208,7 @@ internal fun FullBleedAnimeCardBody(
                         modifier = Modifier
                             .clip(CircleShape)
                             .background(Color.Black.copy(alpha = 0.55f))
+                            .ratingChipTap(onRatingClick, onLongClick)
                     ) {
                         Text(
                             text = "★ ${RatingScale.format(state.rating)}",

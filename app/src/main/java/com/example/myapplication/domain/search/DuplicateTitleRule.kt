@@ -102,6 +102,8 @@ private fun absorb(survivor: Anime, discarded: Anime): Anime = survivor.copy(
     shikimoriId = survivor.shikimoriId ?: discarded.shikimoriId,
     tmdbId = survivor.tmdbId ?: discarded.tmdbId,
     kinopoiskId = survivor.kinopoiskId ?: discarded.kinopoiskId,
+    watchStatus = survivor.watchStatus ?: discarded.watchStatus,
+    releaseYear = survivor.releaseYear?.takeIf { it > 0 } ?: discarded.releaseYear ?: survivor.releaseYear,
     episodes = if (survivor.episodes > 0) survivor.episodes else discarded.episodes,
 )
 

@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Dns
+import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.Extension
 import androidx.compose.material.icons.rounded.Link
 import androidx.compose.material.icons.rounded.Subtitles
@@ -139,6 +140,20 @@ private val VetroPackage = ConnectionType(
     page = { host -> VetroPackagePage(host) },
 )
 
+private val VftTorrents = ConnectionType(
+    id = "vft-torrents",
+    icon = Icons.Rounded.Download,
+    title = Localized("Торренты и TorrServer", "Torrents & TorrServer"),
+    summary = Localized(
+        "Поиск раздач (Rutor, RuTracker, Nyaa, Jackett), стриминг через TorrServer или встроенный движок",
+        "Search releases (Rutor, RuTracker, Nyaa, Jackett), streaming via TorrServer or embedded engine",
+    ),
+    status = { _, ru ->
+        if (ru) "VFTmodule" else "VFTmodule"
+    },
+    page = { host -> com.example.myapplication.media.source.vftmodule.ui.VftTorrentsPage(host.ru) },
+)
+
 /**
  * Карточки главной панели в порядке показа.
  *
@@ -149,6 +164,7 @@ internal val ConnectionTypes: List<ConnectionType> = listOf(
     Subtitles,
     Stremio,
     VetroPackage,
+    VftTorrents,
 )
 
 @Composable

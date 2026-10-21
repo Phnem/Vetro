@@ -541,7 +541,7 @@ private fun ChaptersPage(
 private fun rowShape(index: Int, size: Int): Shape {
     val top = if (index == 0) 22.dp else 6.dp
     val bottom = if (index == size - 1) 22.dp else 6.dp
-    return SquircleCornerShape(topStart = top, topEnd = top, bottomEnd = bottom, bottomStart = bottom)
+    return androidx.compose.foundation.shape.RoundedCornerShape(topStart = top, topEnd = top, bottomEnd = bottom, bottomStart = bottom)
 }
 
 // ---------- Мелочи ----------

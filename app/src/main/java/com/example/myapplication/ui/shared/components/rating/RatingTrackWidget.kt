@@ -19,6 +19,7 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -55,6 +56,14 @@ import kotlin.math.roundToInt
 enum class RatingTrackMode { Compact, Expanded }
 
 /**
+ * Геометрия расширенного трека в бабле. Вынесена, потому что по ней же жест удержания на строке
+ * (оценка серии) переводит сдвиг пальца в значение: ход бегунка равен ширине трека минус бегунок,
+ * и если считать его от тех же чисел, бегунок идёт за пальцем 1:1.
+ */
+internal val RatingExpandedSidePadding = 28.dp
+internal val RatingExpandedThumbWidth = 60.dp
+
+/**
  * Трек рейтинга в форме капсулы с вертикальными насечками и стеклянным бегунком-лозенгой
  * (референс — фото 2). Один и тот же composable для формы (Compact, владеет жестом) и
  * полноэкранного бабла (Expanded).
@@ -82,13 +91,16 @@ fun RatingTrackWidget(
     // трека без «пустых» краёв.
     val trackHeight = if (compact) 27.dp else 33.dp
     val thumbH = trackHeight
-    val thumbW = if (compact) 48.dp else 60.dp
+    val thumbW = if (compact) 48.dp else RatingExpandedThumbWidth
     val capsule = RoundedCornerShape(percent = 50)
 
     val view = LocalView.current
     val density = LocalDensity.current
     val scope = rememberCoroutineScope()
     val thumbWpx = with(density) { thumbW.toPx() }
+    // Жест живёт в pointerInput с ключом state и не пересоздаётся: без этого он держал бы
+    // коллбэк первой композиции (а у пикера на карточке он зависит от выбранной карточки).
+    val currentOnCommitted by rememberUpdatedState(onCommitted)
 
     // Пересчёт подписей/цвета — только при смене квантованного значения (шаг 0.1),
     // не на каждый пиксель движения пальца.
@@ -135,7 +147,7 @@ fun RatingTrackWidget(
                                             change.consume()
                                             performHaptic(view, Haptic.Heavy)
                                             scope.launch {
-                                                state.settle { snapped -> onCommitted(snapped) }
+                                                state.settle { snapped -> currentOnCommitted?.invoke(snapped) }
                                             }
                                             break
                                         }

@@ -12,6 +12,7 @@ import com.example.myapplication.data.ai.AiCredentialsStore
 import com.example.myapplication.data.local.AnimeLocalDataSource
 import com.example.myapplication.data.local.DevPreferencesKeys
 import com.example.myapplication.data.models.Anime
+import com.example.myapplication.data.repository.AnimeRepository
 import com.example.myapplication.domain.settings.RepairAnimeDbUseCase
 import com.example.myapplication.domain.settings.RepairDbSessionLog
 import com.example.myapplication.domain.titles.AiTitleTranslationUseCase
@@ -19,6 +20,8 @@ import com.example.myapplication.domain.titles.RussianTitleEnrichmentUseCase
 import com.example.myapplication.domain.titles.TitleEnrichmentUseCase
 import com.example.myapplication.network.AppContentType
 import com.example.myapplication.network.AppLanguage
+import com.example.myapplication.ui.details.canLookupDetails
+import com.example.myapplication.ui.details.toDetailsLookupRequest
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
@@ -55,6 +58,7 @@ class LiveMaintenanceWorker(
     private val localDataSource: AnimeLocalDataSource by inject()
     private val journal: EnrichmentGapJournal by inject()
     private val credentialsStore: AiCredentialsStore by inject()
+    private val animeRepository: AnimeRepository by inject()
 
     override suspend fun doWork(): Result {
         return try {
@@ -67,6 +71,9 @@ class LiveMaintenanceWorker(
 
             // Ссылки «Где смотреть» тянет отдельный воркер — здесь лишь периодический триггер (6 ч).
             coordinator.enqueueWebLinkEnrichment()
+
+            // Год релиза нужен фильтру в шторке сортировки; не пробел коллекции и не зависит от порога.
+            backfillReleaseYears(language)
 
             val gaps = gapDetector.scan()
             if (gaps.isEmpty()) return Result.success()
@@ -104,6 +111,41 @@ class LiveMaintenanceWorker(
         val complete = repairUseCase.auditForeignMatches(language, RepairDbSessionLog())
         if (complete) {
             settingsDataStore.edit { it[DevPreferencesKeys.FOREIGN_MATCH_AUDIT_DONE] = true }
+        }
+    }
+
+    // ---- Год релиза (для фильтра года) ----
+
+    /**
+     * Дозаполняет год релиза небольшой партией из карточки источника. Год — значение записи, а не
+     * пробел обогащения, поэтому живёт отдельным проходом: не трогает журнал пробелов и не упирается
+     * в порог «слишком много пробелов». Ответ без года пишет 0 («искали»), чтобы не гонять тайтл
+     * каждый заход; сбой сети оставляет NULL и прерывает проход до следующего захода.
+     */
+    private suspend fun backfillReleaseYears(language: AppLanguage) {
+        val batch = localDataSource.getAnimeNeedingReleaseYear(MAX_YEARS_PER_RUN)
+        // Пишем одной пачкой в конце: запись в таблицу будит список главной, поштучно это десятки пересборок.
+        val found = LinkedHashMap<String, Int>()
+        try {
+            collectReleaseYears(batch, language, found)
+        } finally {
+            runCatching { localDataSource.setReleaseYears(found) }
+        }
+    }
+
+    private suspend fun collectReleaseYears(batch: List<Anime>, language: AppLanguage, found: MutableMap<String, Int>) {
+        for (anime in batch) {
+            if (isStopped) return
+            // EN-запрос без id и английского названия невозможен; русский идёт по любому названию.
+            val lookupLanguage = if (anime.canLookupDetails(language)) language else AppLanguage.RU
+            val result = animeRepository.fetchDetails(anime.toDetailsLookupRequest(lookupLanguage))
+            if (result.isFailure) {
+                Log.w(TAG, "Release year lookup failed for ${anime.title}", result.exceptionOrNull())
+                return
+            }
+            val year = result.getOrNull()?.releaseYearOrNull()
+            found[anime.id] = year ?: 0
+            delay(ITEM_DELAY_MS)
         }
     }
 
@@ -228,6 +270,7 @@ class LiveMaintenanceWorker(
         private const val MAX_FIELDS_PER_RUN = 15
         private const val MAX_TITLES_PER_RUN = 20
         private const val TITLE_BATCH = 20
+        private const val MAX_YEARS_PER_RUN = 40
         private const val ITEM_DELAY_MS = 350L
 
         private const val MAX_INLINE_RETRIES = 2

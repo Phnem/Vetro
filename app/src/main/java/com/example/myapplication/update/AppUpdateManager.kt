@@ -3,7 +3,6 @@ package com.example.myapplication.update
 import android.app.ActivityManager
 import android.content.Context
 import android.content.Intent
-import android.content.pm.PackageInstaller
 import android.net.ConnectivityManager
 import android.util.Log
 import androidx.datastore.core.DataStore
@@ -38,8 +37,7 @@ import java.io.IOException
  * Живёт в приложении, а не в экране. Раньше всё это сидело во `ViewModel` настроек: загрузка и опрос
  * прогресса умирали вместе с экраном, приёмник завершения терялся при повороте, а само состояние
  * собиралось из трёх мест. Теперь единственный источник правды - [state]; окно только показывает его,
- * а фоновая задача ([AppUpdateWorker]) и приёмник результата установки ([InstallResultReceiver])
- * двигают его же.
+ * а фоновая задача ([AppUpdateWorker]) двигает его же.
  *
  * Работает только при [UpdateMode.Auto] (подпись ключом автора); иначе состояние навсегда
  * [UpdateState.Unavailable], а все действия - пустые.
@@ -89,9 +87,6 @@ class AppUpdateManager(
     private val downloadMutex = Mutex()
     private var downloadJob: Job? = null
     private var backgroundRefresh: Job? = null
-
-    /** Сторож установки: «Устанавливаем» не должно висеть вечно, если система не ответила. */
-    private var installWatchdog: Job? = null
 
     init {
         if (policy.isAuto) scope.launch { applySnapshot(repository.appUpdateSnapshot.first()) }
@@ -172,6 +167,7 @@ class AppUpdateManager(
             var lastBytes = 0L
             var speed = 0L
             _state.value = UpdateState.Downloading(release, 0, release.sizeBytes, 0)
+            val downloadStartedAt = clock()
             try {
                 val file = downloader.download(release) { done, total ->
                     val now = clock()
@@ -184,7 +180,12 @@ class AppUpdateManager(
                     }
                     _state.value = UpdateState.Downloading(release, done, total, speed)
                 }
-                when (val verdict = verifier.verify(file)) {
+                val downloadedAt = clock()
+                Log.i(TAG, "download ${release.tag}: ${file.length()} bytes in ${downloadedAt - downloadStartedAt} ms")
+                val verdict = verifier.verify(file)
+                // Подпись всего APK проверяет система при разборе пакета: на слабом телефоне это заметное время.
+                Log.i(TAG, "verify ${release.tag}: $verdict in ${clock() - downloadedAt} ms")
+                when (verdict) {
                     ApkVerdict.Ok -> {
                         downloader.cleanExcept(release.tag)
                         _state.value = UpdateState.Ready(release, file)
@@ -207,7 +208,16 @@ class AppUpdateManager(
 
     // ---- установка ----
 
-    /** Передать скачанное системе. Без разрешения не ставит, а переводит в [UpdateState.NeedsPermission]. */
+    /**
+     * Передать скачанное системному установщику сразу, без промежуточных ожиданий. Без разрешения не
+     * ставит, а переводит в [UpdateState.NeedsPermission].
+     *
+     * Раньше пакет уходил в сессию [android.content.pm.PackageInstaller] с ожиданием ответа до 45 с и лишь
+     * потом — обычному установщику: если система проверяла пакет долго, сессию бросали на полпути, и
+     * проверка начиналась заново. Теперь окно системного установщика открывается сразу; итог установки
+     * приложению не нужен — при успехе процесс заменяется новым, при отказе файл остаётся и его можно
+     * поставить снова.
+     */
     fun install() {
         if (!policy.isAuto) return
         val (release, file) = installable() ?: return
@@ -215,30 +225,13 @@ class AppUpdateManager(
             _state.value = UpdateState.NeedsPermission(release, file)
             return
         }
-        _state.value = UpdateState.Installing(release)
-        Log.i(TAG, "install ${release.tag}: ${file.length()} bytes")
-        installWatchdog?.cancel()
-        installWatchdog = scope.launch {
-            // Копия 33 МБ в сессию установщика — не на главном потоке, откуда вызывает кнопка.
-            val committed = withContext(Dispatchers.IO) { installer.install(file) }
-            if (!committed) {
-                Log.w(TAG, "install ${release.tag}: the session could not be committed")
-                _state.value = UpdateState.Failed(release, UpdateFailure.INSTALL, "session")
-                return@launch
-            }
-            // Система отвечает за секунды: окном подтверждения или итогом. Нет ответа — сессия застряла
-            // (HyperOS на Xiaomi 13 после commit молча замирает: ни окна, ни результата). Бросаем её и
-            // отдаём файл обычному системному установщику; не вышло и это — ошибка с кнопкой «Повторить».
-            delay(RESULT_TIMEOUT_MS)
-            if (_state.value is UpdateState.Installing) {
-                Log.w(TAG, "install ${release.tag}: no answer from the system in ${RESULT_TIMEOUT_MS / 1000} s")
-                installer.abandonOwnSessions()
-                _state.value = if (installer.openWithSystemInstaller(file)) {
-                    UpdateState.Ready(release, file)
-                } else {
-                    UpdateState.Failed(release, UpdateFailure.INSTALL, "no-result")
-                }
-            }
+        Log.i(TAG, "install ${release.tag}: ${file.length()} bytes, handing over to the system installer")
+        // Зависшие сессии прежних версий приложения чистим, чтобы они не мешали системному установщику.
+        installer.abandonOwnSessions()
+        _state.value = if (installer.openWithSystemInstaller(file)) {
+            UpdateState.Ready(release, file)
+        } else {
+            UpdateState.Failed(release, UpdateFailure.INSTALL, "no-installer")
         }
     }
 
@@ -253,61 +246,6 @@ class AppUpdateManager(
         is UpdateState.NeedsPermission -> s.release to s.file
         is UpdateState.Failed -> s.release?.let { r -> downloader.downloaded(r.tag)?.let { r to it } }
         else -> null
-    }
-
-    /** Итог от системы: пришёл в [InstallResultReceiver]. */
-    fun onInstallResult(status: Int, message: String?, confirm: Intent?) {
-        Log.i(TAG, "install result: status=$status message=$message confirm=${confirm != null}")
-        scope.launch {
-            installWatchdog?.cancel()
-            val strings = updateStrings(AppLanguagePrefs.current(settingsDataStore))
-            val release = when (val s = _state.value) {
-                is UpdateState.Installing -> s.release
-                is UpdateState.Ready -> s.release
-                is UpdateState.NeedsPermission -> s.release
-                is UpdateState.Failed -> s.release
-                else -> null
-            }
-            when (status) {
-                PackageInstaller.STATUS_PENDING_USER_ACTION -> {
-                    if (confirm == null) {
-                        // Просят подтвердить, но окна не дали: подтверждать нечего, ждать бессмысленно.
-                        _state.value = UpdateState.Failed(release, UpdateFailure.INSTALL, "no-confirm")
-                        return@launch
-                    }
-                    // Система просит подтверждения: на виду открываем её окно, в фоне (или если окно не
-                    // открылось) зовём уведомлением.
-                    val opened = isAppInForeground() &&
-                        runCatching { context.startActivity(confirm.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
-                            .onFailure { Log.w(TAG, "the system confirmation window did not open", it) }
-                            .isSuccess
-                    if (!opened) notifier.showReady(strings, release?.tag.orEmpty(), confirm)
-                    // Пользователь решает в системном окне; если ответа нет долго, возвращаем «Установить».
-                    installWatchdog = scope.launch {
-                        delay(CONFIRM_TIMEOUT_MS)
-                        if (_state.value is UpdateState.Installing) {
-                            Log.w(TAG, "no decision in the system window, back to Ready")
-                            val file = release?.let { downloader.downloaded(it.tag) }
-                            _state.value = if (release != null && file != null) {
-                                UpdateState.Ready(release, file)
-                            } else {
-                                UpdateState.Failed(release, UpdateFailure.INSTALL, "confirm-timeout")
-                            }
-                        }
-                    }
-                }
-                PackageInstaller.STATUS_SUCCESS -> {
-                    downloader.cleanExcept(null)
-                    notifier.cancel()
-                }
-                PackageInstaller.STATUS_FAILURE_ABORTED -> {
-                    // Передумал в системном окне: файл на месте, можно поставить позже.
-                    val file = release?.let { downloader.downloaded(it.tag) }
-                    _state.value = if (release != null && file != null) UpdateState.Ready(release, file) else UpdateState.Idle
-                }
-                else -> _state.value = UpdateState.Failed(release, UpdateFailure.INSTALL, message)
-            }
-        }
     }
 
     // ---- фоновый проход ----
@@ -330,7 +268,11 @@ class AppUpdateManager(
             return
         }
         // На виду ничего не ставим: приложение перезапустилось бы под пальцем. Окно предложит само.
-        if (!isAppInForeground()) install()
+        // В фоне системный установщик открыть нельзя (запуск окна из фона запрещён), поэтому зовём уведомлением.
+        if (!isAppInForeground()) {
+            val strings = updateStrings(AppLanguagePrefs.current(settingsDataStore))
+            notifier.showReady(strings, ready.release.tag, installer.systemInstallIntent(ready.file))
+        }
     }
 
     /** Окно закрыли: этот релиз при запуске больше не предлагаем. */
@@ -398,12 +340,6 @@ class AppUpdateManager(
 
         /** Не старше этого прошлая проверка, чтобы запуск или возврат в приложение не ходил в GitHub зря. */
         const val LAUNCH_CHECK_MAX_AGE_MS = 10L * 60L * 1000L
-
-        /** Сколько ждём ответа системы после передачи пакета. */
-        private const val RESULT_TIMEOUT_MS = 45_000L
-
-        /** Сколько ждём решения пользователя в системном окне подтверждения. */
-        private const val CONFIRM_TIMEOUT_MS = 180_000L
     }
 }
 

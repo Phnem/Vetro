@@ -88,8 +88,12 @@ import com.example.myapplication.media.progress.EpisodePlaybackProgress
 import com.example.myapplication.media.ui.StreamPlayerActivity
 import com.example.myapplication.network.AppLanguage
 import com.example.myapplication.ui.shared.loading.BubbleClusterLoader
+import com.example.myapplication.data.models.RatingScale
+import com.example.myapplication.ui.shared.components.rating.RatingSliderState
+import com.example.myapplication.ui.shared.components.rating.ratingHoldGesture
 import com.example.myapplication.ui.shared.theme.IosDesign
 import com.example.myapplication.ui.shared.theme.MotionTokens
+import com.example.myapplication.ui.shared.theme.getRatingColor
 import com.example.myapplication.ui.shared.theme.SnProFamily
 import com.example.myapplication.utils.Haptic
 import com.example.myapplication.utils.performHaptic
@@ -114,6 +118,11 @@ fun ModernDetailsEpisodesPage(
     posterPath: String? = null,
     /** Создаёт экран Details — одна точка, чтобы у сезона не появилось двух разных VM. */
     viewModel: EpisodeMenuViewModel,
+    /**
+     * Состояние бабла оценки серии. Бабл рисует экран Details поверх дока и кнопок, а жест
+     * удержания на строке только двигает это состояние.
+     */
+    ratingSlider: RatingSliderState,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
@@ -252,10 +261,13 @@ fun ModernDetailsEpisodesPage(
                                 progress = state.playback[key],
                                 watched = state.isWatched(key, season.isSpecial),
                                 streaming = state.streaming == key,
+                                rating = state.ratings[key],
+                                ratingSlider = ratingSlider,
                                 ru = ru,
                                 isDark = isDark,
                                 onClick = { viewModel.play(season, episode) },
                                 onAction = { viewModel.episodeAction(season, episode) },
+                                onRate = { viewModel.rateEpisode(season.seasonNumber, episode, it) },
                             )
                         }
                     }
@@ -610,10 +622,14 @@ private fun EpisodeRow(
     /** Досмотрена в плеере или не дальше отметки «просмотрено до» (см. EpisodeMenuUiState.isWatched). */
     watched: Boolean,
     streaming: Boolean,
+    /** Личная оценка серии по десятибалльной шкале; null — не оценена. */
+    rating: Float?,
+    ratingSlider: RatingSliderState,
     ru: Boolean,
     isDark: Boolean,
     onClick: () -> Unit,
     onAction: () -> Unit,
+    onRate: (Float) -> Unit,
 ) {
     val hasProgress = (progress?.positionMs ?: 0L) > 0L
     val statusColor = when {
@@ -659,6 +675,14 @@ private fun EpisodeRow(
                 indication = null,
                 enabled = !streaming,
                 onClick = onClick,
+            )
+            // Удержание + движение пальца = оценка серии. ПОСЛЕ clickable: жест первым получает
+            // события и, поглотив отпускание, не даёт строке принять его за тап (запуск серии).
+            .ratingHoldGesture(
+                state = ratingSlider,
+                currentRating = rating ?: 0f,
+                onCommitted = onRate,
+                enabled = !streaming,
             )
             .padding(8.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -724,6 +748,12 @@ private fun EpisodeRow(
                     text = "E${episodeNumber.toString().padStart(3, '0')}",
                     accent = MaterialTheme.colorScheme.primary,
                 )
+                if (rating != null) {
+                    EpisodeMetaChip(
+                        text = "★ ${RatingScale.format(rating)}",
+                        accent = getRatingColor(rating),
+                    )
+                }
                 if ((progress?.durationMs ?: 0L) > 0L) {
                     EpisodeMetaChip(
                         text = "${formatEpisodeTime(progress?.positionMs ?: 0L)} / " +

@@ -1,5 +1,6 @@
 package com.example.myapplication
 
+import com.example.myapplication.ui.shared.components.extendUnderGrabber
 import com.example.myapplication.ui.shared.theme.isAppInDarkTheme
 import com.example.myapplication.ui.shared.theme.IosScroll
 import androidx.compose.foundation.layout.offset
@@ -734,11 +735,6 @@ val HeroiconsRectangleStack: ImageVector
 // ==========================================
 private val IconFilterColor = BrandOrange
 
-private sealed interface SortGridSelection {
-    data class Sort(val option: SortOption, val isAscending: Boolean) : SortGridSelection
-    data object Genres : SortGridSelection
-}
-
 fun SortOption.getIcon(): ImageVector = when (this) {
     SortOption.RATING -> Icons.Rounded.Star
     SortOption.EPISODES -> Icons.Outlined.Tv
@@ -755,181 +751,9 @@ fun SortOption.getAccentColor(): Color = when (this) {
 // SORT & FILTER OVERLAYS
 // ==========================================
 
-@Composable
-fun SortFilterOverlay(
-    visibleState: MutableTransitionState<Boolean>,
-    strings: UiStrings,
-    sortOption: SortOption,
-    sortAscending: Boolean = false,
-    filterSelectedTags: List<String>,
-    onDismiss: () -> Unit,
-    onApplySort: (SortOption, Boolean) -> Unit,
-    onApplyOpenGenreFilter: () -> Unit
-) {
-    val view = LocalView.current
-    val isDark = isAppInDarkTheme()
-    val panelBg = if (isDark) DarkBackground else MaterialTheme.colorScheme.surface
-    val rim = if (isDark) OverlayThemeTokens.RimDark else MaterialTheme.colorScheme.outline.copy(alpha = 0.12f)
-    val muted = if (isDark) OverlayThemeTokens.LabelMutedDark else MaterialTheme.colorScheme.onSurfaceVariant
-    val onCard = if (isDark) Color.White else MaterialTheme.colorScheme.onSurface
-    val cardBg = if (isDark) {
-        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-    } else {
-        MaterialTheme.colorScheme.surfaceVariant
-    }
-
-    val isOpening = visibleState.targetState
-    var draftSelection by remember(sortOption, sortAscending, isOpening) {
-        mutableStateOf<SortGridSelection>(SortGridSelection.Sort(sortOption, sortAscending))
-    }
-
-    val swipe = rememberIosSheetSwipe { onDismiss() }
-    // Один источник правды с [SortOption.getAccentColor] — раньше палитра была продублирована
-    // здесь литералами, и правка в одном месте не доезжала до второго.
-    val accentRating = OverlayThemeTokens.AccentOrange
-    val accentEpisodes = OverlayThemeTokens.AccentBlue
-    val accentTitle = OverlayThemeTokens.AccentYellow
-    val accentGenres = OverlayThemeTokens.AccentPurple
-    fun sortAccent(o: SortOption) = o.getAccentColor()
-    val applyAccent = when (val d = draftSelection) {
-        SortGridSelection.Genres -> accentGenres
-        is SortGridSelection.Sort -> sortAccent(d.option)
-    }
-
-    BackHandler { onDismiss() }
-
-    Box(modifier = Modifier.fillMaxSize()) {
-        // Шторка выезжает снизу и уходит вниз; физика и хореография — в MotionBottomSheet.
-        MotionBottomSheet(
-            visibleState = visibleState,
-            onDismiss = onDismiss,
-            isDark = isDark,
-            swipe = swipe,
-            panelModifier = Modifier.fillMaxWidth(),
-        ) {
-            Column(
-                modifier = Modifier
-                    .navigationBarsPadding()
-                    .padding(bottom = 12.dp)
-            ) {
-                GrabberHandle(isDark, modifier = swipe.handleModifier)
-                Column(modifier = Modifier.padding(horizontal = 16.dp)) {
-                    Text(
-                        text = strings.sortSheetTitle,
-                        fontFamily = SnProFamily,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 24.sp,
-                        letterSpacing = (-0.3).sp,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    Text(
-                        text = strings.sortSheetSubtitle,
-                        fontFamily = SnProFamily,
-                        fontSize = 13.sp,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
-                        modifier = Modifier.padding(top = 2.dp, bottom = 14.dp)
-                    )
-
-                    val curSort = draftSelection as? SortGridSelection.Sort
-                    fun toggleSort(o: SortOption) {
-                        performHaptic(view, Haptic.Light)
-                        val cur = draftSelection
-                        draftSelection = if (cur is SortGridSelection.Sort && cur.option == o) {
-                            SortGridSelection.Sort(o, !cur.isAscending)
-                        } else {
-                            SortGridSelection.Sort(o, isAscending = false)
-                        }
-                    }
-                    fun orderLabel(asc: Boolean) =
-                        if (asc) strings.sortOrderAscending else strings.sortOrderDescending
-
-                    SortOptionRow(
-                        icon = SortOption.RATING.getIcon(),
-                        accent = accentRating,
-                        title = strings.ratingHigh,
-                        subtitle = if (curSort?.option == SortOption.RATING) orderLabel(curSort.isAscending) else strings.sortSubtitleRating,
-                        selected = curSort?.option == SortOption.RATING,
-                        isDark = isDark,
-                        onClick = { toggleSort(SortOption.RATING) }
-                    )
-                    SortOptionRow(
-                        icon = SortOption.EPISODES.getIcon(),
-                        accent = accentEpisodes,
-                        title = strings.sortTileEpisodesTitle,
-                        subtitle = if (curSort?.option == SortOption.EPISODES) orderLabel(curSort.isAscending) else strings.sortSubtitleEpisodes,
-                        selected = curSort?.option == SortOption.EPISODES,
-                        isDark = isDark,
-                        onClick = { toggleSort(SortOption.EPISODES) }
-                    )
-                    SortOptionRow(
-                        icon = SortOption.TITLE.getIcon(),
-                        accent = accentTitle,
-                        title = strings.titleAZ,
-                        subtitle = if (curSort?.option == SortOption.TITLE) orderLabel(curSort.isAscending) else strings.sortSubtitleTitle,
-                        selected = curSort?.option == SortOption.TITLE,
-                        isDark = isDark,
-                        onClick = { toggleSort(SortOption.TITLE) }
-                    )
-                    SortOptionRow(
-                        icon = Icons.Outlined.FilterList,
-                        accent = accentGenres,
-                        title = strings.filterByGenre,
-                        subtitle = strings.sortSubtitleGenres,
-                        selected = draftSelection == SortGridSelection.Genres,
-                        isDark = isDark,
-                        onClick = {
-                            performHaptic(view, Haptic.Light)
-                            draftSelection = SortGridSelection.Genres
-                        }
-                    )
-
-                    Spacer(Modifier.height(6.dp))
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(54.dp)
-                            .clip(SquircleShape(27.dp))
-                            .background(applyAccent)
-                            .clickable(
-                                interactionSource = remember { MutableInteractionSource() },
-                                indication = null
-                            ) {
-                                when (val d = draftSelection) {
-                                    SortGridSelection.Genres -> { onApplyOpenGenreFilter(); onDismiss() }
-                                    is SortGridSelection.Sort -> {
-                                        if (d.option == sortOption && d.isAscending == sortAscending) onDismiss()
-                                        else { onApplySort(d.option, d.isAscending); onDismiss() }
-                                    }
-                                }
-                            },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = strings.sortApply,
-                            // По яркости заливки, а не сравнением с одним конкретным акцентом:
-                            // акценты теперь все тёплые и светлые, и белый текст на янтарном
-                            // читался бы плохо. Порог подобран так, что брендовый #E85002
-                            // по-прежнему получает чёрный текст — как было до правки.
-                            color = if (applyAccent.luminance() > 0.2f) {
-                                Color.Black.copy(alpha = 0.85f)
-                            } else {
-                                Color.White
-                            },
-                            fontFamily = SnProFamily,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 17.sp
-                        )
-                    }
-                    Spacer(Modifier.height(4.dp))
-                }
-            }
-        }
-    }
-}
-
 /** Карточка-опция сортировки (iOS «Set Status» стиль): icon-well + заголовок/подпись + радио. */
 @Composable
-private fun SortOptionRow(
+internal fun SortOptionRow(
     icon: ImageVector,
     accent: Color,
     title: String,
@@ -1042,8 +866,11 @@ fun GenreFilterOverlay(
                 GrabberHandle(isDark, modifier = swipe.handleModifier)
                 Column(
                     modifier = Modifier
+                        .extendUnderGrabber()
                         .padding(start = 20.dp, top = 2.dp, end = 20.dp)
                         .verticalScroll(rememberScrollState(), flingBehavior = IosScroll.flingBehavior())
+                        // Содержимое заезжает под ручку, а не режется под ней ровной линией.
+                        .padding(top = com.example.myapplication.ui.shared.components.GrabberReservedTop)
                 ) {
                     Box(
                         modifier = Modifier

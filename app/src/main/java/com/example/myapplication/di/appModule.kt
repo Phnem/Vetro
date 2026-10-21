@@ -68,6 +68,20 @@ val appModule = module {
         )
     }
     single { com.example.myapplication.update.ApkVerifier(androidContext()) }
+    // Статус просмотра «по умолчанию» (Смотрю / Просмотрено) из прогресса — один на приложение, для главной и Details.
+    single {
+        com.example.myapplication.domain.status.AutoWatchStatusResolver(
+            localDataSource = get(),
+            episodePlaybackStore = get(),
+            seasonEpisodesStore = get(),
+            seriesSeasonsStore = get(),
+            mangaBindingStore = get(),
+            mangaChapterCacheStore = get(),
+            mangaReadingStore = get(),
+            mangaTranslateSettings = get(),
+            appScope = get(),
+        )
+    }
     single { com.example.myapplication.update.UpdateInstaller(androidContext()) }
     single { com.example.myapplication.update.UpdateNotifier(androidContext()) }
     single {
@@ -539,6 +553,7 @@ val appModule = module {
                 get<com.example.myapplication.media.source.vfmodule.SibnetProvider>(),
                 get<com.example.myapplication.media.source.vfmodule.VkVideoProvider>(),
                 get<com.example.myapplication.media.source.vfmodule.VeoVeoProvider>(),
+                get<com.example.myapplication.media.source.vftmodule.VftTorrentProvider>(),
             ),
             providerHealth = get<com.example.myapplication.media.source.movieseries.ProviderHealthStore>(),
             intelligence = get(),
@@ -564,6 +579,8 @@ val appModule = module {
             legacySettings = get(named("settings")),
         )
     }
+    // Личные оценки серий: тот же DataStore, что у прогресса, но отдельный класс и своя таблица.
+    single { com.example.myapplication.media.progress.EpisodeRatingStore(store = get(named("playback"))) }
     single {
         CollectionEnrichmentCoordinator(
             context = androidContext(),

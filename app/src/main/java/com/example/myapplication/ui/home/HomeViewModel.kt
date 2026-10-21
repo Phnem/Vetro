@@ -22,6 +22,9 @@ import com.example.myapplication.updates.EpisodeUpdateCheckCoordinator
 import com.example.myapplication.network.ApiSearchResult
 import com.example.myapplication.network.AppContentType
 import com.example.myapplication.network.AppLanguage
+import com.example.myapplication.data.models.LibraryFilter
+import com.example.myapplication.data.models.WatchStatus
+import com.example.myapplication.data.models.effectiveWatchStatus
 import com.example.myapplication.data.models.SortOption
 import com.example.myapplication.notifications.AnimeNotifier
 import com.example.myapplication.notifications.animeUpdateNotificationId
@@ -77,6 +80,7 @@ class HomeViewModel(
     private val mangaBindingStore: com.example.myapplication.manga.data.MangaBindingStore,
     private val mangaChapterCacheStore: com.example.myapplication.manga.data.MangaChapterCacheStore,
     private val mangaReadingStore: com.example.myapplication.manga.data.MangaReadingStore,
+    private val autoWatchStatus: com.example.myapplication.domain.status.AutoWatchStatusResolver,
     private val mangaTranslateSettings: com.example.myapplication.manga.translate.MangaTranslateSettings? = null,
     /** null — раздел аудиокниг выключен в сборке, вкладки «Книги» в поиске нет. */
     private val bookSearch: com.example.myapplication.audiobooks.data.BookSearchAdder? = null,
@@ -254,13 +258,37 @@ class HomeViewModel(
 
     val syncReport = MutableStateFlow(com.example.myapplication.SyncReport())
 
+    /**
+     * Что нужно, чтобы отфильтровать список по статусу: фильтр и статусы «по умолчанию». Без выбранных
+     * статусов прогресс не считается вовсе; пока он не посчитан, прежний список остаётся как есть.
+     */
+    private class StatusGate(val statuses: Set<WatchStatus>, val auto: Map<String, WatchStatus>)
+
+    private val statusGate = _uiState
+        .map { it.libraryFilter.statuses }
+        .distinctUntilChanged()
+        .flatMapLatest { statuses ->
+            if (statuses.isEmpty()) {
+                flowOf(StatusGate(statuses, emptyMap()))
+            } else {
+                autoWatchStatus.statuses.filterNotNull().map { StatusGate(statuses, it) }
+            }
+        }
+
     val animeListFlow: StateFlow<kotlinx.collections.immutable.ImmutableList<Anime>> = repository.observeAnimeList(
         searchQuery = _uiState.map { it.searchQuery },
         sortOption = _uiState.map { it.sortOption },
         sortAscending = _uiState.map { it.sortAscending },
         filterTags = _uiState.map { it.filterTags },
-        mediaTypeFilter = _uiState.map { it.libraryMediaTypeFilter }
-    ).combine(airingOrder.filterNotNull()) { list, airing ->
+        mediaTypeFilter = _uiState.map { it.libraryMediaTypeFilter },
+        libraryFilter = _uiState.map { it.libraryFilter },
+    ).combine(statusGate) { list, gate ->
+        if (gate.statuses.isEmpty()) {
+            list
+        } else {
+            list.filter { anime -> anime.effectiveWatchStatus(gate.auto[anime.id]) in gate.statuses }
+        }
+    }.combine(airingOrder.filterNotNull()) { list, airing ->
         // Порядок групп: избранное → выходящие сейчас → остальное. Сортировка стабильна, так что
         // внутри групп сохраняется выбранная пользователем сортировка; избранное репозиторий уже
         // поднял наверх, здесь достаточно не сломать это и поднять выходящие под ним.
@@ -523,6 +551,28 @@ class HomeViewModel(
         }
     }
 
+    /**
+     * Применяет всё, что выбрано в шторке, одним обновлением состояния: сортировку, фильтры
+     * и жанры. Раздельные вызовы дали бы промежуточный кадр списка с половиной условий.
+     */
+    fun applySortAndFilters(
+        option: SortOption,
+        isAscending: Boolean,
+        filter: LibraryFilter,
+        tags: List<String>,
+        tagsCategory: String,
+    ) {
+        _uiState.update { current ->
+            current.copy(
+                sortOption = option,
+                sortAscending = isAscending,
+                libraryFilter = filter.normalized(),
+                filterTags = tags.toImmutableList(),
+                filterCategory = if (tags.isEmpty()) "" else tagsCategory,
+            )
+        }
+    }
+
     fun toggleGenreFilter() {
         _uiState.update { it.copy(isGenreFilterVisible = !it.isGenreFilterVisible) }
     }
@@ -570,6 +620,21 @@ class HomeViewModel(
             runCatching {
                 val anime = localDataSource.getAnimeById(id) ?: return@launch
                 localDataSource.updateAnime(anime.copy(isFavorite = !anime.isFavorite))
+            }.onFailure { it.printStackTrace() }
+        }
+    }
+
+    /**
+     * Оценка с карточки (окно со смайликом по тапу на рейтинг). [rating] — десятибалльная,
+     * 0 снимает оценку. Остальные поля записи не трогаем: пишем ту же запись, что прочитали.
+     */
+    fun setRating(id: String, rating: Float) {
+        viewModelScope.launch(Dispatchers.IO) {
+            runCatching {
+                val anime = localDataSource.getAnimeById(id) ?: return@launch
+                localDataSource.updateAnime(
+                    anime.copy(rating = rating.coerceIn(0f, com.example.myapplication.data.models.RatingScale.MAX_DISPLAY))
+                )
             }.onFailure { it.printStackTrace() }
         }
     }

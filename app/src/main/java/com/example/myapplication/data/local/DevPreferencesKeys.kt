@@ -63,5 +63,9 @@ object DevPreferencesKeys {
         booleanPreferencesKey("title_dubbing_ever_enabled"),
         // v3.3.8: переключатель «Обновления через GitHub» убран, режим решает подпись приложения.
         booleanPreferencesKey("dev_github_updates_enabled"),
+        // v3.4.3: новый вид bottom sheet стал постоянным, dev-переключатель убран.
+        booleanPreferencesKey("dev_sheet_style_test"),
+        // Эксперимент «ползунки как чипы» отменён.
+        booleanPreferencesKey("dev_slider_band_style"),
     )
 }

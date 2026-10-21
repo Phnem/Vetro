@@ -16,6 +16,7 @@ import com.example.myapplication.media.download.MediaJobBus
 import com.example.myapplication.media.metadata.EpisodeArtworkRepository
 import com.example.myapplication.media.progress.EpisodePlaybackProgress
 import com.example.myapplication.media.progress.EpisodePlaybackStore
+import com.example.myapplication.media.progress.EpisodeRatingStore
 import com.example.myapplication.media.source.flattenVideosWithSource
 import com.example.myapplication.media.source.VetroVideo
 import com.example.myapplication.data.models.MediaType
@@ -109,6 +110,8 @@ data class EpisodeMenuUiState(
     val seasonCovers: Map<Int, String> = emptyMap(),
     val actions: Map<EpisodeKey, EpisodeActionState> = emptyMap(),
     val playback: Map<EpisodeKey, EpisodePlaybackProgress> = emptyMap(),
+    /** Личные оценки серий, десятибалльные; серии без оценки (и с снятой) в карте нет. */
+    val ratings: Map<EpisodeKey, Float> = emptyMap(),
     /**
      * Докуда тайтл просмотрен: дальняя из позиции счётчика серий (как на карточке главной) и
      * самой дальней досмотренной серии. Всё не дальше неё — «Просмотрено», даже если серию
@@ -165,6 +168,7 @@ class EpisodeMenuViewModel(
     private val mediaGateway: MediaGateway,
     private val artworkRepository: EpisodeArtworkRepository,
     private val playbackStore: EpisodePlaybackStore,
+    private val ratingStore: EpisodeRatingStore,
     private val seasonDiscovery: com.example.myapplication.domain.seasons.StreamingSeasonDiscovery,
 ) : AndroidViewModel(application) {
 
@@ -194,6 +198,25 @@ class EpisodeMenuViewModel(
                 }
                 _state.update { it.copy(playback = mapped, watchedThrough = watchedThrough(mapped)) }
             }
+        }
+        viewModelScope.launch {
+            ratingStore.ratingsFlow(anime.id).collect { stored ->
+                // Снятая оценка (0) хранится ради синхронизации, но для экрана её «нет».
+                val mapped = buildMap {
+                    for ((key, rating) in stored) {
+                        if (rating.stored > 0) put(EpisodeKey(key.season, key.episode), rating.display)
+                    }
+                }
+                _state.update { it.copy(ratings = mapped) }
+            }
+        }
+    }
+
+    /** Оценка серии из бабла со смайликом. [rating] — десятибалльная, 0 снимает оценку. */
+    fun rateEpisode(season: Int, episode: Int, rating: Float) {
+        viewModelScope.launch {
+            runCatching { ratingStore.setRating(anime.id, season, episode, rating) }
+                .onFailure { Log.w(TAG, "Saving episode rating failed", it) }
         }
     }
 

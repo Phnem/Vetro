@@ -1,0 +1,4 @@
+-- Статус просмотра (выбор пользователя; NULL = авто) и год релиза (для фильтра сортировки).
+-- Оба поля локальные: в облако не уходят, upsertFromSync их сохраняет.
+ALTER TABLE anime ADD COLUMN watch_status TEXT;
+ALTER TABLE anime ADD COLUMN release_year INTEGER;

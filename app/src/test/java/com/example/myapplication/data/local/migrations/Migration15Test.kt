@@ -108,8 +108,10 @@ class Migration15Test {
     }
 
     private fun migrate() {
-        // 15.sqm срабатывает на переходе 15 → 16 (файл N.sqm — миграция ИЗ версии N).
-        AnimeDatabase.Schema.migrate(driver, 15, 16).value
+        // 15.sqm срабатывает на переходе 15 → 16 (файл N.sqm — миграция ИЗ версии N). Дальше идём до
+        // актуальной схемы: запросы (upsertFromSync и др.) обращаются к колонкам более поздних
+        // миграций, и на «застрявшей» на 16-й версии схеме они падают на несуществующей колонке.
+        AnimeDatabase.Schema.migrate(driver, 15, AnimeDatabase.Schema.version).value
     }
 
     private companion object {

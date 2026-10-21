@@ -5,8 +5,11 @@ import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.aspectRatio
@@ -40,10 +43,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
@@ -244,6 +251,7 @@ fun SharedTransitionScope.OneUiAnimeCard(
     onEditClick: () -> Unit,
     modifier: Modifier = Modifier,
     onLongClick: (() -> Unit)? = null,
+    onRatingClick: ((Rect) -> Unit)? = null,
 ) {
     AnimeCardBody(
         state = state,
@@ -262,13 +270,49 @@ fun SharedTransitionScope.OneUiAnimeCard(
         onClick = onClick,
         onLongClick = onLongClick,
         onEditClick = onEditClick,
+        onRatingClick = onRatingClick,
     )
+}
+
+/**
+ * Чип рейтинга открывает окно оценки: тап по нему не уходит в карточку (в Details), а отдаёт
+ * вызывающему границы чипа — бабл со смайликом выезжает из этого места.
+ *
+ * Долгое удержание на чипе по-прежнему открывает меню карточки: чип поглощает нажатие целиком,
+ * и без собственного [onLongClick] удержание на нём было бы мёртвой зоной.
+ * Без [onRatingClick] (копия в меню карточки) модификатор ничего не добавляет.
+ */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+internal fun Modifier.ratingChipTap(
+    onRatingClick: ((Rect) -> Unit)?,
+    onLongClick: (() -> Unit)?,
+): Modifier {
+    if (onRatingClick == null) return this
+    // Координаты, а не готовые границы: граница считается только в момент тапа, а не на каждом
+    // кадре прокрутки списка.
+    val holder = remember { RatingChipCoordinates() }
+    return this
+        .onGloballyPositioned { holder.coordinates = it }
+        .combinedClickable(
+            interactionSource = remember { MutableInteractionSource() },
+            indication = null,
+            onLongClick = onLongClick,
+            onClick = {
+                holder.coordinates?.takeIf { it.isAttached }?.let { onRatingClick(it.boundsInRoot()) }
+            },
+        )
+}
+
+private class RatingChipCoordinates {
+    var coordinates: LayoutCoordinates? = null
 }
 
 /**
  * Тело карточки без привязки к shared-element и к списку.
  *
  * @param onClick null — карточка не реагирует на нажатия (копия в оверлее контекстного меню).
+ * @param onRatingClick null — чип рейтинга не нажимается; иначе получает границы чипа в корне окна.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -279,9 +323,10 @@ fun AnimeCardBody(
     onClick: (() -> Unit)? = null,
     onLongClick: (() -> Unit)? = null,
     onEditClick: (() -> Unit)? = null,
+    onRatingClick: ((Rect) -> Unit)? = null,
 ) {
     if (LocalFullBleedCards.current) {
-        FullBleedAnimeCardBody(state, modifier, posterModifier, onClick, onLongClick, onEditClick)
+        FullBleedAnimeCardBody(state, modifier, posterModifier, onClick, onLongClick, onEditClick, onRatingClick)
         return
     }
     val isDark = isAppInDarkTheme()
@@ -435,6 +480,7 @@ fun AnimeCardBody(
                                     if (isDark) Color.Black
                                     else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.65f)
                                 )
+                                .ratingChipTap(onRatingClick, onLongClick)
                         ) {
                             Text(
                                 text = "★ ${RatingScale.format(state.rating)}",

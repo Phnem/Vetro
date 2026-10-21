@@ -22,7 +22,21 @@ object MediaFileValidator {
         val isMpegTs = count > MPEG_TS_PACKET_BYTES &&
             header[0] == MPEG_TS_SYNC_BYTE &&
             header[MPEG_TS_PACKET_BYTES] == MPEG_TS_SYNC_BYTE
-        return isIsoBmff || isMpegTs
+        val isEbmlMatroska = count >= 4 &&
+            header[0] == 0x1A.toByte() &&
+            header[1] == 0x45.toByte() &&
+            header[2] == 0xDF.toByte() &&
+            header[3] == 0xA3.toByte()
+        val isRiffAvi = count >= 12 &&
+            header[0] == 'R'.code.toByte() &&
+            header[1] == 'I'.code.toByte() &&
+            header[2] == 'F'.code.toByte() &&
+            header[3] == 'F'.code.toByte() &&
+            header[8] == 'A'.code.toByte() &&
+            header[9] == 'V'.code.toByte() &&
+            header[10] == 'I'.code.toByte() &&
+            header[11] == ' '.code.toByte()
+        return isIsoBmff || isMpegTs || isEbmlMatroska || isRiffAvi
     }
 
     /** Kept for source compatibility with the episode menu. */

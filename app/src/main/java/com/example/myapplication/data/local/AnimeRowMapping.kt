@@ -3,6 +3,7 @@ package com.example.myapplication.data.local
 import com.example.myapplication.data.models.Anime
 import com.example.myapplication.data.models.MediaType
 import com.example.myapplication.data.models.RatingScale
+import com.example.myapplication.data.models.WatchStatus
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.toImmutableList
@@ -48,6 +49,8 @@ internal fun concatRowToAnime(
     kinopoiskId: Long?,
     kinopoiskNotFoundAt: Long?,
     imdbId: String?,
+    watchStatus: String?,
+    releaseYear: Long?,
     tagsConcat: String?,
 ): Anime = Anime(
     id = id,
@@ -75,6 +78,8 @@ internal fun concatRowToAnime(
     tmdbNotFoundAt = tmdbNotFoundAt,
     kinopoiskNotFoundAt = kinopoiskNotFoundAt,
     imdbId = imdbId,
+    watchStatus = WatchStatus.fromPersisted(watchStatus),
+    releaseYear = releaseYear?.toInt(),
 )
 
 internal fun parseTagsConcat(tagsConcat: String?): ImmutableList<String> {

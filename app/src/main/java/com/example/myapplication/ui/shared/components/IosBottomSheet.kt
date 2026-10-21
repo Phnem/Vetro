@@ -38,7 +38,15 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.foundation.LocalOverscrollFactory
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.unit.Velocity
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -48,6 +56,9 @@ import com.example.myapplication.ui.shared.theme.isAppInDarkTheme
 import com.example.myapplication.ui.shared.theme.IosDesign
 import com.example.myapplication.ui.shared.theme.MotionTokens
 import com.example.myapplication.ui.shared.theme.OverlayThemeTokens
+import com.example.myapplication.ui.shared.theme.SheetStyle
+import com.example.myapplication.ui.shared.theme.sheetFloatingMargin
+import com.example.myapplication.ui.shared.theme.sheetPanelShape
 import com.example.myapplication.ui.shared.theme.SquircleCornerShape
 import com.example.myapplication.ui.shared.theme.SquircleShape
 import com.example.myapplication.ui.shared.theme.iosSheetContainer
@@ -95,6 +106,7 @@ fun IosSheetScaffold(
     sheetContent: @Composable () -> Unit,
 ) {
     val isDark = isAppInDarkTheme()
+    com.example.myapplication.ui.shared.SheetGateEffect(sheetVisible)
     val density = LocalDensity.current
     val scope = rememberCoroutineScope()
     val progress = remember { Animatable(0f) }
@@ -103,6 +115,33 @@ fun IosSheetScaffold(
 
     // Режим «назад как в extera» (dev-флаг): null, пока выключен — тогда ниже ничего не меняется.
     val sheetBack = rememberExteraSheetBack(enabled = sheetVisible, onDismiss = onDismiss)
+
+    // Содержимое дотянуто до верха и палец идёт вниз — едет шторка (см. SheetPullConnection), закрытие по тем же порогам, что у ручки.
+    val currentOnDismiss by androidx.compose.runtime.rememberUpdatedState(onDismiss)
+    val contentPull = remember {
+        SheetPullConnection(
+            offset = { dragPx },
+            setOffset = { dragPx = it.coerceAtLeast(0f) },
+            onRelease = { velocity ->
+                val dismiss = MotionTokens.willDismiss(
+                    offset = dragPx,
+                    containerSize = measuredPanelPx.coerceAtLeast(1f),
+                    velocity = velocity / density.density,
+                )
+                if (dismiss) {
+                    currentOnDismiss()
+                } else {
+                    scope.launch {
+                        androidx.compose.animation.core.animate(
+                            initialValue = dragPx,
+                            targetValue = 0f,
+                            animationSpec = MotionTokens.sheetPresent(),
+                        ) { v, _ -> dragPx = v }
+                    }
+                }
+            },
+        )
+    }
     val extera = sheetBack != null
 
     LaunchedEffect(sheetVisible) {
@@ -140,7 +179,7 @@ fun IosSheetScaffold(
                 return (progress.value * (1f - dragFraction)).coerceIn(0f, 1f)
             }
             val sheetShown by remember { derivedStateOf { progress.value > 0.001f } }
-            val scrim = scrimMaxAlpha ?: OverlayThemeTokens.scrimAlpha(isDark)
+            val scrim = (scrimMaxAlpha ?: OverlayThemeTokens.scrimAlpha(isDark)) * SheetStyle.scrimFactor
 
             // Режим extera: поля вокруг вдавленного фона — тот же градиент экрана, сжатый вместе с
             // контентом (строка в строку, поэтому шва нет), а полоса под ним — нижний цвет градиента.
@@ -182,8 +221,10 @@ fun IosSheetScaffold(
                         scaleY = s
                         transformOrigin = TransformOrigin(0.5f, 0f)
                         clip = eff > 0.001f
-                        val bottomR = cornerRadius * eff
-                        shape = SquircleCornerShape(
+                        // eff — значение пружины и может быть чуть ниже нуля; отрицательный радиус роняет RoundedCornerShape.
+                        val bottomR = (cornerRadius * eff).coerceAtLeast(0.dp)
+                        // RoundedCornerShape: squircle-путь не кэшируется Skia (маска клипа на CPU каждый кадр).
+                        shape = androidx.compose.foundation.shape.RoundedCornerShape(
                             topStart = 0.dp,
                             topEnd = 0.dp,
                             bottomEnd = bottomR,
@@ -240,7 +281,7 @@ fun IosSheetScaffold(
             }
 
             // --- Панель шторки ---
-            val panelShape = SquircleCornerShape(cornerRadius, cornerRadius, 0.dp, 0.dp)
+            val panelShape = sheetPanelShape()
             val heightMod = if (sheetHeightFraction != null) {
                 Modifier.fillMaxHeight(sheetHeightFraction)
             } else {
@@ -249,6 +290,7 @@ fun IosSheetScaffold(
             Box(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
+                    .sheetFloatingMargin()
                     // Раньше всех размеров: панель встаёт на верх клавиатуры и сжимается, а не
                     // уходит под неё. Инсет при этом потребляется — navigationBarsPadding внутри
                     // шторки не добавит второй отступ поверх клавиатуры.
@@ -270,7 +312,11 @@ fun IosSheetScaffold(
                     // высоте контента (sheetHeightFraction = null) на первых кадрах measuredPanelPx
                     // ещё 0, и panelHeightPx подставляет догадку 0.9 экрана. Панель стартовала с
                     // чужого офсета и дёргалась, когда приезжала реальная высота.
-                    .graphicsLayer { translationY = (1f - progress.value) * size.height + dragPx }
+                    .graphicsLayer {
+                        val extra = SheetStyle.FloatExtraTravel.toPx()
+                        translationY = (1f - progress.value) * (size.height + extra) + dragPx
+                    }
+                    .then(if (dragToDismiss) Modifier.nestedScroll(contentPull) else Modifier)
                     // iOS-глубина шторки (окантовка+блик+градиент+тень) — единый рецепт для всех
                     // непрозрачных панелей. Для прозрачной (Details рисует свой hero) — только clip.
                     .then(
@@ -285,7 +331,7 @@ fun IosSheetScaffold(
                         }
                     ),
             ) {
-                sheetContent()
+                NoOverscroll { sheetContent() }
 
                 if (showGrabber) {
                     val dragMod = if (dragToDismiss) {
@@ -347,28 +393,104 @@ fun rememberIosSheetSwipe(onDismiss: () -> Unit): IosSheetSwipe {
         scope.launch { offset.snapTo((offset.value + delta).coerceAtLeast(0f)) }
     }
     val thresholdPx = with(density) { 130.dp.toPx() }
-    val panel = Modifier.graphicsLayer { translationY = offset.value }
+    fun release(velocityPx: Float) {
+        if (offset.value > thresholdPx || velocityPx / density.density > 900f) {
+            currentOnDismiss()
+        } else {
+            scope.launch { offset.animateTo(0f, MotionTokens.sheetPresent()) }
+        }
+    }
+    // Потянул содержимое вниз, а оно уже в самом верху: вместо резинки едет вся шторка (и закрывается).
+    val pull = remember {
+        SheetPullConnection(
+            offset = { offset.value },
+            setOffset = { v -> scope.launch(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) { offset.snapTo(v) } },
+            onRelease = ::release,
+        )
+    }
+    val panel = Modifier.graphicsLayer { translationY = offset.value }.nestedScroll(pull)
     val handle = Modifier.draggable(
         state = dragState,
         orientation = Orientation.Vertical,
-        onDragStopped = { velocity ->
-            if (offset.value > thresholdPx || velocity / density.density > 900f) {
-                currentOnDismiss()
-            } else {
-                scope.launch { offset.animateTo(0f, MotionTokens.sheetPresent()) }
-            }
-        },
+        onDragStopped = { velocity -> release(velocity) },
     )
     return IosSheetSwipe(panel, handle)
 }
 
 class IosSheetSwipe(val panelModifier: Modifier, val handleModifier: Modifier)
 
+/**
+ * Передаёт шторке то, что содержимое не смогло прокрутить: когда список уже в самом верху и палец
+ * тянет вниз, сдвигается панель, а на отпускании она закрывается или пружинит назад (те же пороги,
+ * что у ручки). Работает только когда у содержимого нет собственного эффекта «резинки» — иначе он
+ * забирает остаток раньше; поэтому шторки оборачивают содержимое в [NoOverscroll].
+ */
+internal class SheetPullConnection(
+    private val offset: () -> Float,
+    private val setOffset: (Float) -> Unit,
+    private val onRelease: (velocityY: Float) -> Unit,
+) : NestedScrollConnection {
+
+    override fun onPreScroll(available: androidx.compose.ui.geometry.Offset, source: NestedScrollSource): androidx.compose.ui.geometry.Offset {
+        val current = offset()
+        // Шторка уже оттянута, и палец идёт вверх: сначала возвращаем её на место, потом листаем.
+        if (source != NestedScrollSource.UserInput || current <= 0f || available.y >= 0f) {
+            return androidx.compose.ui.geometry.Offset.Zero
+        }
+        val next = (current + available.y).coerceAtLeast(0f)
+        setOffset(next)
+        return androidx.compose.ui.geometry.Offset(0f, next - current)
+    }
+
+    override fun onPostScroll(
+        consumed: androidx.compose.ui.geometry.Offset,
+        available: androidx.compose.ui.geometry.Offset,
+        source: NestedScrollSource,
+    ): androidx.compose.ui.geometry.Offset {
+        if (source != NestedScrollSource.UserInput || available.y <= 0f) return androidx.compose.ui.geometry.Offset.Zero
+        setOffset(offset() + available.y)
+        return androidx.compose.ui.geometry.Offset(0f, available.y)
+    }
+
+    override suspend fun onPreFling(available: Velocity): Velocity {
+        if (offset() <= 0f) return Velocity.Zero
+        onRelease(available.y)
+        return Velocity(0f, available.y)
+    }
+
+    override suspend fun onPostFling(consumed: Velocity, available: Velocity): Velocity {
+        // Резкий бросок вниз от самого верха списка закрывает шторку, как бросок за ручку.
+        if (offset() <= 0f && available.y > 0f) onRelease(available.y)
+        return Velocity.Zero
+    }
+}
+
+/** Без «резинки» на краю прокрутки: внутри шторки остаток жеста должен дойти до самой шторки. */
+@Composable
+fun NoOverscroll(content: @Composable () -> Unit) {
+    CompositionLocalProvider(LocalOverscrollFactory provides null) { content() }
+}
+
+/**
+ * Прокручиваемое содержимое шторки заезжает под ручку: область прокрутки растёт вверх на
+ * [GrabberReservedTop], и контент при прокрутке не режется ровной линией под ручкой, а уходит под
+ * край шторки. Первым элементом внутри прокрутки нужен `Spacer(GrabberReservedTop)`, чтобы в покое
+ * всё стояло на прежних местах; сама ручка рисуется выше ([GrabberHandle], zIndex 1).
+ */
+fun Modifier.extendUnderGrabber(): Modifier = layout { measurable, constraints ->
+    val extra = GrabberReservedTop.roundToPx()
+    val maxHeight = if (constraints.hasBoundedHeight) constraints.maxHeight + extra else constraints.maxHeight
+    val placeable = measurable.measure(constraints.copy(minHeight = 0, maxHeight = maxHeight))
+    layout(placeable.width, (placeable.height - extra).coerceAtLeast(0)) { placeable.place(0, -extra) }
+}
+
 /** Системный grab-индикатор iOS: 36×5, `systemFill`, отступ 8 сверху (§2.3). */
 @Composable
 fun GrabberHandle(isDark: Boolean, modifier: Modifier = Modifier) {
     Box(
         modifier = modifier
+            // Ручка лежит ПОВЕРХ прокручиваемого содержимого (см. [extendUnderGrabber]), а не на своей плашке.
+            .zIndex(1f)
             .fillMaxWidth()
             .height(GrabberReservedTop),
         contentAlignment = Alignment.TopCenter,

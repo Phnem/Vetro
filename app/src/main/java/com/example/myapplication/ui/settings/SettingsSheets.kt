@@ -115,7 +115,7 @@ fun CloudSettingsSheet(
             modifier = Modifier
                 .fillMaxWidth()
                 .verticalScroll(rememberScrollState(), flingBehavior = IosScroll.flingBehavior())
-                .padding(horizontal = 20.dp)
+                .padding(horizontal = IosDesign.SheetSideInset)
                 .padding(top = 16.dp, bottom = 28.dp),
         ) {
             Row(

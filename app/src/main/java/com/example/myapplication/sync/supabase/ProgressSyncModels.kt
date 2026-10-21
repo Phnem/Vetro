@@ -19,6 +19,22 @@ data class EpisodeProgressDto(
     val updated_at: String,
 )
 
+/**
+ * Строка таблицы `episode_ratings` — личная оценка одной серии.
+ *
+ * [rating] — как и у тайтла, целое ×10 (0..100); 0 — оценка снята (строку не удаляем, чтобы
+ * снятие доехало до других устройств).
+ */
+@Serializable
+data class EpisodeRatingDto(
+    val user_id: String,
+    val anime_id: String,
+    val season: Int,
+    val episode: Int,
+    val rating: Int,
+    val updated_at: String,
+)
+
 /** Строка таблицы `manga_progress` — прогресс чтения одной главы. */
 @Serializable
 data class MangaProgressDto(

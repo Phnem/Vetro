@@ -122,35 +122,71 @@ class UpdateDownloaderTest {
         }
     }
 
+    /** Кусок очереди в тестах: 300 КБ данных = 5 кусков (последний короче остальных). */
+    private val CHUNK = 64L * 1024
+    private val chunkCount = ((payload.size + CHUNK - 1) / CHUNK).toInt()
+
     private fun parallelDownloader() =
         UpdateDownloader(
-            OkHttpClient(), dir, bufferSize = 8 * 1024, segments = 4, parallelMinBytes = 100_000, retryDelayMs = 0,
+            OkHttpClient(), dir, bufferSize = 8 * 1024, connections = 4, parallelMinBytes = 100_000, retryDelayMs = 0,
+            chunkBytes = CHUNK,
         )
 
     @Test
-    fun a_large_file_is_fetched_in_four_ranges_and_assembled_whole() = runBlocking {
+    fun a_large_file_is_split_into_queue_chunks_and_written_in_place() = runBlocking {
         val ranges = java.util.Collections.synchronizedList(mutableListOf<String?>())
         serveWithBoundedRanges(ranges)
         val steps = mutableListOf<Pair<Long, Long>>()
         val file = parallelDownloader().download(release()) { done, total -> steps += done to total }
         assertTrue(payload.contentEquals(file.readBytes()))
-        assertEquals(4, ranges.size)
+        // Один пробный запрос первого байта (узнать адрес за редиректами) и по запросу на каждый кусок.
+        assertEquals(1 + chunkCount, ranges.size)
         assertTrue(ranges.all { it != null && Regex("bytes=\\d+-\\d+").matches(it) })
         assertEquals(payload.size.toLong(), steps.last().first)
         assertEquals(listOf("vetro-v3.3.8-Beta.apk"), dir.list()!!.toList())
     }
 
     @Test
-    fun an_interrupted_segment_continues_from_where_it_stopped() = runBlocking {
+    fun an_interrupted_download_requests_only_the_chunks_not_marked_done() = runBlocking {
         val ranges = java.util.Collections.synchronizedList(mutableListOf<String?>())
         serveWithBoundedRanges(ranges)
-        val chunk = (payload.size + 3) / 4
-        // Первый кусок уже наполовину на диске.
-        File(dir, "vetro-v3.3.8-Beta.apk.part.0").writeBytes(payload.copyOfRange(0, 20_000))
+        // Куски 0 и 2 уже на месте и отмечены в карте; остальное в файле — нули (ещё не скачано).
+        val onDisk = ByteArray(payload.size)
+        fun copyChunk(i: Int) {
+            val from = (i * CHUNK).toInt()
+            val to = minOf(payload.size, from + CHUNK.toInt())
+            payload.copyInto(onDisk, from, from, to)
+        }
+        copyChunk(0)
+        copyChunk(2)
+        File(dir, "vetro-v3.3.8-Beta.apk.part").writeBytes(onDisk)
+        File(dir, "vetro-v3.3.8-Beta.apk.part.map").writeText("v1 ${payload.size} $CHUNK" + "\n0\n2\n")
+
         val file = parallelDownloader().download(release()) { _, _ -> }
+
         assertTrue(payload.contentEquals(file.readBytes()))
-        assertTrue(ranges.contains("bytes=20000-${chunk - 1}"))
-        assertFalse(ranges.contains("bytes=0-${chunk - 1}"))
+        val chunkRanges = ranges.filter { it != "bytes=0-0" }
+        assertEquals(chunkCount - 2, chunkRanges.size)
+        assertFalse(chunkRanges.contains("bytes=0-${CHUNK - 1}"))
+        assertFalse(chunkRanges.contains("bytes=${2 * CHUNK}-${3 * CHUNK - 1}"))
+        assertEquals(listOf("vetro-v3.3.8-Beta.apk"), dir.list()!!.toList())
+    }
+
+    @Test
+    fun a_map_for_another_layout_is_discarded_and_the_file_starts_over() = runBlocking {
+        val ranges = java.util.Collections.synchronizedList(mutableListOf<String?>())
+        serveWithBoundedRanges(ranges)
+        File(dir, "vetro-v3.3.8-Beta.apk.part").writeBytes(ByteArray(payload.size) { 9 })
+        // Размер куска другой: отметки ничего не значат.
+        File(dir, "vetro-v3.3.8-Beta.apk.part.map").writeText("v1 ${payload.size} 12345" + "\n0\n1\n2\n")
+        // Остаток прежней раскладки (равные доли) не должен остаться лежать на диске.
+        File(dir, "vetro-v3.3.8-Beta.apk.part.0").writeBytes(ByteArray(10))
+
+        val file = parallelDownloader().download(release()) { _, _ -> }
+
+        assertTrue(payload.contentEquals(file.readBytes()))
+        assertEquals(1 + chunkCount, ranges.size)
+        assertEquals(listOf("vetro-v3.3.8-Beta.apk"), dir.list()!!.toList())
     }
 
     @Test

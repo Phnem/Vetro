@@ -43,6 +43,7 @@ val viewModelModule = module {
             mangaBindingStore = get(),
             mangaChapterCacheStore = get(),
             mangaReadingStore = get(),
+            autoWatchStatus = get(),
             mangaTranslateSettings = get(),
             bookSearch = if (get<com.example.myapplication.audiobooks.AudiobookFeatureGate>().enabled) get() else null,
         )
@@ -117,6 +118,7 @@ val viewModelModule = module {
             titleInfoEnricher = get(),
             seriesSeasonsStore = get(),
             seriesEpisodeCheck = get(),
+            autoWatchStatus = get(),
         )
     }
     viewModel { (anime: com.example.myapplication.data.models.Anime) ->
@@ -126,6 +128,7 @@ val viewModelModule = module {
             mediaGateway = get(),
             artworkRepository = get(),
             playbackStore = get(),
+            ratingStore = get(),
             seasonDiscovery = get(),
         )
     }

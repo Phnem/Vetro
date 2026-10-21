@@ -83,7 +83,7 @@ fun CollectionEnrichmentSheet(
     Column(
         modifier = sharedModifier
             .fillMaxWidth()
-            .padding(horizontal = 20.dp)
+            .padding(horizontal = IosDesign.SheetSideInset)
             .padding(top = IosDesign.SheetContentTop, bottom = 28.dp),
         verticalArrangement = Arrangement.spacedBy(18.dp),
     ) {

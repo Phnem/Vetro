@@ -1,5 +1,6 @@
 package com.example.myapplication.ui.home
 
+import com.example.myapplication.ui.shared.components.extendUnderGrabber
 import com.example.myapplication.ui.shared.theme.IosScroll
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
@@ -221,8 +222,10 @@ private fun StatsContent(
     val scroll = rememberScrollState()
     Column(
         modifier = Modifier
+            .extendUnderGrabber()
             .fillMaxWidth()
             .verticalScroll(scroll, flingBehavior = IosScroll.flingBehavior())
+            .padding(top = com.example.myapplication.ui.shared.components.GrabberReservedTop)
             .padding(horizontal = 28.dp, vertical = 20.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {

@@ -38,7 +38,12 @@ CREATE TABLE anime (
     kinopoisk_id INTEGER,
     kinopoisk_not_found_at INTEGER,
     -- IMDb id (MOVIE/SERIES). TEXT: канонический вид `tt0412142` со значащими ведущими нулями.
-    imdb_id TEXT
+    imdb_id TEXT,
+    -- Статус просмотра, выбранный пользователем (PLANNED/WATCHING/…). NULL = «авто» по прогрессу.
+    -- Локальное поле: в облако не уходит, pull его сохраняет (см. upsertFromSync).
+    watch_status TEXT,
+    -- Год релиза. NULL = ещё не искали; 0 = искали и источник года не дал (повторно не ходим).
+    release_year INTEGER
 );
 
 -- Delta Sync: rows that need to be pushed to cloud
@@ -89,6 +94,8 @@ SELECT
     anime.kinopoisk_id,
     anime.kinopoisk_not_found_at,
     anime.imdb_id,
+    anime.watch_status,
+    anime.release_year,
     GROUP_CONCAT(anime_tags.tag, CHAR(31)) AS tagsConcat
 FROM anime
 LEFT JOIN anime_tags ON anime.id = anime_tags.anime_id
@@ -125,6 +132,8 @@ SELECT
     anime.kinopoisk_id,
     anime.kinopoisk_not_found_at,
     anime.imdb_id,
+    anime.watch_status,
+    anime.release_year,
     GROUP_CONCAT(anime_tags.tag, CHAR(31)) AS tagsConcat
 FROM anime
 LEFT JOIN anime_tags ON anime.id = anime_tags.anime_id
@@ -176,6 +185,8 @@ SELECT
     anime.kinopoisk_id,
     anime.kinopoisk_not_found_at,
     anime.imdb_id,
+    anime.watch_status,
+    anime.release_year,
     GROUP_CONCAT(anime_tags.tag, CHAR(31)) AS tagsConcat
 FROM anime
 LEFT JOIN anime_tags ON anime.id = anime_tags.anime_id
@@ -189,9 +200,10 @@ INSERT INTO anime(
     anilist_id, mal_id, shikimori_id,
     anilist_not_found_at, mal_not_found_at, shikimori_not_found_at,
     isPrivate, encryptionIv, deletedAt, mediaType, title_en, title_ru,
-    tmdb_id, kinopoisk_id, tmdb_not_found_at, kinopoisk_not_found_at, imdb_id
+    tmdb_id, kinopoisk_id, tmdb_not_found_at, kinopoisk_not_found_at, imdb_id,
+    watch_status, release_year
 )
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING_CREATE', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING_CREATE', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 
 updateAnime:
 UPDATE anime
@@ -223,7 +235,9 @@ SET title = ?,
     kinopoisk_id = ?,
     tmdb_not_found_at = ?,
     kinopoisk_not_found_at = ?,
-    imdb_id = ?
+    imdb_id = ?,
+    watch_status = ?,
+    release_year = ?
 WHERE id = ?;
 
 updateAnimeFromSync:
@@ -298,6 +312,19 @@ UPDATE anime
 SET imdb_id = ?, updatedAt = ?, sync_status = 'PENDING_UPDATE'
 WHERE id = ?;
 
+-- NULL возвращает запись к «авто» (статус выводится из прогресса).
+setWatchStatus:
+UPDATE anime
+SET watch_status = ?, updatedAt = ?, sync_status = 'PENDING_UPDATE'
+WHERE id = ?;
+
+-- Год — вспомогательное поле для фильтра: updatedAt не трогаем, иначе фоновый догон года
+-- «освежал» бы каждую запись и затирал облачную версию при синке.
+setReleaseYear:
+UPDATE anime
+SET release_year = ?
+WHERE id = ?;
+
 clearKinopoiskId:
 UPDATE anime
 SET kinopoisk_id = NULL, kinopoisk_not_found_at = NULL, updatedAt = ?, sync_status = 'PENDING_UPDATE'
@@ -322,6 +349,50 @@ markTitleEnChecked:
 UPDATE anime
 SET title_en_checked_at = ?, updatedAt = ?, sync_status = 'PENDING_UPDATE'
 WHERE id = ?;
+
+-- Записи без года релиза — для фонового догона (release_year IS NULL; 0 = уже искали).
+selectNeedingReleaseYear:
+SELECT
+    anime.id,
+    anime.title,
+    anime.imagePath,
+    anime.episodes,
+    anime.rating,
+    anime.status,
+    anime.isFavorite,
+    anime.updatedAt,
+    anime.orderIndex,
+    anime.dateAdded,
+    anime.categoryType,
+    anime.sync_status,
+    anime.comment,
+    anime.isAiRecommendation,
+    anime.anilist_id,
+    anime.mal_id,
+    anime.shikimori_id,
+    anime.anilist_not_found_at,
+    anime.mal_not_found_at,
+    anime.shikimori_not_found_at,
+    anime.mediaType,
+    anime.title_en,
+    anime.title_ru,
+    anime.tmdb_id,
+    anime.tmdb_not_found_at,
+    anime.kinopoisk_id,
+    anime.kinopoisk_not_found_at,
+    anime.imdb_id,
+    anime.watch_status,
+    anime.release_year,
+    GROUP_CONCAT(anime_tags.tag, CHAR(31)) AS tagsConcat
+FROM anime
+LEFT JOIN anime_tags ON anime.id = anime_tags.anime_id
+WHERE anime.release_year IS NULL AND anime.deletedAt IS NULL
+GROUP BY anime.id
+ORDER BY anime.dateAdded DESC
+LIMIT ?;
+
+countNeedingReleaseYear:
+SELECT COUNT(*) FROM anime WHERE release_year IS NULL AND deletedAt IS NULL;
 
 selectNeedingTitleEn:
 SELECT
@@ -353,6 +424,8 @@ SELECT
     anime.kinopoisk_id,
     anime.kinopoisk_not_found_at,
     anime.imdb_id,
+    anime.watch_status,
+    anime.release_year,
     GROUP_CONCAT(anime_tags.tag, CHAR(31)) AS tagsConcat
 FROM anime
 LEFT JOIN anime_tags ON anime.id = anime_tags.anime_id
@@ -410,6 +483,8 @@ SELECT
     anime.kinopoisk_id,
     anime.kinopoisk_not_found_at,
     anime.imdb_id,
+    anime.watch_status,
+    anime.release_year,
     GROUP_CONCAT(anime_tags.tag, CHAR(31)) AS tagsConcat
 FROM anime
 LEFT JOIN anime_tags ON anime.id = anime_tags.anime_id
@@ -476,7 +551,8 @@ INSERT OR REPLACE INTO anime(
     anilist_id, mal_id, shikimori_id,
     anilist_not_found_at, mal_not_found_at, shikimori_not_found_at,
     isPrivate, encryptionIv, deletedAt, mediaType, title_en, title_en_checked_at, title_ru, title_ru_checked_at,
-    tmdb_id, tmdb_not_found_at, kinopoisk_id, kinopoisk_not_found_at, imdb_id
+    tmdb_id, tmdb_not_found_at, kinopoisk_id, kinopoisk_not_found_at, imdb_id,
+    watch_status, release_year
 )
 VALUES (
     :id, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'SYNCED', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
@@ -484,7 +560,9 @@ VALUES (
     (SELECT tmdb_not_found_at FROM anime WHERE id = :id),
     (SELECT kinopoisk_id FROM anime WHERE id = :id),
     (SELECT kinopoisk_not_found_at FROM anime WHERE id = :id),
-    (SELECT imdb_id FROM anime WHERE id = :id)
+    (SELECT imdb_id FROM anime WHERE id = :id),
+    (SELECT watch_status FROM anime WHERE id = :id),
+    (SELECT release_year FROM anime WHERE id = :id)
 );
 
 keepingDirty:

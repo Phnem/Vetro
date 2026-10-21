@@ -74,6 +74,8 @@ import com.example.myapplication.ui.shared.theme.MotionTokens
 import com.example.myapplication.ui.shared.theme.OverlayThemeTokens
 import com.example.myapplication.ui.shared.theme.SnProFamily
 import com.example.myapplication.ui.shared.theme.SquircleCornerShape
+import com.example.myapplication.ui.shared.theme.sheetFloatingMargin
+import com.example.myapplication.ui.shared.theme.sheetPanelShape
 import com.example.myapplication.ui.shared.theme.iosSheetContainer
 import com.example.myapplication.utils.Haptic
 import com.example.myapplication.utils.performHaptic
@@ -94,6 +96,7 @@ fun RecommendationsSheet(
     onDismiss: () -> Unit,
 ) {
     val isDark = isAppInDarkTheme()
+    com.example.myapplication.ui.shared.SheetGateEffect(true)
     var visible by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { visible = true }
 
@@ -126,7 +129,7 @@ fun RecommendationsSheet(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(Color.Black.copy(alpha = OverlayThemeTokens.scrimAlpha(isDark)))
+                    .background(Color.Black.copy(alpha = OverlayThemeTokens.scrimAlpha(isDark) * com.example.myapplication.ui.shared.theme.SheetStyle.scrimFactor))
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null
@@ -151,11 +154,12 @@ fun RecommendationsSheet(
                 // сама, поэтому пустот сверху/снизу нет. Cap — 92% экрана.
                 Column(
                     modifier = Modifier
+                        .sheetFloatingMargin()
                         .then(swipe.panelModifier)
                         .fillMaxWidth()
                         .heightIn(max = maxSheetHeight)
                         .iosSheetContainer(
-                            SquircleCornerShape(IosDesign.SheetCorner, IosDesign.SheetCorner, 0.dp, 0.dp),
+                            sheetPanelShape(),
                             isDark,
                             IosDesign.sheetSurface(isDark),
                         )

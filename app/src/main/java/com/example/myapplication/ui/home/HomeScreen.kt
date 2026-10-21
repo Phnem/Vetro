@@ -103,7 +103,6 @@ import com.example.myapplication.GlassBottomNavigation
 import com.example.myapplication.GenreFilterOverlay
 import com.example.myapplication.NotificationSyncOverlay
 import com.example.myapplication.SimpGlassCard
-import com.example.myapplication.SortFilterOverlay
 import com.example.myapplication.data.models.*
 import com.example.myapplication.data.repository.GenreRepository
 import com.example.myapplication.domain.seasons.isAiringNow
@@ -126,6 +125,9 @@ import com.example.myapplication.ui.home.recommendations.RecommendationsViewMode
 import com.example.myapplication.ui.home.recommendations.getRecommendationsStrings
 import com.example.myapplication.ui.home.cardmenu.CardActionMenuOverlay
 import com.example.myapplication.ui.home.cardmenu.CardMenuTarget
+import com.example.myapplication.ui.shared.components.rating.RatingOverlayHost
+import com.example.myapplication.ui.shared.components.rating.RatingSliderState
+import androidx.compose.ui.geometry.Rect
 import com.example.myapplication.ui.home.updates.EpisodeUpdateStack
 import com.example.myapplication.ui.shared.LocalWorkspaceSearch
 import com.example.myapplication.ui.navigation.navigateToAddEdit
@@ -234,6 +236,10 @@ fun HomeScreen(
     var showSortOverlay by remember { mutableStateOf(false) }
     val sortVisibleState = remember { MutableTransitionState(false) }
     sortVisibleState.targetState = showSortOverlay
+    // Сколько тайтлов без года — шторка предупреждает, что фильтр года их пропустит.
+    val yearUnknownCount = remember(uiState.statsAnimeList) {
+        uiState.statsAnimeList.count { (it.releaseYear ?: 0) <= 0 }
+    }
 
     var showMediaTypeFilterOverlay by remember { mutableStateOf(false) }
     val mediaTypeFilterVisibleState = remember { MutableTransitionState(false) }
@@ -250,7 +256,19 @@ fun HomeScreen(
     var cardMenuTarget by remember { mutableStateOf<CardMenuTarget?>(null) }
     // Отдельно от цели: меню обязано дожить до конца своего закрытия, см. CardActionMenuOverlay.
     var cardMenuVisible by remember { mutableStateOf(false) }
-    LaunchedEffect(cardMenuTarget != null) { onCardSelectionChange(cardMenuTarget != null) }
+    /**
+     * Окно оценки по тапу на рейтинг карточки — то же, что открывается в AddEdit при движении
+     * рейтинг-слайдера, только выезжает из чипа на карточке. Состояние (смайлик, значение)
+     * общее с AddEdit, поэтому лицо и цвета совпадают один в один.
+     */
+    val ratingPickerSlider = remember { RatingSliderState(0f) }
+    var ratingPickerId by remember { mutableStateOf<String?>(null) }
+    // Отдельно от id по той же причине, что cardMenuVisible: бабл обязан доиграть втягивание.
+    var ratingPickerShown by remember { mutableStateOf(false) }
+    // Пока окно оценки открыто, док ведёт себя так же, как при поднятой карточке (гаснет и не жмётся).
+    LaunchedEffect(cardMenuTarget != null, ratingPickerShown) {
+        onCardSelectionChange(cardMenuTarget != null || ratingPickerShown)
+    }
     DisposableEffect(Unit) {
         onDispose {
             onCardSelectionChange(false)
@@ -264,6 +282,14 @@ fun HomeScreen(
         if (list.none { it.id == id }) cardMenuTarget = null
     }
     val scope = rememberCoroutineScope()
+    val openRatingPicker: (Anime, Rect) -> Unit = { anime, chipBounds ->
+        performHaptic(view, Haptic.Light)
+        // Бабл выезжает из чипа и в него же втягивается; значение — текущая оценка записи.
+        ratingPickerSlider.anchorBoundsInRoot = chipBounds
+        ratingPickerId = anime.id
+        scope.launch { ratingPickerSlider.syncFromExternal(anime.rating) }
+        ratingPickerShown = true
+    }
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
     ) { }
@@ -499,8 +525,9 @@ fun HomeScreen(
 
     // Любая шторка/диалог/оверлей поверх главной → док рабочей области уезжает вниз: он
     // соседний узел, сам про эти состояния не знает.
+    // Бабл оценки по тапу на рейтинг закрывает экран целиком: док под ним просвечивал сквозь стекло.
     val anyOverlayVisible = shouldBlur || anyHomeSheetOpen || showRecsSheet || isSearchVisible ||
-        notificationCenterOpen
+        notificationCenterOpen || ratingPickerShown
     LaunchedEffect(anyOverlayVisible) {
         onOverlayVisibleChange(anyOverlayVisible)
         if (anyOverlayVisible) collapseUpdatesToBell()
@@ -561,28 +588,29 @@ fun HomeScreen(
             }
 
             if (sortVisibleState.currentState || sortVisibleState.targetState) {
-                Box(modifier = Modifier.zIndex(5f).fillMaxSize()) {
+                // Шторки лежат ВЫШЕ верхней шапки (zIndex 30): шапка не должна торчать поверх листа.
+                Box(modifier = Modifier.zIndex(31f).fillMaxSize()) {
                     SortFilterOverlay(
                         visibleState = sortVisibleState,
                         strings = getStrings(currentLanguage),
+                        currentLanguage = currentLanguage,
                         sortOption = uiState.sortOption,
                         sortAscending = uiState.sortAscending,
+                        filter = uiState.libraryFilter,
                         filterSelectedTags = uiState.filterTags,
+                        filterCategoryType = uiState.filterCategory,
+                        yearUnknownCount = yearUnknownCount,
                         onDismiss = { showSortOverlay = false },
-                        onApplySort = { option, isAscending ->
+                        onApply = { option, isAscending, filter, tags, category ->
                             performHaptic(view, Haptic.Light)
-                            viewModel.applySort(option, isAscending)
+                            viewModel.applySortAndFilters(option, isAscending, filter, tags, category)
                         },
-                        onApplyOpenGenreFilter = {
-                            performHaptic(view, Haptic.Light)
-                            viewModel.toggleGenreFilter()
-                        }
                     )
                 }
             }
 
             if (genreFilterVisibleState.currentState || genreFilterVisibleState.targetState) {
-                Box(modifier = Modifier.zIndex(5f).fillMaxSize()) {
+                Box(modifier = Modifier.zIndex(31f).fillMaxSize()) {
                     GenreFilterOverlay(
                         visibleState = genreFilterVisibleState,
                         strings = getStrings(currentLanguage),
@@ -608,7 +636,7 @@ fun HomeScreen(
             }
 
             if (mediaTypeFilterVisibleState.currentState || mediaTypeFilterVisibleState.targetState) {
-                Box(modifier = Modifier.zIndex(5f).fillMaxSize()) {
+                Box(modifier = Modifier.zIndex(31f).fillMaxSize()) {
                     MediaTypeFilterOverlay(
                         visibleState = mediaTypeFilterVisibleState,
                         strings = getStrings(currentLanguage),
@@ -652,11 +680,16 @@ fun HomeScreen(
                         scaleY = s
                         transformOrigin = TransformOrigin(0.5f, 0f)
                         clip = push > 0.001f
-                        shape = SquircleCornerShape(
+                        // RoundedCornerShape, а не squircle: путь squircle не кэшируется Skia, и маска клипа
+                        // главной (почти весь экран) растеризовалась на CPU заново каждый кадр, пока шторка открыта.
+                        // Пружина на возврате уходит чуть ниже нуля, а RoundedCornerShape на отрицательном радиусе
+                        // бросает исключение (squircle его терпел) — радиус зажат снизу.
+                        val bottomR = (16.dp * push).coerceAtLeast(0.dp)
+                        shape = androidx.compose.foundation.shape.RoundedCornerShape(
                             topStart = 0.dp,
                             topEnd = 0.dp,
-                            bottomEnd = 16.dp * push,
-                            bottomStart = 16.dp * push,
+                            bottomEnd = bottomR,
+                            bottomStart = bottomR,
                         )
                     }
                     .homeScrollBlur { blurAmount.value }
@@ -878,6 +911,7 @@ fun HomeScreen(
                                                             )
                                                             cardMenuVisible = true
                                                         },
+                                                        onRatingClick = { bounds -> openRatingPicker(anime, bounds) },
                                                     )
                                                 }
                                             }
@@ -911,6 +945,7 @@ fun HomeScreen(
                                                         animatedVisibilityScope = animatedVisibilityScope,
                                                         onClick = openDetails,
                                                         onEditClick = openEdit,
+                                                        onRatingClick = { bounds -> openRatingPicker(anime, bounds) },
                                                     )
                                                 }
                                             }
@@ -1432,6 +1467,21 @@ fun HomeScreen(
                     modifier = Modifier.zIndex(50f),
                 )
             }
+
+            // Окно оценки по тапу на рейтинг карточки. Живой бабл: палец ставит значение на треке
+            // внизу, отпускание сохраняет и втягивает бабл обратно в чип; тап мимо и «назад» —
+            // закрытие без сохранения.
+            RatingOverlayHost(
+                state = ratingPickerSlider,
+                ru = currentLanguage == AppLanguage.RU,
+                shown = ratingPickerShown,
+                onCommitted = { value ->
+                    ratingPickerId?.let { viewModel.setRating(it, value) }
+                    ratingPickerShown = false
+                },
+                onOutsideTap = { ratingPickerShown = false },
+                modifier = Modifier.zIndex(60f),
+            )
         }
 
         if (showRecsSheet) {
@@ -1631,52 +1681,7 @@ private fun rememberCardProgress(
     airing: com.example.myapplication.data.models.AiringProgress?,
     reading: com.example.myapplication.manga.domain.MangaReadingSummary?,
 ): AiringCardInfo? = remember(layout, storedEpisodes, watched, airing, reading) {
-    fun airingInfo(a: com.example.myapplication.data.models.AiringProgress) = AiringCardInfo(
-        // Номер выходящего сезона — из расклада, если сезон там уже есть (см. latestSeasonEpisode):
-        // снимок выхода считает сезоны по приквелам и на франшизах со спешлами промахивается.
-        seasonNumber = latestSeasonEpisode(layout, a)?.season ?: layout.ongoingSeason()?.seasonNumber,
-        airedEpisodes = a.airedEpisodes,
-        totalEpisodes = a.totalEpisodes,
-        kind = CardProgressKind.AIRING,
-    )
-    when {
-        reading != null -> AiringCardInfo(
-            seasonNumber = null,
-            airedEpisodes = reading.readChapters,
-            totalEpisodes = reading.totalChapters,
-            kind = CardProgressKind.READING,
-            newItems = reading.newChapters,
-        )
-
-        // Сезон выходит, и вышло не меньше, чем посмотрено в нём, — бар выхода. Смотрят другой
-        // сезон или сезон закрыт — сравнивать нечего, остаётся бар просмотра ниже.
-        airing != null && airing.isAiringNow() && (
-            watched == null || run {
-                val airingSeason = airingInfo(airing).seasonNumber
-                (airingSeason == null || airingSeason == watched.season) && airing.airedEpisodes >= watched.episode
-            }
-        ) -> airingInfo(airing)
-
-        // Прогресс внутри сезона: «S3 · 6 / 12». Знаменатель — серии этого сезона по раскладу;
-        // без расклада он известен только у первого сезона (это сохранённый счётчик). Числитель
-        // не подрезается: зажимать реальный прогресс под неразрешённый расклад — значит
-        // показывать пользователю не то, что он посмотрел.
-        watched != null -> {
-            val seasons = layout.regularSeasons()
-            val season = seasons.firstOrNull { it.seasonNumber == watched.season }
-            AiringCardInfo(
-                seasonNumber = watched.season.takeIf { seasons.isNotEmpty() || it > 1 },
-                airedEpisodes = watched.episode,
-                totalEpisodes = season?.let { it.totalEpisodes ?: it.episodes }
-                    ?: storedEpisodes.takeIf { seasons.isEmpty() && watched.season == 1 && it > 0 },
-                kind = CardProgressKind.WATCHING,
-            )
-        }
-
-        airing != null -> airingInfo(airing)
-
-        else -> null
-    }
+    computeCardProgress(layout, storedEpisodes, watched, airing, reading)
 }
 
 /**

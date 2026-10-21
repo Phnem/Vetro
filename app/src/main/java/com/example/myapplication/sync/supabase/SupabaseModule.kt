@@ -71,7 +71,7 @@ val supabaseModule = org.koin.dsl.module {
     single { ApiKeySyncRepository(get(), get(), get(), get(), get()) }
 
     // Прогресс просмотра/чтения: DataStore ↔ Supabase.
-    single { ProgressSyncRepository(androidContext(), get(), get(), get(), get(), get()) }
+    single { ProgressSyncRepository(androidContext(), get(), get(), get(), get(), get(), get()) }
 
     // Аудиокниги: книги, прогресс и закладки (только данные, без аудио).
     single { AudiobookSyncRepository(androidContext(), get(), get(), get()) }

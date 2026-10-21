@@ -3,6 +3,7 @@ package com.example.myapplication.ui.home
 import androidx.compose.runtime.Immutable
 import com.example.myapplication.data.models.Anime
 import com.example.myapplication.data.models.AnimeUpdate
+import com.example.myapplication.data.models.LibraryFilter
 import com.example.myapplication.data.models.SortOption
 import com.example.myapplication.network.ApiSearchResult
 import kotlinx.collections.immutable.ImmutableList
@@ -27,6 +28,8 @@ data class HomeUiState(
     val sortAscending: Boolean = false,
     val filterTags: ImmutableList<String> = persistentListOf(),
     val filterCategory: String = "",
+    /** Статус / год / рейтинг / число серий из шторки сортировки (жанры — в [filterTags]). */
+    val libraryFilter: LibraryFilter = LibraryFilter(),
     val isGenreFilterVisible: Boolean = false,
     val isCheckingUpdates: Boolean = false,
     val updates: ImmutableList<AnimeUpdate> = persistentListOf(),

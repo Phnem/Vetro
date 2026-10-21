@@ -31,10 +31,13 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.border
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.CircularProgressIndicator
@@ -63,9 +66,13 @@ import androidx.compose.ui.zIndex
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 import coil3.request.crossfade
+import com.example.myapplication.data.models.WatchStatus
 import com.example.myapplication.domain.enrichment.PosterCandidate
 import com.example.myapplication.domain.enrichment.TitleCandidate
 import com.example.myapplication.ui.shared.components.GrabberHandle
+import com.example.myapplication.ui.shared.components.NoOverscroll
+import com.example.myapplication.ui.shared.components.accent
+import com.example.myapplication.ui.shared.components.icon
 import com.example.myapplication.ui.shared.components.rememberIosSheetSwipe
 import com.example.myapplication.ui.shared.theme.BrandOrangeBright
 import com.example.myapplication.ui.shared.theme.IosDesign
@@ -73,6 +80,8 @@ import com.example.myapplication.ui.shared.theme.MotionTokens
 import com.example.myapplication.ui.shared.theme.OverlayThemeTokens
 import com.example.myapplication.ui.shared.theme.SnProFamily
 import com.example.myapplication.ui.shared.theme.SquircleCornerShape
+import com.example.myapplication.ui.shared.theme.sheetFloatingMargin
+import com.example.myapplication.ui.shared.theme.sheetPanelShape
 import com.example.myapplication.ui.shared.theme.iosSheetContainer
 
 /** Что сейчас выбирает пользователь в шторке меню «⋯» экрана Details. */
@@ -91,6 +100,12 @@ sealed interface DetailsPickerState {
         val loading: Boolean = false,
         val saving: Boolean = false,
     ) : DetailsPickerState
+
+    /** [chosen] — выбор пользователя (null = «авто»), [effective] — то, что показывается сейчас. */
+    data class Status(
+        val chosen: WatchStatus?,
+        val effective: WatchStatus,
+    ) : DetailsPickerState
 }
 
 /**
@@ -107,8 +122,10 @@ internal fun DetailsPickerSheet(
     onPickSource: (TitleCandidate) -> Unit,
     onNoneOfThese: () -> Unit,
     onSearch: (String) -> Unit,
+    onPickStatus: (WatchStatus?) -> Unit,
 ) {
     if (state == DetailsPickerState.None) return
+    com.example.myapplication.ui.shared.SheetGateEffect(true)
 
     var visible by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { visible = true }
@@ -126,7 +143,7 @@ internal fun DetailsPickerSheet(
             Box(
                 Modifier
                     .fillMaxSize()
-                    .background(Color.Black.copy(alpha = OverlayThemeTokens.scrimAlpha(isDark)))
+                    .background(Color.Black.copy(alpha = OverlayThemeTokens.scrimAlpha(isDark) * com.example.myapplication.ui.shared.theme.SheetStyle.scrimFactor))
                     .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {
                         visible = false
                     },
@@ -140,11 +157,12 @@ internal fun DetailsPickerSheet(
             BoxWithConstraints {
                 Column(
                     modifier = Modifier
+                        .sheetFloatingMargin()
                         .then(swipe.panelModifier)
                         .fillMaxWidth()
                         .heightIn(max = maxHeight * 0.9f)
                         .iosSheetContainer(
-                            SquircleCornerShape(IosDesign.SheetCorner, IosDesign.SheetCorner, 0.dp, 0.dp),
+                            sheetPanelShape(),
                             isDark,
                             IosDesign.sheetSurface(isDark),
                         )
@@ -152,10 +170,13 @@ internal fun DetailsPickerSheet(
                         .navigationBarsPadding(),
                 ) {
                     GrabberHandle(isDark, modifier = swipe.handleModifier)
-                    when (state) {
-                        is DetailsPickerState.Covers -> CoversContent(state, ru, onPickCover)
-                        is DetailsPickerState.Sources -> SourcesContent(state, ru, onPickSource, onNoneOfThese, onSearch)
-                        DetailsPickerState.None -> Unit
+                    NoOverscroll {
+                        when (state) {
+                            is DetailsPickerState.Covers -> CoversContent(state, ru, onPickCover)
+                            is DetailsPickerState.Sources -> SourcesContent(state, ru, onPickSource, onNoneOfThese, onSearch)
+                            is DetailsPickerState.Status -> StatusContent(state, ru, isDark, onPickStatus)
+                            DetailsPickerState.None -> Unit
+                        }
                     }
                 }
             }
@@ -273,6 +294,126 @@ private fun androidx.compose.foundation.layout.ColumnScope.CoversContent(
             )
         }
         else -> Box(Modifier.weight(1f, fill = false)) { CoversGrid(state, onPick) }
+    }
+}
+
+// ——— Статус просмотра ———
+
+@Composable
+private fun androidx.compose.foundation.layout.ColumnScope.StatusContent(
+    state: DetailsPickerState.Status,
+    ru: Boolean,
+    isDark: Boolean,
+    onPick: (WatchStatus?) -> Unit,
+) {
+    SheetTitle(
+        title = if (ru) "Статус просмотра" else "Watch status",
+        subtitle = if (ru) {
+            "Виден в Details и работает в фильтре сортировки. Без выбора статус определяется по прогрессу."
+        } else {
+            "Shown in Details and used by the sort filter. Without a choice it follows your progress."
+        },
+    )
+    val neutral = MaterialTheme.colorScheme.onSurfaceVariant
+    LazyColumn(
+        modifier = Modifier.weight(1f, fill = false),
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        items(WatchStatus.entries, key = { it.name }) { status ->
+            StatusRow(
+                status = status,
+                ru = ru,
+                isDark = isDark,
+                selected = state.effective == status,
+                accent = status.accent(neutral),
+                onClick = { onPick(status) },
+            )
+        }
+        if (state.chosen != null) {
+            item(key = "reset") {
+                Text(
+                    text = if (ru) "Сбросить к автоматическому" else "Reset to automatic",
+                    fontFamily = SnProFamily,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 15.sp,
+                    color = BrandOrangeBright,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(14.dp))
+                        .clickable { onPick(null) }
+                        .padding(vertical = 14.dp, horizontal = 4.dp),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun StatusRow(
+    status: WatchStatus,
+    ru: Boolean,
+    isDark: Boolean,
+    selected: Boolean,
+    accent: Color,
+    onClick: () -> Unit,
+) {
+    val shape = RoundedCornerShape(18.dp)
+    val bg = if (selected) accent.copy(alpha = if (isDark) 0.20f else 0.13f) else IosDesign.elevatedCard(isDark)
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(shape)
+            .background(bg)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 14.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            modifier = Modifier
+                .size(40.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .background(if (isDark) Color.Black.copy(alpha = 0.28f) else Color.White.copy(alpha = 0.75f)),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                imageVector = status.icon(),
+                contentDescription = null,
+                tint = if (selected) accent else MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(22.dp),
+            )
+        }
+        Spacer(Modifier.width(14.dp))
+        Column(Modifier.weight(1f)) {
+            Text(
+                text = status.label(ru),
+                fontFamily = SnProFamily,
+                fontWeight = FontWeight.Bold,
+                fontSize = 16.sp,
+                color = if (selected) accent else MaterialTheme.colorScheme.onSurface,
+            )
+            Text(
+                text = status.hint(ru),
+                fontFamily = SnProFamily,
+                fontSize = 13.sp,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+            )
+        }
+        Spacer(Modifier.width(10.dp))
+        Box(
+            modifier = Modifier
+                .size(24.dp)
+                .clip(CircleShape)
+                .then(
+                    if (selected) Modifier.background(accent)
+                    else Modifier.border(2.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.22f), CircleShape),
+                ),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (selected) {
+                Icon(Icons.Rounded.Check, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
+            }
+        }
     }
 }
 

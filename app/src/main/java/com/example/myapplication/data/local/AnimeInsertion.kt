@@ -54,6 +54,8 @@ internal fun AnimeDatabase.insertAnimeRow(anime: Anime, updatedAt: Long) {
         tmdb_not_found_at = anime.tmdbNotFoundAt,
         kinopoisk_not_found_at = anime.kinopoiskNotFoundAt,
         imdb_id = anime.imdbId,
+        watch_status = anime.watchStatus?.name,
+        release_year = anime.releaseYear?.toLong(),
     )
     anime.tags.forEach { tag ->
         animeQueries.insertAnimeTag(anime_id = anime.id, tag = tag)

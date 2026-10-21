@@ -1,5 +1,6 @@
 package com.example.myapplication
 
+import com.example.myapplication.ui.shared.components.extendUnderGrabber
 import com.example.myapplication.ui.shared.theme.isAppInDarkTheme
 import com.example.myapplication.ui.shared.theme.BrandDeepRed
 import com.example.myapplication.ui.shared.theme.IosScroll
@@ -256,8 +257,10 @@ fun NotificationSyncOverlay(
                 GrabberHandle(isDark, modifier = swipe.handleModifier)
                     Column(
                         modifier = Modifier
+                            .extendUnderGrabber()
                             .padding(horizontal = 16.dp)
                             .verticalScroll(rememberScrollState(), flingBehavior = IosScroll.flingBehavior())
+                            .padding(top = com.example.myapplication.ui.shared.components.GrabberReservedTop)
                     ) {
                         // —— Header (Close button only) —— //
                         Row(

@@ -152,12 +152,12 @@ fun MediaTypeFilterOverlay(
     data class TypeOption(val filter: MediaType?, val label: String, val icon: ImageVector, val accent: Color, val subtitle: String)
     val allLabel = if (ru) "Все" else "All"
     val options = listOf(
-        TypeOption(null, allLabel, Icons.Outlined.GridView, BrandLightGray, if (ru) "Вся коллекция" else "Whole collection"),
+        TypeOption(null, allLabel, Icons.Outlined.GridView, BrandOrange, if (ru) "Вся коллекция" else "Whole collection"),
         TypeOption(MediaType.ANIME, strings.typeAnime, Icons.Outlined.AutoAwesome, BrandOrange, if (ru) "Только аниме" else "Anime only"),
-        TypeOption(MediaType.MANGA, strings.typeManga, Icons.AutoMirrored.Outlined.MenuBook, BrandSand, if (ru) "Только манга" else "Manga only"),
+        TypeOption(MediaType.MANGA, strings.typeManga, Icons.AutoMirrored.Outlined.MenuBook, BrandOrange, if (ru) "Только манга" else "Manga only"),
         // MOVIE+SERIES под одной опцией (см. HomeComponents.tiles выше) — комбинированное
         // сопоставление в AnimeRepository.observeAnimeList.
-        TypeOption(MediaType.SERIES, strings.typeSeries, Icons.Outlined.Tv, Color(0xFFFFB067), if (ru) "Фильмы и сериалы" else "Movies & series"),
+        TypeOption(MediaType.SERIES, strings.typeSeries, Icons.Outlined.Tv, BrandOrange, if (ru) "Фильмы и сериалы" else "Movies & series"),
     )
 
     Box(modifier = Modifier.fillMaxSize()) {

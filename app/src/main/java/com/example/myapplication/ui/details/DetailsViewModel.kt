@@ -8,6 +8,9 @@ import androidx.lifecycle.viewModelScope
 import com.example.myapplication.data.local.AnimeLocalDataSource
 import com.example.myapplication.data.models.Anime
 import com.example.myapplication.data.models.MediaType
+import com.example.myapplication.data.models.WatchStatus
+import com.example.myapplication.data.models.effectiveWatchStatus
+import com.example.myapplication.domain.enrichment.releaseYearOrNull
 import com.example.myapplication.data.repository.AnimeRepository
 import com.example.myapplication.domain.enrichment.PosterCandidate
 import com.example.myapplication.domain.enrichment.TitleInfoEnricher
@@ -40,6 +43,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import com.example.myapplication.domain.seasons.ongoingSeason
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -59,6 +63,7 @@ class DetailsViewModel(
     private val titleInfoEnricher: TitleInfoEnricher,
     private val seriesSeasonsStore: SeriesSeasonsStore? = null,
     private val seriesEpisodeCheck: SeriesEpisodeCheckUseCase? = null,
+    private val autoWatchStatus: com.example.myapplication.domain.status.AutoWatchStatusResolver? = null,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow<DetailsUiState>(DetailsUiState.Idle)
@@ -72,6 +77,20 @@ class DetailsViewModel(
      * Обогащение карточки (логотип, трейлер, рейтинги критиков, следующая серия) — отдельно от базовой
      * карточки: грузится после неё и не мешает ей; ошибка или отсутствие ключей — просто null.
      */
+    /**
+     * Статус, который показывает чип в Details: выбранный пользователем или «по умолчанию» из прогресса.
+     * null — пока статус «по умолчанию» не посчитан и своего выбора нет: чип в это время не рисуется,
+     * чтобы не показать «Просмотрено» тому, кто на самом деле смотрит.
+     */
+    val effectiveWatchStatus: StateFlow<WatchStatus?> = combine(
+        _currentAnime,
+        // Считаем статус только этого тайтла, а не всей коллекции.
+        autoWatchStatus?.observeOne(animeId, _currentAnime.map { it?.episodes ?: 0 }.distinctUntilChanged())
+            ?: kotlinx.coroutines.flow.flowOf(null),
+    ) { anime, auto ->
+        anime?.let { a -> a.watchStatus ?: auto }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), _currentAnime.value?.watchStatus)
+
     private val _enrichment = MutableStateFlow<TitleEnrichment?>(null)
     val enrichment: StateFlow<TitleEnrichment?> = _enrichment.asStateFlow()
 
@@ -182,6 +201,36 @@ class DetailsViewModel(
         }
     }
 
+    /**
+     * Статус просмотра, выбранный пользователем; null возвращает «авто». Точечная запись в БД, а
+     * копия в [currentAnime] обновляется следом — иначе следующая полная запись записи (например,
+     * из «Просмотрено») вернула бы старый статус.
+     */
+    /** Шторка выбора статуса: что выбрано вручную и что показывается сейчас. */
+    fun openStatusPicker() {
+        val anime = _currentAnime.value ?: return
+        _picker.value = DetailsPickerState.Status(
+            chosen = anime.watchStatus,
+            effective = effectiveWatchStatus.value ?: anime.effectiveWatchStatus(null),
+        )
+    }
+
+    fun pickStatus(status: WatchStatus?) {
+        _picker.value = DetailsPickerState.None
+        setWatchStatus(status)
+    }
+
+    fun setWatchStatus(status: WatchStatus?) {
+        viewModelScope.launch {
+            runCatching { localDataSource.setWatchStatus(animeId, status) }
+                .onSuccess { _currentAnime.value = _currentAnime.value?.copy(watchStatus = status) }
+                .onFailure {
+                    if (it is kotlinx.coroutines.CancellationException) throw it
+                    say("Не удалось сохранить статус", "Couldn't save the status")
+                }
+        }
+    }
+
     /** Короткие ответы на действия из меню «⋮» — экран показывает их тостом. */
     private val _messages = MutableSharedFlow<String>(extraBufferCapacity = 4)
     val messages: SharedFlow<String> = _messages.asSharedFlow()
@@ -218,6 +267,9 @@ class DetailsViewModel(
                     localDataSource.updateAnime(updated)
                     _currentAnime.value = updated
                 }
+                // Досмотрел вне приложения — статус тоже «Просмотрено», иначе карточка осталась бы «Смотрю».
+                localDataSource.setWatchStatus(animeId, WatchStatus.COMPLETED)
+                _currentAnime.value = _currentAnime.value?.copy(watchStatus = WatchStatus.COMPLETED)
             }.onSuccess {
                 say("Отмечено просмотренным: ${keys.size} сер.", "Marked as watched: ${keys.size} ep.")
             }.onFailure {
@@ -365,6 +417,13 @@ class DetailsViewModel(
         }
     }
 
+    /** Год релиза из открытой карточки уходит в запись: по нему работает фильтр года в шторке сортировки. */
+    private suspend fun rememberReleaseYear(year: Int?) {
+        if (year == null || _currentAnime.value?.releaseYear == year) return
+        runCatching { localDataSource.setReleaseYear(animeId, year) }
+            .onSuccess { _currentAnime.value = _currentAnime.value?.copy(releaseYear = year) }
+    }
+
     private fun loadDetails(anime: Anime, language: AppLanguage) {
         viewModelScope.launch {
             if (!anime.canLookupDetails(language)) {
@@ -382,6 +441,7 @@ class DetailsViewModel(
                     onSuccess = { details ->
                         val elapsed = System.currentTimeMillis() - startTime
                         if (elapsed < 500) delay(500 - elapsed)
+                        if (details != null) rememberReleaseYear(details.releaseYearOrNull())
                         _uiState.value = if (details != null) {
                             DetailsUiState.Success(details)
                         } else {

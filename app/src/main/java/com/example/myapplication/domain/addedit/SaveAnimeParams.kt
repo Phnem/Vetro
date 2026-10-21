@@ -41,5 +41,7 @@ data class SaveAnimeParams(
     val tmdbId: Int? = null,
     val kinopoiskId: Int? = null,
     val tmdbNotFoundAt: Long? = null,
-    val kinopoiskNotFoundAt: Long? = null
+    val kinopoiskNotFoundAt: Long? = null,
+    /** Год релиза из результата поиска; null при правке — тогда сохраняется уже записанный год. */
+    val releaseYear: Int? = null,
 )

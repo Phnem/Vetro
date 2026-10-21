@@ -26,6 +26,9 @@ class SaveAnimeUseCase(
         } ?: params.currentImageFileName
 
         val isNew = params.animeId == null
+        // AddEdit про статус просмотра и год релиза ничего не знает: при правке они остаются как были,
+        // иначе сохранение формы молча сбрасывало бы выбранный в Details статус в «авто».
+        val existing = if (isNew) null else localDataSource.getAnimeById(animeId)
         val anime = Anime(
             id = animeId,
             title = params.title,
@@ -55,7 +58,9 @@ class SaveAnimeUseCase(
             tmdbId = params.tmdbId,
             kinopoiskId = params.kinopoiskId,
             tmdbNotFoundAt = params.tmdbNotFoundAt,
-            kinopoiskNotFoundAt = params.kinopoiskNotFoundAt
+            kinopoiskNotFoundAt = params.kinopoiskNotFoundAt,
+            watchStatus = existing?.watchStatus,
+            releaseYear = params.releaseYear ?: existing?.releaseYear,
         )
 
         if (isNew) {

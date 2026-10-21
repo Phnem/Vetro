@@ -206,7 +206,8 @@ fun WorkspaceScreen(
             modifier = Modifier.fillMaxSize(),
             // Соседняя страница обязана быть готова заранее: иначе переход показывает пустой кадр.
             beyondViewportPageCount = 1,
-            userScrollEnabled = !cardSelectionActive,
+            // Открытая шторка владеет жестами: горизонтальный драг по её ползунку не листает страницы.
+            userScrollEnabled = !cardSelectionActive && !com.example.myapplication.ui.shared.SheetGate.anyOpen,
         ) { index ->
             Box(modifier = Modifier.workspacePageMotion(pagerState, index)) {
             when (WorkspacePage.ofIndex(index)) {

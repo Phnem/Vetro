@@ -1,5 +1,6 @@
 package com.example.myapplication.ui.calendar
 
+import com.example.myapplication.ui.shared.components.extendUnderGrabber
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.foundation.background
@@ -167,8 +168,10 @@ private fun CalendarContent(language: AppLanguage, isDark: Boolean, onOpenTitle:
 
     Column(
         modifier = Modifier
+            .extendUnderGrabber()
             .fillMaxWidth()
             .verticalScroll(rememberScrollState(), flingBehavior = IosScroll.flingBehavior())
+            .padding(top = com.example.myapplication.ui.shared.components.GrabberReservedTop)
             .padding(horizontal = 20.dp, vertical = 16.dp),
     ) {
         Text(

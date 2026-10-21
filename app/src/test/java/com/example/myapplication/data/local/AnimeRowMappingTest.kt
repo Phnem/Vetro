@@ -3,6 +3,7 @@ package com.example.myapplication.data.local
 import app.cash.sqldelight.driver.jdbc.sqlite.JdbcSqliteDriver
 import com.example.myapplication.data.models.Anime
 import com.example.myapplication.data.models.MediaType
+import com.example.myapplication.data.models.WatchStatus
 import kotlinx.collections.immutable.persistentListOf
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -55,6 +56,8 @@ class AnimeRowMappingTest {
         tmdbNotFoundAt = null,
         kinopoiskNotFoundAt = 1_600_000_000_000,
         imdbId = "tt0000001",
+        watchStatus = WatchStatus.REWATCHING,
+        releaseYear = 2011,
     )
 
     @Test

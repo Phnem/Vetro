@@ -33,6 +33,10 @@ data class Anime(
     val kinopoiskNotFoundAt: Long? = null,
     /** Канонический IMDb id вида `tt0412142`. Строка: ведущие нули значащие. */
     val imdbId: String? = null,
+    /** Статус просмотра, выбранный пользователем. null = «авто» по прогрессу, см. [effectiveWatchStatus]. */
+    val watchStatus: WatchStatus? = null,
+    /** Год релиза для фильтра. null = ещё не искали, 0 = источник года не дал. */
+    val releaseYear: Int? = null,
 )
 
 enum class MediaType {

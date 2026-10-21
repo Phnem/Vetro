@@ -53,6 +53,8 @@ import com.example.myapplication.ui.shared.frostedGlass
 import com.example.myapplication.ui.shared.theme.MotionTokens
 import com.example.myapplication.ui.shared.theme.OverlayThemeTokens
 import com.kyant.backdrop.Backdrop
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
 // ==========================================
@@ -68,6 +70,9 @@ import kotlin.math.roundToInt
 // ==========================================
 
 private val CARD_SCALE = 1.04f
+
+/** Число кнопок в ряду: от него зависит набор личных прогрессов «лесенки». */
+private const val ACTION_COUNT = 4
 private val ACTION_SIZE = 54.dp
 private val ACTION_SPACING = 14.dp
 private val CARD_TO_ACTIONS_GAP = 16.dp
@@ -121,6 +126,24 @@ fun CardActionMenuOverlay(
             // а не прощается с ней. Цель снимаем ПОСЛЕ анимации — иначе снимать было бы нечего.
             progress.animateTo(0f, animationSpec = MotionTokens.sheetDismissForced())
             onClosed()
+        }
+    }
+
+    // Кнопки выезжают «лесенкой»: у каждой своя пружина со сдвигом по времени, а не общий прогресс
+    // на весь ряд. Уход — без лесенки: меню освобождает карточку разом.
+    val actionProgress = remember { List(ACTION_COUNT) { Animatable(0f) } }
+    LaunchedEffect(visible) {
+        if (visible) {
+            actionProgress.forEachIndexed { index, animatable ->
+                launch {
+                    delay(index * MotionTokens.CardActionStaggerMillis.toLong())
+                    animatable.animateTo(1f, animationSpec = MotionTokens.menuPop())
+                }
+            }
+        } else {
+            actionProgress.forEach { animatable ->
+                launch { animatable.animateTo(0f, animationSpec = MotionTokens.sheetDismissForced()) }
+            }
         }
     }
 
@@ -206,15 +229,7 @@ fun CardActionMenuOverlay(
                             (actionsRestTop - lift * progress.value).roundToInt(),
                         )
                     }
-                    .width(cardWidth)
-                    .graphicsLayer {
-                        alpha = progress.value
-                        // Кнопки «выезжают» из-под карточки, а не появляются на месте.
-                        translationY = (1f - progress.value) * -gapPx
-                        val s = 0.85f + 0.15f * progress.value
-                        scaleX = s
-                        scaleY = s
-                    },
+                    .width(cardWidth),
                 horizontalArrangement = Arrangement.spacedBy(ACTION_SPACING, Alignment.CenterHorizontally),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
@@ -222,24 +237,32 @@ fun CardActionMenuOverlay(
                     icon = if (target.isFavorite) Icons.Rounded.Star else Icons.Rounded.StarBorder,
                     tint = OverlayThemeTokens.FavoriteGold,
                     backdrop = backdrop,
+                    entry = actionProgress[0],
+                    slideFromPx = gapPx,
                     onClick = onToggleFavorite,
                 )
                 CardActionButton(
                     icon = Icons.Rounded.Delete,
                     tint = Color(0xFFE5382B),
                     backdrop = backdrop,
+                    entry = actionProgress[1],
+                    slideFromPx = gapPx,
                     onClick = onDelete,
                 )
                 CardActionButton(
                     icon = Icons.Filled.Edit,
                     tint = if (isDark) Color.White else Color(0xFF1C1C1E),
                     backdrop = backdrop,
+                    entry = actionProgress[2],
+                    slideFromPx = gapPx,
                     onClick = onEdit,
                 )
                 CardActionButton(
                     icon = Icons.Outlined.Info,
                     tint = if (isDark) Color.White else Color(0xFF1C1C1E),
                     backdrop = backdrop,
+                    entry = actionProgress[3],
+                    slideFromPx = gapPx,
                     onClick = onDetails,
                 )
             }
@@ -259,10 +282,23 @@ private fun CardActionButton(
     icon: ImageVector,
     tint: Color,
     backdrop: Backdrop,
+    /** Личный прогресс кнопки 0..1 (с перелётом): лесенку задаёт сдвиг запуска, см. оверлей. */
+    entry: Animatable<Float, *>,
+    /** Откуда кнопка выезжает: на столько пикселей выше места, «из-под» карточки. */
+    slideFromPx: Float,
     onClick: () -> Unit,
 ) {
     Box(
         modifier = Modifier
+            // Читается в графическом слое: прогресс кнопки не пересобирает композицию на кадрах.
+            .graphicsLayer {
+                val p = entry.value
+                alpha = p.coerceIn(0f, 1f)
+                translationY = (1f - p) * -slideFromPx
+                val s = 0.55f + 0.45f * p
+                scaleX = s
+                scaleY = s
+            }
             .size(ACTION_SIZE)
             .clip(CircleShape)
             .frostedGlass(

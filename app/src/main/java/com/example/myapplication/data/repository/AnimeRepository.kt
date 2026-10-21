@@ -2,6 +2,7 @@ package com.example.myapplication.data.repository
 
 import com.example.myapplication.data.local.AnimeLocalDataSource
 import com.example.myapplication.data.models.Anime
+import com.example.myapplication.data.models.LibraryFilter
 import com.example.myapplication.data.models.SortOption
 import com.example.myapplication.data.models.MediaType
 import com.example.myapplication.network.ApiService
@@ -44,7 +45,8 @@ class AnimeRepository(
         sortOption: Flow<SortOption>,
         sortAscending: Flow<Boolean>,
         filterTags: Flow<List<String>>,
-        mediaTypeFilter: Flow<MediaType?>
+        mediaTypeFilter: Flow<MediaType?>,
+        libraryFilter: Flow<LibraryFilter> = kotlinx.coroutines.flow.flowOf(LibraryFilter()),
     ): Flow<List<Anime>> = mediaTypeFilter.flatMapLatest { filterType ->
         // Плитка "Сериалы" исторически охватывала и фильмы, и сериалы одной строкой
         // (MediaType.TV_SERIES до разделения на MOVIE/SERIES) — сохраняем это поведение: выбор
@@ -64,6 +66,10 @@ class AnimeRepository(
                 list
             }
             filterAndSortInMemory(scoped, q, sort, asc, tags)
+        }.combine(libraryFilter.distinctUntilChanged()) { sorted, filter ->
+            // Фильтры шторки (год, рейтинг, серии; статус — во ViewModel, ему нужен прогресс) поверх отсортированного списка:
+            // filter сохраняет порядок, а «избранное сверху» остаётся как было.
+            if (filter.isActive) sorted.filter(filter::matchesRanges) else sorted
         }
     }.flowOn(Dispatchers.Default)
 

@@ -57,4 +57,43 @@ class MediaFileValidatorTest {
         }
     }
 
+    @Test
+    fun `accepts EBML Matroska MKV stream`() {
+        val file = File.createTempFile("episode-mkv", ".mp4")
+        try {
+            val bytes = ByteArray(128 * 1024)
+            bytes[0] = 0x1A.toByte()
+            bytes[1] = 0x45.toByte()
+            bytes[2] = 0xDF.toByte()
+            bytes[3] = 0xA3.toByte()
+            file.writeBytes(bytes)
+
+            assertTrue(MediaFileValidator.isPlayableVideo(file))
+            assertTrue(MediaFileValidator.isPlayableMp4(file))
+        } finally {
+            file.delete()
+        }
+    }
+
+    @Test
+    fun `accepts RIFF AVI stream`() {
+        val file = File.createTempFile("episode-avi", ".mp4")
+        try {
+            val bytes = ByteArray(128 * 1024)
+            bytes[0] = 'R'.code.toByte()
+            bytes[1] = 'I'.code.toByte()
+            bytes[2] = 'F'.code.toByte()
+            bytes[3] = 'F'.code.toByte()
+            bytes[8] = 'A'.code.toByte()
+            bytes[9] = 'V'.code.toByte()
+            bytes[10] = 'I'.code.toByte()
+            bytes[11] = ' '.code.toByte()
+            file.writeBytes(bytes)
+
+            assertTrue(MediaFileValidator.isPlayableVideo(file))
+            assertTrue(MediaFileValidator.isPlayableMp4(file))
+        } finally {
+            file.delete()
+        }
+    }
 }

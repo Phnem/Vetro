@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="880" height="14" viewBox="0 0 880 14" role="img" aria-label="">
+  <defs>
+    <linearGradient id="fade" x1="0" x2="1" y1="0" y2="0">
+      <stop offset="0" stop-color="#E85002" stop-opacity="0"/>
+      <stop offset="0.18" stop-color="#E85002" stop-opacity="0.85"/>
+      <stop offset="0.5" stop-color="#F16001"/>
+      <stop offset="0.82" stop-color="#34C759" stop-opacity="0.85"/>
+      <stop offset="1" stop-color="#34C759" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="shine" x1="0" x2="1" y1="0" y2="0">
+      <stop offset="0" stop-color="#fff" stop-opacity="0"/>
+      <stop offset="0.5" stop-color="#fff" stop-opacity="0.9"/>
+      <stop offset="1" stop-color="#fff" stop-opacity="0"/>
+    </linearGradient>
+    <clipPath id="bar"><rect x="0" y="5" width="880" height="3" rx="1.5"/></clipPath>
+  </defs>
+  <style>
+    .shine { animation: sweep 5.5s ease-in-out infinite; }
+    @keyframes sweep { 0% { transform: translateX(-220px); } 70%, 100% { transform: translateX(880px); } }
+    @media (prefers-reduced-motion: reduce) { .shine { animation: none; opacity: 0; } }
+  </style>
+  <rect x="0" y="5" width="880" height="3" rx="1.5" fill="url(#fade)"/>
+  <g clip-path="url(#bar)"><rect class="shine" x="0" y="5" width="220" height="3" fill="url(#shine)"/></g>
+  <circle cx="440" cy="6.5" r="5" fill="#E85002"/>
+  <circle cx="440" cy="6.5" r="2" fill="#fff" fill-opacity="0.9"/>
+</svg>

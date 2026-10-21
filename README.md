@@ -18,6 +18,8 @@
 
 <p align="center">
   <a href="https://github.com/Phnem/Vetro/releases">Releases</a> ·
+  <a href="#whats-new-in-343">What's new</a> ·
+  <a href="#what-vetro-does">Features</a> ·
   <a href="#screens">Screens</a> ·
   <a href="#install">Install</a> ·
   <a href="https://drive.google.com/drive/folders/1pUrXV6LYuEcoi6fMrsQpk9VXlWUhVo5f?usp=sharing">Community sources</a> ·
@@ -29,7 +31,59 @@ Vetro is an Android media library. Build a personal collection, follow new episo
 
 Vetro does not host any media. It connects to catalogues and sources that you choose, including your own servers.
 
-> **Current development build:** `v3.4.2`. The app is actively evolving; source availability can vary by region.
+> **Current development build:** `v3.4.3`. The app is actively evolving; source availability can vary by region.
+
+<p align="center"><img src="images/readme/divider.svg" alt="" width="880" /></p>
+
+## What's new in 3.4.3
+
+<p align="center">
+  <img src="images/readme/whats-new.svg" alt="What's new in Vetro 3.4.3: watch status, sort and filters, episode ratings, floating bottom sheets" width="880" />
+</p>
+
+<table>
+  <tr>
+    <td width="50%" valign="top">
+      <b>Watch status</b><br />
+      Mark every title in Details: <i>Planned, Watching, Completed, Rewatching, On Hold, Dropped</i> or <i>Not Started</i>. Until you pick one, Vetro decides for you: a title you are partway through shows as <i>Watching</i>, everything else as <i>Completed</i>.
+    </td>
+    <td width="50%" valign="top">
+      <b>Sort and filters, rebuilt</b><br />
+      One sheet for the whole library: sort order, status and genre chips (up to three each, or <i>All</i>), and glass two-handle sliders for release year (1950 to today), rating (0.0–10.0) and total episodes (1–2000). Release years are filled in by background enrichment.
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <b>Rate single episodes</b><br />
+      Press and hold an episode, then drag: the rating face follows your finger from 0.0 to 10.0 (it starts from your current score, or 5.0). Tap the score on a library card to change it in the same bubble. Episode scores sync with your account.
+    </td>
+    <td width="50%" valign="top">
+      <b>Floating bottom sheets</b><br />
+      Every sheet now hovers over the edges of the screen with a thin light rim and a soft shadow. Pull the content down from its top to close it; page swipes stay off while a sheet is open.
+    </td>
+  </tr>
+</table>
+
+<p align="center"><sub>Also in this build: a new version goes to the Android installer as soon as it is downloaded, and the download no longer crawls at the end.</sub></p>
+
+<p align="center"><img src="images/readme/divider.svg" alt="" width="880" /></p>
+
+## At a glance
+
+<table>
+  <tr>
+    <td width="33%" valign="top"><b>Collect</b><br />Anime, films, series, manga and audiobooks in one library, with scores, notes, tags and watch status.</td>
+    <td width="33%" valign="top"><b>Track</b><br />Progress by season, episode alerts as notification cards and a release calendar.</td>
+    <td width="33%" valign="top"><b>Watch</b><br />A built-in player with smart source ranking, subtitles, downloads and casting to a TV.</td>
+  </tr>
+  <tr>
+    <td width="33%" valign="top"><b>Read</b><br />Manga and manhwa with offline chapters, and optional page-by-page translation.</td>
+    <td width="33%" valign="top"><b>Listen</b><br />Audiobooks with chapters, smart rewind, sleep timer and Android Auto.</td>
+    <td width="33%" valign="top"><b>Make it yours</b><br />Spring-physics motion, frosted glass, light and dark themes, your own sources.</td>
+  </tr>
+</table>
+
+<p align="center"><img src="images/readme/divider.svg" alt="" width="880" /></p>
 
 ## Trailer
 
@@ -41,13 +95,17 @@ Vetro does not host any media. It connects to catalogues and sources that you ch
   <sub>▶ Tap to watch the full trailer — 1080 × 1920, 60 fps, with sound.</sub>
 </p>
 
+<p align="center"><img src="images/readme/divider.svg" alt="" width="880" /></p>
+
 ## What Vetro does
 
 ### Your collection
 
 - Anime, films, TV series, manga, manhwa and audiobooks in one library.
 - Add titles from search with cover art, genres, descriptions and a 0.0–10.0 score; favourites, notes and watch or reading progress.
-- Filter by content type, sort, and search locally or online.
+- A watch status on every title: Planned, Watching, Completed, Rewatching, On Hold, Dropped or Not Started. Left unset, it follows your progress: Watching for titles you are partway through, Completed for the rest.
+- Sort and filter in one sheet: by content type, status and genre (up to three each), release year, rating and number of episodes with two-handle sliders; search locally or online.
+- Rate more than titles: hold an episode and drag to give it its own 0.0–10.0 score, or tap the score on a card to change it in place. Episode scores sync with your account.
 - Statistics with short AI-written explanations (optional), plus insights: an activity heatmap, a month-by-month curve, rewatch/reread/relisten counts, finished-vs-dropped rates per genre and your last 90 days against the whole collection. A recommendations deck you swipe through.
 - Background enrichment fills in missing titles, IDs and links, and keeps episode counts current.
 
@@ -106,6 +164,8 @@ Vetro does not host any media. It connects to catalogues and sources that you ch
 - Optional Bring Your Own Key (BYOK) AI provider for AI-assisted features.
 - A shareable PDF export of the collection, plus database maintenance and diagnostics in Developer Settings.
 
+<p align="center"><img src="images/readme/divider.svg" alt="" width="880" /></p>
+
 ## Screens
 
 <p align="center">
@@ -118,6 +178,8 @@ Vetro does not host any media. It connects to catalogues and sources that you ch
   <a href="images/preview/05-rate.png"><img src="images/preview/small/05-rate.jpg" alt="Rate it: the 10-point rating face and Settings" width="31%" /></a>
 </p>
 <p align="center"><sub>Tap any screen to open it in full resolution.</sub></p>
+
+<p align="center"><img src="images/readme/divider.svg" alt="" width="880" /></p>
 
 ## Install
 
@@ -134,6 +196,8 @@ The F-Droid build contains no proprietary Google libraries, so Google Cast is av
 Updates follow the signature, not a switch. A build signed with the author's key updates itself: Vetro checks the releases in the background, downloads a new one over Wi‑Fi, verifies its size, SHA-256 and signature, and installs it. **Settings → Check for updates** shows what is happening. A build signed with any other key, such as the F-Droid one, never updates itself and the option cannot be turned on: F-Droid delivers its updates. Versions are compared by their numbers alone: the suffix (Beta, Stable) does not matter, and a tag marked Alpha is never offered.
 
 Vetro runs on Android 8.0 (API 26) and newer. On-device subtitle recognition and torrent-based audiobook sources need a 64-bit ARM (arm64) device.
+
+<p align="center"><img src="images/readme/divider.svg" alt="" width="880" /></p>
 
 ## Build from source
 
@@ -157,7 +221,19 @@ On an existing checkout, run `git submodule update --init` first. On Windows, us
 
 Copy `local.properties.example` to `local.properties` and fill in only the integrations you plan to use. OAuth and cloud-account values are read from environment variables first, then from `local.properties`. Catalogue and enrichment keys (the full list is in `local.properties.example`) are read from `local.properties`. An empty value switches the related feature off. Never commit this file, API keys or signing keys.
 
+<p align="center"><img src="images/readme/divider.svg" alt="" width="880" /></p>
+
 ## Architecture
+
+<p align="center">
+  <img src="https://img.shields.io/badge/Kotlin-2.1-E85002?style=flat-square&logo=kotlin&logoColor=white" alt="Kotlin" />
+  <img src="https://img.shields.io/badge/Jetpack%20Compose-UI-333333?style=flat-square&logo=jetpackcompose&logoColor=white" alt="Jetpack Compose" />
+  <img src="https://img.shields.io/badge/SQLDelight-data-333333?style=flat-square" alt="SQLDelight" />
+  <img src="https://img.shields.io/badge/Media3-ExoPlayer-333333?style=flat-square" alt="Media3" />
+  <img src="https://img.shields.io/badge/Koin-DI-333333?style=flat-square" alt="Koin" />
+  <img src="https://img.shields.io/badge/Ktor-network-333333?style=flat-square" alt="Ktor" />
+  <img src="https://img.shields.io/badge/whisper.cpp-NDK-34C759?style=flat-square" alt="whisper.cpp" />
+</p>
 
 Vetro is a Kotlin and Jetpack Compose Android application with unidirectional state flow and separate data, domain and UI layers.
 
@@ -170,6 +246,8 @@ Vetro is a Kotlin and Jetpack Compose Android application with unidirectional st
 - **Native:** whisper.cpp built with the NDK for on-device speech recognition.
 - **Performance:** a shipped baseline profile, narrow R8 rules and ast-grep UI guardrails (`scripts/lint-ui.sh`).
 
+<p align="center"><img src="images/readme/divider.svg" alt="" width="880" /></p>
+
 ## Privacy
 
 Vetro does not require an account to manage a collection. Network requests happen when you use online search, episode checks, media sources, enrichment, sync or backup, update checks, or an optional AI provider. Credentials for your own servers and accounts are stored encrypted on the device. See [PRIVACY.MD](PRIVACY.MD) for the full policy.
@@ -181,3 +259,5 @@ Issues and pull requests are welcome. Before proposing a change, please read the
 ## License
 
 Vetro is released under the [MIT License](LICENSE).
+
+<p align="center"><img src="images/readme/divider.svg" alt="" width="880" /></p>

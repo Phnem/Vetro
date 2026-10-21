@@ -29,6 +29,10 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.example.myapplication.ui.shared.SheetGateEffect
+import com.example.myapplication.ui.shared.theme.SheetStyle
+import com.example.myapplication.ui.shared.theme.sheetFloatingMargin
+import com.example.myapplication.ui.shared.theme.sheetPanelShape
 import com.example.myapplication.ui.shared.back.rememberExteraSheetBack
 import com.example.myapplication.ui.shared.theme.IosDesign
 import com.example.myapplication.ui.shared.theme.MotionTokens
@@ -73,6 +77,8 @@ fun MotionBottomSheet(
     containerColor: Color = IosDesign.sheetSurface(isDark),
     content: @Composable ColumnScope.() -> Unit,
 ) {
+    // Пока шторка на экране (и пока уезжает), жесты навигации под ней выключены.
+    SheetGateEffect(visibleState.currentState || visibleState.targetState)
     val context = LocalContext.current
     val reducedMotion = remember(context) {
         Settings.Global.getFloat(context.contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) == 0f
@@ -123,7 +129,7 @@ fun MotionBottomSheet(
             modifier = Modifier
                 .fillMaxSize()
                 .graphicsLayer { alpha = scrim.value }
-                .background(Color.Black.copy(alpha = scrimAlpha))
+                .background(Color.Black.copy(alpha = scrimAlpha * SheetStyle.scrimFactor))
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null,
@@ -131,10 +137,11 @@ fun MotionBottomSheet(
                 ),
         )
 
-        val shape = SquircleCornerShape(topCorner, topCorner, 0.dp, 0.dp)
+        val shape = sheetPanelShape()
         Column(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
+                .sheetFloatingMargin()
                 .then(panelModifier)
                 .onSizeChanged { panelHeight = it.height.toFloat() }
                 .then(swipe?.panelModifier ?: Modifier)
@@ -148,14 +155,15 @@ fun MotionBottomSheet(
                     // её на месте, а следующий — отдёрнул бы вниз.
                     alpha = if (panelHeight > 0f) 1f else 0f
                     // Запас под тень: иначе в нулевой точке над кромкой торчала бы её полоска.
-                    val travel = panelHeight + SHADOW_ALLOWANCE.toPx()
+                    val travel = panelHeight + SHADOW_ALLOWANCE.toPx() +
+                        SheetStyle.FloatExtraTravel.toPx()
                     translationY = (1f - shell.value) * travel
                     sheetBack?.applyTo(this, topCorner.toPx())
                 }
                 .iosSheetContainer(shape, isDark, containerColor),
         ) {
             Column(modifier = Modifier.graphicsLayer { alpha = contentAlpha.value }) {
-                content()
+                NoOverscroll { content() }
             }
         }
     }
