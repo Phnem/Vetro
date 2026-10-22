@@ -2,6 +2,7 @@
     xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.USE_BIOMETRIC" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <!-- «Воспроизвести на…»: поиск телевизоров в локальной сети (SSDP). Обычные разрешения,
          без запроса у пользователя и без геолокации. -->
@@ -32,6 +33,10 @@
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:enableOnBackInvokedCallback="true">
+        <activity
+            android:name="com.example.myapplication.security.AppLockActivity"
+            android:exported="false"
+            android:theme="@style/Theme.MyApplication" />
         <activity
         android:name="com.example.myapplication.MainActivity"
         android:exported="true"

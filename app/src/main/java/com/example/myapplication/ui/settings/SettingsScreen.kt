@@ -423,6 +423,18 @@ fun SettingsScreen(
                         )
                     }
 
+                    item(key = "group_security") {
+                        IosListGroup(
+                            isDark = isDark,
+                            rows = listOf({
+                                com.example.myapplication.security.BiometricLockSettingRow(
+                                    ru = uiState.language == AppLanguage.RU,
+                                    isDark = isDark,
+                                )
+                            }),
+                        )
+                    }
+
                     // ГРУППА: Аккаунт / связь.
                     item(key = "group_account") {
                         IosListGroup(

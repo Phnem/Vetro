@@ -12,6 +12,7 @@ workManager = "2.9.0"
 activity = "1.9.3"
 coreKtx = "1.15.0"
 appcompat = "1.7.0"
+biometric = "1.1.0"
 material = "1.12.0"
 securityCrypto = "1.1.0-alpha06"
 # Та же версия, что тянет security-crypto: Ed25519 для подписи пакетов провайдеров, APK не растёт.
@@ -58,6 +59,7 @@ fastlaneScreengrab = "2.1.1"
 # --- AndroidX Core ---
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
 androidx-appcompat = { group = "androidx.appcompat", name = "appcompat", version.ref = "appcompat" }
+androidx-biometric = { group = "androidx.biometric", name = "biometric", version.ref = "biometric" }
 material = { group = "com.google.android.material", name = "material", version.ref = "material" }
 
 # --- Koin 4.1.1 (через BOM) ---

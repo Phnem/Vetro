@@ -24,6 +24,7 @@ class VetroApplication : Application(), SingletonImageLoader.Factory {
 
     override fun onCreate() {
         super.onCreate()
+        com.example.myapplication.security.AppLockManager.get(this)
         startKoin {
             androidContext(this@VetroApplication)
             modules(
