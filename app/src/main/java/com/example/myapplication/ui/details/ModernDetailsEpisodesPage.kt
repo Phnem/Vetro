@@ -34,6 +34,10 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.runtime.key
+import androidx.compose.ui.zIndex
+import com.example.myapplication.ui.shared.components.rememberSectionReveal
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -191,9 +195,20 @@ fun ModernDetailsEpisodesPage(
 
     // Общий с настройками и меню глав градиент — значение живёт в теме, а не копией на экран.
     val episodeBackground = remember(isDark) { IosDesign.screenGradient(isDark) }
+    val listState = rememberLazyListState()
+    val reveals = normalizedSeasons.associate { season ->
+        key(season.seasonNumber) {
+            season.seasonNumber to rememberSectionReveal(
+                expanded = season.seasonNumber in state.expandedSeasons,
+                headerKey = "season_head_${season.seasonNumber}",
+                listState = listState,
+            )
+        }
+    }
 
     Box(Modifier.fillMaxSize().background(episodeBackground)) {
         LazyColumn(
+            state = listState,
             flingBehavior = IosScroll.flingBehavior(),
             modifier = Modifier.fillMaxSize().statusBarsPadding(),
             contentPadding = PaddingValues(
@@ -237,7 +252,7 @@ fun ModernDetailsEpisodesPage(
                         isDark = isDark,
                         onToggle = { viewModel.toggleSeason(season.seasonNumber) },
                         onSeasonAction = { viewModel.seasonAction(season) },
-                        modifier = Modifier.animateItem(),
+                        modifier = Modifier.animateItem(placementSpec = MotionTokens.seasonExpansion()).zIndex(1f),
                     )
                 }
 
@@ -251,7 +266,13 @@ fun ModernDetailsEpisodesPage(
                         SeasonEpisodeSlot(
                             isLast = index == episodeCount - 1,
                             isDark = isDark,
-                            modifier = Modifier.animateItem(),
+                            modifier = Modifier
+                                .animateItem(
+                                    fadeInSpec = null,
+                                    placementSpec = MotionTokens.seasonExpansion(),
+                                    fadeOutSpec = MotionTokens.tweenFast(),
+                                )
+                                .then(reveals.getValue(season.seasonNumber).rowModifier(index)),
                         ) {
                             EpisodeRow(
                                 episodeNumber = episode,

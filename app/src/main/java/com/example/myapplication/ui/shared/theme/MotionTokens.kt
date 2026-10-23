@@ -43,9 +43,9 @@ object MotionTokens {
     /** Дефолт, если нет более специфичного токена. iOS "standard interactive" (response 0.55/0.825). */
     fun <T> standard(): SpringSpec<T> = spring(dampingRatio = 0.825f, stiffness = 130.5f)
 
-    /** Season container expansion: Apple response 0.42 s, damping fraction 0.80. */
+    /** Season/volume reveal: ~0.47 s, nearly settled, matching the supplied stacked-card reference. */
     fun <T> seasonExpansion(): SpringSpec<T> =
-        spring(dampingRatio = 0.80f, stiffness = 223.8f)
+        spring(dampingRatio = 0.90f, stiffness = 180f)
 
     /** Крупные величественные раскрытия (response 0.65/0.86). */
     fun <T> modalSlow(): SpringSpec<T> = spring(dampingRatio = 0.86f, stiffness = 93.5f)

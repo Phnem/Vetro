@@ -3,12 +3,7 @@ package com.example.myapplication.manga.ui
 import com.example.myapplication.ui.shared.theme.IosScroll
 import android.content.Intent
 import androidx.core.net.toUri
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -29,6 +24,10 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.runtime.key
+import androidx.compose.ui.zIndex
+import com.example.myapplication.ui.shared.components.rememberSectionReveal
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
@@ -392,7 +391,7 @@ private data class ChapterGroup(
 )
 
 @Composable
-private fun ChaptersContent(
+internal fun ChaptersContent(
     state: MangaLibraryUiState.Chapters,
     ru: Boolean,
     onOpen: (MangaChapter) -> Unit,
@@ -428,6 +427,16 @@ private fun ChaptersContent(
     }
     val ordered = if (newestFirst) visible.asReversed() else visible
     val groups = remember(ordered, ru) { groupByVolume(ordered, ru) }
+    val listState = rememberLazyListState()
+    val reveals = groups.associate { group ->
+        key(group.key) {
+            group.key to rememberSectionReveal(
+                expanded = group.key in expanded,
+                headerKey = "vol_${group.key}",
+                listState = listState,
+            )
+        }
+    }
 
     // Фон (тот же, что у настроек и меню серий) поднят в MangaChaptersPage, чтобы доходить до
     // верхнего края экрана. Карточки ниже полупрозрачны — засветка читается сквозь них.
@@ -525,6 +534,7 @@ private fun ChaptersContent(
         }
 
         LazyColumn(
+            state = listState,
             flingBehavior = IosScroll.flingBehavior(),
             contentPadding = PaddingValues(
                 start = 16.dp,
@@ -571,15 +581,10 @@ private fun ChaptersContent(
                     }
                     return@forEach
                 }
-                // Том целиком — ОДИН элемент списка: шапка плюс тело под общей анимацией. Раньше
-                // свёрнутый том просто выкидывал свои `itemsIndexed` из LazyColumn, и анимировать
-                // было нечего — строки исчезали вместе с элементами.
-                //
-                // Держать шапку и тело раздельными элементами тоже нельзя: `spacedBy` ставит зазор
-                // между элементами независимо от их высоты, и у свёрнутого тома между шапками
-                // набегал бы двойной отступ.
+                // Шапка всегда остаётся в списке. Главы ленивые, со своим проявлением: движение
+                // последнего тома не зависит от наличия следующей шапки или высоты всего тома.
                 item(key = "vol_${group.key}") {
-                    Column {
+                    Box(Modifier.animateItem(placementSpec = MotionTokens.seasonExpansion()).zIndex(1f)) {
                         VolumeHeader(
                             label = group.label,
                             coverUrl = state.binding.coverUrl,
@@ -598,41 +603,31 @@ private fun ChaptersContent(
                                     .forEach(onToggleDownload)
                             },
                         )
-                        AnimatedVisibility(
-                            visible = isExpanded,
-                            // Пружина — seasonExpansion: тома здесь ровно то же, что сезоны в
-                            // Details, и разъезжаться в моциях этим двум спискам незачем.
-                            enter = expandVertically(MotionTokens.seasonExpansion()) +
-                                fadeIn(MotionTokens.seasonExpansion()),
-                            exit = shrinkVertically(MotionTokens.seasonExpansion()) +
-                                fadeOut(MotionTokens.seasonExpansion()),
-                        ) {
-                            Column(
-                                // Отступ от шапки живёт ВНУТРИ анимируемой области, иначе он
-                                // остался бы висеть под шапкой свёрнутого тома.
-                                modifier = Modifier.padding(top = 12.dp),
-                                verticalArrangement = Arrangement.spacedBy(12.dp),
-                            ) {
-                                group.chapters.forEachIndexed { index, chapter ->
-                                    ChapterRow(
-                                        chapter = chapter,
-                                        shape = groupRowShape(index, group.chapters.size, true),
-                                        progressFraction = state.progress[chapter.key]?.fraction ?: 0f,
-                                        read = isRead(chapter),
-                                        downloaded = isDownloaded(chapter),
-                                        downloading = state.downloading[chapter.key],
-                                        aiTranslated = ChapterTranslationPlan.needsTranslation(
-                                            chapter, state.binding.preferredLanguage, state.autoTranslate,
-                                        ),
-                                        isDark = isDark,
-                                        ru = ru,
-                                        onClick = { onOpen(chapter) },
-                                        onToggleRead = { onToggleRead(chapter, it) },
-                                        onToggleDownload = { onToggleDownload(chapter) },
-                                    )
-                                }
-                            }
-                        }
+                    }
+                }
+                if (isExpanded) {
+                    itemsIndexed(group.chapters, key = { _, chapter -> "${group.key}_${chapter.key}" }) { index, chapter ->
+                        ChapterRow(
+                            chapter = chapter,
+                            shape = groupRowShape(index, group.chapters.size, true),
+                            progressFraction = state.progress[chapter.key]?.fraction ?: 0f,
+                            read = isRead(chapter),
+                            downloaded = isDownloaded(chapter),
+                            downloading = state.downloading[chapter.key],
+                            aiTranslated = ChapterTranslationPlan.needsTranslation(
+                                chapter, state.binding.preferredLanguage, state.autoTranslate,
+                            ),
+                            isDark = isDark,
+                            ru = ru,
+                            onClick = { onOpen(chapter) },
+                            onToggleRead = { onToggleRead(chapter, it) },
+                            onToggleDownload = { onToggleDownload(chapter) },
+                            modifier = Modifier.animateItem(
+                                fadeInSpec = null,
+                                placementSpec = MotionTokens.seasonExpansion(),
+                                fadeOutSpec = MotionTokens.tweenFast(),
+                            ).then(reveals.getValue(group.key).rowModifier(index)),
+                        )
                     }
                 }
             }
