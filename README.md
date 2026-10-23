@@ -67,7 +67,7 @@ Vetro does not host any media. It connects to catalogues and sources that you ch
 
 <p align="center"><sub>Also in this build: audio selection in a bottom sheet, recessed Details backgrounds with page-matched margins, and reversible season/volume animations without a reset on reopening.</sub></p>
 
-<p align="center"><a href="CHANGELOG.md">Detailed 3.4.4 changelog (Russian)</a></p>
+<p align="center"><a href="CHANGELOG.md">Detailed 3.4.4 changelog</a></p>
 
 <p align="center"><img src="images/readme/divider.svg" alt="" width="880" /></p>
 

@@ -68,6 +68,7 @@ dependency and `manga/translate/pipeline` into an optional source set that the r
 
 1. Bump `versionCode` / `versionName` in `app/build.gradle.kts` and add
    `fastlane/metadata/android/en-US/changelogs/<versionCode>.txt`.
+   Write the detailed changelog and GitHub release notes in English.
 2. Commit, then `git tag vX.Y.Z-Stable` on that commit and push the tag.
 3. `gh release create` with the signed APK.
 4. Watch the bot MR in `fdroiddata`; if its `fdroid build` job fails, the log is the first place to look.
