@@ -153,6 +153,7 @@ class StreamPlayerActivity : ComponentActivity(), PipHostActivity {
     private val mediaGateway: MediaGateway by inject()
     private val okHttpClient: OkHttpClient by inject()
     private val playbackStore: EpisodePlaybackStore by inject()
+    private val titleTrackingRecorder: com.example.myapplication.media.progress.TitleTrackingRecorder by inject()
     private val externalSubtitles: ExternalSubtitleService by inject()
     private val whisperModels: WhisperModelStore by inject()
     private val whisperSubtitles: WhisperSubtitleManager by inject()
@@ -327,7 +328,14 @@ class StreamPlayerActivity : ComponentActivity(), PipHostActivity {
 
                     // Прогресс пишется под текущую серию и после переключения — тоже (onStop читает
                     // именно эти поля).
-                    LaunchedEffect(episode) { activeEpisode = episode }
+                    LaunchedEffect(animeId, season, episode) {
+                        activeEpisode = episode
+                        val openedEpisode = episode
+                        appScope.launch {
+                            runCatching { titleTrackingRecorder.opened(animeId, season, openedEpisode) }
+                                .onFailure { android.util.Log.w("WatchDates", "Could not record episode open", it) }
+                        }
+                    }
 
                     BackHandler { finish() }
                     DisposableEffect(landscape) {

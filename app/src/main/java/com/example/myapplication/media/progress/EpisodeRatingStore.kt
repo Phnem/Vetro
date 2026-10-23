@@ -88,6 +88,7 @@ class EpisodeRatingStore(
                 if (stored == 0 && current[target] == null) return@edit
                 current[target] = EpisodeRating(stored = stored, updatedAt = System.currentTimeMillis())
                 preferences[preferenceKey] = encode(current)
+                TitleTrackingStore.resetIfUnrated(preferences, animeId, current.values)
             }
         }
     }
@@ -128,7 +129,10 @@ class EpisodeRatingStore(
                         changed = true
                         applied++
                     }
-                    if (changed) preferences[preferenceKey] = encode(current)
+                    if (changed) {
+                        preferences[preferenceKey] = encode(current)
+                        TitleTrackingStore.resetIfUnrated(preferences, animeId, current.values)
+                    }
                 }
             }
         }
@@ -142,6 +146,10 @@ class EpisodeRatingStore(
         }.getOrElse { emptyMap() }
     }
 
+    internal fun rawRatings(preferences: Preferences, animeId: String): String? = preferences[ratingKey(animeId)]
+
+    internal fun decodeRatings(raw: String?): Map<PlaybackEpisodeKey, EpisodeRating> = decode(raw)
+
     private fun encode(value: Map<PlaybackEpisodeKey, EpisodeRating>): String =
         json.encodeToString(
             RatingSnapshot(
@@ -151,7 +159,7 @@ class EpisodeRatingStore(
             ),
         )
 
-    private fun ratingKey(animeId: String) =
+    internal fun ratingKey(animeId: String) =
         stringPreferencesKey("$RATING_PREFIX${stableSuffix(animeId)}")
 
     /** Тот же короткий хэш, что у ключей прогресса: по id тайтла ключ не угадать и не перечислить. */

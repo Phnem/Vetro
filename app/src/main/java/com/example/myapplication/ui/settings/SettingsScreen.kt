@@ -60,6 +60,7 @@ import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.filled.Image
+import androidx.compose.material.icons.filled.ViewCarousel
 import androidx.compose.material.icons.outlined.BrightnessAuto
 import androidx.compose.material.icons.outlined.Category
 import androidx.compose.material.icons.outlined.DarkMode
@@ -634,6 +635,7 @@ fun SettingsScreen(
                                 onFpsOverlayToggle = { performHaptic(view, Haptic.Light); viewModel.setDevFpsOverlay(it) },
                                 onAdaptiveGlassToggle = { performHaptic(view, Haptic.Light); viewModel.setDevAdaptiveGlassScroll(it) },
                                 onFullBleedCardsToggle = { performHaptic(view, Haptic.Light); viewModel.setDevFullBleedCards(it) },
+                                onExperimentalGridToggle = { performHaptic(view, Haptic.Light); viewModel.setDevExperimentalGrid(it) },
                                 onExteraBackToggle = { performHaptic(view, Haptic.Light); viewModel.setDevExteraBack(it) },
                                 onExportLogs = { performHaptic(view, Haptic.Light); viewModel.exportLogs(context) },
                                 onExportPdf = { performHaptic(view, Haptic.Light); viewModel.exportCollectionPdf(context) },
@@ -891,6 +893,7 @@ private fun DeveloperGroups(
     onFpsOverlayToggle: (Boolean) -> Unit,
     onAdaptiveGlassToggle: (Boolean) -> Unit,
     onFullBleedCardsToggle: (Boolean) -> Unit,
+    onExperimentalGridToggle: (Boolean) -> Unit,
     onExteraBackToggle: (Boolean) -> Unit,
     onExportLogs: () -> Unit,
     onExportPdf: () -> Unit,
@@ -950,6 +953,26 @@ private fun DeveloperGroups(
                             IosSwitch(
                                 checked = uiState.devFullBleedCards,
                                 onCheckedChange = onFullBleedCardsToggle,
+                            )
+                        },
+                    )
+                },
+                {
+                    val ru = strings.languageName == "RU"
+                    IosRow(
+                        title = if (ru) "Экспериментальная сетка" else "Experimental grid",
+                        subtitle = if (ru) {
+                            "Избранное в горизонтальной ленте над коллекцией"
+                        } else {
+                            "Favorites in a horizontal strip above the collection"
+                        },
+                        isDark = isDark,
+                        icon = Icons.Filled.ViewCarousel,
+                        iconBackground = devIcon,
+                        trailing = {
+                            IosSwitch(
+                                checked = uiState.devExperimentalGrid,
+                                onCheckedChange = onExperimentalGridToggle,
                             )
                         },
                     )

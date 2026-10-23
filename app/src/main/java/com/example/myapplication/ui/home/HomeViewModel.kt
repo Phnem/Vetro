@@ -11,6 +11,7 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.myapplication.data.local.AnimeLocalDataSource
+import com.example.myapplication.data.local.DevPreferencesKeys
 import com.example.myapplication.data.models.Anime
 import com.example.myapplication.data.models.AnimeUpdate
 import com.example.myapplication.data.repository.AnimeRepository
@@ -81,6 +82,7 @@ class HomeViewModel(
     private val mangaChapterCacheStore: com.example.myapplication.manga.data.MangaChapterCacheStore,
     private val mangaReadingStore: com.example.myapplication.manga.data.MangaReadingStore,
     private val autoWatchStatus: com.example.myapplication.domain.status.AutoWatchStatusResolver,
+    private val titleTrackingStore: com.example.myapplication.media.progress.TitleTrackingStore,
     private val mangaTranslateSettings: com.example.myapplication.manga.translate.MangaTranslateSettings? = null,
     /** null — раздел аудиокниг выключен в сборке, вкладки «Книги» в поиске нет. */
     private val bookSearch: com.example.myapplication.audiobooks.data.BookSearchAdder? = null,
@@ -255,6 +257,11 @@ class HomeViewModel(
             AppLanguagePrefs.from(prefs)
         }
         .stateIn(viewModelScope, SharingStarted.Eagerly, AppLanguage.EN)
+
+    val experimentalGrid: StateFlow<Boolean> = settingsDataStore.data
+        .map { it[DevPreferencesKeys.EXPERIMENTAL_GRID] ?: false }
+        .distinctUntilChanged()
+        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
     val syncReport = MutableStateFlow(com.example.myapplication.SyncReport())
 
@@ -628,9 +635,13 @@ class HomeViewModel(
      * Оценка с карточки (окно со смайликом по тапу на рейтинг). [rating] — десятибалльная,
      * 0 снимает оценку. Остальные поля записи не трогаем: пишем ту же запись, что прочитали.
      */
+    suspend fun usesEpisodeRating(id: String): Boolean =
+        titleTrackingStore.observe(id).first().preferences.manualRating
+
     fun setRating(id: String, rating: Float) {
         viewModelScope.launch(Dispatchers.IO) {
             runCatching {
+                if (usesEpisodeRating(id)) return@launch
                 val anime = localDataSource.getAnimeById(id) ?: return@launch
                 localDataSource.updateAnime(
                     anime.copy(rating = rating.coerceIn(0f, com.example.myapplication.data.models.RatingScale.MAX_DISPLAY))

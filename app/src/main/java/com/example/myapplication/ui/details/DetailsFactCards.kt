@@ -73,6 +73,7 @@ fun buildDetailFacts(
     details: AnimeDetails?,
     ru: Boolean,
     ratings: OmdbRatings? = null,
+    userRatingOverride: Float? = null,
 ): List<DetailFact> {
     val isManga = anime.mediaType == MediaType.MANGA
     val facts = mutableListOf<DetailFact>()
@@ -80,7 +81,7 @@ fun buildDetailFacts(
     // Рейтинг идёт первым: это единственный факт, который переехал сюда из верхней строки чипсов
     // (её остальные пункты — дата и число серий — дублировали «Релиз» и «Эпизоды»). Задвинуть его
     // в конец сетки значило бы обесценить сам смысл переноса.
-    ratingLabel(anime, details)?.let { label ->
+    (userRatingOverride?.let { "${RatingScale.format(it)}/10" } ?: ratingLabel(anime, details))?.let { label ->
         facts += DetailFact(
             key = "rating",
             icon = Icons.Rounded.Star,

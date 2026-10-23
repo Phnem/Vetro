@@ -26,6 +26,7 @@ data class SettingsUiState(
     val devLegacyUi: Boolean = false,
     /** Карточки с обложкой на всю площадь, см. `DevPreferencesKeys.FULL_BLEED_CARDS`. */
     val devFullBleedCards: Boolean = true,
+    val devExperimentalGrid: Boolean = false,
     /** Анимация «назад» как в exteraGram, см. `DevPreferencesKeys.EXTERA_BACK`. */
     val devExteraBack: Boolean = true,
     val isExportingLogs: Boolean = false,

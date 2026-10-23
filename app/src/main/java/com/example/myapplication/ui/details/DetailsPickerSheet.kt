@@ -1,18 +1,10 @@
 package com.example.myapplication.ui.details
 
-import androidx.activity.compose.BackHandler
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -20,8 +12,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -46,11 +36,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -62,27 +51,17 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.zIndex
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 import coil3.request.crossfade
 import com.example.myapplication.data.models.WatchStatus
 import com.example.myapplication.domain.enrichment.PosterCandidate
 import com.example.myapplication.domain.enrichment.TitleCandidate
-import com.example.myapplication.ui.shared.components.GrabberHandle
-import com.example.myapplication.ui.shared.components.NoOverscroll
 import com.example.myapplication.ui.shared.components.accent
 import com.example.myapplication.ui.shared.components.icon
-import com.example.myapplication.ui.shared.components.rememberIosSheetSwipe
 import com.example.myapplication.ui.shared.theme.BrandOrangeBright
 import com.example.myapplication.ui.shared.theme.IosDesign
-import com.example.myapplication.ui.shared.theme.MotionTokens
-import com.example.myapplication.ui.shared.theme.OverlayThemeTokens
 import com.example.myapplication.ui.shared.theme.SnProFamily
-import com.example.myapplication.ui.shared.theme.SquircleCornerShape
-import com.example.myapplication.ui.shared.theme.sheetFloatingMargin
-import com.example.myapplication.ui.shared.theme.sheetPanelShape
-import com.example.myapplication.ui.shared.theme.iosSheetContainer
 
 /** Что сейчас выбирает пользователь в шторке меню «⋯» экрана Details. */
 sealed interface DetailsPickerState {
@@ -106,80 +85,41 @@ sealed interface DetailsPickerState {
         val chosen: WatchStatus?,
         val effective: WatchStatus,
     ) : DetailsPickerState
+
+    data class RatingMode(val manual: Boolean) : DetailsPickerState
+    data class DateMode(val preferences: com.example.myapplication.media.progress.TitleTrackingPreferences) : DetailsPickerState
+    data class WatchDates(val start: java.time.LocalDate?, val finish: java.time.LocalDate?) : DetailsPickerState
 }
 
-/**
- * Шторка выбора: обложка из других каталогов или вариант тайтла для «Источник неверен».
- * Скрим, подъём и свайп вниз — как у шторки рекомендаций.
- */
+/** Content of the shared IosSheetScaffold owned by DetailsScreen. */
 @Composable
-internal fun DetailsPickerSheet(
+internal fun DetailsPickerContent(
     state: DetailsPickerState,
     ru: Boolean,
     isDark: Boolean,
-    onDismiss: () -> Unit,
     onPickCover: (PosterCandidate) -> Unit,
     onPickSource: (TitleCandidate) -> Unit,
     onNoneOfThese: () -> Unit,
     onSearch: (String) -> Unit,
     onPickStatus: (WatchStatus?) -> Unit,
+    onPickRatingMode: (Boolean) -> Unit,
+    onPickDateMode: (Boolean) -> Unit,
+    onSaveWatchDates: (java.time.LocalDate, java.time.LocalDate?) -> Unit,
 ) {
     if (state == DetailsPickerState.None) return
-    com.example.myapplication.ui.shared.SheetGateEffect(true)
-
-    var visible by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) { visible = true }
-    LaunchedEffect(visible) {
-        if (!visible) {
-            kotlinx.coroutines.delay(250)
-            onDismiss()
-        }
-    }
-    BackHandler { visible = false }
-    val swipe = rememberIosSheetSwipe { visible = false }
-
-    Box(Modifier.fillMaxSize().zIndex(10f), contentAlignment = Alignment.BottomCenter) {
-        AnimatedVisibility(visible = visible, enter = fadeIn(tween(200)), exit = fadeOut(tween(150))) {
-            Box(
-                Modifier
-                    .fillMaxSize()
-                    .background(Color.Black.copy(alpha = OverlayThemeTokens.scrimAlpha(isDark) * com.example.myapplication.ui.shared.theme.SheetStyle.scrimFactor))
-                    .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {
-                        visible = false
-                    },
-            )
-        }
-        AnimatedVisibility(
-            visible = visible,
-            enter = slideInVertically(initialOffsetY = { it }, animationSpec = MotionTokens.sheetPresent()) + fadeIn(),
-            exit = slideOutVertically(targetOffsetY = { it }, animationSpec = MotionTokens.sheetDismissForced()) + fadeOut(),
-        ) {
-            BoxWithConstraints {
-                Column(
-                    modifier = Modifier
-                        .sheetFloatingMargin()
-                        .then(swipe.panelModifier)
-                        .fillMaxWidth()
-                        .heightIn(max = maxHeight * 0.9f)
-                        .iosSheetContainer(
-                            sheetPanelShape(),
-                            isDark,
-                            IosDesign.sheetSurface(isDark),
-                        )
-                        .imePadding()
-                        .navigationBarsPadding(),
-                ) {
-                    GrabberHandle(isDark, modifier = swipe.handleModifier)
-                    NoOverscroll {
-                        when (state) {
-                            is DetailsPickerState.Covers -> CoversContent(state, ru, onPickCover)
-                            is DetailsPickerState.Sources -> SourcesContent(state, ru, onPickSource, onNoneOfThese, onSearch)
-                            is DetailsPickerState.Status -> StatusContent(state, ru, isDark, onPickStatus)
-                            DetailsPickerState.None -> Unit
-                        }
-                    }
-                }
-            }
+    Column(
+        Modifier.fillMaxWidth()
+            .padding(top = com.example.myapplication.ui.shared.components.GrabberReservedTop)
+            .navigationBarsPadding(),
+    ) {
+        when (state) {
+            is DetailsPickerState.Covers -> CoversContent(state, ru, onPickCover)
+            is DetailsPickerState.Sources -> SourcesContent(state, ru, onPickSource, onNoneOfThese, onSearch)
+            is DetailsPickerState.Status -> StatusContent(state, ru, isDark, onPickStatus)
+            is DetailsPickerState.RatingMode -> TrackingModeContent(true, state.manual, ru, isDark, onPickRatingMode)
+            is DetailsPickerState.DateMode -> TrackingModeContent(false, state.preferences.manualDates, ru, isDark, onPickDateMode)
+            is DetailsPickerState.WatchDates -> WatchDatesContent(state, ru, isDark, onSaveWatchDates)
+            DetailsPickerState.None -> Unit
         }
     }
 }

@@ -18,7 +18,8 @@
 
 <p align="center">
   <a href="https://github.com/Phnem/Vetro/releases">Releases</a> ·
-  <a href="#whats-new-in-343">What's new</a> ·
+  <a href="#whats-new-in-344">What's new</a> ·
+  <a href="CHANGELOG.md">Changelog (RU)</a> ·
   <a href="#what-vetro-does">Features</a> ·
   <a href="#screens">Screens</a> ·
   <a href="#install">Install</a> ·
@@ -31,40 +32,42 @@ Vetro is an Android media library. Build a personal collection, follow new episo
 
 Vetro does not host any media. It connects to catalogues and sources that you choose, including your own servers.
 
-> **Current development build:** `v3.4.3`. The app is actively evolving; source availability can vary by region.
+> **Current stable release:** [`v3.4.4-Stable`](https://github.com/Phnem/Vetro/releases/tag/v3.4.4-Stable). The app is actively evolving; source availability can vary by region.
 
 <p align="center"><img src="images/readme/divider.svg" alt="" width="880" /></p>
 
-## What's new in 3.4.3
+## What's new in 3.4.4
 
 <p align="center">
-  <img src="images/readme/whats-new.svg" alt="What's new in Vetro 3.4.3: watch status, sort and filters, episode ratings, floating bottom sheets" width="880" />
+  <img src="images/readme/whats-new.svg" alt="What's new in Vetro 3.4.4: episode-based title ratings, watch dates, biometric app lock and an experimental favorites strip" width="880" />
 </p>
 
 <table>
   <tr>
     <td width="50%" valign="top">
-      <b>Watch status</b><br />
-      Mark every title in Details: <i>Planned, Watching, Completed, Rewatching, On Hold, Dropped</i> or <i>Not Started</i>. Until you pick one, Vetro decides for you: a title you are partway through shows as <i>Watching</i>, everything else as <i>Completed</i>.
+      <b>Title ratings from episode scores</b><br />
+      Choose <i>Manual rating</i> in Details to use the average of your rated episodes across seasons. Unrated episodes are excluded; the result also appears on collection cards. <i>Auto rating</i> restores the original title score.
     </td>
     <td width="50%" valign="top">
-      <b>Sort and filters, rebuilt</b><br />
-      One sheet for the whole library: sort order, status and genre chips (up to three each, or <i>All</i>), and glass two-handle sliders for release year (1950 to today), rating (0.0–10.0) and total episodes (1–2000). Release years are filled in by background enrichment.
+      <b>Watch dates</b><br />
+      Record the first opening of the first and final episodes automatically, or choose start and finish dates in a calendar. A saved finish date marks the title as <i>Completed</i>; you can also leave it open while watching.
     </td>
   </tr>
   <tr>
     <td width="50%" valign="top">
-      <b>Rate single episodes</b><br />
-      Press and hold an episode, then drag: the rating face follows your finger from 0.0 to 10.0 (it starts from your current score, or 5.0). Tap the score on a library card to change it in the same bubble. Episode scores sync with your account.
+      <b>Biometric app lock</b><br />
+      An optional setting asks for your fingerprint or face through Android's system prompt when entering the app. It also protects direct entry into players and readers. Off by default.
     </td>
     <td width="50%" valign="top">
-      <b>Floating bottom sheets</b><br />
-      Every sheet now hovers over the edges of the screen with a thin light rim and a soft shadow. Pull the content down from its top to close it; page swipes stay off while a sheet is open.
+      <b>Experimental favorites strip</b><br />
+      Enable <i>Experimental grid</i> in Developer Settings to put favorites in a horizontal cover strip above the collection. Search, filters and the long-press menu still work. Off by default.
     </td>
   </tr>
 </table>
 
-<p align="center"><sub>Also in this build: a new version goes to the Android installer as soon as it is downloaded, and the download no longer crawls at the end.</sub></p>
+<p align="center"><sub>Also in this build: audio selection in a bottom sheet, recessed Details backgrounds with page-matched margins, and reversible season/volume animations without a reset on reopening.</sub></p>
+
+<p align="center"><a href="CHANGELOG.md">Detailed 3.4.4 changelog (Russian)</a></p>
 
 <p align="center"><img src="images/readme/divider.svg" alt="" width="880" /></p>
 

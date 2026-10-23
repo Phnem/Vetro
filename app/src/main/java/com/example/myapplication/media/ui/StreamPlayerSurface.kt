@@ -156,8 +156,7 @@ fun StreamPlayerSurface(
             .distinctBy { it.sourceName }
             .takeIf { it.size > 1 }
             .orEmpty()
-            // Колесо «озвучки»: сначала голоса, переводы-субтитры («… (субтитры)») — после. У свежей
-            // серии их бывает большинство, и вперемешку колесо выглядело как меню субтитров.
+            // В списке озвучек сначала голоса, переводы-субтитры («… (субтитры)») — после.
             .sortedBy { it.sourceName.orEmpty().contains("субтитр", ignoreCase = true) || it.sourceName.orEmpty().contains("subtitles", ignoreCase = true) }
             .map { rendition ->
                 AudioTrackOption(

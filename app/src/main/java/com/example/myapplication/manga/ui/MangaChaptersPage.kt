@@ -605,7 +605,7 @@ internal fun ChaptersContent(
                         )
                     }
                 }
-                if (isExpanded) {
+                if (isExpanded || reveals.getValue(group.key).visible) {
                     itemsIndexed(group.chapters, key = { _, chapter -> "${group.key}_${chapter.key}" }) { index, chapter ->
                         ChapterRow(
                             chapter = chapter,
@@ -622,11 +622,7 @@ internal fun ChaptersContent(
                             onClick = { onOpen(chapter) },
                             onToggleRead = { onToggleRead(chapter, it) },
                             onToggleDownload = { onToggleDownload(chapter) },
-                            modifier = Modifier.animateItem(
-                                fadeInSpec = null,
-                                placementSpec = MotionTokens.seasonExpansion(),
-                                fadeOutSpec = MotionTokens.tweenFast(),
-                            ).then(reveals.getValue(group.key).rowModifier(index)),
+                            modifier = reveals.getValue(group.key).rowModifier(index),
                         )
                     }
                 }

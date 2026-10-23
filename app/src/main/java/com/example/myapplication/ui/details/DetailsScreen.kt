@@ -37,11 +37,17 @@ import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.automirrored.rounded.MenuBook
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.PlayCircleFilled
+import androidx.compose.material.icons.rounded.Star
+import androidx.compose.material.icons.rounded.Schedule
+import com.example.myapplication.media.progress.TitleTracking
+import com.example.myapplication.data.models.RatingScale
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
+import androidx.activity.compose.BackHandler
+import com.example.myapplication.ui.shared.components.IosSheetScaffold
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -122,6 +128,7 @@ fun DetailsScreen(
     val seasons by viewModel.seasons.collectAsStateWithLifecycle()
     val enrichment by viewModel.enrichment.collectAsStateWithLifecycle()
     val watchStatus by viewModel.effectiveWatchStatus.collectAsStateWithLifecycle()
+    val tracking by viewModel.tracking.collectAsStateWithLifecycle()
     val isDark = isAppInDarkTheme()
 
     val current = anime
@@ -188,187 +195,208 @@ fun DetailsScreen(
         }
     }
 
-    Box(modifier = modifier.fillMaxSize().background(screenBg)) {
-        // Обе страницы лежат под layerBackdrop — стеклянные кнопка «назад» и мини-док
-        // преломляют живой контент. Узел с layerBackdrop никогда не размонтируется.
-        Box(modifier = Modifier.fillMaxSize().layerBackdrop(backdrop)) {
-            HorizontalPager(
-                flingBehavior = IosScroll.pagerFlingBehavior(pagerState),
-                // Резинка на краях у страниц читается как дёрганье (см. IosScroll.pagerFlingBehavior).
-                overscrollEffect = null,
-                state = pagerState,
-                // Свайп вправо со страницы «Детали» — назад на главную (как в iOS, от любой точки).
-                modifier = Modifier.fillMaxSize().detailsSwipeBack(pagerState, enabled = !com.example.myapplication.ui.shared.SheetGate.anyOpen),
-                beyondViewportPageCount = 1,
-            ) { page ->
-                when (page) {
-                    0 -> DetailsInfoPage(
-                        anime = current,
-                        displayTitle = displayTitle,
-                        uiState = uiState,
-                        language = language,
-                        isDark = isDark,
-                        imgPath = viewModel.getImgPath(current.imageFileName),
-                        webLinks = webLinks,
-                        seasons = seasons,
-                        enrichment = enrichment,
-                        onReleaseElapsed = viewModel::onReleaseElapsed,
-                        onWatch = {
-                            performHaptic(view, Haptic.Light)
-                            openEpisodes()
-                        },
-                        onDownload = {
-                            performHaptic(view, Haptic.Light)
-                            openEpisodes()
-                        },
-                        onToggleFavorite = {
-                            performHaptic(view, if (current.isFavorite) Haptic.Light else Haptic.Success)
-                            viewModel.toggleFavorite()
-                        },
-                        onOpenSeason = {
-                            performHaptic(view, Haptic.Light)
-                            openEpisodes()
-                        },
-                        onOpenStatus = {
-                            performHaptic(view, Haptic.Light)
-                            viewModel.openStatusPicker()
-                        },
-                        watchStatus = watchStatus,
-                        onHeroUnderStatusBar = { heroUnderStatusBar = it },
-                    )
+    val picker by viewModel.picker.collectAsStateWithLifecycle()
+    var retainedPicker by remember { mutableStateOf<DetailsPickerState>(DetailsPickerState.None) }
+    SideEffect { if (picker != DetailsPickerState.None) retainedPicker = picker }
+    val displayedPicker = if (picker != DetailsPickerState.None) picker else retainedPicker
+    BackHandler(enabled = picker != DetailsPickerState.None, onBack = viewModel::dismissPicker)
 
-                    else -> if (isManga) MangaChaptersPage(
-                        animeId = current.id,
-                        animeTitle = displayTitle,
-                        animeTitleEn = current.titleEn,
-                        language = language,
-                        // Отступ под шапку страница накладывает сама — на СОДЕРЖИМОЕ, не на фон.
-                        // Снаружи он ужимал и фон тоже, и над градиентом оставалась чёрная полоса
-                        // корневого экрана.
-                        modifier = Modifier.fillMaxSize(),
-                    ) else ModernDetailsEpisodesPage(
-                        animeId = current.id,
-                        animeTitle = displayTitle,
-                        animeTitleRu = current.titleRu,
-                        animeTitleEn = current.titleEn,
-                        malId = current.malId,
-                        anilistId = current.anilistId,
-                        language = language,
-                        isDark = isDark,
-                        seasons = seasons,
-                        fallbackEpisodes = current.episodes,
-                        posterPath = viewModel.getImgPath(current.imageFileName),
-                        viewModel = checkNotNull(episodeMenuViewModel),
-                        ratingSlider = episodeRatingSlider,
-                    )
+    IosSheetScaffold(
+        sheetVisible = picker != DetailsPickerState.None,
+        onDismiss = viewModel::dismissPicker,
+        modifier = modifier,
+        sheetHeightFraction = null,
+        // Цвета полей берём с реальной страницы: здесь фон зависит от обложки и прокрутки.
+        edgeContentLayer = backdrop.graphicsLayer,
+        content = {
+            Box(modifier = Modifier.fillMaxSize().background(screenBg)) {
+                // Обе страницы лежат под layerBackdrop — стеклянные кнопка «назад» и мини-док
+                // преломляют живой контент. Узел с layerBackdrop никогда не размонтируется.
+                Box(modifier = Modifier.fillMaxSize().layerBackdrop(backdrop)) {
+                    HorizontalPager(
+                        flingBehavior = IosScroll.pagerFlingBehavior(pagerState),
+                        // Резинка на краях у страниц читается как дёрганье (см. IosScroll.pagerFlingBehavior).
+                        overscrollEffect = null,
+                        state = pagerState,
+                        // Свайп вправо со страницы «Детали» — назад на главную (как в iOS, от любой точки).
+                        modifier = Modifier.fillMaxSize().detailsSwipeBack(pagerState, enabled = !com.example.myapplication.ui.shared.SheetGate.anyOpen),
+                        beyondViewportPageCount = 1,
+                    ) { page ->
+                        when (page) {
+                            0 -> DetailsInfoPage(
+                                anime = current.copy(rating = tracking.rating(current.rating)),
+                                displayTitle = displayTitle,
+                                uiState = uiState,
+                                language = language,
+                                isDark = isDark,
+                                imgPath = viewModel.getImgPath(current.imageFileName),
+                                webLinks = webLinks,
+                                seasons = seasons,
+                                enrichment = enrichment,
+                                onReleaseElapsed = viewModel::onReleaseElapsed,
+                                onWatch = {
+                                    performHaptic(view, Haptic.Light)
+                                    openEpisodes()
+                                },
+                                onDownload = {
+                                    performHaptic(view, Haptic.Light)
+                                    openEpisodes()
+                                },
+                                onToggleFavorite = {
+                                    performHaptic(view, if (current.isFavorite) Haptic.Light else Haptic.Success)
+                                    viewModel.toggleFavorite()
+                                },
+                                onOpenSeason = {
+                                    performHaptic(view, Haptic.Light)
+                                    openEpisodes()
+                                },
+                                onOpenStatus = {
+                                    performHaptic(view, Haptic.Light)
+                                    viewModel.openStatusPicker()
+                                },
+                                watchStatus = watchStatus,
+                                tracking = tracking,
+                                onOpenRatingMode = viewModel::openRatingModePicker,
+                                onOpenDateMode = viewModel::openDateModePicker,
+                                onHeroUnderStatusBar = { heroUnderStatusBar = it },
+                            )
+
+                            else -> if (isManga) MangaChaptersPage(
+                                animeId = current.id,
+                                animeTitle = displayTitle,
+                                animeTitleEn = current.titleEn,
+                                language = language,
+                                // Отступ под шапку страница накладывает сама — на СОДЕРЖИМОЕ, не на фон.
+                                // Снаружи он ужимал и фон тоже, и над градиентом оставалась чёрная полоса
+                                // корневого экрана.
+                                modifier = Modifier.fillMaxSize(),
+                            ) else ModernDetailsEpisodesPage(
+                                animeId = current.id,
+                                animeTitle = displayTitle,
+                                animeTitleRu = current.titleRu,
+                                animeTitleEn = current.titleEn,
+                                malId = current.malId,
+                                anilistId = current.anilistId,
+                                language = language,
+                                isDark = isDark,
+                                seasons = seasons,
+                                fallbackEpisodes = current.episodes,
+                                posterPath = viewModel.getImgPath(current.imageFileName),
+                                viewModel = checkNotNull(episodeMenuViewModel),
+                                ratingSlider = episodeRatingSlider,
+                            )
+                        }
+                    }
                 }
-            }
-        }
 
-        DetailsGlassBackButton(
-            backdrop = backdrop,
-            isDark = isDark,
-            onClick = { navController.popBackStack() },
-            modifier = Modifier
-                .align(Alignment.TopStart)
-                .statusBarsPadding()
-                .padding(top = 12.dp, start = 16.dp)
-                .zIndex(4f),
-        )
-
-        // Меню работает с каталогами аниме (обложки, id, «просмотрено» по сериям), у манги его нет.
-        if (!isManga) {
-            DetailsOverflowMenu(
-                backdrop = backdrop,
-                isDark = isDark,
-                ru = language == AppLanguage.RU,
-                onMarkWatched = viewModel::markWatched,
-                onChangeCover = viewModel::openCoverPicker,
-                onWrongSource = viewModel::openSourcePicker,
-            )
-        }
-
-        val picker by viewModel.picker.collectAsStateWithLifecycle()
-        DetailsPickerSheet(
-            state = picker,
-            ru = language == AppLanguage.RU,
-            isDark = isDark,
-            onDismiss = viewModel::dismissPicker,
-            onPickCover = viewModel::pickCover,
-            onPickSource = viewModel::pickSource,
-            onNoneOfThese = viewModel::rejectSource,
-            onSearch = viewModel::searchSources,
-            onPickStatus = viewModel::pickStatus,
-        )
-
-        DetailsMiniDock(
-            backdrop = backdrop,
-            isDark = isDark,
-            language = language,
-            isManga = isManga,
-            activePage = pagerState.targetPage,
-            onSelect = { page ->
-                performHaptic(view, Haptic.Light)
-                scope.launch {
-                    pagerState.animateScrollToPage(page, animationSpec = MotionTokens.sheetPresent())
-                }
-            },
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .navigationBarsPadding()
-                .padding(bottom = 16.dp)
-                .zIndex(4f),
-        )
-
-        // Кнопка «продолжить» относится к списку серий/глав, поэтому живёт только на второй
-        // странице. У манги она делает то же самое, что у аниме, — открывает то, на чём читатель
-        // остановился; у манги вдобавок может быть нечего открывать (источник ещё не привязан),
-        // и тогда кнопки просто нет.
-        if (pagerState.targetPage == 1) {
-            val startButtonModifier = Modifier
-                .align(Alignment.BottomCenter)
-                .navigationBarsPadding()
-                .padding(bottom = 16.dp)
-                .offset(x = 124.dp)
-                .zIndex(4f)
-            if (isManga) {
-                val continueReading = rememberMangaContinueReading(
-                    animeId = current.id,
-                    animeTitle = displayTitle,
-                    animeTitleEn = current.titleEn,
-                )
-                if (continueReading != null) {
-                    DetailsGlassStartButton(
-                        backdrop = backdrop,
-                        onClick = {
-                            performHaptic(view, Haptic.Light)
-                            continueReading()
-                        },
-                        modifier = startButtonModifier,
-                    )
-                }
-            } else {
-                DetailsGlassStartButton(
+                DetailsGlassBackButton(
                     backdrop = backdrop,
-                    onClick = {
-                        performHaptic(view, Haptic.Light)
-                        episodeMenuViewModel?.startWatching()
-                    },
-                    modifier = startButtonModifier,
+                    isDark = isDark,
+                    onClick = { navController.popBackStack() },
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .statusBarsPadding()
+                        .padding(top = 12.dp, start = 16.dp)
+                        .zIndex(4f),
                 )
-            }
-        }
 
-        // Бабл оценки серии — последним и с самым высоким zIndex: закрывает мини-док и кнопки.
-        // Жестом не владеет: палец остаётся на строке серии, бабл только рисует состояние.
-        if (!isManga) {
-            RatingOverlayHost(
-                state = episodeRatingSlider,
+                // Меню работает с каталогами аниме (обложки, id, «просмотрено» по сериям), у манги его нет.
+                if (!isManga) {
+                    DetailsOverflowMenu(
+                        backdrop = backdrop,
+                        isDark = isDark,
+                        ru = language == AppLanguage.RU,
+                        onMarkWatched = viewModel::markWatched,
+                        onChangeCover = viewModel::openCoverPicker,
+                        onWrongSource = viewModel::openSourcePicker,
+                    )
+                }
+
+                DetailsMiniDock(
+                    backdrop = backdrop,
+                    isDark = isDark,
+                    language = language,
+                    isManga = isManga,
+                    activePage = pagerState.targetPage,
+                    onSelect = { page ->
+                        performHaptic(view, Haptic.Light)
+                        scope.launch {
+                            pagerState.animateScrollToPage(page, animationSpec = MotionTokens.sheetPresent())
+                        }
+                    },
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .navigationBarsPadding()
+                        .padding(bottom = 16.dp)
+                        .zIndex(4f),
+                )
+
+                // Кнопка «продолжить» относится к списку серий/глав, поэтому живёт только на второй
+                // странице. У манги она делает то же самое, что у аниме, — открывает то, на чём читатель
+                // остановился; у манги вдобавок может быть нечего открывать (источник ещё не привязан),
+                // и тогда кнопки просто нет.
+                if (pagerState.targetPage == 1) {
+                    val startButtonModifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .navigationBarsPadding()
+                        .padding(bottom = 16.dp)
+                        .offset(x = 124.dp)
+                        .zIndex(4f)
+                    if (isManga) {
+                        val continueReading = rememberMangaContinueReading(
+                            animeId = current.id,
+                            animeTitle = displayTitle,
+                            animeTitleEn = current.titleEn,
+                        )
+                        if (continueReading != null) {
+                            DetailsGlassStartButton(
+                                backdrop = backdrop,
+                                onClick = {
+                                    performHaptic(view, Haptic.Light)
+                                    continueReading()
+                                },
+                                modifier = startButtonModifier,
+                            )
+                        }
+                    } else {
+                        DetailsGlassStartButton(
+                            backdrop = backdrop,
+                            onClick = {
+                                performHaptic(view, Haptic.Light)
+                                episodeMenuViewModel?.startWatching()
+                            },
+                            modifier = startButtonModifier,
+                        )
+                    }
+                }
+
+                // Бабл оценки серии — последним и с самым высоким zIndex: закрывает мини-док и кнопки.
+                // Жестом не владеет: палец остаётся на строке серии, бабл только рисует состояние.
+                if (!isManga) {
+                    RatingOverlayHost(
+                        state = episodeRatingSlider,
+                        ru = language == AppLanguage.RU,
+                        modifier = Modifier.zIndex(10f),
+                    )
+                }
+            }
+        },
+        sheetContent = {
+            DetailsPickerContent(
+                state = displayedPicker,
                 ru = language == AppLanguage.RU,
-                modifier = Modifier.zIndex(10f),
+                isDark = isDark,
+                onPickCover = viewModel::pickCover,
+                onPickSource = viewModel::pickSource,
+                onNoneOfThese = viewModel::rejectSource,
+                onSearch = viewModel::searchSources,
+                onPickStatus = viewModel::pickStatus,
+                onPickRatingMode = viewModel::pickRatingMode,
+                onPickDateMode = viewModel::pickDateMode,
+                onSaveWatchDates = viewModel::saveWatchDates,
             )
-        }
-    }
+        },
+    )
 }
 
 // ==========================================
@@ -394,6 +422,9 @@ private fun DetailsInfoPage(
     onOpenSeason: () -> Unit,
     onOpenStatus: () -> Unit,
     watchStatus: WatchStatus?,
+    tracking: TitleTracking,
+    onOpenRatingMode: () -> Unit,
+    onOpenDateMode: () -> Unit,
     onHeroUnderStatusBar: (Boolean) -> Unit,
 ) {
     val context = LocalContext.current
@@ -523,14 +554,28 @@ private fun DetailsInfoPage(
             )
 
             // Статус просмотра: тап открывает выбор. Без ручного выбора показывается выведенный из прогресса.
-            if (watchStatus != null) {
-                Spacer(Modifier.height(12.dp))
-                WatchStatusChip(
-                    status = watchStatus,
-                    ru = ru,
-                    isDark = isDark,
-                    onClick = onOpenStatus,
-                )
+            Spacer(Modifier.height(12.dp))
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                if (watchStatus != null) WatchStatusChip(watchStatus, ru, isDark, onOpenStatus)
+                if (anime.mediaType != MediaType.MANGA) {
+                    TrackingChip(
+                        label = if (tracking.preferences.manualRating) "Manual · ${RatingScale.format(anime.rating)}" else "Auto",
+                        description = if (ru) "Режим рейтинга" else "Rating mode",
+                        icon = Icons.Rounded.Star,
+                        isDark = isDark,
+                        onClick = onOpenRatingMode,
+                    )
+                    TrackingChip(
+                        label = watchDatesLabel(tracking.preferences),
+                        description = if (ru) "Даты просмотра" else "Watch dates",
+                        icon = Icons.Rounded.Schedule,
+                        isDark = isDark,
+                        onClick = onOpenDateMode,
+                    )
+                }
             }
 
             // Строки мета-чипов «дата · рейтинг · серии» здесь больше нет: дата дублировала
@@ -597,7 +642,10 @@ private fun DetailsInfoPage(
             // ——— Информация: сетка 2×N. Пока карточка API не пришла, факты берутся из
             // локальной записи (счётчик серий), поэтому секция не мигает пустотой. ———
             val ratings = enrichment?.ratings
-            val facts = remember(anime, details, ru, ratings) { buildDetailFacts(anime, details, ru, ratings) }
+            val facts = remember(anime, details, ru, ratings, tracking.preferences.manualRating) {
+                buildDetailFacts(anime, details, ru, ratings,
+                    userRatingOverride = anime.rating.takeIf { tracking.preferences.manualRating })
+            }
             if (facts.isNotEmpty()) {
                 SectionHeader(text = if (ru) "Информация" else "Information", color = onBg)
                 Spacer(Modifier.height(12.dp))

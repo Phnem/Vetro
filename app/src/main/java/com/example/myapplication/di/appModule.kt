@@ -49,7 +49,7 @@ import org.koin.dsl.module
 val appModule = module {
     single { StatsPhraseCatalog(androidContext()) }
     single { ResolveStatsFooterPhraseUseCase(catalog = get(), settingsDataStore = get(named("settings"))) }
-    single<AnimeRepository> { AnimeRepository(apiService = get(), localDataSource = get()) }
+    single<AnimeRepository> { AnimeRepository(apiService = get(), localDataSource = get(), titleTracking = get()) }
     single { AppUpdateRepository(settingsDataStore = get(named("settings")), animeRepository = get()) }
     // Обновление приложения: режим решает подпись (UpdatePolicy), всё остальное живёт в AppUpdateManager.
     single { com.example.myapplication.update.UpdatePolicy(get()) }
@@ -581,6 +581,8 @@ val appModule = module {
     }
     // Личные оценки серий: тот же DataStore, что у прогресса, но отдельный класс и своя таблица.
     single { com.example.myapplication.media.progress.EpisodeRatingStore(store = get(named("playback"))) }
+    single { com.example.myapplication.media.progress.TitleTrackingStore(store = get(named("playback")), ratings = get()) }
+    single { com.example.myapplication.media.progress.TitleTrackingRecorder(get(), get(), get(), get()) }
     single {
         CollectionEnrichmentCoordinator(
             context = androidContext(),

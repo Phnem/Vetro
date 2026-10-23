@@ -1,0 +1,9 @@
+New
+• Title ratings from your episode scores, with Auto/Manual modes.
+• Automatic watch dates and a calendar for manual start/finish dates.
+• Optional fingerprint/face app lock, off by default.
+• Experimental favorites strip in Developer Settings, off by default.
+• Audio selection uses a bottom sheet instead of a wheel.
+Fixes
+• Details sheets keep the recessed background with page-matched margins.
+• Seasons and volumes animate both ways; reopening continues without resetting.

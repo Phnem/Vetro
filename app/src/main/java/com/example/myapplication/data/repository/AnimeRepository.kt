@@ -22,6 +22,9 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.flowOf
+import com.example.myapplication.media.progress.TitleTrackingStore
 
 /**
  * Single source of truth for anime data. Network calls return Result;
@@ -31,7 +34,8 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
  */
 class AnimeRepository(
     private val apiService: ApiService,
-    private val localDataSource: AnimeLocalDataSource
+    private val localDataSource: AnimeLocalDataSource,
+    private val titleTracking: TitleTrackingStore? = null,
 ) {
 
     fun getAllAnimeSnapshot(): List<Anime> = localDataSource.getAllAnimeList()
@@ -54,7 +58,14 @@ class AnimeRepository(
         // при SERIES тянем всё и доотфильтровываем в памяти.
         val dbFilterType = if (filterType == MediaType.SERIES) null else filterType
         combine(
-            localDataSource.observeAllAnime(dbFilterType),
+            localDataSource.observeAllAnime(dbFilterType).flatMapLatest { list ->
+                titleTracking?.observeTitles(list.map { it.id })?.map { tracking ->
+                    list.map { anime ->
+                        val score = tracking[anime.id]?.rating(anime.rating) ?: anime.rating
+                        if (score == anime.rating) anime else anime.copy(rating = score)
+                    }
+                } ?: flowOf(list)
+            },
             searchQuery.debounce(300L).distinctUntilChanged(),
             sortOption.distinctUntilChanged(),
             sortAscending.distinctUntilChanged(),

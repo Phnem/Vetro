@@ -44,6 +44,9 @@ object DevPreferencesKeys {
      */
     val FULL_BLEED_CARDS = booleanPreferencesKey("dev_full_bleed_cards")
 
+    /** Избранные в горизонтальной ленте над коллекцией. Отсутствие ключа = ВЫКЛ. */
+    val EXPERIMENTAL_GRID = booleanPreferencesKey("dev_experimental_grid")
+
     /**
      * Анимация «назад» в стиле exteraGram (интенсивность 2): страница уменьшается до 0.85, едет за
      * пальцем и по вертикали, скругляется, а страница под ней проявляется со скримом. Та же

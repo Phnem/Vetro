@@ -38,6 +38,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.layer.GraphicsLayer
 import androidx.compose.foundation.LocalOverscrollFactory
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
@@ -91,10 +92,8 @@ fun IosSheetScaffold(
     sheetHeightFraction: Float? = 0.92f,
     cornerRadius: Dp = IosDesign.SheetCorner,
     scrimMaxAlpha: Float? = null,
-    // 1f — фон остаётся на всю ширину: прежнее вдавливание до 0.92 оставляло по бокам чёрные
-    // поля, которые на светлой теме и под блюром выглядели как дыры. Глубину теперь даёт
-    // градиентный скрим (темнее к верху) и тень самой панели.
-    backgroundScaleTarget: Float = 1f,
+    // null — обычный фон на всю ширину, в Extera — вдавливание.
+    backgroundScaleTarget: Float? = null,
     dragToDismiss: Boolean = true,
     showGrabber: Boolean = true,
     sheetContainerColor: Color? = null,
@@ -102,6 +101,9 @@ fun IosSheetScaffold(
     // контента (тем же градиентом и в том же масштабе, чтобы шва не было). По умолчанию —
     // общий градиент экранов приложения.
     backdropBrush: Brush? = null,
+    // Already-recorded page background, excluding glass controls that sample this same layer.
+    // Reusing it avoids recording the entire screen (including its backdrop consumers) again.
+    edgeContentLayer: GraphicsLayer? = null,
     content: @Composable () -> Unit,
     sheetContent: @Composable () -> Unit,
 ) {
@@ -154,10 +156,11 @@ fun IosSheetScaffold(
         }
     }
 
-    // В режиме extera фон вдавливается всегда (тот же принцип, что у страниц: сжатие + скругление
-    // + скрим), а за ним вместо чёрного — градиент экрана, который скрим затемняет вместе с ним.
-    val bgScaleTarget = if (extera && backgroundScaleTarget >= 1f) EXTERA_BACKGROUND_SCALE else backgroundScaleTarget
+    // По умолчанию в Extera фон вдавливается (сжатие + скругление + скрим), а за ним —
+    // градиент экрана или продолжение его краёв. Явный масштаб переопределяет глубину.
+    val bgScaleTarget = backgroundScaleTarget ?: if (extera) EXTERA_BACKGROUND_SCALE else 1f
     val recessed = bgScaleTarget < 1f
+    val edgeLayer = edgeContentLayer
     // Боковой «провал» за вдавленным экраном — нужен, только пока фон реально уменьшается. Сверху
     // контент остаётся edge-to-edge (под status bar / вырез камеры) — иначе появляется чёрная
     // полоса в строке состояния.
@@ -183,7 +186,7 @@ fun IosSheetScaffold(
 
             // Режим extera: поля вокруг вдавленного фона — тот же градиент экрана, сжатый вместе с
             // контентом (строка в строку, поэтому шва нет), а полоса под ним — нижний цвет градиента.
-            if (extera) {
+            if (extera && edgeLayer == null) {
                 val marginBrush = backdropBrush ?: remember(isDark) { IosDesign.screenGradient(isDark) }
                 val marginBottom = IosDesign.groupedBackground(isDark)
                 Box(
@@ -209,45 +212,62 @@ fun IosSheetScaffold(
             }
 
             // --- Фон: scale от верхнего края, скругление только снизу ---
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .graphicsLayer {
-                        if (!recessed) return@graphicsLayer
-                        // Пока шторку тянет жест «назад», фон отпускает вдавливание вместе с ней.
-                        val eff = eff() * (1f - 0.5f * (sheetBack?.pull ?: 0f))
-                        val s = lerp(1f, bgScaleTarget, eff)
-                        scaleX = s
-                        scaleY = s
-                        transformOrigin = TransformOrigin(0.5f, 0f)
-                        clip = eff > 0.001f
-                        // eff — значение пружины и может быть чуть ниже нуля; отрицательный радиус роняет RoundedCornerShape.
-                        val bottomR = (cornerRadius * eff).coerceAtLeast(0.dp)
-                        // RoundedCornerShape: squircle-путь не кэшируется Skia (маска клипа на CPU каждый кадр).
-                        shape = androidx.compose.foundation.shape.RoundedCornerShape(
-                            topStart = 0.dp,
-                            topEnd = 0.dp,
-                            bottomEnd = bottomR,
-                            bottomStart = bottomR,
-                        )
-                    }
-                    // iOS затемняет фон по-разному: тёмная тема — сильно, светлая — деликатно.
-                    // К верху скрим плотнее: экран «уходит вглубь» от шторки, а не гаснет равномерно.
-                    .drawWithContent {
-                        drawContent()
-                        val eff = eff()
-                        // В режиме extera скрим рисуется отдельным слоем ниже, на весь экран.
-                        if (eff > 0f && !extera) {
-                            drawRect(
-                                Brush.verticalGradient(
-                                    0f to Color.Black.copy(alpha = (scrim * 1.2f).coerceAtMost(1f) * eff),
-                                    1f to Color.Black.copy(alpha = scrim * 0.8f * eff),
-                                ),
+            val backgroundContent: @Composable () -> Unit = {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .graphicsLayer {
+                            if (!recessed) return@graphicsLayer
+                            // Пока шторку тянет жест «назад», фон отпускает вдавливание вместе с ней.
+                            val eff = eff() * (1f - 0.5f * (sheetBack?.pull ?: 0f))
+                            val s = lerp(1f, bgScaleTarget, eff)
+                            scaleX = s
+                            scaleY = s
+                            transformOrigin = TransformOrigin(0.5f, 0f)
+                            clip = eff > 0.001f
+                            // eff — значение пружины и может быть чуть ниже нуля; отрицательный радиус роняет RoundedCornerShape.
+                            val bottomR = (cornerRadius * eff).coerceAtLeast(0.dp)
+                            // RoundedCornerShape: squircle-путь не кэшируется Skia (маска клипа на CPU каждый кадр).
+                            shape = androidx.compose.foundation.shape.RoundedCornerShape(
+                                topStart = 0.dp,
+                                topEnd = 0.dp,
+                                bottomEnd = bottomR,
+                                bottomStart = bottomR,
                             )
                         }
-                    },
-            ) {
-                content()
+                        // iOS затемняет фон по-разному: тёмная тема — сильно, светлая — деликатно.
+                        // К верху скрим плотнее: экран «уходит вглубь» от шторки, а не гаснет равномерно.
+                        .drawWithContent {
+                            drawContent()
+                            val eff = eff()
+                            // В режиме extera скрим рисуется отдельным слоем ниже, на весь экран.
+                            if (eff > 0f && !extera) {
+                                drawRect(
+                                    Brush.verticalGradient(
+                                        0f to Color.Black.copy(alpha = (scrim * 1.2f).coerceAtMost(1f) * eff),
+                                        1f to Color.Black.copy(alpha = scrim * 0.8f * eff),
+                                    ),
+                                )
+                            }
+                        },
+                ) {
+                    content()
+                }
+            }
+            if (edgeLayer != null) {
+                Box(
+                    Modifier.fillMaxSize().drawWithContent {
+                        drawContent()
+                        val e = eff() * (1f - 0.5f * (sheetBack?.pull ?: 0f))
+                        if (extera && recessed && e > 0.001f) {
+                            val s = lerp(1f, bgScaleTarget, e)
+                            drawRecessedContentMargins(edgeLayer, s, cornerRadius.toPx() * e * s)
+                        }
+                    }
+                ) { backgroundContent() }
+            } else {
+                // Preserve the original hierarchy above the home/workspace glass backdrops.
+                backgroundContent()
             }
 
             // Режим extera: скрим на весь экран, включая поля по бокам вдавленного фона.

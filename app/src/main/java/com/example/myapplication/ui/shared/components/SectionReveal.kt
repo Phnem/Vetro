@@ -6,6 +6,8 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
@@ -21,6 +23,8 @@ import kotlinx.coroutines.launch
 @Stable
 internal class SectionRevealState {
     val progress = Animatable(0f)
+    /** Keep lazy rows mounted until their reverse animation has actually finished. */
+    val visible by derivedStateOf { progress.value > 0f }
 
     fun rowModifier(index: Int): Modifier = Modifier.graphicsLayer {
         val delay = index.coerceAtMost(4) * 0.035f
@@ -43,7 +47,8 @@ internal fun rememberSectionReveal(
     val previewPx = with(LocalDensity.current) { 112.dp.toPx() }
     LaunchedEffect(expanded) {
         if (expanded) {
-            reveal.progress.snapTo(0f)
+            // animateTo reverses an interrupted close from its current value and velocity.
+            // Resetting to zero here flashed already-visible rows back to their collapsed pose.
             launch { reveal.progress.animateTo(1f, MotionTokens.seasonExpansion()) }
             launch {
                 // Let LazyColumn see the newly inserted rows before asking for scroll space.
@@ -61,8 +66,9 @@ internal fun rememberSectionReveal(
                     }
                 }
             }
+        } else {
+            reveal.progress.animateTo(0f, MotionTokens.seasonExpansion())
         }
-        // On collapse retain the pose: LazyColumn fades departing rows while neighbours move.
     }
     return reveal
 }

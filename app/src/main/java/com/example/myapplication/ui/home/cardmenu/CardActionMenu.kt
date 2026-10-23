@@ -42,12 +42,14 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import com.example.myapplication.ui.shared.theme.isAppInDarkTheme
 import com.example.myapplication.ui.home.AnimeCardBody
 import com.example.myapplication.ui.home.AnimeCardState
+import com.example.myapplication.ui.home.FavoriteCollectionCard
 import com.example.myapplication.ui.shared.FrostedMaterials
 import com.example.myapplication.ui.shared.frostedGlass
 import com.example.myapplication.ui.shared.theme.MotionTokens
@@ -84,6 +86,9 @@ data class CardMenuTarget(
     val isFavorite: Boolean,
     /** Границы карточки в координатах корня окна. */
     val boundsInRoot: Rect,
+    /** Portrait favorites keep their own appearance in the lifted preview. */
+    val favoritePosition: Int? = null,
+    val releaseYear: Int? = null,
 )
 
 @Composable
@@ -216,20 +221,40 @@ fun CardActionMenuOverlay(
                         indication = null,
                     ) { onDismiss() },
             ) {
-                AnimeCardBody(state = target.state)
+                val favoritePosition = target.favoritePosition
+                if (favoritePosition != null) {
+                    FavoriteCollectionCard(
+                        state = target.state,
+                        releaseYear = target.releaseYear,
+                        position = favoritePosition,
+                        onClick = onDismiss,
+                        onLongClick = {},
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                } else {
+                    AnimeCardBody(state = target.state)
+                }
             }
 
             // —— Ряд действий —— //
             val actionsRestTop = cardLocalTop + grow + scaledHeight + gapPx
+            // The four actions must still fit when the selected cover is only half a screen wide.
+            val actionsWidth = maxOf(cardWidth, ACTION_SIZE * ACTION_COUNT + ACTION_SPACING * (ACTION_COUNT - 1))
+                .coerceAtMost(maxWidth - 32.dp)
+            val actionsWidthPx = with(density) { actionsWidth.toPx() }
+            val marginPx = with(density) { 16.dp.toPx() }
+            val actionsLeft = (cardLocalLeft + target.boundsInRoot.width / 2f - actionsWidthPx / 2f)
+                .coerceIn(marginPx, (with(density) { maxWidth.toPx() } - actionsWidthPx - marginPx).coerceAtLeast(marginPx))
             Row(
                 modifier = Modifier
                     .offset {
                         IntOffset(
-                            cardLocalLeft.roundToInt(),
+                            actionsLeft.roundToInt(),
                             (actionsRestTop - lift * progress.value).roundToInt(),
                         )
                     }
-                    .width(cardWidth),
+                    .width(actionsWidth)
+                    .testTag("card_action_row"),
                 horizontalArrangement = Arrangement.spacedBy(ACTION_SPACING, Alignment.CenterHorizontally),
                 verticalAlignment = Alignment.CenterVertically,
             ) {

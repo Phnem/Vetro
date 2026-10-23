@@ -98,6 +98,7 @@ private fun mergeSettingsUi(
         devAdaptiveGlassScroll = prefs[DevPreferencesKeys.ADAPTIVE_GLASS_SCROLL] ?: false,
         devLegacyUi = prefs[DevPreferencesKeys.LEGACY_UI] ?: false,
         devFullBleedCards = prefs[DevPreferencesKeys.FULL_BLEED_CARDS] ?: true,
+        devExperimentalGrid = prefs[DevPreferencesKeys.EXPERIMENTAL_GRID] ?: false,
         devExteraBack = prefs[DevPreferencesKeys.EXTERA_BACK] ?: true,
         isExportingLogs = t.isExportingLogs,
         isExportingPdf = t.isExportingPdf,
@@ -265,6 +266,12 @@ class SettingsViewModel(
     fun setDevFullBleedCards(enabled: Boolean) {
         viewModelScope.launch {
             settingsDataStore.edit { it[DevPreferencesKeys.FULL_BLEED_CARDS] = enabled }
+        }
+    }
+
+    fun setDevExperimentalGrid(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsDataStore.edit { it[DevPreferencesKeys.EXPERIMENTAL_GRID] = enabled }
         }
     }
 

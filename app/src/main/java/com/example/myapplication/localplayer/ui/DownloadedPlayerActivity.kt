@@ -60,10 +60,27 @@ private val progressScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 class DownloadedPlayerActivity : ComponentActivity(), PipHostActivity {
 
     private val playbackStore: EpisodePlaybackStore by inject()
+    private val titleTrackingRecorder: com.example.myapplication.media.progress.TitleTrackingRecorder by inject()
     private val settings: DataStore<Preferences> by inject(named("settings"))
     private var player: ExoPlayer? = null
     private var animeId: String = ""
     private var episodes: List<LocalEpisode> = emptyList()
+    private val openListener = object : androidx.media3.common.Player.Listener {
+        override fun onMediaItemTransition(mediaItem: androidx.media3.common.MediaItem?, reason: Int) {
+            if (mediaItem != null) recordOpenedEpisode()
+        }
+    }
+
+    private fun recordOpenedEpisode() {
+        val active = player ?: return
+        val item = episodes.getOrNull(active.currentMediaItemIndex) ?: return
+        val episode = item.episodeNumber ?: return
+        val season = item.season?.coerceAtLeast(1) ?: 1
+        progressScope.launch {
+            runCatching { titleTrackingRecorder.opened(animeId, season, episode) }
+                .onFailure { android.util.Log.w("WatchDates", "Could not record downloaded episode open", it) }
+        }
+    }
     private val pipState = mutableStateOf(false)
     private val pipActions = PipActionsController(this)
     /** Экран хоть раз уходил в PiP — см. [finishIfStoppedOutsidePip]. */
@@ -135,7 +152,14 @@ class DownloadedPlayerActivity : ComponentActivity(), PipHostActivity {
                             onEnterPip = ::enterPip,
                             onRotate = { landscape = !landscape },
                             onBack = { finish() },
-                            onPlayerAvailable = { player = it },
+                            onPlayerAvailable = { available ->
+                                if (player !== available) {
+                                    player?.removeListener(openListener)
+                                    player = available
+                                    available?.addListener(openListener)
+                                    recordOpenedEpisode()
+                                }
+                            },
                             mediaTitle = title,
                             mediaAnimeId = animeId,
                         )

@@ -256,7 +256,7 @@ fun ModernDetailsEpisodesPage(
                     )
                 }
 
-                if (expanded) {
+                if (expanded || reveals.getValue(season.seasonNumber).visible) {
                     items(
                         count = episodeCount,
                         key = { index -> "ep_${season.seasonNumber}_${index + 1}" },
@@ -266,13 +266,7 @@ fun ModernDetailsEpisodesPage(
                         SeasonEpisodeSlot(
                             isLast = index == episodeCount - 1,
                             isDark = isDark,
-                            modifier = Modifier
-                                .animateItem(
-                                    fadeInSpec = null,
-                                    placementSpec = MotionTokens.seasonExpansion(),
-                                    fadeOutSpec = MotionTokens.tweenFast(),
-                                )
-                                .then(reveals.getValue(season.seasonNumber).rowModifier(index)),
+                            modifier = reveals.getValue(season.seasonNumber).rowModifier(index),
                         ) {
                             EpisodeRow(
                                 episodeNumber = episode,
@@ -606,8 +600,8 @@ private fun seasonCardColor(isDark: Boolean): Color =
 
 /**
  * Одна серия как элемент списка: продолжает карточку сезона (те же поля и заливка), последняя
- * закругляет низ. Появление/исчезновение отдаём [androidx.compose.foundation.lazy.LazyItemScope.animateItem]
- * — работают только видимые строки, без пересчёта всего сезона.
+ * закругляет низ. Общий SectionReveal управляет появлением и исчезновением; строки остаются
+ * ленивыми и не удаляются из списка посреди обратной анимации.
  */
 @Composable
 private fun SeasonEpisodeSlot(

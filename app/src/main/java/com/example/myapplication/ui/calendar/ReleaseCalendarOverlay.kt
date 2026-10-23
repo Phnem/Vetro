@@ -229,7 +229,7 @@ private fun CalendarContent(language: AppLanguage, isDark: Boolean, onOpenTitle:
 }
 
 @Composable
-private fun MonthHeader(
+internal fun MonthHeader(
     month: YearMonth,
     locale: Locale,
     ink: Color,
@@ -264,7 +264,7 @@ private fun NavButton(isDark: Boolean, onClick: () -> Unit, icon: @Composable ()
 }
 
 @Composable
-private fun WeekdayHeader(locale: Locale, muted: Color) {
+internal fun WeekdayHeader(locale: Locale, muted: Color) {
     Row(modifier = Modifier.fillMaxWidth()) {
         DayOfWeek.entries.forEach { day ->
             Text(
@@ -281,7 +281,7 @@ private fun WeekdayHeader(locale: Locale, muted: Color) {
 }
 
 @Composable
-private fun MonthGrid(
+internal fun MonthGrid(
     month: YearMonth,
     today: LocalDate,
     selected: LocalDate?,
@@ -289,6 +289,8 @@ private fun MonthGrid(
     imagePath: (String?) -> String?,
     isDark: Boolean,
     onSelect: (LocalDate) -> Unit,
+    rangeStart: LocalDate? = null,
+    rangeEnd: LocalDate? = null,
 ) {
     // Понедельник первой колонкой; шесть строк всегда, чтобы шторка не прыгала по высоте между месяцами.
     val first = month.atDay(1)
@@ -302,7 +304,8 @@ private fun MonthGrid(
                         date = date,
                         inMonth = YearMonth.from(date) == month,
                         isToday = date == today,
-                        isSelected = date == selected,
+                        isSelected = date == selected || date == rangeStart || date == rangeEnd,
+                        inRange = rangeStart != null && rangeEnd != null && !date.isBefore(rangeStart) && !date.isAfter(rangeEnd),
                         items = byDate[date].orEmpty(),
                         imagePath = imagePath,
                         isDark = isDark,
@@ -321,6 +324,7 @@ private fun DayCell(
     inMonth: Boolean,
     isToday: Boolean,
     isSelected: Boolean,
+    inRange: Boolean,
     items: List<CalendarRelease>,
     imagePath: (String?) -> String?,
     isDark: Boolean,
@@ -335,7 +339,7 @@ private fun DayCell(
         modifier = modifier
             .aspectRatio(0.78f)
             .clip(shape)
-            .background(if (inMonth) base else Color.Transparent)
+            .background(if (inRange) BrandOrange.copy(alpha = 0.16f) else if (inMonth) base else Color.Transparent)
             .then(
                 when {
                     isSelected -> Modifier.border(1.5.dp, BrandOrange, shape)

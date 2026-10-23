@@ -1264,6 +1264,10 @@ private fun OptionMenu(
     onSelectSubtitle: (SubtitleOption) -> Unit,
     onDismiss: () -> Unit,
 ) {
+    if (menu == PlayerMenu.AUDIO) {
+        PlayerAudioSheet(state, audioTracks, playerIsRu(), onSelectAudio, onDismiss)
+        return
+    }
     BackHandler(enabled = true) { onDismiss() }
     val origin = TransformOrigin(1f, 0f) // «вытекает» из верхнего-правого дока
     val labels = when (menu) {

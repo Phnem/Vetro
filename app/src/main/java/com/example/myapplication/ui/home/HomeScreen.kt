@@ -51,6 +51,7 @@ import com.example.myapplication.ui.shared.components.pulltorefresh.PullRefreshI
 import com.example.myapplication.ui.shared.components.pulltorefresh.rememberPullRefreshController
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.platform.testTag
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
@@ -188,6 +189,13 @@ fun HomeScreen(
     val syncReport by viewModel.syncReport.collectAsStateWithLifecycle()
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val list by viewModel.animeListFlow.collectAsStateWithLifecycle()
+    val experimentalGrid by viewModel.experimentalGrid.collectAsStateWithLifecycle()
+    val favorites = remember(list, experimentalGrid) {
+        if (experimentalGrid) list.filter { it.isFavorite } else emptyList()
+    }
+    val collection = remember(list, experimentalGrid) {
+        if (experimentalGrid) list.filterNot { it.isFavorite } else list
+    }
     // Старт «полностью отрисован», когда коллекция на экране: система пишет это время в лог
     // (Fully drawn), и по нему считается холодный старт, а не по первому кадру сплэша.
     ReportDrawnWhen { uiState.isListLoaded }
@@ -196,6 +204,62 @@ fun HomeScreen(
     val watchedMap by viewModel.watchedMarks.collectAsStateWithLifecycle()
     val mangaReadingMap by viewModel.mangaReading.collectAsStateWithLifecycle()
     val seasonLayoutMap by viewModel.seasonLayouts.collectAsStateWithLifecycle()
+    @Composable
+    fun rememberCollectionCardState(anime: Anime): AnimeCardState {
+        val webLinksEntry = webLinksMap[anime.id]
+        val airingEntry = airingMap[anime.id]
+        val seasonLayout = seasonLayoutMap[anime.id]
+        val cardProgress = rememberCardProgress(
+            layout = seasonLayout,
+            storedEpisodes = anime.episodes,
+            watched = watchedMap[anime.id],
+            airing = airingEntry,
+            reading = mangaReadingMap[anime.id],
+        )
+        return remember(anime, currentLanguage, webLinksEntry, cardProgress, seasonLayout, airingEntry) {
+            // Название по выбранному языку: EN → английское, RU → русское.
+            // Замена, а не вторая строка; при отсутствии перевода — исходный title.
+            val displayTitle = when (currentLanguage) {
+                AppLanguage.EN -> anime.titleEn?.takeIf { it.isNotBlank() } ?: anime.title
+                AppLanguage.RU -> anime.titleRu?.takeIf { it.isNotBlank() } ?: anime.title
+            }
+            val links = when (currentLanguage) {
+                AppLanguage.EN -> webLinksEntry?.enLinks
+                AppLanguage.RU -> webLinksEntry?.ruLinks
+            }.orEmpty()
+            AnimeCardState(
+                id = anime.id,
+                title = displayTitle,
+                titleEn = null,
+                rating = anime.rating,
+                genres = persistentListOf(
+                    *anime.tags.take(3)
+                        .mapNotNull { genreRepository.getLabel(it, currentLanguage).takeIf { n -> n.isNotBlank() } }
+                        .toTypedArray()
+                ),
+                // Сезон и серия вместо сквозного счёта: «S3 E12».
+                // У манги счёт по главам, у тайтла без расклада
+                // (фильм, односезонник без данных) — прежний.
+                episodesLabel = when (anime.mediaType) {
+                    com.example.myapplication.data.models.MediaType.MANGA -> "${anime.episodes} ch."
+                    else -> latestSeasonEpisode(seasonLayout, airingEntry)?.label()
+                        ?: "${anime.episodes} eps."
+                },
+                mediaType = anime.mediaType,
+                webLinks = links,
+                language = currentLanguage,
+                imagePath = viewModel.getImgPath(anime.imageFileName),
+                mediaTypeLabel = when (anime.mediaType) {
+                    com.example.myapplication.data.models.MediaType.ANIME -> strings.typeAnime
+                    com.example.myapplication.data.models.MediaType.MANGA -> strings.typeManga
+                    com.example.myapplication.data.models.MediaType.MOVIE -> strings.typeMovie
+                    com.example.myapplication.data.models.MediaType.SERIES -> strings.typeSeries
+                },
+                airing = cardProgress,
+                isFavorite = anime.isFavorite,
+            )
+        }
+    }
     // Подпись плашки «вышла серия»: «S3 E5» по тем же данным, что подпись на карточке. Лямбда
     // читает состояние при вызове из композиции карточки — плашка перерисуется сама.
     val updateEpisodeLabel: (com.example.myapplication.data.models.AnimeUpdate) -> String? = remember {
@@ -284,11 +348,19 @@ fun HomeScreen(
     val scope = rememberCoroutineScope()
     val openRatingPicker: (Anime, Rect) -> Unit = { anime, chipBounds ->
         performHaptic(view, Haptic.Light)
-        // Бабл выезжает из чипа и в него же втягивается; значение — текущая оценка записи.
-        ratingPickerSlider.anchorBoundsInRoot = chipBounds
-        ratingPickerId = anime.id
-        scope.launch { ratingPickerSlider.syncFromExternal(anime.rating) }
-        ratingPickerShown = true
+        scope.launch {
+            if (viewModel.usesEpisodeRating(anime.id)) {
+                android.widget.Toast.makeText(ctx,
+                    if (currentLanguage == AppLanguage.RU) "Рейтинг считается по эпизодам. Измените их оценки или выберите Auto в деталях"
+                    else "Rating follows your episode scores. Edit them or choose Auto in Details",
+                    android.widget.Toast.LENGTH_LONG).show()
+            } else {
+                ratingPickerSlider.anchorBoundsInRoot = chipBounds
+                ratingPickerId = anime.id
+                ratingPickerSlider.syncFromExternal(anime.rating)
+                ratingPickerShown = true
+            }
+        }
     }
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
@@ -748,6 +820,7 @@ fun HomeScreen(
                                     // перемонтирования списка (см. GlassBackdropRecovery).
                                     .drawBehind { backdropRedraw.intValue }
                                     .layerBackdrop(backdrop)
+                                    .testTag("home_collection_list")
                             ) {
                                 item {
                                     VetroWorkspaceTopBar(
@@ -817,64 +890,49 @@ fun HomeScreen(
                                         }
                                     }
                                 } else if (list.isNotEmpty()) {
+                                    if (favorites.isNotEmpty()) {
+                                        item(key = "favorite_collection", contentType = "favorite_collection") {
+                                            FavoriteCollectionStrip(favorites, currentLanguage) { anime, position, cardModifier ->
+                                                val state = rememberCollectionCardState(anime)
+                                                with(sharedTransitionScope) {
+                                                    FavoriteCollectionCard(
+                                                        state = state,
+                                                        releaseYear = anime.releaseYear,
+                                                        position = position,
+                                                        onClick = {
+                                                            performHaptic(view, Haptic.Light)
+                                                            collapseUpdatesToBell()
+                                                            navController.navigateToDetails(anime.id)
+                                                        },
+                                                        onLongClick = { bounds ->
+                                                            performHaptic(view, Haptic.Light)
+                                                            cardMenuTarget = CardMenuTarget(
+                                                                state = state, isFavorite = true, boundsInRoot = bounds,
+                                                                favoritePosition = position, releaseYear = anime.releaseYear,
+                                                            )
+                                                            cardMenuVisible = true
+                                                        },
+                                                        modifier = cardModifier.sharedBounds(
+                                                            sharedContentState = rememberSharedContentState("anime_${anime.id}_bounds"),
+                                                            animatedVisibilityScope = animatedVisibilityScope,
+                                                            resizeMode = SharedTransitionScope.ResizeMode.RemeasureToBounds,
+                                                            clipInOverlayDuringTransition = OverlayClip(RoundedCornerShape(24.dp)),
+                                                        ),
+                                                        posterModifier = Modifier.sharedElement(
+                                                            sharedContentState = rememberSharedContentState("anime_${anime.id}"),
+                                                            animatedVisibilityScope = animatedVisibilityScope,
+                                                        ).skipToLookaheadSize(),
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
                                     items(
-                                        items = list,
+                                        items = collection,
                                         key = { it.id },
                                         contentType = { "anime_card" }
                                     ) { anime ->
-                                        val webLinksEntry = webLinksMap[anime.id]
-                                            val airingEntry = airingMap[anime.id]
-                                            val seasonLayout = seasonLayoutMap[anime.id]
-                                            val cardProgress = rememberCardProgress(
-                                                layout = seasonLayout,
-                                                storedEpisodes = anime.episodes,
-                                                watched = watchedMap[anime.id],
-                                                airing = airingEntry,
-                                                reading = mangaReadingMap[anime.id],
-                                            )
-                                            val cardState = remember(anime, currentLanguage, webLinksEntry, cardProgress, seasonLayout, airingEntry) {
-                                                // Название по выбранному языку: EN → английское, RU → русское.
-                                                // Замена, а не вторая строка; при отсутствии перевода — исходный title.
-                                                val displayTitle = when (currentLanguage) {
-                                                    AppLanguage.EN -> anime.titleEn?.takeIf { it.isNotBlank() } ?: anime.title
-                                                    AppLanguage.RU -> anime.titleRu?.takeIf { it.isNotBlank() } ?: anime.title
-                                                }
-                                                val links = when (currentLanguage) {
-                                                    AppLanguage.EN -> webLinksEntry?.enLinks
-                                                    AppLanguage.RU -> webLinksEntry?.ruLinks
-                                                }.orEmpty()
-                                                AnimeCardState(
-                                                    id = anime.id,
-                                                    title = displayTitle,
-                                                    titleEn = null,
-                                                    rating = anime.rating,
-                                                    genres = persistentListOf(
-                                                        *anime.tags.take(3)
-                                                            .mapNotNull { genreRepository.getLabel(it, currentLanguage).takeIf { n -> n.isNotBlank() } }
-                                                            .toTypedArray()
-                                                    ),
-                                                    // Сезон и серия вместо сквозного счёта: «S3 E12».
-                                                    // У манги счёт по главам, у тайтла без расклада
-                                                    // (фильм, односезонник без данных) — прежний.
-                                                    episodesLabel = when (anime.mediaType) {
-                                                        com.example.myapplication.data.models.MediaType.MANGA -> "${anime.episodes} ch."
-                                                        else -> latestSeasonEpisode(seasonLayout, airingEntry)?.label()
-                                                            ?: "${anime.episodes} eps."
-                                                    },
-                                                    mediaType = anime.mediaType,
-                                                    webLinks = links,
-                                                    language = currentLanguage,
-                                                    imagePath = viewModel.getImgPath(anime.imageFileName),
-                                                    mediaTypeLabel = when (anime.mediaType) {
-                                                        com.example.myapplication.data.models.MediaType.ANIME -> strings.typeAnime
-                                                        com.example.myapplication.data.models.MediaType.MANGA -> strings.typeManga
-                                                        com.example.myapplication.data.models.MediaType.MOVIE -> strings.typeMovie
-                                                        com.example.myapplication.data.models.MediaType.SERIES -> strings.typeSeries
-                                                    },
-                                                    airing = cardProgress,
-                                                    isFavorite = anime.isFavorite,
-                                                )
-                                            }
+                                        val cardState = rememberCollectionCardState(anime)
 
                                         // Тап по карточке — полноэкранные детали; кнопка справа-внизу — редактирование.
                                         val openDetails: () -> Unit = {
@@ -1323,6 +1381,7 @@ fun HomeScreen(
                 Box(modifier = Modifier.align(Alignment.TopEnd).padding(end = 16.dp)) {
                     GlassActionDock(
                         backdrop = backdrop,
+                        onSurfaceReady = { backdropRedraw.intValue++ },
                         isFloating = isHeaderFloating,
                         strings = strings,
                         filterSelectedTags = uiState.filterTags,
@@ -1330,7 +1389,7 @@ fun HomeScreen(
                         onOpenSort = openWorkspaceSort,
                         onOpenNotifications = openWorkspaceNotifications,
                         onOpenMediaTypeFilter = openMediaTypeFilter,
-                        modifier = Modifier.padding(top = 12.dp),
+                        modifier = Modifier.padding(top = 12.dp).testTag("home_top_dock"),
                         // В рабочей области середина верхнего дока — статистика: панель
                         // подключения оттуда уехала отдельным пунктом в настройки.
                         middleAction = if (hostedInWorkspace) {

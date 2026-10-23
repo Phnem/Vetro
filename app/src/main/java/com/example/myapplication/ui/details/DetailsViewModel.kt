@@ -19,6 +19,9 @@ import com.example.myapplication.domain.enrichment.TitleCandidateSearch
 import com.example.myapplication.domain.enrichment.withRejectedSource
 import com.example.myapplication.media.progress.EpisodePlaybackStore
 import com.example.myapplication.media.progress.PlaybackEpisodeKey
+import com.example.myapplication.media.progress.TitleTracking
+import com.example.myapplication.media.progress.TitleTrackingStore
+import java.time.LocalDate
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
@@ -61,6 +64,7 @@ class DetailsViewModel(
     private val playbackStore: EpisodePlaybackStore,
     private val titleCandidates: TitleCandidateSearch,
     private val titleInfoEnricher: TitleInfoEnricher,
+    private val titleTrackingStore: TitleTrackingStore,
     private val seriesSeasonsStore: SeriesSeasonsStore? = null,
     private val seriesEpisodeCheck: SeriesEpisodeCheckUseCase? = null,
     private val autoWatchStatus: com.example.myapplication.domain.status.AutoWatchStatusResolver? = null,
@@ -72,6 +76,9 @@ class DetailsViewModel(
     // Инициализация синхронно: узел sharedBounds есть в дереве на 0-м кадре — Exit transition работает.
     private val _currentAnime = MutableStateFlow<Anime?>(repository.getAnimeById(animeId))
     val currentAnime: StateFlow<Anime?> = _currentAnime.asStateFlow()
+
+    val tracking: StateFlow<TitleTracking> = titleTrackingStore.observe(animeId)
+        .stateIn(viewModelScope, SharingStarted.Eagerly, TitleTracking())
 
     /**
      * Обогащение карточки (логотип, трейлер, рейтинги критиков, следующая серия) — отдельно от базовой
@@ -237,6 +244,81 @@ class DetailsViewModel(
 
     private fun say(ru: String, en: String) {
         _messages.tryEmit(if (_currentLanguage.value == AppLanguage.RU) ru else en)
+    }
+
+    init {
+        // Players can change the watch status while Details is in the back stack.
+        viewModelScope.launch {
+            localDataSource.observeAllAnime().map { list -> list.find { it.id == animeId } }
+                .distinctUntilChanged().collect { _currentAnime.value = it }
+        }
+        viewModelScope.launch {
+            tracking.collect { state ->
+                if (state.preferences.ratingResetNotice) {
+                    say("Все оценки эпизодов удалены. Рейтинг переключён на Auto", "All episode ratings were removed. Rating switched to Auto")
+                    titleTrackingStore.acknowledgeRatingReset(animeId)
+                }
+            }
+        }
+    }
+
+    fun openRatingModePicker() {
+        _picker.value = DetailsPickerState.RatingMode(tracking.value.preferences.manualRating)
+    }
+
+    fun pickRatingMode(manual: Boolean) {
+        viewModelScope.launch {
+            runCatching { titleTrackingStore.setManualRating(animeId, manual) }
+                .onSuccess { accepted ->
+                    if (accepted) dismissPicker() else say(
+                        "Нет оценок эпизодов: среднее пока посчитать нельзя. Manual rating недоступен",
+                        "No episodes have a rating yet. Manual rating needs at least one rated episode",
+                    )
+                }.onFailure {
+                    if (it is kotlinx.coroutines.CancellationException) throw it
+                    say("Не удалось сохранить режим рейтинга", "Couldn't save the rating mode")
+                }
+        }
+    }
+
+    fun openDateModePicker() {
+        _picker.value = DetailsPickerState.DateMode(tracking.value.preferences)
+    }
+
+    fun pickDateMode(manual: Boolean) {
+        if (manual) {
+            val prefs = tracking.value.preferences
+            _picker.value = if (prefs.manualStartedOn != null) DetailsPickerState.WatchDates(
+                LocalDate.ofEpochDay(prefs.manualStartedOn), prefs.manualFinishedOn?.let(LocalDate::ofEpochDay),
+            ) else DetailsPickerState.WatchDates(prefs.startedOn, prefs.finishedOn)
+        } else viewModelScope.launch {
+            runCatching { titleTrackingStore.useAutoDates(animeId) }
+                .onSuccess { dismissPicker() }
+                .onFailure {
+                    if (it is kotlinx.coroutines.CancellationException) throw it
+                    say("Не удалось сохранить режим дат", "Couldn't save the date mode")
+                }
+        }
+    }
+
+    fun saveWatchDates(start: LocalDate, finish: LocalDate?) {
+        if (finish != null && finish.isBefore(start)) {
+            say("Дата окончания не может быть раньше начала", "Finish date cannot precede the start date")
+            return
+        }
+        viewModelScope.launch {
+            runCatching {
+                titleTrackingStore.saveManualDates(animeId, start, finish)
+                if (finish != null) {
+                    localDataSource.setWatchStatus(animeId, WatchStatus.COMPLETED)
+                    _currentAnime.value = _currentAnime.value?.copy(watchStatus = WatchStatus.COMPLETED)
+                }
+            }.onSuccess { dismissPicker() }
+                .onFailure {
+                    if (it is kotlinx.coroutines.CancellationException) throw it
+                    say("Не удалось сохранить даты просмотра", "Couldn't save watch dates")
+                }
+        }
     }
 
     /**

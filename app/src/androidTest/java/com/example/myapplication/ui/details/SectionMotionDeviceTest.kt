@@ -63,6 +63,9 @@ class SectionMotionDeviceTest {
             compose.onNode(season).performClick()
             val row = hasText("Episode 1") or hasText("Серия 1")
             assertSpatialReveal(row, "season")
+            compose.mainClock.autoAdvance = false
+            compose.onNode(season).performClick()
+            assertSpatialCollapse(row)
         } finally { local.deleteAnime(id) }
     }
 
@@ -117,6 +120,65 @@ class SectionMotionDeviceTest {
         compose.mainClock.advanceTimeBy(1200)
         compose.mainClock.autoAdvance = true
         compose.onNodeWithText("Глава 1012").assertIsDisplayed()
+    }
+
+    @Test fun closingVolumeRetractsItsRowsBeforeRemovingThem() {
+        showVolumes(1, 4)
+        val header = compose.onNode(hasText("Том 1") and hasClickAction())
+        header.performClick()
+        val row = hasText("Глава 1004")
+        bounds(row)
+        compose.mainClock.autoAdvance = false
+        header.performClick()
+        assertSpatialCollapse(row)
+    }
+
+    private fun assertSpatialCollapse(row: SemanticsMatcher) {
+        compose.mainClock.advanceTimeBy(48)
+        val early = bounds(row)
+        compose.mainClock.advanceTimeBy(144)
+        val later = bounds(row)
+        assertTrue("Closing must retract rows smoothly: early=$early later=$later",
+            later.width < early.width - 0.5f && later.top < early.top - 0.5f)
+        compose.mainClock.advanceTimeBy(1200)
+        compose.onNode(row).assertDoesNotExist()
+        compose.mainClock.autoAdvance = true
+    }
+
+    @Test fun openingMiddleVolumeNeverRewindsUnderItsHeader() {
+        showVolumes(3, 4)
+        val header = compose.onNode(hasText("Том 2") and hasClickAction())
+        header.performScrollTo()
+        compose.mainClock.autoAdvance = false
+        header.performClick()
+        val samples = mutableListOf<Pair<Float, Float>>()
+        repeat(16) {
+            compose.mainClock.advanceTimeBy(16)
+            compose.waitForIdle()
+            val row = compose.onNodeWithText("Глава 2004").fetchSemanticsNode().boundsInRoot
+            val head = header.fetchSemanticsNode().boundsInRoot
+            samples += row.width to (row.top - head.bottom)
+        }
+        assertTrue("Opening must not rewind to its collapsed pose: $samples",
+            samples.zipWithNext().all { (a, b) -> b.first >= a.first - 1f && b.second >= a.second - 1f })
+        compose.mainClock.autoAdvance = true
+    }
+
+    @Test fun reopeningDuringCollapseContinuesFromTheVisiblePose() {
+        showVolumes(1, 4)
+        val header = compose.onNode(hasText("Том 1") and hasClickAction())
+        header.performClick()
+        val openWidth = bounds(hasText("Глава 1004")).width
+        compose.mainClock.autoAdvance = false
+        header.performClick()
+        compose.mainClock.advanceTimeBy(32)
+        header.performClick()
+        compose.mainClock.advanceTimeBy(32)
+        val reopenedWidth = bounds(hasText("Глава 1004")).width
+        assertTrue("Reopening must continue the visible pose, not snap back to zero: open=$openWidth reopened=$reopenedWidth",
+            reopenedWidth >= openWidth * 0.97f)
+        compose.mainClock.advanceTimeBy(1200)
+        compose.mainClock.autoAdvance = true
     }
 
     private fun showVolumes(volumes: Int, chaptersPerVolume: Int) {

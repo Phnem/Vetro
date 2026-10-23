@@ -9,6 +9,7 @@ import androidx.compose.ui.draw.drawWithCache
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.AnimatedVisibilityScope
+import androidx.compose.animation.EnterExitState
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.animation.animateColorAsState
@@ -85,6 +86,7 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.path
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -191,6 +193,8 @@ fun GlassActionDock(
      * анимации появления, что и капсула: приезжает и уезжает вместе с ней, а не своей дорогой.
      */
     leading: (@Composable () -> Unit)? = null,
+    /** Refresh a lazy backdrop after the newly attached glass finishes its entrance. */
+    onSurfaceReady: () -> Unit = {},
 ) {
     val isDark = isAppInDarkTheme()
     val glassEffects = rememberAdaptiveGlassEffects(GlassPreset.Card)
@@ -239,6 +243,15 @@ fun GlassActionDock(
             .offset { IntOffset(0, topShift.value.roundToPx()) }
             .statusBarsPadding()
     ) {
+        // The source list can finish drawing before this consumer attaches. Refresh only when
+        // the entrance settles; otherwise the first recording can leave a clear/flat capsule.
+        LaunchedEffect(transition.currentState, transition.targetState, transition.isRunning) {
+            if (transition.currentState == EnterExitState.Visible &&
+                transition.targetState == EnterExitState.Visible && !transition.isRunning) {
+                androidx.compose.runtime.withFrameNanos { }
+                onSurfaceReady()
+            }
+        }
         Row(
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -249,6 +262,7 @@ fun GlassActionDock(
                     Modifier
                         .matchParentSize()
                         .clip(dockShape)
+                        .testTag("top_dock_surface")
                         .then(
                             if (frosted) {
                                 Modifier.frostedGlass(
