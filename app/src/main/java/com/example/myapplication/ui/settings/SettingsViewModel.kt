@@ -98,7 +98,7 @@ private fun mergeSettingsUi(
         devAdaptiveGlassScroll = prefs[DevPreferencesKeys.ADAPTIVE_GLASS_SCROLL] ?: false,
         devLegacyUi = prefs[DevPreferencesKeys.LEGACY_UI] ?: false,
         devFullBleedCards = prefs[DevPreferencesKeys.FULL_BLEED_CARDS] ?: true,
-        devExperimentalGrid = prefs[DevPreferencesKeys.EXPERIMENTAL_GRID] ?: false,
+        devExperimentalGrid = prefs[DevPreferencesKeys.EXPERIMENTAL_GRID] ?: true,
         devExteraBack = prefs[DevPreferencesKeys.EXTERA_BACK] ?: true,
         isExportingLogs = t.isExportingLogs,
         isExportingPdf = t.isExportingPdf,

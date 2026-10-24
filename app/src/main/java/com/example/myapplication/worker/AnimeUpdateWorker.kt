@@ -1,6 +1,7 @@
 package com.example.myapplication.worker
 
 import com.example.myapplication.data.local.AppLanguagePrefs
+import com.example.myapplication.data.local.SecretFolderStore
 import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
@@ -47,10 +48,13 @@ class AnimeUpdateWorker(
             // Системные пуши шлём ТОЛЬКО когда приложение в фоне/закрыто. Если оно
             // открыто — обновления уже показываются in-app стопкой, дублировать шторкой
             // не нужно (иначе уведомление «мигает» при каждом взаимодействии).
-            if (newlyDetected.isNotEmpty() && !isAppInForeground()) {
+            // Тайтлы секретной папки пушей не шлют: уведомление выдало бы название на экране блокировки.
+            val hidden = SecretFolderStore(settingsDataStore).ids.first()
+            val visibleUpdates = newlyDetected.filterNot { it.animeId in hidden }
+            if (visibleUpdates.isNotEmpty() && !isAppInForeground()) {
                 // Подписи «S3 E5» — после догона расклада выше, чтобы сезон был актуальным.
-                val labels = runCatching { seasonEpisodeLocator.labelsFor(newlyDetected) }.getOrElse { emptyMap() }
-                notifier.showUpdateNotifications(newlyDetected, language, labels)
+                val labels = runCatching { seasonEpisodeLocator.labelsFor(visibleUpdates) }.getOrElse { emptyMap() }
+                notifier.showUpdateNotifications(visibleUpdates, language, labels)
             }
             // Новые главы привязанной манги. Проверка СЪЕДАЕТ состояние: сравнив оглавление с
             // кэшем, она тут же кладёт свежее — то есть «новым» это уже не будет никогда. Поэтому
@@ -60,7 +64,7 @@ class AnimeUpdateWorker(
             // глазами и грузит оглавление сама.
             if (!isAppInForeground()) {
                 runCatching {
-                    val chapters = mangaUpdateCheck.detect()
+                    val chapters = mangaUpdateCheck.detect().filterNot { it.animeId in hidden }
                     if (chapters.isNotEmpty()) {
                         mangaNotifier.showChapterNotifications(chapters, language)
                     }

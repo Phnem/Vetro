@@ -130,7 +130,7 @@ class FavoriteCollectionStripDeviceTest {
             val home = withContext(Dispatchers.Main) {
                 koin.get<HomeViewModel>().also { store.put("home", it) }
             }
-            assertEquals(false, home.experimentalGrid.value)
+            assertEquals(true, home.experimentalGrid.value)
             home.updateSearchQuery("Shelf device fixture")
             compose.setContent {
                 OneUiTheme(darkTheme = true) {

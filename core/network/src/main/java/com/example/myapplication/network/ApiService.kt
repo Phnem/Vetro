@@ -15,6 +15,17 @@ interface ApiService {
     suspend fun searchApi(query: String, contentType: AppContentType, language: AppLanguage): Result<List<ApiSearchResult>>
 
     /**
+     * Тот же поиск, но выдача приходит по мере ответа источников: каждый элемент потока — вся
+     * накопленная к этому моменту выдача (не прирост). По умолчанию — один элемент, итог [searchApi].
+     */
+    fun searchApiProgressive(
+        query: String,
+        contentType: AppContentType,
+        language: AppLanguage,
+    ): kotlinx.coroutines.flow.Flow<List<ApiSearchResult>> =
+        kotlinx.coroutines.flow.flow { emit(searchApi(query, contentType, language).getOrThrow()) }
+
+    /**
      * Только Shikimori (для RU inspect: trace → Gemini → Shikimori).
      * [allowZeroEpisodes]: для AI-рекомендаций, иначе Shikimori даёт 0 эпизодов у не вышедших/фильмов — список становится пустым.
      */

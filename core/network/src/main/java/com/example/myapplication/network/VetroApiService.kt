@@ -12,6 +12,16 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.channelFlow
+import kotlinx.coroutines.flow.lastOrNull
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withTimeoutOrNull
 
 /**
  * Ktor 3.x–based API facade. Uses Shikimori + AniList + Kitsu + AniLibria remote data sources,
@@ -167,23 +177,48 @@ class VetroApiService(
     }
 
     override suspend fun searchApi(query: String, contentType: AppContentType, language: AppLanguage): Result<List<ApiSearchResult>> {
-        return runCatching {
-            searchRate.acquire()
-            val q = query.trim()
-            if (q.isEmpty()) return@runCatching emptyList<ApiSearchResult>()
-            val results = when (contentType) {
-                AppContentType.ANIME -> searchAnimeApis(q, language)
-                AppContentType.MANGA -> searchMangaApis(q, language)
-                AppContentType.MOVIE, AppContentType.SERIES ->
-                    movieSeriesRepository.search(q, contentType, language).valueOrEmptyOrThrow()
-            }
-            // Что найдено в разделе «Манга» — манга, и так по каждому разделу. Тип берём из
-            // раздела, а не из ответа источника: Shikimori проставляет "ANIME" и результатам
-            // /api/mangas, из-за чего добавленная манга попадала в коллекцию как аниме и
-            // открывала меню серий вместо глав. См. [AppContentType.categoryTypeName].
-            val categoryType = contentType.categoryTypeName()
-            results.map { if (it.categoryType == categoryType) it else it.copy(categoryType = categoryType) }
+        return runCatching { searchApiProgressive(query, contentType, language).lastOrNull().orEmpty() }
+    }
+
+    /**
+     * Источники опрашиваются параллельно и каждый со своим таймаутом ([SOURCE_TIMEOUT_MS]): время
+     * поиска — время самого медленного из них, а не сумма, и один подвисший источник не держит
+     * выдачу. Первые ответы уходят в поток сразу, итог (с русским мостом) — последним элементом.
+     * Готовый итог кладётся в короткий кэш: повторный и обратный ввод отвечают мгновенно.
+     */
+    override fun searchApiProgressive(
+        query: String,
+        contentType: AppContentType,
+        language: AppLanguage,
+    ): Flow<List<ApiSearchResult>> = channelFlow {
+        val q = query.trim()
+        if (q.isEmpty()) {
+            send(emptyList())
+            return@channelFlow
         }
+        val cacheKey = SearchCacheKey(contentType, language, q.lowercase())
+        searchCache.get(cacheKey)?.let {
+            send(it)
+            return@channelFlow
+        }
+        searchRate.acquire()
+        // Что найдено в разделе «Манга» — манга, и так по каждому разделу. Тип берём из
+        // раздела, а не из ответа источника: Shikimori проставляет "ANIME" и результатам
+        // /api/mangas, из-за чего добавленная манга попадала в коллекцию как аниме и
+        // открывала меню серий вместо глав. См. [AppContentType.categoryTypeName].
+        val categoryType = contentType.categoryTypeName()
+        fun stamp(list: List<ApiSearchResult>) =
+            list.map { if (it.categoryType == categoryType) it else it.copy(categoryType = categoryType) }
+        val staged = when (contentType) {
+            AppContentType.ANIME -> searchAnimeStaged(q, language) { send(stamp(it)) }
+            AppContentType.MANGA -> searchMangaStaged(q, language) { send(stamp(it)) }
+            AppContentType.MOVIE, AppContentType.SERIES ->
+                StagedSearch(movieSeriesRepository.search(q, contentType, language).valueOrEmptyOrThrow(), complete = true)
+        }
+        val results = stamp(staged.results)
+        send(results)
+        // Пустую или неполную (источник не уложился в таймаут) выдачу не кэшируем: повтор может дать больше.
+        if (results.isNotEmpty() && staged.complete) searchCache.put(cacheKey, results)
     }
 
     override suspend fun searchAnimeShikimoriOnly(
@@ -403,36 +438,122 @@ class VetroApiService(
             .map { it.first }
     }
 
-    private suspend fun searchAnimeApis(query: String, language: AppLanguage): List<ApiSearchResult> {
+    private class StagedSearch(val results: List<ApiSearchResult>, val complete: Boolean)
+
+    private class Gathered(val results: List<List<ApiSearchResult>>, val complete: Boolean)
+
+    private data class SearchCacheKey(val type: AppContentType, val language: AppLanguage, val query: String)
+
+    /** Короткий кэш готовых выдач: ключ — раздел, язык и запрос, запись живёт [ttlMs]. */
+    private class SearchCache(private val ttlMs: Long = 10 * 60_000L, private val maxEntries: Int = 40) {
+        private class Entry(val at: Long, val value: List<ApiSearchResult>)
+
+        private val map = object : LinkedHashMap<SearchCacheKey, Entry>(16, 0.75f, true) {
+            override fun removeEldestEntry(eldest: MutableMap.MutableEntry<SearchCacheKey, Entry>?) = size > maxEntries
+        }
+
+        @Synchronized
+        fun get(key: SearchCacheKey): List<ApiSearchResult>? {
+            val entry = map[key] ?: return null
+            if (System.currentTimeMillis() - entry.at > ttlMs) {
+                map.remove(key)
+                return null
+            }
+            return entry.value
+        }
+
+        @Synchronized
+        fun put(key: SearchCacheKey, value: List<ApiSearchResult>) {
+            map[key] = Entry(System.currentTimeMillis(), value)
+        }
+    }
+
+    private val searchCache = SearchCache()
+
+    /**
+     * Запускает [sources] одновременно, каждый с таймаутом. После каждого ответа зовёт [onArrival]
+     * со слотами по порядку источников (null — ещё не ответил): порядок слияния не зависит от того,
+     * кто успел первым, и выдача получается такой же, как при последовательном опросе.
+     */
+    private suspend fun gather(
+        sources: List<suspend () -> List<ApiSearchResult>>,
+        onArrival: suspend (List<List<ApiSearchResult>?>) -> Unit,
+    ): Gathered = coroutineScope {
+        val slots = arrayOfNulls<List<ApiSearchResult>>(sources.size)
+        var complete = true
+        val lock = Mutex()
+        sources.mapIndexed { index, source ->
+            async {
+                val found: List<ApiSearchResult>? = try {
+                    withTimeoutOrNull(SOURCE_TIMEOUT_MS) { source() }
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    emptyList()
+                }
+                lock.withLock {
+                    if (found == null) complete = false
+                    slots[index] = found.orEmpty()
+                    onArrival(slots.toList())
+                }
+            }
+        }.awaitAll()
+        Gathered(slots.map { it.orEmpty() }, complete)
+    }
+
+    /** Слияние ответов аниме-источников по порядку: дубликаты по названию отбрасываются, затем ранжирование. */
+    private fun mergeAnime(query: String, arrived: List<List<ApiSearchResult>?>): List<ApiSearchResult> {
         val raw = mutableListOf<ApiSearchResult>()
         val seenKeys = mutableSetOf<String>()
-        fun addIfNew(r: ApiSearchResult) {
-            val key = normalizeForSearch(r.title)
-            if (key.isEmpty() || !seenKeys.add(key)) return
-            raw.add(r)
+        arrived.forEach { list ->
+            list.orEmpty().forEach { r ->
+                val key = normalizeForSearch(r.title)
+                if (key.isNotEmpty() && seenKeys.add(key)) raw.add(r)
+            }
         }
-        shikimori.searchAnime(query, 20, language).getOrNull()?.forEach { addIfNew(it) }
-        burstRate.acquire()
-        aniList.searchAnime(query, 20, language).getOrNull()?.forEach { addIfNew(it) }
-        burstRate.acquire()
-        searchJikan(query, language).forEach { addIfNew(it) }
-        // Языковые endpoint'ы: AniLibria — русские описания/постеры, Kitsu — стабильный EN JSON:API.
-        when (language) {
-            AppLanguage.RU -> anilibria.searchAnime(query, 10).getOrNull()?.forEach { addIfNew(it) }
-            AppLanguage.EN -> kitsu.searchAnime(query, 10).getOrNull()?.forEach { addIfNew(it) }
+        val ranked = filterAndRankByQuery(query, raw)
+        if (ranked.isNotEmpty() || raw.isEmpty()) return ranked
+        return raw.sortedWith(compareByDescending<ApiSearchResult> { it.rating ?: Int.MIN_VALUE }).take(20)
+    }
+
+    private suspend fun searchAnimeStaged(
+        query: String,
+        language: AppLanguage,
+        onPartial: suspend (List<ApiSearchResult>) -> Unit,
+    ): StagedSearch {
+        val sources: List<suspend () -> List<ApiSearchResult>> = listOf(
+            { shikimori.searchAnime(query, 20, language).getOrNull().orEmpty() },
+            { aniList.searchAnime(query, 20, language).getOrNull().orEmpty() },
+            { searchJikan(query, language) },
+            // Языковые endpoint'ы: AniLibria — русские описания/постеры, Kitsu — стабильный EN JSON:API.
+            {
+                when (language) {
+                    AppLanguage.RU -> anilibria.searchAnime(query, 10).getOrNull().orEmpty()
+                    AppLanguage.EN -> kitsu.searchAnime(query, 10).getOrNull().orEmpty()
+                }
+            },
+        )
+        val gathered = gather(sources) { arrived ->
+            val merged = mergeAnime(query, arrived)
+            if (merged.isNotEmpty()) onPartial(merged)
+        }
+        val raw = mutableListOf<ApiSearchResult>()
+        val seenKeys = mutableSetOf<String>()
+        gathered.results.forEach { list ->
+            list.forEach { r ->
+                val key = normalizeForSearch(r.title)
+                if (key.isNotEmpty() && seenKeys.add(key)) raw.add(r)
+            }
         }
         val ranked = filterAndRankByQuery(query, raw)
         // Stage 12: при RU-запросе без сильного Shikimori — мост через EN-название → Shikimori.
-        val withBridge = if (language == AppLanguage.RU) {
-            augmentRuSearchViaEnglish(query, raw, ranked)
-        } else {
-            ranked
+        val withBridge = if (language == AppLanguage.RU) augmentRuSearchViaEnglish(query, raw, ranked) else ranked
+        val final = when {
+            withBridge.isNotEmpty() -> withBridge
+            raw.isEmpty() -> emptyList()
+            else -> raw.sortedWith(compareByDescending<ApiSearchResult> { it.rating ?: Int.MIN_VALUE }).take(20)
         }
-        if (withBridge.isNotEmpty()) return withBridge
-        if (raw.isEmpty()) return emptyList()
-        return raw
-            .sortedWith(compareByDescending<ApiSearchResult> { it.rating ?: Int.MIN_VALUE })
-            .take(20)
+        return StagedSearch(final, gathered.complete)
     }
 
     /**
@@ -469,9 +590,13 @@ class VetroApiService(
 
         val seen = ranked.map { resultDedupKey(it) }.filter { it.isNotEmpty() }.toMutableSet()
         val shikiExtra = mutableListOf<ApiSearchResult>()
-        for (en in enQueries.take(3)) {
-            burstRate.acquire()
-            val hits = shikimori.searchAnime(en, 8, AppLanguage.RU).getOrNull().orEmpty()
+        // Три запроса к Shikimori — одновременно; разбор по-прежнему по порядку запросов.
+        val bridgeQueries = enQueries.take(3)
+        val bridged = gather(
+            bridgeQueries.map { en -> suspend { shikimori.searchAnime(en, 8, AppLanguage.RU).getOrNull().orEmpty() } },
+        ) { }
+        for ((position, en) in bridgeQueries.withIndex()) {
+            val hits = bridged.results[position]
             for (hit in hits) {
                 val key = resultDedupKey(hit)
                 if (key.isEmpty() || !seen.add(key)) continue
@@ -534,53 +659,50 @@ class VetroApiService(
         }
     }.getOrElse { emptyList() }
 
-    private suspend fun searchMangaApis(query: String, language: AppLanguage): List<ApiSearchResult> {
+    /** Слияние ответов манга-источников по порядку: у дубликата недостающие поля берутся у следующего источника. */
+    private fun mergeManga(query: String, arrived: List<List<ApiSearchResult>?>): List<ApiSearchResult> {
         val raw = mutableListOf<ApiSearchResult>()
-        val seenKeys = mutableSetOf<String>()
-        fun addIfNew(r: ApiSearchResult) {
-            val key = resultDedupKey(r)
-            if (key.isEmpty()) return
-
-            val existing = raw.find { resultDedupKey(it) == key }
-            if (existing != null) {
-                // Merge data if existing is missing something
-                val merged = existing.copy(
-                    episodes = if (existing.episodes == 0) r.episodes else existing.episodes,
-                    genres = if (existing.genres.isEmpty()) r.genres else existing.genres,
-                    posterUrl = if (existing.posterUrl.isNullOrEmpty()) r.posterUrl else existing.posterUrl
-                )
-                raw[raw.indexOf(existing)] = merged
-            } else {
-                seenKeys.add(key)
-                raw.add(r)
+        arrived.forEach { list ->
+            list.orEmpty().forEach { r ->
+                val key = resultDedupKey(r)
+                if (key.isEmpty()) return@forEach
+                val existing = raw.find { resultDedupKey(it) == key }
+                if (existing != null) {
+                    raw[raw.indexOf(existing)] = existing.copy(
+                        episodes = if (existing.episodes == 0) r.episodes else existing.episodes,
+                        genres = if (existing.genres.isEmpty()) r.genres else existing.genres,
+                        posterUrl = if (existing.posterUrl.isNullOrEmpty()) r.posterUrl else existing.posterUrl,
+                    )
+                } else {
+                    raw.add(r)
+                }
             }
         }
-        
-        // 1. Remanga (Primary source for manga, especially Russian)
-        val remangaRes = remanga.searchManga(query, 6)
-        remangaRes.forEach { addIfNew(it) }
-
-        // 2. MangaDex — второй источник, у которого главы реально читаются в приложении
-        //    (Shikimori и AniList ниже дают только карточку тайтла). Свой лимит он держит сам.
-        val mangaDexRes = mangaDex.searchManga(query, 20, language)
-        filterAndRankByQuery(query, mangaDexRes).take(6).forEach { addIfNew(it) }
-
-        // 3. Shikimori (Fallback 1)
-        val shikiRes = shikimori.searchManga(query, 30, language).getOrNull() ?: emptyList()
-        val shikiRanked = filterAndRankByQuery(query, shikiRes).take(3)
-        shikiRanked.forEach { addIfNew(it) }
-
-        // 4. AniList (Fallback 2)
-        val aniRes = aniList.searchAnime(query, 30, language, isManga = true).getOrNull() ?: emptyList()
-        val aniRanked = filterAndRankByQuery(query, aniRes).take(3)
-        aniRanked.forEach { addIfNew(it) }
-        
         val ranked = filterAndRankByQuery(query, raw)
-        if (ranked.isNotEmpty()) return ranked
-        if (raw.isEmpty()) return emptyList()
-        return raw
-            .sortedWith(compareByDescending<ApiSearchResult> { it.rating ?: Int.MIN_VALUE })
-            .take(20)
+        if (ranked.isNotEmpty() || raw.isEmpty()) return ranked
+        return raw.sortedWith(compareByDescending<ApiSearchResult> { it.rating ?: Int.MIN_VALUE }).take(20)
+    }
+
+    private suspend fun searchMangaStaged(
+        query: String,
+        language: AppLanguage,
+        onPartial: suspend (List<ApiSearchResult>) -> Unit,
+    ): StagedSearch {
+        val sources: List<suspend () -> List<ApiSearchResult>> = listOf(
+            // 1. Remanga — основной источник манги, особенно русской.
+            { remanga.searchManga(query, 6) },
+            // 2. MangaDex — второй источник, у которого главы реально читаются в приложении
+            //    (Shikimori и AniList ниже дают только карточку тайтла). Свой лимит он держит сам.
+            { filterAndRankByQuery(query, mangaDex.searchManga(query, 20, language)).take(6) },
+            // 3–4. Shikimori и AniList — запасные.
+            { filterAndRankByQuery(query, shikimori.searchManga(query, 30, language).getOrNull().orEmpty()).take(3) },
+            { filterAndRankByQuery(query, aniList.searchAnime(query, 30, language, isManga = true).getOrNull().orEmpty()).take(3) },
+        )
+        val gathered = gather(sources) { arrived ->
+            val merged = mergeManga(query, arrived)
+            if (merged.isNotEmpty()) onPartial(merged)
+        }
+        return StagedSearch(mergeManga(query, gathered.results), gathered.complete)
     }
 
     private suspend fun searchJikanManga(query: String, language: AppLanguage): List<ApiSearchResult> = runCatching {
@@ -737,3 +859,6 @@ class VetroApiService(
     private fun LookupResult<List<ApiSearchResult>>.valueOrEmptyOrThrow(): List<ApiSearchResult> =
         valueOrNullOrThrow().orEmpty()
 }
+
+/** Сколько ждём один источник поиска, мс: дальше он выпадает из выдачи, остальные не ждут. */
+private const val SOURCE_TIMEOUT_MS = 5_000L

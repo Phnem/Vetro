@@ -8,6 +8,7 @@ import android.os.Build
 import android.os.Bundle
 import android.view.Window
 import androidx.activity.ComponentActivity
+import androidx.fragment.app.FragmentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
@@ -67,7 +68,7 @@ import com.example.myapplication.ui.settings.SettingsViewModel
 import org.koin.androidx.compose.koinViewModel
 import org.koin.android.ext.android.inject
 
-class MainActivity : ComponentActivity() {
+class MainActivity : FragmentActivity() {
 
     private val externalListSyncCoordinator: ExternalListSyncCoordinator by inject()
     private val supabaseClient: SupabaseClient by inject()

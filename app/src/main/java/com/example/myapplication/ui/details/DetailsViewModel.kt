@@ -6,6 +6,7 @@ import com.example.myapplication.data.local.AppLanguagePrefs
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.myapplication.data.local.AnimeLocalDataSource
+import com.example.myapplication.data.local.SecretFolderStore
 import com.example.myapplication.data.models.Anime
 import com.example.myapplication.data.models.MediaType
 import com.example.myapplication.data.models.WatchStatus
@@ -76,6 +77,30 @@ class DetailsViewModel(
     // Инициализация синхронно: узел sharedBounds есть в дереве на 0-м кадре — Exit transition работает.
     private val _currentAnime = MutableStateFlow<Anime?>(repository.getAnimeById(animeId))
     val currentAnime: StateFlow<Anime?> = _currentAnime.asStateFlow()
+
+    private val secretStore = SecretFolderStore(settingsDataStore)
+
+    /** Лежит ли тайтл в секретной папке: из основной ленты он при этом скрыт. */
+    val isSecret: StateFlow<Boolean> = secretStore.ids
+        .map { animeId in it }
+        .distinctUntilChanged()
+        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
+
+    /** Пункт меню «⋯»: положить тайтл в секретную папку или вернуть его в ленту. */
+    fun toggleSecret() {
+        val toSecret = !isSecret.value
+        viewModelScope.launch {
+            runCatching { secretStore.setSecret(animeId, toSecret) }
+                .onSuccess {
+                    if (toSecret) say("Тайтл перемещён в секретную папку", "Moved to the secret folder")
+                    else say("Тайтл возвращён в ленту", "Moved back to your collection")
+                }
+                .onFailure {
+                    if (it is kotlinx.coroutines.CancellationException) throw it
+                    say("Не удалось сохранить", "Couldn't save")
+                }
+        }
+    }
 
     val tracking: StateFlow<TitleTracking> = titleTrackingStore.observe(animeId)
         .stateIn(viewModelScope, SharingStarted.Eagerly, TitleTracking())

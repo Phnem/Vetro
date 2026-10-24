@@ -68,11 +68,11 @@ class AiConnectViewModel(
 
     fun toggleShowKey() = local.update { it.copy(showKey = !it.showKey) }
 
-    /** Ссылка «Get API Key» контекстна: ведёт на страницу определённого (или вероятного) провайдера. */
-    fun apiKeyUrlForCurrentInput(): String {
-        val candidate = AiKeyDetector.detectCandidates(local.value.input).firstOrNull()
-        return (candidate ?: AiProvider.OPENAI).apiKeyUrl
-    }
+    /**
+     * Ссылка «Получить ключ» ведёт на OpenRouter: один ключ открывает модели разных провайдеров, и
+     * новичку не нужно выбирать, у кого заводить аккаунт. Ключи остальных провайдеров вводятся как раньше.
+     */
+    fun apiKeyUrlForCurrentInput(): String = AiProvider.OPENROUTER.apiKeyUrl
 
     fun connect() {
         val key = local.value.input.trim()

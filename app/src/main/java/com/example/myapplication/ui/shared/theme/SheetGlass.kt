@@ -104,15 +104,18 @@ fun Modifier.iosSheetGlass(
     // 9 dp) убрана как дорогая. Обводка центрирована на контуре, а клип панели срезает наружную половину.
     val outline = shape.createOutline(size, layoutDirection, this)
     val rimPath = (outline as? Outline.Generic)?.path ?: Path().apply { addOutline(outline) }
+    // Блик: ярче всего на верхних углах (там линия контура изгибается), по бокам спадает до ровной
+    // окантовки. Прежние 0,8 dp при 15–22% после среза клипом давали ~0,4 dp почти невидимой линии.
     val rim = Brush.verticalGradient(
-        0f to Color.White.copy(alpha = 0.22f),
+        0f to Color.White.copy(alpha = 0.55f),
+        0.10f to Color.White.copy(alpha = 0.30f),
         0.5f to Color.White.copy(alpha = 0.18f),
-        1f to Color.White.copy(alpha = 0.15f),
+        1f to Color.White.copy(alpha = 0.22f),
     )
     onDrawBehind {
         // Панель уже обрезана по форме (clip выше по цепочке), поэтому градиент заливается обычным
         // прямоугольником, а не контуром: заливка сложного пути с шейдером на весь лист стоила заметно дороже.
         drawRect(gradient)
-        drawPath(rimPath, brush = rim, style = Stroke(width = 0.8.dp.toPx()))
+        drawPath(rimPath, brush = rim, style = Stroke(width = 1.6.dp.toPx()))
     }
 }

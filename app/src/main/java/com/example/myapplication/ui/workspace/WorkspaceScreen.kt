@@ -74,6 +74,15 @@ import com.kyant.backdrop.backdrops.layerBackdrop
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
+import androidx.compose.runtime.SideEffect
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
+import com.example.myapplication.security.findFragmentActivity
+import com.example.myapplication.ui.secret.SecretFolderHostState
+import com.example.myapplication.ui.secret.SecretFolderOverlay
+import com.example.myapplication.ui.secret.SecretFolderViewModel
+import com.example.myapplication.ui.secret.secretPullObserver
+import org.koin.androidx.compose.koinViewModel
 
 /**
  * Рабочая область — корень приложения при включённом флаге `SELECT_DOCK_NAVIGATION`.
@@ -137,6 +146,22 @@ fun WorkspaceScreen(
         initialPage = WorkspacePage.Start.index,
         pageCount = { WorkspacePage.PageCount },
     )
+
+    // Секретная папка слева от главной: сессия живёт в Activity (Details поверх неё не закрывает
+    // папку), жест и анимация — в host. Подробности — ui/secret.
+    val secretOwner = remember(context) { context.findFragmentActivity() } ?: checkNotNull(LocalViewModelStoreOwner.current)
+    val secretViewModel: SecretFolderViewModel = koinViewModel(viewModelStoreOwner = secretOwner)
+    val secretHost = remember(scope, secretViewModel) { SecretFolderHostState(scope, secretViewModel) }
+    SideEffect {
+        secretHost.haptic = { performHaptic(view, it) }
+        secretHost.gestureAllowed = {
+            pagerState.currentPage == WorkspacePage.HOME.index &&
+                pagerState.currentPageOffsetFraction == 0f &&
+                !cardSelectionActive &&
+                !com.example.myapplication.ui.shared.SheetGate.anyOpen &&
+                !homeOverlayVisible && !menuOpen && !showSyncPanel && !showStats && !showCalendar
+        }
+    }
 
     val goTo: (WorkspacePage) -> Unit = { page ->
         scope.launch {
@@ -203,7 +228,11 @@ fun WorkspaceScreen(
             // Резинка на краях у «наезда» страниц читается как дёрганье (см. IosScroll.pagerFlingBehavior).
             overscrollEffect = null,
             state = pagerState,
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier
+                .fillMaxSize()
+                // Нулевая страница: остаток свайпа вправо тянет секретную папку (см. ui/secret).
+                .secretPullObserver(secretHost)
+                .nestedScroll(secretHost.connection),
             // Соседняя страница обязана быть готова заранее: иначе переход показывает пустой кадр.
             beyondViewportPageCount = 1,
             // Открытая шторка владеет жестами: горизонтальный драг по её ползунку не листает страницы.
@@ -317,6 +346,17 @@ fun WorkspaceScreen(
                     }
                 },
             ) },
+        )
+
+        // Секретная папка накрывает всё, включая док.
+        SecretFolderOverlay(
+            host = secretHost,
+            viewModel = secretViewModel,
+            language = language,
+            navController = navController,
+            sharedTransitionScope = sharedTransitionScope,
+            animatedVisibilityScope = animatedVisibilityScope,
+            modifier = Modifier.zIndex(7f),
         )
 
         WorkspaceDock(

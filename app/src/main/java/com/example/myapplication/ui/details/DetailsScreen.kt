@@ -1,6 +1,8 @@
 package com.example.myapplication.ui.details
 
 import com.example.myapplication.ui.shared.theme.IosScroll
+import com.example.myapplication.ui.shared.theme.iosOverscrollFactory
+import androidx.compose.foundation.LocalOverscrollFactory
 import com.example.myapplication.ui.shared.glassControl
 import com.example.myapplication.ui.shared.StatusBarIconsOverArt
 import androidx.compose.ui.platform.LocalDensity
@@ -300,17 +302,20 @@ fun DetailsScreen(
                         .zIndex(4f),
                 )
 
-                // Меню работает с каталогами аниме (обложки, id, «просмотрено» по сериям), у манги его нет.
-                if (!isManga) {
-                    DetailsOverflowMenu(
-                        backdrop = backdrop,
-                        isDark = isDark,
-                        ru = language == AppLanguage.RU,
-                        onMarkWatched = viewModel::markWatched,
-                        onChangeCover = viewModel::openCoverPicker,
-                        onWrongSource = viewModel::openSourcePicker,
-                    )
-                }
+                // Каталоги аниме (обложки, id, «просмотрено» по сериям) манге не нужны: у неё в меню
+                // остаётся только секретная папка.
+                val isSecret by viewModel.isSecret.collectAsStateWithLifecycle()
+                DetailsOverflowMenu(
+                    backdrop = backdrop,
+                    isDark = isDark,
+                    ru = language == AppLanguage.RU,
+                    onMarkWatched = viewModel::markWatched,
+                    onChangeCover = viewModel::openCoverPicker,
+                    onWrongSource = viewModel::openSourcePicker,
+                    isSecret = isSecret,
+                    onToggleSecret = viewModel::toggleSecret,
+                    showCatalogActions = !isManga,
+                )
 
                 DetailsMiniDock(
                     backdrop = backdrop,
@@ -474,6 +479,13 @@ private fun DetailsInfoPage(
     val reportHero by rememberUpdatedState(onHeroUnderStatusBar)
     LaunchedEffect(heroUnderStatusBar) { reportHero(heroUnderStatusBar) }
 
+    // Лист можно оттянуть вниз только до нижнего края арта: дальше за ним пустой фон экрана.
+    val overscrollContext = LocalContext.current
+    val sheetStretchPx = with(density) { sheetOverlap.toPx() }
+    val sheetOverscroll = remember(overscrollContext, sheetStretchPx) {
+        iosOverscrollFactory(overscrollContext, maxTopStretchPx = sheetStretchPx)
+    }
+    CompositionLocalProvider(LocalOverscrollFactory provides sheetOverscroll) {
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
         val viewportHeight = maxHeight
 
@@ -481,7 +493,8 @@ private fun DetailsInfoPage(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(heroHeight)
+                // Арт чуть длиннее листа: под скруглёнными углами листа при оттяжке виден арт, а не фон.
+                .height(heroHeight + sheetCorner)
                 .graphicsLayer { translationY = -scrollState.value * 0.35f },
         ) {
             if (imgPath != null) {
@@ -828,6 +841,7 @@ private fun DetailsInfoPage(
                 Spacer(Modifier.height(140.dp))
             }
         }
+    }
     }
 }
 

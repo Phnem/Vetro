@@ -1,0 +1,8 @@
+New
+• Secret folder: swipe right on Home, open it behind a fingerprint/face bolt, add titles from the Details menu.
+• Faster search: sources run in parallel, results appear as they arrive.
+• Account, AI Connect and Collection Enrichment panels redesigned.
+• Favorites strip is on by default.
+Fixes
+• Details no longer shows a black gap when pulled down.
+• The Added button no longer sticks after deleting a title.

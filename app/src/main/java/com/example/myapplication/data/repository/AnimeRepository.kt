@@ -145,6 +145,11 @@ class AnimeRepository(
         return apiService.searchApi(query, contentType, language)
     }
 
+    /** Поиск с поэтапной выдачей: каждый элемент потока — вся накопленная выдача, см. [ApiService.searchApiProgressive]. */
+    fun searchApiProgressive(query: String, contentType: AppContentType, language: AppLanguage): Flow<List<ApiSearchResult>> {
+        return apiService.searchApiProgressive(query, contentType, language)
+    }
+
     suspend fun searchAnimeShikimoriOnly(
         query: String,
         language: AppLanguage,

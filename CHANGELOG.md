@@ -1,5 +1,40 @@
 # Vetro changelog
 
+## v3.4.5-Stable — October 24, 2026
+
+App version: `v3.4.5-Stable`. Android version code: `345`.
+Changes since 3.4.4.
+
+### Secret folder
+
+- A new folder to the left of Home. Swipe right on the Home page: the edge stretches like rubber and resists more the further you pull. Let go early and it springs back; pull almost to the far edge and it breaks free with a haptic click and opens full screen.
+- The gesture adapts to where your finger starts. The barrier breaks at 85% of the distance your finger can still travel, and a start too close to the right edge does not trigger it at all, so a short accidental swipe cannot open the folder.
+- Every opening starts with a bolt screen that asks for your fingerprint or face through Android's system prompt, the same as the app lock. Content is not even loaded until the bolt is open.
+- After the bolt: the folder itself, in an orange-and-mono palette that differs from the main screen, or a short animated empty state when nothing has been added yet.
+- Add a title from the "⋯" menu in Details (manga included); the same item returns it to the collection. Secret titles disappear from the main feed, statistics, the new-episode tray and push notifications.
+- The folder closes with the Back gesture, the close button, a swipe left, or when the app goes to the background, and asks for biometrics again next time.
+
+### Faster search
+
+- Anime and manga sources are queried at the same time instead of one after another, each with a 5-second limit. Search time is now the time of the slowest source, not the sum of all of them, and one stuck source no longer holds up the results.
+- Results appear as soon as the first source answers and fill in as the others arrive.
+- Finished searches are cached for 10 minutes, so repeating or retyping a query answers instantly. Incomplete results (a source timed out) are not cached.
+- The pause before a search starts is shorter (300 ms instead of 400 ms). The Russian "via the English title" fallback now runs its three requests in parallel.
+
+### Redesigned settings panels
+
+- Account settings, AI Connect and Collection Enrichment now use the same card layout as Additional sources: a header with "Done", rounded cards with a tinted icon tile, a title, a description and an accent status.
+- Input fields are pill-shaped with a round icon tile and a raised eye button for showing the key or password. Secondary buttons are raised pills with an icon instead of bare text.
+- Account settings is split into cards: cloud sync, sign-in methods with one card per provider, and the email password.
+- "Get" in AI Connect now opens the OpenRouter key page instead of OpenAI's.
+
+### Fixes and defaults
+
+- Details: pulling the sheet down now stops at the bottom edge of the cover instead of exposing a black gap.
+- Search: after adding a title and then deleting it from the collection, the result no longer keeps the "Added" button. The added state now follows the real collection, including titles hidden by the current filters.
+- The favorites strip (formerly "Experimental grid") is now on by default. Turn it off in Developer Settings if you prefer the old layout.
+- Bottom sheets: the thin light rim is brighter and wider, with a highlight on the top corners.
+
 ## v3.4.4-Stable — October 23, 2026
 
 App version: `v3.4.4-Stable`. Android version code: `344`.

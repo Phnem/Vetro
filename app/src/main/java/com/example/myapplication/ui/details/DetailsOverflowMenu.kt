@@ -21,6 +21,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Image
 import androidx.compose.material.icons.rounded.LinkOff
+import androidx.compose.material.icons.rounded.Lock
+import androidx.compose.material.icons.rounded.LockOpen
 import androidx.compose.material.icons.rounded.MoreHoriz
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -72,6 +74,10 @@ internal fun BoxScope.DetailsOverflowMenu(
     onMarkWatched: () -> Unit,
     onChangeCover: () -> Unit,
     onWrongSource: () -> Unit,
+    isSecret: Boolean,
+    onToggleSecret: () -> Unit,
+    /** false у манги: каталоги аниме ей не нужны, в меню остаётся только секретная папка. */
+    showCatalogActions: Boolean = true,
 ) {
     val view = LocalView.current
     var expanded by remember { mutableStateOf(false) }
@@ -147,7 +153,7 @@ internal fun BoxScope.DetailsOverflowMenu(
                 }
                 .padding(vertical = 6.dp),
         ) {
-            MenuRow(
+            if (showCatalogActions) MenuRow(
                 icon = Icons.Rounded.CheckCircle,
                 label = if (ru) "Просмотрено" else "Mark as watched",
                 tint = textColor,
@@ -157,7 +163,7 @@ internal fun BoxScope.DetailsOverflowMenu(
                     onMarkWatched()
                 },
             )
-            MenuRow(
+            if (showCatalogActions) MenuRow(
                 icon = Icons.Rounded.Image,
                 label = if (ru) "Сменить обложку" else "Change cover",
                 tint = textColor,
@@ -166,13 +172,28 @@ internal fun BoxScope.DetailsOverflowMenu(
                     onChangeCover()
                 },
             )
-            MenuRow(
+            if (showCatalogActions) MenuRow(
                 icon = Icons.Rounded.LinkOff,
                 label = if (ru) "Источник неверен" else "Wrong source",
                 tint = BrandOrangeBright,
                 onClick = {
                     expanded = false
                     onWrongSource()
+                },
+            )
+            MenuRow(
+                icon = if (isSecret) Icons.Rounded.LockOpen else Icons.Rounded.Lock,
+                label = when {
+                    isSecret && ru -> "Вернуть в ленту"
+                    isSecret -> "Move back to collection"
+                    ru -> "В секретную папку"
+                    else -> "Move to secret folder"
+                },
+                tint = textColor,
+                onClick = {
+                    expanded = false
+                    performHaptic(view, Haptic.Light)
+                    onToggleSecret()
                 },
             )
         }

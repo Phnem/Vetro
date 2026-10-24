@@ -18,8 +18,8 @@
 
 <p align="center">
   <a href="https://github.com/Phnem/Vetro/releases">Releases</a> ·
-  <a href="#whats-new-in-344">What's new</a> ·
-  <a href="CHANGELOG.md">Changelog (RU)</a> ·
+  <a href="#whats-new-in-345">What's new</a> ·
+  <a href="CHANGELOG.md">Changelog</a> ·
   <a href="#what-vetro-does">Features</a> ·
   <a href="#screens">Screens</a> ·
   <a href="#install">Install</a> ·
@@ -32,42 +32,42 @@ Vetro is an Android media library. Build a personal collection, follow new episo
 
 Vetro does not host any media. It connects to catalogues and sources that you choose, including your own servers.
 
-> **Current stable release:** [`v3.4.4-Stable`](https://github.com/Phnem/Vetro/releases/tag/v3.4.4-Stable). The app is actively evolving; source availability can vary by region.
+> **Current stable release:** [`v3.4.5-Stable`](https://github.com/Phnem/Vetro/releases/tag/v3.4.5-Stable). The app is actively evolving; source availability can vary by region.
 
 <p align="center"><img src="images/readme/divider.svg" alt="" width="880" /></p>
 
-## What's new in 3.4.4
+## What's new in 3.4.5
 
 <p align="center">
-  <img src="images/readme/whats-new.svg" alt="What's new in Vetro 3.4.4: episode-based title ratings, watch dates, biometric app lock and an experimental favorites strip" width="880" />
+  <img src="images/readme/whats-new.svg" alt="What's new in Vetro 3.4.5: a secret folder behind your fingerprint, faster search, redesigned account, AI Connect and enrichment panels" width="880" />
 </p>
 
 <table>
   <tr>
     <td width="50%" valign="top">
-      <b>Title ratings from episode scores</b><br />
-      Choose <i>Manual rating</i> in Details to use the average of your rated episodes across seasons. Unrated episodes are excluded; the result also appears on collection cards. <i>Auto rating</i> restores the original title score.
+      <b>Secret folder</b><br />
+      Swipe right on Home: the edge stretches like rubber and only a firm pull opens the folder. A bolt asks for your fingerprint or face on every opening. Add titles from the <i>⋯</i> menu in Details; they leave the feed, statistics, the new-episode tray and notifications.
     </td>
     <td width="50%" valign="top">
-      <b>Watch dates</b><br />
-      Record the first opening of the first and final episodes automatically, or choose start and finish dates in a calendar. A saved finish date marks the title as <i>Completed</i>; you can also leave it open while watching.
+      <b>Faster search</b><br />
+      Sources are queried at the same time with a 5-second limit each, results appear as soon as the first one answers, and a repeated query is served from a 10-minute cache.
     </td>
   </tr>
   <tr>
     <td width="50%" valign="top">
-      <b>Biometric app lock</b><br />
-      An optional setting asks for your fingerprint or face through Android's system prompt when entering the app. It also protects direct entry into players and readers. Off by default.
+      <b>Redesigned settings panels</b><br />
+      Account settings, AI Connect and Collection Enrichment now share the card layout of Additional sources, with pill input fields and buttons. <i>Get</i> in AI Connect opens the OpenRouter key page.
     </td>
     <td width="50%" valign="top">
-      <b>Experimental favorites strip</b><br />
-      Enable <i>Experimental grid</i> in Developer Settings to put favorites in a horizontal cover strip above the collection. Search, filters and the long-press menu still work. Off by default.
+      <b>Favorites strip on by default</b><br />
+      Favorites sit in a horizontal cover strip above the collection out of the box. Prefer the old layout? Turn off <i>Experimental grid</i> in Developer Settings.
     </td>
   </tr>
 </table>
 
-<p align="center"><sub>Also in this build: audio selection in a bottom sheet, recessed Details backgrounds with page-matched margins, and reversible season/volume animations without a reset on reopening.</sub></p>
+<p align="center"><sub>Also in this build: Details stops at the cover edge when pulled down, the <i>Added</i> button no longer sticks after deleting a title, and bottom sheets get a brighter rim highlight.</sub></p>
 
-<p align="center"><a href="CHANGELOG.md">Detailed 3.4.4 changelog</a></p>
+<p align="center"><a href="CHANGELOG.md">Detailed 3.4.5 changelog</a></p>
 
 <p align="center"><img src="images/readme/divider.svg" alt="" width="880" /></p>
 

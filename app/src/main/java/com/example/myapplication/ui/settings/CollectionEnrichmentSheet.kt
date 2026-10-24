@@ -1,6 +1,7 @@
 package com.example.myapplication.ui.settings
 
 import com.example.myapplication.ui.shared.theme.StatusSuccess
+import com.example.myapplication.network.AppLanguage
 import com.example.myapplication.ui.shared.theme.BrandOrange
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.tween
@@ -59,7 +60,8 @@ import kotlinx.coroutines.delay
 /**
  * «Обогащение коллекции» — модуль 1 (кнопка «Полное обогащение») и модуль 2 (тумблер
  * «Фоновое обновление»). Прогресс полного прогона отражают isRepairingDb (фаза полей) и
- * isTitleDubbing (фаза названий) из SettingsViewModel.
+ * isTitleDubbing (фаза названий) из SettingsViewModel. Вёрстка — карточки панели
+ * «Дополнительные источники» (см. SettingsPanelParts).
  */
 @Composable
 fun CollectionEnrichmentSheet(
@@ -69,7 +71,7 @@ fun CollectionEnrichmentSheet(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val strings = getCollectionEnrichmentStrings(uiState.language)
-    val sheetInDark = isAppInDarkTheme()
+    val ru = uiState.language == AppLanguage.RU
 
     val running = uiState.isRepairingDb || uiState.isTitleDubbing
     val fullSubtitle = when {
@@ -80,43 +82,35 @@ fun CollectionEnrichmentSheet(
         else -> strings.fullSubtitle
     }
 
-    Column(
-        modifier = sharedModifier
-            .fillMaxWidth()
-            .padding(horizontal = IosDesign.SheetSideInset)
-            .padding(top = IosDesign.SheetContentTop, bottom = 28.dp),
-        verticalArrangement = Arrangement.spacedBy(18.dp),
-    ) {
-        Text(
-            text = strings.sheetTitle,
-            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold, fontSize = 22.sp),
-            fontFamily = SnProFamily,
-            color = MaterialTheme.colorScheme.onSurface,
+    SettingsPanelColumn(modifier = sharedModifier) {
+        SettingsPanelHeader(
+            title = strings.sheetTitle,
+            doneLabel = if (ru) "Готово" else "Done",
+            onDone = onDismiss,
         )
 
-        // Модуль 1: полное обогащение (кнопка).
-        EnrichmentModuleRow(
-            icon = { IosIconWell(icon = Icons.Filled.AutoFixHigh, background = BrandOrange) },
+        // Модуль 1: полное обогащение (нажатие на карточку).
+        PanelRowCard(
             title = strings.fullTitle,
-            subtitle = fullSubtitle,
+            summary = fullSubtitle,
             onClick = if (running) null else { { viewModel.runFullEnrichment() } },
-            trailing = {
-                if (running) {
+            leading = { PanelGlyphTile(Icons.Filled.AutoFixHigh) },
+            trailing = if (running) {
+                {
                     CircularProgressIndicator(
                         modifier = Modifier.size(20.dp),
-                        color = BrandOrange,
+                        color = MaterialTheme.colorScheme.primary,
                         strokeWidth = 2.dp,
                     )
                 }
-            },
+            } else null,
         )
 
         // Модуль 2: фоновое обновление (тумблер).
-        EnrichmentModuleRow(
-            icon = { IosIconWell(icon = Icons.Filled.Autorenew, background = StatusSuccess) },
+        PanelRowCard(
             title = strings.liveTitle,
-            subtitle = strings.liveSubtitle,
-            onClick = null,
+            summary = strings.liveSubtitle,
+            leading = { PanelGlyphTile(Icons.Filled.Autorenew) },
             trailing = {
                 IosSwitch(
                     checked = uiState.liveMaintenanceEnabled,
@@ -124,48 +118,6 @@ fun CollectionEnrichmentSheet(
                 )
             },
         )
-    }
-}
-
-@Composable
-private fun EnrichmentModuleRow(
-    icon: @Composable () -> Unit,
-    title: String,
-    subtitle: String,
-    onClick: (() -> Unit)?,
-    trailing: @Composable () -> Unit,
-) {
-    val base = Modifier.fillMaxWidth()
-    val clickable = if (onClick != null) {
-        base.clickable(
-            interactionSource = remember { MutableInteractionSource() },
-            indication = null,
-            onClick = onClick,
-        )
-    } else base
-    Row(
-        modifier = clickable.padding(vertical = 6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        icon()
-        Spacer(Modifier.width(14.dp))
-        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text(
-                text = title,
-                fontFamily = SnProFamily,
-                fontSize = 17.sp,
-                fontWeight = FontWeight.Medium,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-            Text(
-                text = subtitle,
-                fontFamily = SnProFamily,
-                fontSize = 13.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-        Spacer(Modifier.width(12.dp))
-        trailing()
     }
 }
 

@@ -28,6 +28,7 @@ import com.example.myapplication.data.models.WatchStatus
 import com.example.myapplication.data.models.effectiveWatchStatus
 import com.example.myapplication.data.models.SortOption
 import com.example.myapplication.notifications.AnimeNotifier
+import com.example.myapplication.data.local.SecretFolderStore
 import com.example.myapplication.notifications.animeUpdateNotificationId
 import com.example.myapplication.SyncReport
 import kotlinx.coroutines.delay
@@ -259,9 +260,9 @@ class HomeViewModel(
         .stateIn(viewModelScope, SharingStarted.Eagerly, AppLanguage.EN)
 
     val experimentalGrid: StateFlow<Boolean> = settingsDataStore.data
-        .map { it[DevPreferencesKeys.EXPERIMENTAL_GRID] ?: false }
+        .map { it[DevPreferencesKeys.EXPERIMENTAL_GRID] ?: true }
         .distinctUntilChanged()
-        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
+        .stateIn(viewModelScope, SharingStarted.Eagerly, true)
 
     val syncReport = MutableStateFlow(com.example.myapplication.SyncReport())
 
@@ -282,6 +283,9 @@ class HomeViewModel(
             }
         }
 
+    /** Тайтлы секретной папки: из ленты, статистики и стопки новых серий их не видно. */
+    private val secretIds = SecretFolderStore(settingsDataStore).ids
+
     val animeListFlow: StateFlow<kotlinx.collections.immutable.ImmutableList<Anime>> = repository.observeAnimeList(
         searchQuery = _uiState.map { it.searchQuery },
         sortOption = _uiState.map { it.sortOption },
@@ -295,6 +299,8 @@ class HomeViewModel(
         } else {
             list.filter { anime -> anime.effectiveWatchStatus(gate.auto[anime.id]) in gate.statuses }
         }
+    }.combine(secretIds) { list, hidden ->
+        if (hidden.isEmpty()) list else list.filterNot { it.id in hidden }
     }.combine(airingOrder.filterNotNull()) { list, airing ->
         // Порядок групп: избранное → выходящие сейчас → остальное. Сортировка стабильна, так что
         // внутри групп сохраняется выбранная пользователем сортировка; избранное репозиторий уже
@@ -326,7 +332,8 @@ class HomeViewModel(
     val apiSearchWithStatus: StateFlow<kotlinx.collections.immutable.ImmutableList<ApiSearchUiModel>> = combine(
         _uiState.map { it.apiSearchResults }.distinctUntilChanged(),
         _uiState.map { it.optimisticallyAddedKeys }.distinctUntilChanged(),
-        animeListFlow,
+        // Вся коллекция, а не лента: у ленты свои поиск и фильтры, и из-за них добавленный тайтл мог пропасть.
+        localDataSource.observeAllAnime(null),
         bookSearch?.libraryTitles ?: flowOf(emptySet()),
     ) { apiResults, optimisticKeys, localList, bookTitles ->
         apiResults.map { result ->
@@ -348,7 +355,9 @@ class HomeViewModel(
 
     init {
         viewModelScope.launch {
-            localDataSource.observeUpdates().collect { list ->
+            combine(localDataSource.observeUpdates(), secretIds) { list, hidden ->
+                list.filterNot { it.animeId in hidden }
+            }.collect { list ->
                 _uiState.update { it.copy(updates = list.toImmutableList()) }
             }
         }
@@ -406,7 +415,7 @@ class HomeViewModel(
             return
         }
         apiSearchJob = viewModelScope.launch {
-            kotlinx.coroutines.delay(400)
+            kotlinx.coroutines.delay(300)
             if (_uiState.value.searchQuery.trim() != trimmed) return@launch
             _uiState.update { it.copy(apiSearchLoading = true, apiSearchError = null) }
             if (_uiState.value.searchBooks && bookSearch != null) {
@@ -427,30 +436,36 @@ class HomeViewModel(
                 com.example.myapplication.data.models.MediaType.SERIES -> AppContentType.SERIES
             }
             val language = uiLanguage.value
-            repository.searchApi(trimmed, contentType, language)
-                .fold(
-                    onSuccess = { results ->
-                        if (_uiState.value.searchQuery.trim() == trimmed) {
-                            _uiState.update {
-                                it.copy(
-                                    apiSearchResults = results.toImmutableList(),
-                                    apiSearchLoading = false,
-                                    apiSearchError = null
-                                )
-                            }
-                        }
-                    },
-                    onFailure = { e ->
-                        if (_uiState.value.searchQuery.trim() == trimmed) {
-                            _uiState.update {
-                                it.copy(
-                                    apiSearchLoading = false,
-                                    apiSearchError = e.message ?: "Search failed"
-                                )
-                            }
-                        }
+            // Выдача приходит по мере ответа источников: первые результаты видны сразу, остальные
+            // дописываются, индикатор гаснет с первой непустой выдачей.
+            var gotResults = false
+            try {
+                repository.searchApiProgressive(trimmed, contentType, language).collect { results ->
+                    if (_uiState.value.searchQuery.trim() != trimmed || results.isEmpty()) return@collect
+                    gotResults = true
+                    _uiState.update {
+                        it.copy(
+                            apiSearchResults = results.toImmutableList(),
+                            apiSearchLoading = false,
+                            apiSearchError = null,
+                        )
                     }
-                )
+                }
+                if (_uiState.value.searchQuery.trim() == trimmed) {
+                    _uiState.update {
+                        it.copy(
+                            apiSearchLoading = false,
+                            apiSearchResults = if (gotResults) it.apiSearchResults else persistentListOf(),
+                        )
+                    }
+                }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                if (_uiState.value.searchQuery.trim() == trimmed) {
+                    _uiState.update { it.copy(apiSearchLoading = false, apiSearchError = e.message ?: "Search failed") }
+                }
+            }
         }
     }
 
@@ -502,8 +517,16 @@ class HomeViewModel(
         _uiState.update { it.copy(optimisticallyAddedKeys = it.optimisticallyAddedKeys.add(key), addingFromApiId = key) }
         viewModelScope.launch {
             val ok = runCatching { adder.add(book) }.getOrElse { if (it is kotlinx.coroutines.CancellationException) throw it else false }
+            // Ключ нужен, только пока книга не видна в библиотеке: дальше правда — в самой библиотеке,
+            // иначе после удаления кнопка осталась бы «Added».
+            val confirmed = ok && kotlinx.coroutines.withTimeoutOrNull(3_000) {
+                adder.libraryTitles.first { adder.key(book.title) in it }
+            } != null
             _uiState.update {
-                if (ok) it.copy(addingFromApiId = null) else it.copy(
+                if (ok) it.copy(
+                    addingFromApiId = null,
+                    optimisticallyAddedKeys = if (confirmed) it.optimisticallyAddedKeys.remove(key) else it.optimisticallyAddedKeys,
+                ) else it.copy(
                     addingFromApiId = null,
                     optimisticallyAddedKeys = it.optimisticallyAddedKeys.remove(key),
                     apiSearchError = if (uiLanguage.value == com.example.myapplication.network.AppLanguage.RU) "Источник не отдал книгу" else "The source didn't return this book",
@@ -536,6 +559,12 @@ class HomeViewModel(
                         // коллекции, галочка правдива. Откатывать её во втором случае значило бы
                         // предлагать пользователю добавить то, что уже добавлено.
                         _uiState.update { it.copy(addingFromApiId = null) }
+                        // Ключ нужен, только пока запись не видна в БД; дальше кнопку ведёт сама
+                        // коллекция — иначе после удаления тайтла остался бы «Added».
+                        val confirmed = kotlinx.coroutines.withTimeoutOrNull(3_000) {
+                            localDataSource.observeAllAnime(null).first { isAddedInMemory(result, it) }
+                        } != null
+                        if (confirmed) _uiState.update { it.copy(optimisticallyAddedKeys = it.optimisticallyAddedKeys.remove(key)) }
                     },
                     onFailure = { e ->
                         e.printStackTrace()
@@ -732,7 +761,10 @@ class HomeViewModel(
 
     fun loadStatsAnimeList() {
         viewModelScope.launch {
-            val list = withContext(Dispatchers.IO) { localDataSource.getAllAnimeList() }.toImmutableList()
+            val hidden = secretIds.first()
+            val list = withContext(Dispatchers.IO) { localDataSource.getAllAnimeList() }
+                .filterNot { it.id in hidden }
+                .toImmutableList()
             val avgRating = if (list.isEmpty()) {
                 0.0
             } else {

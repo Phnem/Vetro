@@ -50,6 +50,13 @@ val viewModelModule = module {
         )
     }
     viewModel {
+        com.example.myapplication.ui.secret.SecretFolderViewModel(
+            localDataSource = get(),
+            settingsDataStore = get(named("settings")),
+            imageStorage = get(),
+        )
+    }
+    viewModel {
         RecommendationsViewModel(
             engine = get(),
             localDataSource = get(),

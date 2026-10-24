@@ -104,17 +104,29 @@ private class IosFlingBehavior(private val decay: DecayAnimationSpec<Float>) : F
  * Фабрика «резинки» для `LocalOverscrollFactory`: одна строка в корне приложения подключает её
  * ко всем спискам и скроллам. При системном отключении анимаций отскока нет — край просто край.
  */
-class IosOverscrollFactory(private val reducedMotion: Boolean) : OverscrollFactory {
-    override fun createOverscrollEffect(): OverscrollEffect = IosOverscrollEffect(reducedMotion)
+class IosOverscrollFactory(
+    private val reducedMotion: Boolean,
+    private val maxTopStretchPx: Float = Float.POSITIVE_INFINITY,
+) : OverscrollFactory {
+    override fun createOverscrollEffect(): OverscrollEffect = IosOverscrollEffect(reducedMotion, maxTopStretchPx)
     override fun equals(other: Any?): Boolean =
-        other is IosOverscrollFactory && other.reducedMotion == reducedMotion
-    override fun hashCode(): Int = reducedMotion.hashCode()
+        other is IosOverscrollFactory && other.reducedMotion == reducedMotion &&
+            other.maxTopStretchPx == maxTopStretchPx
+    override fun hashCode(): Int = 31 * reducedMotion.hashCode() + maxTopStretchPx.hashCode()
 }
 
-fun iosOverscrollFactory(context: Context): IosOverscrollFactory =
-    IosOverscrollFactory(reducedMotion = context.isReducedMotion())
+fun iosOverscrollFactory(context: Context, maxTopStretchPx: Float = Float.POSITIVE_INFINITY): IosOverscrollFactory =
+    IosOverscrollFactory(reducedMotion = context.isReducedMotion(), maxTopStretchPx = maxTopStretchPx)
 
-private class IosOverscrollEffect(private val reducedMotion: Boolean) : OverscrollEffect {
+/**
+ * [maxTopStretchPx] — асимптота оттяжки вниз у верхнего края (по умолчанию — высота вьюпорта).
+ * Нужна экранам, где за контентом лежит конечный по высоте слой, например арт Details: дальше
+ * его края лист тянуть нельзя, иначе открывается пустота.
+ */
+private class IosOverscrollEffect(
+    private val reducedMotion: Boolean,
+    private val maxTopStretchPx: Float,
+) : OverscrollEffect {
 
     /** Сырая протяжка за границу, px (ось определяется знаком сдвига). */
     private var raw by mutableStateOf(Offset.Zero)
@@ -215,7 +227,10 @@ private class IosOverscrollEffect(private val reducedMotion: Boolean) : Overscro
     /** Видимое смещение содержимого: асимптотическая «резинка» Apple, не линейная доля. */
     private fun displayed(): Offset = Offset(
         x = sign(raw.x) * MotionTokens.rubberBand(abs(raw.x), viewport.x),
-        y = sign(raw.y) * MotionTokens.rubberBand(abs(raw.y), viewport.y),
+        y = sign(raw.y) * MotionTokens.rubberBand(
+            abs(raw.y),
+            if (raw.y > 0f) minOf(viewport.y, maxTopStretchPx) else viewport.y,
+        ),
     )
 
     override val node: DelegatableNode = object : Modifier.Node(), DrawModifierNode {
