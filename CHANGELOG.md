@@ -1,5 +1,39 @@
 # Vetro changelog
 
+## v3.4.6-Stable — October 25, 2026
+
+App version: `v3.4.6-Stable`. Android version code: `346`.
+Changes since 3.4.5.
+
+### New episodes, checked hourly
+
+- Titles that are airing right now and your favorites get their own check every hour, separate from the full collection check that runs every few hours. A push about a new episode now arrives soon after it comes out, not at the next big pass.
+- The hourly pass touches only those titles and keeps the "airing now" progress of all the others intact.
+
+### Seasons, countdown and calendar
+
+- A season that AniList has only announced is no longer shown as a real one. "The Apothecary Diaries" showed a fourth season that does not exist yet (it is "Season 3 Part 2", not released); because of it the title had no next-episode countdown and was missing from the release calendar. Both are back, and announced or cancelled entries stay out of the season list.
+- The airing season is now picked as the last season that is actually airing, so one extra row after it can no longer hide the countdown.
+
+### Audiobook covers and English titles
+
+- More places to find a cover when the book site has none: the same book on other sites, Apple's audiobook catalogue (square covers up to 600×600), Open Library and Google Books. Covers are checked against the title (and the author when the alphabets allow it), so a wrong cover is better skipped than shown.
+- Alternative English titles for Russian books: Wikidata, then Open Library, then your AI provider if one is connected. A Russian title is also searched under its English name in the catalogues and on English sites.
+- Books in your library that have no cover look for one on their own; a book page without a cover does the same. "Refresh cover" now tries all of these sources.
+
+### Faster polling of sources
+
+- The search trick (sources in parallel, a hard limit each, the answer as soon as there is something to show) now applies to the other places that ask many sources at once.
+- Playback: once a source returns a playable video, the others get a few more seconds instead of the full wait (up to 24 seconds for the slowest). Sources that were let go early are not marked as failed.
+- "Find more" for seasons, manga search and audiobook search stop waiting for the slowest source after the first answers arrive.
+- Cover search runs its branches in parallel and stops at the first working cover; found lists are cached for 15 minutes.
+
+### Settings and fixes
+
+- The "Collection Enrichment" item is gone from Settings. Background enrichment is always on (every 6 hours and when you add a title); the old switch no longer exists, and anyone who had switched it off gets it back on.
+- The "Source is no longer responding" panel in the player now has rounded corners like the rest of the interface.
+- The audio (dub) menu in the player scrolls again: it was swallowing swipes. While the menu is open, swipes no longer seek or change brightness underneath it.
+
 ## v3.4.5-Stable — October 24, 2026
 
 App version: `v3.4.5-Stable`. Android version code: `345`.

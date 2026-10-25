@@ -4,14 +4,11 @@ import android.content.Context
 import android.graphics.BitmapFactory
 import android.net.Uri
 import android.util.Log
-import com.example.myapplication.audiobooks.domain.enrichment.BookWorkEnrichment
+import com.example.myapplication.audiobooks.domain.enrichment.BookCoverFinder
 import com.example.myapplication.audiobooks.domain.model.WorkId
-import com.example.myapplication.audiobooks.domain.source.AudiobookSearch
 import com.example.myapplication.sync.supabase.AttachmentSyncManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import okhttp3.OkHttpClient
-import okhttp3.Request
 import java.io.File
 
 /**
@@ -26,10 +23,8 @@ import java.io.File
 class BookCoverManager(
     private val context: Context,
     private val repository: AudiobookRepository,
-    private val search: AudiobookSearch,
-    private val enrichment: BookWorkEnrichment,
+    private val finder: BookCoverFinder,
     private val attachments: AttachmentSyncManager,
-    private val client: OkHttpClient,
 ) {
     sealed interface Result {
         /** Обложка заменена (адрес сайта или файл в облаке). */
@@ -47,20 +42,18 @@ class BookCoverManager(
     /** Адреса, которые по произведению уже показывали в этом запуске: «обновить» не ходит по кругу. */
     private val shown = mutableMapOf<String, MutableSet<String>>()
 
-    /** Другая обложка: сначала те же книги на сайтах-источниках, затем Open Library. */
+    /** Другая обложка: сайты-источники, витрина Apple, Open Library и Google Books, в том числе по английским названиям. */
     suspend fun reload(workId: WorkId): Result = withContext(Dispatchers.IO) {
         val info = repository.coverInfo(workId) ?: return@withContext Result.Failed
         val seen = shown.getOrPut(workId.value) { mutableSetOf() }
         info.coverUrl?.let { seen += it }
 
-        val candidates = runCatching {
-            search.sameWork(info.title, info.authors).mapNotNull { it.coverUrl } +
-                listOfNotNull(enrichment.coverUrl(info.title, info.authors))
-        }.onFailure { Log.w(TAG, "cover search failed: ${it.message}") }.getOrDefault(emptyList())
+        val candidates = runCatching { finder.candidates(info.title, info.authors) }
+            .onFailure { Log.w(TAG, "cover search failed: ${it.message}") }.getOrDefault(emptyList())
 
         val next = pickNextCover(candidates, seen, MAX_CHECKS) { url ->
             // Негодный адрес запоминаем сразу: иначе каждое нажатие проверяло бы его заново.
-            isImage(url).also { if (!it) seen += url }
+            finder.isImage(url).also { if (!it) seen += url }
         }
         if (next == null) {
             // Круг пройден: следующее нажатие начнёт его заново с текущей обложки.
@@ -110,14 +103,6 @@ class BookCoverManager(
             }
         }
     }
-
-    private fun isImage(url: String): Boolean = runCatching {
-        val request = Request.Builder().url(url).build()
-        client.newCall(request).execute().use { response ->
-            val body = response.body
-            response.isSuccessful && body?.contentType()?.type == "image" && body.contentLength() != 0L
-        }
-    }.getOrDefault(false)
 
     private fun looksLikeImage(bytes: ByteArray): Boolean {
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }

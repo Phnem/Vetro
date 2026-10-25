@@ -1,0 +1,8 @@
+New
+• New episodes of airing titles and favorites are checked every hour.
+• Audiobook covers from more sources, plus English titles for Russian books.
+• Faster source polling: playback, season discovery, manga and audiobook search.
+Fixes
+• The Apothecary Diaries: no phantom season, countdown and calendar are back.
+• Dub menu in the player scrolls again; the error panel has rounded corners.
+• Collection Enrichment is now automatic and removed from Settings.

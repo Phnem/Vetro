@@ -395,6 +395,19 @@ class HomeViewModel(
             ExistingPeriodicWorkPolicy.KEEP,
             updateRequest
         )
+        // Выходящие сейчас и избранные — отдельной частой проверкой: общий проход раз в несколько
+        // часов (а Doze растягивает его ещё) слишком медленный, чтобы пуш о серии приходил сразу.
+        val watchlistRequest = PeriodicWorkRequestBuilder<AnimeUpdateWorker>(
+            BackgroundSchedule.WATCHLIST_CHECK_HOURS, TimeUnit.HOURS
+        )
+            .setConstraints(constraints)
+            .setInputData(workDataOf(AnimeUpdateWorker.KEY_WATCHLIST to true))
+            .build()
+        WorkManager.getInstance(context).enqueueUniquePeriodicWork(
+            "AnimeWatchlistWork",
+            ExistingPeriodicWorkPolicy.KEEP,
+            watchlistRequest
+        )
         // Серии по сезонам: разовый прогон прямо сейчас — периодик выше может
         // сработать только через часы, а данные нужны в Details сразу.
         com.example.myapplication.worker.SeasonEpisodesWorker.enqueueOnce(context)

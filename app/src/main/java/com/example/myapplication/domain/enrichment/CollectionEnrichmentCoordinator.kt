@@ -69,12 +69,11 @@ class CollectionEnrichmentCoordinator(
 
     /** Старт приложения: планируем периодику + догон ссылок «Где смотреть». */
     fun ensureScheduled() {
+        // Фоновое обновление работает всегда: выключателя у него нет.
+        schedulePeriodic()
         scope.launch {
-            if (isLiveMaintenanceEnabled()) {
-                schedulePeriodic()
-                // Разовая очистка чужих привязок не ждёт периодику (6 ч): сразу после обновления.
-                if (!isForeignMatchAuditDone()) enqueueImmediateScan()
-            }
+            // Разовая очистка чужих привязок не ждёт периодику (6 ч): сразу после обновления.
+            if (!isForeignMatchAuditDone()) enqueueImmediateScan()
         }
         enqueueWebLinkEnrichment()
     }
@@ -143,12 +142,6 @@ class CollectionEnrichmentCoordinator(
         enqueueWebLinkEnrichment()
     }
 
-    suspend fun isLiveMaintenanceEnabled(): Boolean {
-        val prefs = runCatching { settingsDataStore.data.first() }.getOrNull() ?: return true
-        // Отсутствие ключа = ВКЛ по умолчанию.
-        return prefs[DevPreferencesKeys.LIVE_MAINTENANCE_ENABLED] ?: true
-    }
-
     // ==========================================================
     // Модуль 1: полное обогащение (поля → названия)
     // ==========================================================
@@ -173,19 +166,6 @@ class CollectionEnrichmentCoordinator(
     // Модуль 2: Live Maintenance (планирование)
     // ==========================================================
 
-    /** Вкл/выкл + (пере)планирование. При включении — немедленный скан (он же выявит перегрузку). */
-    fun setLiveMaintenanceEnabled(enabled: Boolean) {
-        scope.launch {
-            settingsDataStore.edit { it[DevPreferencesKeys.LIVE_MAINTENANCE_ENABLED] = enabled }
-            if (enabled) {
-                schedulePeriodic()
-                enqueueImmediateScan()
-            } else {
-                cancelPeriodic()
-            }
-        }
-    }
-
     /** Периодический скан раз в 6 ч (при наличии сети). Idempotent (KEEP). */
     fun schedulePeriodic() {
         val constraints = Constraints.Builder()
@@ -204,11 +184,7 @@ class CollectionEnrichmentCoordinator(
         )
     }
 
-    private fun cancelPeriodic() {
-        WorkManager.getInstance(context).cancelUniqueWork(LIVE_PERIODIC_WORK)
-    }
-
-    /** Мгновенный догон (при включении тумблера или добавлении записи). KEEP — не дублируем живой. */
+    /** Мгновенный догон (при добавлении записи или после обновления). KEEP — не дублируем живой. */
     fun enqueueImmediateScan() {
         val constraints = Constraints.Builder()
             .setRequiredNetworkType(NetworkType.CONNECTED)

@@ -16,7 +16,6 @@ class SaveAnimeUseCase(
     private val localDataSource: AnimeLocalDataSource,
     private val imageStorage: ImageStorageRepository,
     private val idGenerator: IdGenerator,
-    private val settingsDataStore: DataStore<Preferences>,
     private val enrichmentCoordinator: CollectionEnrichmentCoordinator,
 ) {
     suspend operator fun invoke(params: SaveAnimeParams): Result<Unit> = runCatching {
@@ -65,18 +64,11 @@ class SaveAnimeUseCase(
 
         if (isNew) {
             localDataSource.insertAnime(anime)
-            maybeScheduleLiveMaintenance()
+            // Мгновенный догон фонового обогащения: воркер подтянет недостающие поля и названия
+            // новой записи (идемпотентно — KEEP).
+            enrichmentCoordinator.enqueueImmediateScan()
         } else {
             localDataSource.updateAnime(anime)
         }
-    }
-
-    /** Мгновенный догон Live Maintenance при добавлении записи: фоновый воркер подтянет
-     *  недостающие поля/названия (идемпотентно — KEEP). Включено по умолчанию. */
-    private suspend fun maybeScheduleLiveMaintenance() {
-        val prefs = runCatching { settingsDataStore.data.first() }.getOrNull()
-        // Отсутствие ключа = ВКЛ по умолчанию.
-        if (prefs?.get(DevPreferencesKeys.LIVE_MAINTENANCE_ENABLED) == false) return
-        enrichmentCoordinator.enqueueImmediateScan()
     }
 }

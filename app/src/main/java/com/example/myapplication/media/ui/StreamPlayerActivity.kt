@@ -1195,7 +1195,10 @@ class StreamPlayerActivity : ComponentActivity(), PipHostActivity {
                             Column(
                                 modifier = Modifier
                                     .align(Alignment.Center)
-                                    .background(Color.Black.copy(alpha = 0.72f))
+                                    .background(
+                                        Color.Black.copy(alpha = 0.72f),
+                                        androidx.compose.foundation.shape.RoundedCornerShape(24.dp),
+                                    )
                                     .padding(24.dp),
                                 horizontalAlignment = Alignment.CenterHorizontally,
                                 verticalArrangement = Arrangement.spacedBy(12.dp),

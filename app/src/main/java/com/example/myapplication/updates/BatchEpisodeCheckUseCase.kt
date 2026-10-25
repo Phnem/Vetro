@@ -10,6 +10,7 @@ import com.example.myapplication.data.models.AnimeUpdate
 import com.example.myapplication.data.models.MediaType
 import com.example.myapplication.data.repository.AnimeRepository
 import com.example.myapplication.network.ApiSearchResult
+import com.example.myapplication.domain.seasons.isAiringNow
 import com.example.myapplication.network.AppLanguage
 import com.example.myapplication.network.EpisodeCheckMedia
 import com.example.myapplication.sync.TitleMatcher
@@ -50,15 +51,21 @@ class BatchEpisodeCheckUseCase(
      *
      * @return только НОВЫЕ события (их нужно показать в системных уведомлениях).
      */
-    suspend fun detectAndStore(language: AppLanguage): List<AnimeUpdate> {
+    suspend fun detectAndStore(language: AppLanguage, scope: Set<String>? = null): List<AnimeUpdate> {
         val animeOnly = localDataSource.getAllAnimeList()
-            .filter { it.mediaType == MediaType.ANIME }
+            .filter { it.mediaType == MediaType.ANIME && (scope == null || it.id in scope) }
         if (animeOnly.isEmpty()) return emptyList()
 
         val detected = detect(animeOnly, language)
-        // Снимок «выходящих сезонов» авторитетен для всего прохода: полная перезапись.
         val previousAiring = runCatching { localDataSource.getAiringProgressSnapshot() }.getOrElse { emptyMap() }
-        runCatching { localDataSource.setAiringProgress(detected.airing) }
+        // Полный проход авторитетен для всего снимка «выходящих сезонов» — полная перезапись. Частичный
+        // (часовая проверка выходящих и избранных) знает только свои тайтлы: чужие плашки переносим.
+        val airingToStore = if (scope == null) {
+            detected.airing
+        } else {
+            detected.airing + previousAiring.values.filter { it.animeId !in scope }
+        }
+        runCatching { localDataSource.setAiringProgress(airingToStore) }
             .onFailure { Log.w(TAG, "setAiringProgress failed: ${it.message}") }
         recordReleaseObservations(previousAiring, detected.airing)
 
@@ -68,6 +75,19 @@ class BatchEpisodeCheckUseCase(
             getAcknowledged = { runCatching { localDataSource.getIgnoredMap() }.getOrElse { emptyMap() } },
             setUpdates = localDataSource::setUpdates,
         )
+    }
+
+    /**
+     * Кого проверять часто: тайтлы, чей сезон выходит прямо сейчас (плашка прошлого прохода), и
+     * избранные аниме/сериалы. Закрытые плашки «сезон вышел полностью» не в счёт — ждать там нечего.
+     */
+    suspend fun watchlistIds(): Set<String> {
+        val airing = runCatching { localDataSource.getAiringProgressSnapshot() }.getOrElse { emptyMap() }
+            .values.filter { it.isAiringNow() }.map { it.animeId }
+        val favorites = localDataSource.getAllAnimeList()
+            .filter { it.isFavorite && (it.mediaType == MediaType.ANIME || it.mediaType == MediaType.SERIES) }
+            .map { it.id }
+        return (airing + favorites).toSet()
     }
 
     /**

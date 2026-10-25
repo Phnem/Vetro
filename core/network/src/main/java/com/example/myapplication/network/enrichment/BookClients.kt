@@ -190,6 +190,21 @@ class GoogleBooksClient(
             if (key.isNotEmpty()) identity.headers().forEach { (name, value) -> header(name, value) }
         }.parse { GoogleBooksParser.volumes(it).firstOrNull() }
     }
+
+    /**
+     * Поиск томов по названию — для обложек книг без ISBN (аудиокнига не знает издания). Результат
+     * нужно сверять с искомым названием: выдача Google щедра на однофамильцев.
+     */
+    suspend fun search(title: String, language: String? = null): LookupResult<List<GoogleVolume>> {
+        val clean = title.trim()
+        if (clean.isEmpty()) return LookupResult.NoMatch
+        val key = apiKey().takeIf { it.isNotBlank() }?.let { "&key=$it" }.orEmpty()
+        val lang = language?.let { "&langRestrict=$it" }.orEmpty()
+        return http.text("Google Books", "https://www.googleapis.com/books/v1/volumes?q=intitle:${enc(clean)}&maxResults=8&printType=books$lang$key", rate,
+            policy = CachePolicy("googlebooks:title:${language.orEmpty()}:${clean.lowercase()}", 30 * CacheTtl.DAY, 3 * CacheTtl.DAY)) {
+            if (key.isNotEmpty()) identity.headers().forEach { (name, value) -> header(name, value) }
+        }.parse { GoogleBooksParser.volumes(it).takeIf(List<GoogleVolume>::isNotEmpty) }
+    }
 }
 
 internal object GoogleBooksParser {

@@ -38,7 +38,14 @@ class AnimeUpdateWorker(
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
         try {
             val language = AppLanguagePrefs.current(settingsDataStore)
-            val newlyDetected = episodeUpdateCheckCoordinator.detectAndStore(language, catchUpSeasons = false)
+            // Часовой прогон смотрит только выходящие сейчас и избранные тайтлы; тяжёлые добавки полного
+            // прохода (манга, дорезолв сезонов) ему не нужны.
+            val watchlistOnly = inputData.getBoolean(KEY_WATCHLIST, false)
+            val newlyDetected = if (watchlistOnly) {
+                episodeUpdateCheckCoordinator.detectWatchlist(language)
+            } else {
+                episodeUpdateCheckCoordinator.detectAndStore(language, catchUpSeasons = false)
+            }
             // Догоняем расклад сезонов ДО уведомления: пуш «вышла 10-я серия 4-го сезона»,
             // открывающий тайтл с одним сезоном, — это ровно та ручная работа («Найти ещё»),
             // которую пользователь делал после каждого пуша. Ошибки здесь не отменяют пуш:
@@ -62,7 +69,7 @@ class AnimeUpdateWorker(
             // обновления, выпавшие на открытое приложение, пропадали бы молча и насовсем.
             // Пользователю в этот момент ничего не теряется — вкладка «Главы» у него перед
             // глазами и грузит оглавление сама.
-            if (!isAppInForeground()) {
+            if (!watchlistOnly && !isAppInForeground()) {
                 runCatching {
                     val chapters = mangaUpdateCheck.detect().filterNot { it.animeId in hidden }
                     if (chapters.isNotEmpty()) {
@@ -72,8 +79,10 @@ class AnimeUpdateWorker(
             }
             // Серии по сезонам: дорезолвливаем протухшие записи тем же фоновым проходом.
             // Ошибки не роняют воркер — проверка новых серий важнее.
-            runCatching { seasonEpisodesResolver.refreshStale() }
-                .onFailure { it.printStackTrace() }
+            if (!watchlistOnly) {
+                runCatching { seasonEpisodesResolver.refreshStale() }
+                    .onFailure { it.printStackTrace() }
+            }
             Result.success()
         } catch (e: CancellationException) {
             throw e
@@ -89,5 +98,10 @@ class AnimeUpdateWorker(
         android.app.ActivityManager.getMyMemoryState(state)
         return state.importance == android.app.ActivityManager.RunningAppProcessInfo.IMPORTANCE_FOREGROUND ||
             state.importance == android.app.ActivityManager.RunningAppProcessInfo.IMPORTANCE_VISIBLE
+    }
+
+    companion object {
+        /** Входной флаг: часовой прогон по выходящим и избранным вместо полной проверки коллекции. */
+        const val KEY_WATCHLIST = "watchlist_only"
     }
 }

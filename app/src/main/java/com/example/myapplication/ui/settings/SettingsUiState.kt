@@ -41,8 +41,6 @@ data class SettingsUiState(
     val titleDubbingTotal: Int = 0,
     val titleDubbingMessage: String? = null,
     val showTitleDubbingNoAiDialog: Boolean = false,
-    /** Collection Enrichment → Live Maintenance тумблер (по умолчанию ВКЛ). */
-    val liveMaintenanceEnabled: Boolean = true,
     /** != null → показать незакрываемый диалог «слишком много пропусков» (значение = число записей). */
     val fullEnrichmentPromptGapCount: Int? = null,
     val currentVersion: String = "",

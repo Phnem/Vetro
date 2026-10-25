@@ -1,6 +1,7 @@
 package com.example.myapplication.audiobooks.ui.details
 
 import com.example.myapplication.network.AppLanguage
+import com.example.myapplication.audiobooks.domain.enrichment.BookCoverFinder
 import com.example.myapplication.audiobooks.domain.enrichment.BookWorkEnrichment
 import com.example.myapplication.audiobooks.domain.enrichment.BookWorkInfo
 import androidx.lifecycle.ViewModel
@@ -49,6 +50,8 @@ class BookDetailsViewModel(
     private val search: AudiobookSearch,
     /** Произведение за озвучкой (Open Library): оригинал, год, обложка и описание, если их нет у сайта. */
     private val workEnrichment: BookWorkEnrichment? = null,
+    /** Обложка из каталогов (в том числе по английскому названию), если сайт и база её не дали. */
+    private val coverFinder: BookCoverFinder? = null,
     private val language: suspend () -> AppLanguage = { AppLanguage.RU },
 ) : ViewModel() {
 
@@ -120,6 +123,13 @@ class BookDetailsViewModel(
             val opened = repository.saveOpened(source, details)
             val progress = repository.progress(opened.narrationId)
             _state.update { it.copy(loading = false, details = details, opened = opened, progress = progress) }
+            // Сайт обложки не дал — ищем в каталогах; находка ложится в произведение и видна на полках.
+            if (coverFinder != null && repository.coverInfo(opened.workId)?.coverUrl.isNullOrBlank()) {
+                launch {
+                    runCatching { coverFinder.first(details.book.title, details.book.authors) }.getOrNull()
+                        ?.let { runCatching { repository.setCover(opened.workId, it) } }
+                }
+            }
             // Остальное — после основной карточки и независимо: не нашлось — секции просто нет.
             val narrations = async { narrationsOf(details) }
             val work = async {

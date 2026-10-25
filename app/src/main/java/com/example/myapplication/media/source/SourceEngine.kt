@@ -260,8 +260,15 @@ class SourceEngine(
         language: AppLanguage,
         calls: List<PlaybackProviderCall<List<VetroHoster>>>,
     ): List<SourceAttempt<List<VetroHoster>>> =
-        runPlaybackProviderCascade(calls).map { learnFrom(it, language) }.onEach { attempt ->
+        runPlaybackProviderCascade(
+            calls,
+            // Как в поиске: появилось рабочее видео — остальным даём ещё немного (озвучки у Kodik и
+            // AniLiberty приходят вместе), но не ждём самого медленного до его таймаута в 24 с.
+            graceAfterHitMs = PLAYABLE_GRACE_MS,
+            isHit = { it.hasPlayableVideo() },
+        ).map { learnFrom(it, language) }.onEach { attempt ->
             when {
+                attempt.skipped -> Log.i(TAG, "${attempt.label} released early (playable video already found)")
                 attempt.timedOut -> Log.w(TAG, "${attempt.label} timed out")
                 attempt.failed -> Log.w(TAG, "${attempt.label} failed")
             }
@@ -312,6 +319,8 @@ class SourceEngine(
         private const val KODIK_SOURCE_TIMEOUT_MS = 24_000L
         private const val EN_SOURCE_TIMEOUT_MS = 20_000L
         private const val DIRECT_TIMEOUT_MS = 5_000L
+        /** Сколько ждём остальных источников после первого рабочего видео. */
+        private const val PLAYABLE_GRACE_MS = 7_000L
         private const val PERSONAL_SOURCE_TIMEOUT_MS = 20_000L
     }
 

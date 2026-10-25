@@ -49,7 +49,7 @@ val databaseModule = module {
     }
     single<IdGenerator> { RealIdGenerator() }
     single { GetAnimeForEditUseCase(get()) }
-    single { SaveAnimeUseCase(get(), get(), get(), get(named("settings")), get()) }
+    single { SaveAnimeUseCase(get(), get(), get(), get()) }
     single { UpdateCommentUseCase(get()) }
     single<GeminiApiKeyRepository> {
         EncryptedGeminiApiKeyRepository(context = androidContext())

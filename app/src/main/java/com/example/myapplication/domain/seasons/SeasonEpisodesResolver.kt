@@ -121,7 +121,10 @@ class SeasonEpisodesResolver(
         val graph = gatherFranchise(self)
         // Порядок строим по ПОЛНОМУ графу (фильмы/OVA внутри цепочки — тоже рёбра), а разбираем
         // уже потом: иначе «S2 → фильм → S3» разваливается на два куска.
-        val chain = orderByRelations(graph.nodes)
+        // Анонсированное-но-невышедшее в расклад не берём: у «Монолога фармацевта» AniList уже
+        // знает «3rd Season Part 2» (12 серий, NOT_YET_RELEASED), и он вставал четвёртым сезоном,
+        // которого ещё нет. Порядок строим по полному графу, отсев — после него.
+        val chain = orderByRelations(graph.nodes).filter { it.isWatchable() || it === self }
         val orderedSeasons = chain.filter { it.isSeasonFormat() }.ifEmpty { listOf(self) }
         // Спецвыпуски идут ПОСЛЕ сезонов и своей нумерацией: вклинить OVA между сезонами значит
         // сдвинуть номера всех последующих, а по ним источники просмотра ищут релиз.
@@ -452,6 +455,10 @@ class SeasonEpisodesResolver(
     }
 
 
+
+    /** Есть что смотреть: анонс (`NOT_YET_RELEASED`) и отменённое в список серий не попадают. */
+    private fun EpisodeCheckMedia.isWatchable(): Boolean =
+        status != "NOT_YET_RELEASED" && status != "CANCELLED"
 
     private fun EpisodeCheckMedia.isSeasonFormat(): Boolean =
         format == null || format in SEASON_FORMATS

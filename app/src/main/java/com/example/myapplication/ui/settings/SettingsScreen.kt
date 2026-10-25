@@ -138,7 +138,6 @@ import com.example.myapplication.utils.getAiConnectStrings
 import com.example.myapplication.utils.getDevRepairDbStrings
 import com.example.myapplication.utils.getTitleDubbingStrings
 import com.example.myapplication.utils.TitleDubbingStrings
-import com.example.myapplication.utils.getCollectionEnrichmentStrings
 import com.example.myapplication.utils.getPlayerSettingsStrings
 import com.example.myapplication.utils.getStrings
 import com.example.myapplication.utils.Haptic
@@ -166,7 +165,6 @@ private val IconDeveloper = IosDesign.Category.Storage
 private sealed interface SettingsOverlaySheet {
     data object Cloud : SettingsOverlaySheet
     data object AiConnect : SettingsOverlaySheet
-    data object Enrichment : SettingsOverlaySheet
     data object PlaybackSources : SettingsOverlaySheet
     data object Contact : SettingsOverlaySheet
     data object Update : SettingsOverlaySheet
@@ -219,7 +217,6 @@ fun SettingsScreen(
     val updateManager: com.example.myapplication.update.AppUpdateManager = org.koin.compose.koinInject()
     val updateState by updateManager.state.collectAsStateWithLifecycle()
     val aiConnectStrings = getAiConnectStrings(uiState.language)
-    val enrichmentStrings = getCollectionEnrichmentStrings(uiState.language)
     val playerSettingsStrings = getPlayerSettingsStrings(uiState.language)
 
     var activeSheet by remember { mutableStateOf<SettingsOverlaySheet?>(null) }
@@ -473,17 +470,6 @@ fun SettingsScreen(
                                         )
                                     })
                                 } else emptyArray()),
-                                {
-                                    IosRow(
-                                        title = enrichmentStrings.cardTitle,
-                                        subtitle = enrichmentStrings.cardSubtitle,
-                                        isDark = isDark,
-                                        icon = Icons.Filled.AutoFixHigh,
-                                        iconWell = false,
-                                        showChevron = true,
-                                        onClick = { performHaptic(view, Haptic.Light); activeSheet = SettingsOverlaySheet.Enrichment },
-                                    )
-                                },
                                 {
                                     IosRow(
                                         title = aiConnectStrings.tileTitle,
@@ -785,10 +771,6 @@ fun SettingsScreen(
                         onLogout = { activeSheet = null; navController.navigateToWelcome() },
                     )
                     activeSheet == SettingsOverlaySheet.AiConnect -> AiConnectSheet(
-                        onDismiss = { activeSheet = null },
-                    )
-                    activeSheet == SettingsOverlaySheet.Enrichment -> CollectionEnrichmentSheet(
-                        viewModel = viewModel,
                         onDismiss = { activeSheet = null },
                     )
                     activeSheet == SettingsOverlaySheet.PlaybackSources -> PlaybackSourcesSettingsSheet(

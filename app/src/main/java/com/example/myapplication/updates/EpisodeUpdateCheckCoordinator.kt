@@ -55,6 +55,17 @@ class EpisodeUpdateCheckCoordinator(
         }
         return found
     }
+
+    /**
+     * Частая проверка только того, о чём пользователь ждёт новостей: выходящие сейчас тайтлы и
+     * избранные. Идёт мимо [EpisodeCheckThrottle] — её зовёт часовой воркер, а полный проход
+     * (раз в несколько часов и при входе) остаётся тяжёлым и редким.
+     */
+    suspend fun detectWatchlist(language: AppLanguage): List<AnimeUpdate> = mutex.withLock {
+        val scope = animeCheck.watchlistIds()
+        if (scope.isEmpty()) return@withLock emptyList()
+        animeCheck.detectAndStore(language, scope) + seriesCheck.detectAndStore(scope)
+    }
 }
 
 /** Когда проверку серий можно не повторять: недавно уже была успешная. */

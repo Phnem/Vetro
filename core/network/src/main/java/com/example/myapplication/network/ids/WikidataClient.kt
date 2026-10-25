@@ -62,6 +62,32 @@ class WikidataClient(
         ).parse { WikidataParser.ruWikiTitle(it, qid) }
     }
 
+    /**
+     * Английские названия литературных произведений, которые на языке [lang] называются [title]
+     * («Задача трёх тел» → «The Three-Body Problem»). Берутся только записи, описанные как книга,
+     * роман, рассказ и т. п.: «Дюна» — ещё и фильм, и город.
+     */
+    suspend fun workEnglishTitles(title: String, lang: String): LookupResult<List<String>> {
+        val clean = title.trim()
+        if (clean.isEmpty()) return LookupResult.NoMatch
+        val encoded = URLEncoder.encode(clean, "UTF-8")
+        val found = http.text(
+            provider = "Wikidata",
+            url = "$API?action=wbsearchentities&search=$encoded&language=$lang&uselang=$lang&type=item&limit=8&format=json",
+            rate = rate,
+            policy = CachePolicy("wikidata:work:$lang:${clean.lowercase()}", 30 * CacheTtl.DAY, negativeTtlMs = 3 * CacheTtl.DAY),
+            configure = { header("Accept", "application/json") },
+        ).parse { WikidataParser.bookIds(it).takeIf(List<String>::isNotEmpty) }
+        val ids = (found as? LookupResult.Found)?.value ?: return LookupResult.NoMatch
+        return http.text(
+            provider = "Wikidata",
+            url = "$API?action=wbgetentities&ids=${ids.joinToString("%7C")}&props=labels&languages=en&format=json",
+            rate = rate,
+            policy = CachePolicy("wikidata:labels-en:${ids.joinToString(",")}", 30 * CacheTtl.DAY, negativeTtlMs = 3 * CacheTtl.DAY),
+            configure = { header("Accept", "application/json") },
+        ).parse { WikidataParser.englishLabels(it, ids).takeIf(List<String>::isNotEmpty) }
+    }
+
     private suspend fun run(cacheKey: String, match: String): LookupResult<List<WikidataEntity>> {
         val query = buildQuery(match)
         val url = "$SPARQL?format=json&query=" + URLEncoder.encode(query, "UTF-8")
@@ -134,6 +160,31 @@ internal object WikidataParser {
         val sitelinks = entity["sitelinks"] as? JsonObject ?: return null
         return ((sitelinks["ruwiki"] as? JsonObject)?.get("title") as? JsonPrimitive)?.contentOrNull
     }
+
+    /** Записи поиска `wbsearchentities`, описание которых говорит «книга/роман/рассказ…». */
+    fun bookIds(body: String): List<String> {
+        val hits = EnrichmentJson.parseToJsonElement(body).jsonObject["search"] as? JsonArray ?: return emptyList()
+        return hits.mapNotNull { element ->
+            val o = element as? JsonObject ?: return@mapNotNull null
+            val id = (o["id"] as? JsonPrimitive)?.contentOrNull?.takeIf { Regex("Q\\d+").matches(it) } ?: return@mapNotNull null
+            val description = (o["description"] as? JsonPrimitive)?.contentOrNull.orEmpty()
+            id.takeIf { BOOK_DESCRIPTION.containsMatchIn(description) }
+        }.take(4)
+    }
+
+    /** Английские подписи записей в порядке [ids]; записи без подписи пропускаются. */
+    fun englishLabels(body: String, ids: List<String>): List<String> {
+        val entities = EnrichmentJson.parseToJsonElement(body).jsonObject["entities"] as? JsonObject ?: return emptyList()
+        return ids.mapNotNull { id ->
+            val labels = (entities[id] as? JsonObject)?.get("labels") as? JsonObject
+            ((labels?.get("en") as? JsonObject)?.get("value") as? JsonPrimitive)?.contentOrNull?.trim()?.takeIf { it.isNotEmpty() }
+        }.distinct()
+    }
+
+    private val BOOK_DESCRIPTION = Regex(
+        "(?i)(роман|повесть|рассказ|книга|поэма|пьеса|сказк|новелл|цикл|сборник|литературн|произведение|" +
+            "novel|book|story|novella|poem|play|fairy|series|collection|literary|written work)",
+    )
 
     private fun JsonObject.value(name: String): String? =
         ((get(name) as? JsonObject)?.get("value") as? JsonPrimitive)?.contentOrNull?.trim()?.takeIf { it.isNotEmpty() }

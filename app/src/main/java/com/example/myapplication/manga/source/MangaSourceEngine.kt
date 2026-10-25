@@ -8,9 +8,7 @@ import com.example.myapplication.manga.domain.MangaPage
 import com.example.myapplication.manga.domain.MangaSourceId
 import com.example.myapplication.manga.domain.VetroMangaSource
 import com.example.myapplication.manga.domain.sortedForReading
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.supervisorScope
+import com.example.myapplication.utils.gatherWithGrace
 import kotlinx.coroutines.withTimeoutOrNull
 
 /** Результат поиска по одному источнику: пустой список значит «источник ответил и ничего не нашёл». */
@@ -40,19 +38,25 @@ class MangaSourceEngine(
     fun sourceById(id: MangaSourceId): VetroMangaSource? =
         sources.firstOrNull { it.id == id } ?: japaneseSources.firstOrNull { it.id == id }
 
-    /** Поиск по всем источникам параллельно — для экрана привязки тайтл↔источник (§8 плана). */
+    /**
+     * Поиск по всем источникам параллельно — для экрана привязки тайтл↔источник (§8 плана). Как в
+     * поиске по каталогам: после первого непустого ответа остальным даётся [SEARCH_GRACE_MS], и
+     * выдача не ждёт самый медленный источник.
+     */
     suspend fun searchAll(query: String): List<MangaSourceResults> {
         if (query.isBlank()) return emptyList()
-        return supervisorScope {
-            sources.map { source ->
-                async {
+        return gatherWithGrace(
+            blocks = sources.map { source ->
+                suspend {
                     val items = call(source.name, "search") { source.search(query, page = 1) }
                         ?.items
                         .orEmpty()
-                    MangaSourceResults(source.id, source.name, items.rankedFor(query))
+                    if (items.isEmpty()) emptyList() else listOf(MangaSourceResults(source.id, source.name, items.rankedFor(query)))
                 }
-            }.awaitAll()
-        }.filter { it.items.isNotEmpty() }
+            },
+            hardTimeoutMs = DEFAULT_TIMEOUT_MS,
+            graceMs = SEARCH_GRACE_MS,
+        ).flatten()
     }
 
     suspend fun search(sourceId: MangaSourceId, query: String, page: Int = 1): List<MangaItem> {
@@ -120,6 +124,8 @@ class MangaSourceEngine(
     private companion object {
         const val TAG = "MangaSourceEngine"
         const val DEFAULT_TIMEOUT_MS = 15_000L
+        /** Сколько ждём остальных источников поиска после первого непустого ответа. */
+        const val SEARCH_GRACE_MS = 4_000L
         /** Список глав у длинных тайтлов — это несколько страниц фида по 500 записей. */
         const val CHAPTERS_TIMEOUT_MS = 40_000L
         /** Один повтор: сетевой сбой лечит, а мёртвый источник не превращает в минуту ожидания. */

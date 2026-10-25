@@ -62,8 +62,6 @@ class LiveMaintenanceWorker(
 
     override suspend fun doWork(): Result {
         return try {
-            if (!coordinator.isLiveMaintenanceEnabled()) return Result.success()
-
             val language = readLanguage()
 
             // Раньше всего: записи, привязанные к чужому тайтлу, иначе всё остальное «чинит» их по чужим id.

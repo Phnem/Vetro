@@ -1,5 +1,6 @@
 package com.example.myapplication.audiobooks.data
 
+import com.example.myapplication.audiobooks.domain.enrichment.BookTitleAlternatives
 import com.example.myapplication.audiobooks.domain.source.AudiobookSearch
 import com.example.myapplication.audiobooks.domain.source.AudiobookSource
 import com.example.myapplication.audiobooks.domain.source.SourceBook
@@ -9,6 +10,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.withTimeoutOrNull
 
 /**
  * Аудиокниги в общем поиске главной: поиск по всем источникам сразу и «Добавить» — книга встаёт
@@ -18,6 +20,8 @@ class BookSearchAdder(
     private val sources: List<AudiobookSource>,
     private val search: AudiobookSearch,
     private val repository: AudiobookRepository,
+    /** Английские названия запроса: русская книга на английских сайтах лежит под оригинальным именем. */
+    private val alternatives: BookTitleAlternatives? = null,
 ) {
     /**
      * Одна строка на озвучку: одна и та же лежит на нескольких сайтах, а порядок выдачи — приоритет
@@ -27,12 +31,23 @@ class BookSearchAdder(
         // Сайты ищут по-своему: «Мы — Легион. Мы — Боб» с тире и точками у части из них не находится,
         // поэтому запрос уходит и как есть, и очищенным от знаков.
         val plain = WorkMatch.normalize(query)
-        val found = coroutineScope {
+        val (found, englishQuery, englishFound) = coroutineScope {
             val raw = async { search.searchAll(query, pages = PAGES) }
             val cleaned = if (plain.isNotBlank() && plain != query.trim().lowercase()) async { search.searchAll(plain, pages = PAGES) } else null
-            raw.await() + cleaned?.await().orEmpty()
+            // Английский вариант названия ищется параллельно: он не задерживает основную выдачу.
+            val english = async {
+                val alt = withTimeoutOrNull(ALTERNATIVE_TIMEOUT_MS) { alternatives?.english(query)?.firstOrNull() }
+                    ?: return@async null to emptyList<SourceBook>()
+                alt to search.searchAll(alt, pages = 1)
+            }
+            val (altQuery, altFound) = english.await()
+            Triple(raw.await() + cleaned?.await().orEmpty(), altQuery, altFound)
         }
-        return BookSearchRanking.rank(query, found)
+        // Русская выдача — первой; английские сайты по оригинальному названию — следом, ранжируются
+        // по английскому запросу, иначе фильтр совпадений выбросил бы их все.
+        val ranked = BookSearchRanking.rank(query, found) +
+            if (englishQuery != null) BookSearchRanking.rank(englishQuery, englishFound) else emptyList()
+        return ranked
             .distinctBy { key(it.title) + "|" + WorkMatch.words(it.authors).sorted() + "|" + WorkMatch.words(it.narrators).sorted() }
     }
 
@@ -52,6 +67,7 @@ class BookSearchAdder(
 }
 
 private const val PAGES = 2
+private const val ALTERNATIVE_TIMEOUT_MS = 8_000L
 
 /**
  * Порядок выдачи по смыслу запроса, а не по тому, что вернул сайт: «Марсианин» должен стоять выше

@@ -53,7 +53,9 @@ internal fun PlayerAudioSheet(
             onDismiss = onDismiss,
             isDark = true,
             containerColor = Color(0xFF17130F),
-            modifier = Modifier.pointerInput(Unit) { consumeEverything() },
+            // Глушим жесты на затемнении, а не на корне шторки: потребляющий предок списка
+            // отменял его прокрутку (список озвучек переставал листаться).
+            scrimModifier = Modifier.pointerInput(Unit) { consumeEverything() },
             panelModifier = Modifier.widthIn(max = 640.dp).fillMaxWidth().heightIn(max = limit),
             swipe = swipe,
         ) {

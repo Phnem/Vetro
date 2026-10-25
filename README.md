@@ -18,7 +18,7 @@
 
 <p align="center">
   <a href="https://github.com/Phnem/Vetro/releases">Releases</a> ·
-  <a href="#whats-new-in-345">What's new</a> ·
+  <a href="#whats-new-in-346">What's new</a> ·
   <a href="CHANGELOG.md">Changelog</a> ·
   <a href="#what-vetro-does">Features</a> ·
   <a href="#screens">Screens</a> ·
@@ -32,42 +32,42 @@ Vetro is an Android media library. Build a personal collection, follow new episo
 
 Vetro does not host any media. It connects to catalogues and sources that you choose, including your own servers.
 
-> **Current stable release:** [`v3.4.5-Stable`](https://github.com/Phnem/Vetro/releases/tag/v3.4.5-Stable). The app is actively evolving; source availability can vary by region.
+> **Current stable release:** [`v3.4.6-Stable`](https://github.com/Phnem/Vetro/releases/tag/v3.4.6-Stable). The app is actively evolving; source availability can vary by region.
 
 <p align="center"><img src="images/readme/divider.svg" alt="" width="880" /></p>
 
-## What's new in 3.4.5
+## What's new in 3.4.6
 
 <p align="center">
-  <img src="images/readme/whats-new.svg" alt="What's new in Vetro 3.4.5: a secret folder behind your fingerprint, faster search, redesigned account, AI Connect and enrichment panels" width="880" />
+  <img src="images/readme/whats-new.svg" alt="What's new in Vetro 3.4.6: hourly checks of airing titles and favorites, audiobook covers and English titles, faster source polling" width="880" />
 </p>
 
 <table>
   <tr>
     <td width="50%" valign="top">
-      <b>Secret folder</b><br />
-      Swipe right on Home: the edge stretches like rubber and only a firm pull opens the folder. A bolt asks for your fingerprint or face on every opening. Add titles from the <i>⋯</i> menu in Details; they leave the feed, statistics, the new-episode tray and notifications.
+      <b>Hourly checks</b><br />
+      Airing titles and your favorites are checked for new episodes every hour on their own, so the push arrives soon after the episode comes out.
     </td>
     <td width="50%" valign="top">
-      <b>Faster search</b><br />
-      Sources are queried at the same time with a 5-second limit each, results appear as soon as the first one answers, and a repeated query is served from a 10-minute cache.
+      <b>Audiobook covers</b><br />
+      Covers come from more places (other sites, Apple's audiobook catalogue, Open Library, Google Books), and Russian books are also looked up by their English title.
     </td>
   </tr>
   <tr>
     <td width="50%" valign="top">
-      <b>Redesigned settings panels</b><br />
-      Account settings, AI Connect and Collection Enrichment now share the card layout of Additional sources, with pill input fields and buttons. <i>Get</i> in AI Connect opens the OpenRouter key page.
+      <b>Faster source polling</b><br />
+      Playback, season discovery, manga and audiobook search answer as soon as the first source delivers, without waiting for the slowest one.
     </td>
     <td width="50%" valign="top">
-      <b>Favorites strip on by default</b><br />
-      Favorites sit in a horizontal cover strip above the collection out of the box. Prefer the old layout? Turn off <i>Experimental grid</i> in Developer Settings.
+      <b>Seasons, countdown, calendar</b><br />
+      Announced seasons no longer appear as real ones, so airing titles keep their next-episode countdown and their place in the release calendar.
     </td>
   </tr>
 </table>
 
-<p align="center"><sub>Also in this build: Details stops at the cover edge when pulled down, the <i>Added</i> button no longer sticks after deleting a title, and bottom sheets get a brighter rim highlight.</sub></p>
+<p align="center"><sub>Also in this build: the dub menu in the player scrolls again, the error panel has rounded corners, and Collection Enrichment now runs on its own and is gone from Settings.</sub></p>
 
-<p align="center"><a href="CHANGELOG.md">Detailed 3.4.5 changelog</a></p>
+<p align="center"><a href="CHANGELOG.md">Detailed 3.4.6 changelog</a></p>
 
 <p align="center"><img src="images/readme/divider.svg" alt="" width="880" /></p>
 

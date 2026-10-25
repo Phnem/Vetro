@@ -112,7 +112,6 @@ private fun mergeSettingsUi(
         titleDubbingTotal = t.titleDubbingTotal,
         titleDubbingMessage = t.titleDubbingMessage,
         showTitleDubbingNoAiDialog = t.showTitleDubbingNoAiDialog,
-        liveMaintenanceEnabled = prefs[DevPreferencesKeys.LIVE_MAINTENANCE_ENABLED] ?: true,
         fullEnrichmentPromptGapCount = t.fullEnrichmentPromptGapCount,
         currentVersion = t.currentVersionDisplay,
     )
@@ -488,20 +487,6 @@ class SettingsViewModel(
     // Обогащение коллекции (Collection Enrichment)
     // ==========================================================
 
-    /** Модуль 1: полный прогон (поля → названия). Прогресс отражают isRepairingDb / isTitleDubbing. */
-    fun runFullEnrichment() {
-        if (_transient.value.isRepairingDb || _transient.value.isTitleDubbing) return
-        enrichmentCoordinator.startFullEnrichment(
-            language = uiState.value.language,
-            contentType = uiState.value.contentType,
-        )
-    }
-
-    /** Модуль 2: тумблер Live Maintenance (вкл/выкл + планирование). */
-    fun setLiveMaintenance(enabled: Boolean) {
-        enrichmentCoordinator.setLiveMaintenanceEnabled(enabled)
-    }
-
     /** Незакрываемый диалог «слишком много пропусков» → «Начать»: запускаем полное обогащение. */
     fun confirmFullEnrichmentPrompt() {
         _transient.update { it.copy(fullEnrichmentPromptGapCount = null) }
@@ -511,11 +496,14 @@ class SettingsViewModel(
         )
     }
 
-    /** Диалог → «Отмена»: скрываем и выключаем Live Maintenance. */
+    /**
+     * Диалог → «Отмена»: просто скрываем. Раньше отмена ещё и выключала фоновое обновление, а
+     * включить его обратно можно было только тумблером в настройках; тумблера больше нет — всё
+     * обогащение автоматическое, и выключенным навсегда оно остаться не должно.
+     */
     fun cancelFullEnrichmentPrompt() {
         _transient.update { it.copy(fullEnrichmentPromptGapCount = null) }
         enrichmentCoordinator.dismissFullEnrichmentPrompt()
-        enrichmentCoordinator.setLiveMaintenanceEnabled(false)
     }
 
     fun exportRepairDbLog(context: Context) {

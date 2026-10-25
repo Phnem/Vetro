@@ -328,6 +328,9 @@ fun PlayerControlsOverlay(
             .pointerInput(locked, duration, pinchState) {
                 awaitEachGesture {
                     val down = awaitFirstDown()
+                    // Пока открыто меню, касания по нему не должны ни перематывать, ни ускорять:
+                    // шторка озвучки больше не поглощает жесты предком (см. PlayerAudioSheet).
+                    if (menuKind != null) return@awaitEachGesture
                     val holdZone = !locked &&
                         isSpeedHoldZone(down.position.x, size.width.toFloat()) &&
                         !pinchState.swipesBlocked()
@@ -401,7 +404,7 @@ fun PlayerControlsOverlay(
                 detectDragGestures(
                     onDragStart = { offset ->
                         // Во время удержания палец принадлежит ускорению, а не свайпам.
-                        blocked = pinchState.swipesBlocked() || speedHeld
+                        blocked = pinchState.swipesBlocked() || speedHeld || menuKind != null
                         axis = DragAxis.Undecided
                         totalX = 0f
                         totalY = 0f

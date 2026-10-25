@@ -71,6 +71,12 @@ fun MotionBottomSheet(
     isDark: Boolean,
     modifier: Modifier = Modifier,
     panelModifier: Modifier = Modifier,
+    /**
+     * Модификатор затемнения. Поглощение жестов (`consumeEverything`) вешается сюда, а не на
+     * [modifier]: потребляющий ПРЕДОК списка отменяет его прокрутку — распознаватель сдвига
+     * перед стартом смотрит Final-проход и видит чужое потребление.
+     */
+    scrimModifier: Modifier = Modifier,
     swipe: IosSheetSwipe? = null,
     scrimAlpha: Float = OverlayThemeTokens.scrimAlpha(isDark),
     topCorner: Dp = IosDesign.SheetCorner,
@@ -130,6 +136,7 @@ fun MotionBottomSheet(
                 .fillMaxSize()
                 .graphicsLayer { alpha = scrim.value }
                 .background(Color.Black.copy(alpha = scrimAlpha * SheetStyle.scrimFactor))
+                .then(scrimModifier)
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null,

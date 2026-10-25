@@ -89,7 +89,7 @@ val audiobookModule = module {
         }.map { com.example.myapplication.audiobooks.domain.source.OffMainSource(it) }
     }
     single { AudiobookSearch(get(named(SOURCES))) }
-    single { com.example.myapplication.audiobooks.data.BookSearchAdder(get(named(SOURCES)), get(), get()) }
+    single { com.example.myapplication.audiobooks.data.BookSearchAdder(get(named(SOURCES)), get(), get(), alternatives = get()) }
     single { NarrationChain(get(), get(named(SOURCES)), get(), get()) }
     // Резолвер знает все источники манифестов: сайты и локальную папку; принятые восстановленные
     // главы накладываются поверх разметки источника.
@@ -159,7 +159,20 @@ val audiobookModule = module {
     single { com.example.myapplication.audiobooks.ui.AudiobookSubtitleModes(androidContext()) }
     single { AudiobookRepository(get()) }
     // Ручная смена обложки книги: «обновить» (другая картинка) и «импорт» (файл → облако).
-    single { com.example.myapplication.audiobooks.data.BookCoverManager(androidContext(), get(), get(), get(), get(), get()) }
+    single { com.example.myapplication.audiobooks.data.BookCoverManager(androidContext(), get(), get(), get()) }
+    // Обложка там, где сайт её не дал: другие сайты, витрина Apple, Open Library, Google Books — в том
+    // числе по английскому названию (Wikidata → Open Library → ИИ пользователя, если подключён).
+    single { com.example.myapplication.audiobooks.domain.enrichment.BookTitleAlternatives(get(), get(), get()) }
+    single {
+        com.example.myapplication.audiobooks.domain.enrichment.BookCoverFinder(
+            search = get(),
+            openLibrary = get(),
+            googleBooks = get(),
+            itunes = get(),
+            alternatives = get(),
+            client = get<OkHttpClient>(),
+        )
+    }
     single {
         BooksCatalog(
             sources = get(named(SOURCES)),
@@ -181,6 +194,7 @@ val audiobookModule = module {
             search = get(),
             sources = get(named(SOURCES)),
             repository = get(),
+            coverFinder = get(),
         )
     }
     viewModel { BooksHomeViewModel(get(), get(), get(), get()) }
@@ -188,6 +202,7 @@ val audiobookModule = module {
         BookDetailsViewModel(
             source, key, title, get(named(SOURCES)), get(), get(), get(),
             workEnrichment = get(),
+            coverFinder = get(),
             language = { com.example.myapplication.data.local.AppLanguagePrefs.current(get(named("settings"))) },
         )
     }

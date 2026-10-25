@@ -384,23 +384,38 @@ internal fun PanelPillButton(
     modifier: Modifier = Modifier,
     icon: ImageVector? = null,
     enabled: Boolean = true,
+    /** Вдвое меньше обычной: для тесных рядов, где рядом стоит основная кнопка. */
+    compact: Boolean = false,
 ) {
     val scheme = MaterialTheme.colorScheme
+    val height = if (compact) 26.dp else 52.dp
+    val tile = if (compact) 18.dp else 36.dp
+    val glyph = if (compact) 11.dp else 20.dp
     Row(
         modifier = modifier
-            .height(52.dp)
+            .height(height)
             .graphicsLayer { alpha = if (enabled) 1f else 0.5f }
             .raisedBubble(CircleShape)
             .clickable(enabled = enabled, onClick = onClick)
-            .padding(start = if (icon != null) 8.dp else 22.dp, end = 22.dp),
+            .padding(
+                start = if (icon != null) (if (compact) 4.dp else 8.dp) else (if (compact) 11.dp else 22.dp),
+                end = if (compact) 11.dp else 22.dp,
+            ),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (icon != null) {
-            Box(Modifier.size(36.dp).clip(CircleShape).background(scheme.onSurface), contentAlignment = Alignment.Center) {
-                Icon(icon, contentDescription = null, tint = scheme.background, modifier = Modifier.size(20.dp))
+            Box(Modifier.size(tile).clip(CircleShape).background(scheme.onSurface), contentAlignment = Alignment.Center) {
+                Icon(icon, contentDescription = null, tint = scheme.background, modifier = Modifier.size(glyph))
             }
-            Spacer(Modifier.width(12.dp))
+            Spacer(Modifier.width(if (compact) 6.dp else 12.dp))
         }
-        Text(text, color = scheme.onSurface, fontFamily = SnProFamily, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
+        Text(
+            text,
+            color = scheme.onSurface,
+            fontFamily = SnProFamily,
+            fontWeight = FontWeight.SemiBold,
+            fontSize = if (compact) 12.sp else 16.sp,
+            maxLines = 1,
+        )
     }
 }

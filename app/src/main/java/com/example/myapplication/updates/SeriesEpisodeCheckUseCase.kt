@@ -64,9 +64,10 @@ class SeriesEpisodeCheckUseCase internal constructor(
     }
 
     /** Detects, auto-applies and merges new SERIES events into the shared anime_update feed. */
-    suspend fun detectAndStore(): List<AnimeUpdate> {
-        val series = store.getAllSeries()
-        store.retainSeasons(series.map { it.id }.toSet())
+    suspend fun detectAndStore(scope: Set<String>? = null): List<AnimeUpdate> {
+        val all = store.getAllSeries()
+        store.retainSeasons(all.map { it.id }.toSet())
+        val series = if (scope == null) all else all.filter { it.id in scope }
         if (series.isEmpty()) return emptyList()
 
         val detected = buildList {

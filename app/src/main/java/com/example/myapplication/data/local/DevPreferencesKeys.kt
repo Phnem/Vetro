@@ -7,12 +7,6 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 object DevPreferencesKeys {
     val ADAPTIVE_GLASS_SCROLL = booleanPreferencesKey("dev_adaptive_glass_scroll")
 
-    /**
-     * Live Maintenance (фоновое обновление обогащения коллекции). Отсутствие ключа трактуется как ВКЛ —
-     * фича включена по умолчанию. См. [com.example.myapplication.domain.enrichment.CollectionEnrichmentCoordinator].
-     */
-    val LIVE_MAINTENANCE_ENABLED = booleanPreferencesKey("live_maintenance_enabled")
-
     /** Разовая проверка записей, привязанных к чужому тайтлу (см. RepairAnimeDbUseCase.auditForeignMatches). */
     val FOREIGN_MATCH_AUDIT_DONE = booleanPreferencesKey("foreign_match_audit_v1_done")
 
@@ -70,5 +64,7 @@ object DevPreferencesKeys {
         booleanPreferencesKey("dev_sheet_style_test"),
         // Эксперимент «ползунки как чипы» отменён.
         booleanPreferencesKey("dev_slider_band_style"),
+        // v3.4.6: тумблер фонового обогащения убран, оно работает всегда; выключенное раньше — стирается.
+        booleanPreferencesKey("live_maintenance_enabled"),
     )
 }

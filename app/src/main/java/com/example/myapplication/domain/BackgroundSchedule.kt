@@ -14,6 +14,9 @@ object BackgroundSchedule {
     /** Проверка новых серий в фоне. */
     const val EPISODE_CHECK_HOURS = 6L
 
+    /** Частая проверка выходящих сейчас и избранных тайтлов — чтобы пуш приходил сразу. */
+    const val WATCHLIST_CHECK_HOURS = 1L
+
     /** Повторная проверка серий не раньше, чем через это время, если её не форсировали. */
     const val EPISODE_CHECK_MIN_INTERVAL_MS = 30 * 60 * 1000L
 

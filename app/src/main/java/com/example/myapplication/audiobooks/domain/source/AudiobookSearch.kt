@@ -1,5 +1,6 @@
 package com.example.myapplication.audiobooks.domain.source
 
+import com.example.myapplication.utils.gatherWithGrace
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
@@ -13,18 +14,27 @@ import kotlinx.coroutines.withTimeoutOrNull
  */
 class AudiobookSearch(private val sources: List<AudiobookSource>) {
 
-    /** Выдача всех источников в порядке приоритета; медленный сайт не держит остальных дольше [timeoutMs]. */
-    suspend fun searchAll(query: String, timeoutMs: Long = SEARCH_TIMEOUT_MS, pages: Int = 1): List<SourceBook> = coroutineScope {
-        sources.map { source ->
-            async {
-                (0 until pages.coerceAtLeast(1)).map { page ->
-                    async {
-                        withTimeoutOrNull(timeoutMs) { (source.search(query, page) as? SourceResult.Ok)?.value }.orEmpty()
+    /**
+     * Выдача всех источников в порядке приоритета. Как в поиске по каталогам: сайты опрашиваются
+     * одновременно, а после первого ответа остальным дают [GRACE_MS] — не ждём самый медленный
+     * сайт (раньше выдача висела до [timeoutMs], если один из них молчал).
+     */
+    suspend fun searchAll(query: String, timeoutMs: Long = SEARCH_TIMEOUT_MS, pages: Int = 1): List<SourceBook> =
+        gatherWithGrace(
+            blocks = sources.map { source ->
+                suspend {
+                    coroutineScope {
+                        (0 until pages.coerceAtLeast(1)).map { page ->
+                            async {
+                                withTimeoutOrNull(timeoutMs) { (source.search(query, page) as? SourceResult.Ok)?.value }.orEmpty()
+                            }
+                        }.awaitAll().flatten().distinctBy { it.ref }
                     }
-                }.awaitAll().flatten().distinctBy { it.ref }
-            }
-        }.awaitAll().flatten()
-    }
+                }
+            },
+            hardTimeoutMs = timeoutMs,
+            graceMs = GRACE_MS,
+        ).flatten()
 
     /** Все озвучки того же произведения у всех источников (включая саму [book], если она там есть). */
     suspend fun sameWork(title: String, authors: List<String>): List<SourceBook> =
@@ -50,6 +60,8 @@ class AudiobookSearch(private val sources: List<AudiobookSource>) {
 
     private companion object {
         const val SEARCH_TIMEOUT_MS = 12_000L
+        /** Сколько ждём остальных сайтов после первого непустого ответа. */
+        const val GRACE_MS = 4_000L
     }
 }
 

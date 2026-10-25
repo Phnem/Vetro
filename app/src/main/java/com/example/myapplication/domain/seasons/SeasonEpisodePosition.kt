@@ -45,7 +45,9 @@ fun latestSeasonEpisode(layout: SeasonEpisodesEntry?, airing: AiringProgress?): 
 
 /** Сезон, который прямо сейчас выходит, по раскладу (TMDB у сериалов, AniList у аниме). */
 fun SeasonEpisodesEntry?.ongoingSeason(): SeasonInfo? =
-    regularSeasons().lastOrNull()?.takeIf { it.ongoing }
+    // Последний ВЫХОДЯЩИЙ, а не «последний сезон, если он выходит»: лишняя строка после него
+    // (анонс, сезон от источника просмотра) раньше лишала тайтл отсчёта и места в календаре.
+    regularSeasons().lastOrNull { it.ongoing }
 
 /** Выходит ли сезон прямо сейчас: закрытая строка «сезон вышел полностью» (aired == total) — нет. */
 fun AiringProgress.isAiringNow(): Boolean {

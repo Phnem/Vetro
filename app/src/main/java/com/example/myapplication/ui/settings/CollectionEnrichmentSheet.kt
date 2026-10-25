@@ -58,70 +58,9 @@ import kotlinx.coroutines.delay
 
 
 /**
- * «Обогащение коллекции» — модуль 1 (кнопка «Полное обогащение») и модуль 2 (тумблер
- * «Фоновое обновление»). Прогресс полного прогона отражают isRepairingDb (фаза полей) и
- * isTitleDubbing (фаза названий) из SettingsViewModel. Вёрстка — карточки панели
- * «Дополнительные источники» (см. SettingsPanelParts).
- */
-@Composable
-fun CollectionEnrichmentSheet(
-    viewModel: SettingsViewModel,
-    onDismiss: () -> Unit,
-    sharedModifier: Modifier = Modifier,
-) {
-    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    val strings = getCollectionEnrichmentStrings(uiState.language)
-    val ru = uiState.language == AppLanguage.RU
-
-    val running = uiState.isRepairingDb || uiState.isTitleDubbing
-    val fullSubtitle = when {
-        uiState.isRepairingDb -> strings.fullRunningFields
-        uiState.isTitleDubbing && uiState.titleDubbingTotal > 0 ->
-            strings.fullRunningTitlesTemplate.format(uiState.titleDubbingProcessed, uiState.titleDubbingTotal)
-        uiState.isTitleDubbing -> strings.fullRunningFields
-        else -> strings.fullSubtitle
-    }
-
-    SettingsPanelColumn(modifier = sharedModifier) {
-        SettingsPanelHeader(
-            title = strings.sheetTitle,
-            doneLabel = if (ru) "Готово" else "Done",
-            onDone = onDismiss,
-        )
-
-        // Модуль 1: полное обогащение (нажатие на карточку).
-        PanelRowCard(
-            title = strings.fullTitle,
-            summary = fullSubtitle,
-            onClick = if (running) null else { { viewModel.runFullEnrichment() } },
-            leading = { PanelGlyphTile(Icons.Filled.AutoFixHigh) },
-            trailing = if (running) {
-                {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(20.dp),
-                        color = MaterialTheme.colorScheme.primary,
-                        strokeWidth = 2.dp,
-                    )
-                }
-            } else null,
-        )
-
-        // Модуль 2: фоновое обновление (тумблер).
-        PanelRowCard(
-            title = strings.liveTitle,
-            summary = strings.liveSubtitle,
-            leading = { PanelGlyphTile(Icons.Filled.Autorenew) },
-            trailing = {
-                IosSwitch(
-                    checked = uiState.liveMaintenanceEnabled,
-                    onCheckedChange = { viewModel.setLiveMaintenance(it) },
-                )
-            },
-        )
-    }
-}
-
-/**
+ * Шторка «Обогащение коллекции» убрана из настроек: обогащение идёт само (фон раз в 6 часов и при
+ * добавлении тайтла). Остался только незакрываемый диалог порога перегрузки.
+ *
  * Незакрываемый диалог порога перегрузки: «Отмена» гасит фон, «Начать» превращается в зелёную
  * пилюлю с галочкой и плавно запускает полное обогащение.
  */

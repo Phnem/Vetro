@@ -81,6 +81,7 @@ fun AiConnectSheet(
                     // Коротко: полная подпись «Получить ключ» вытесняла «Подключить» и переносила её на две строки.
                     text = if (settingsState.language == AppLanguage.RU) "Получить" else "Get",
                     icon = Icons.Filled.QuestionMark,
+                    compact = true,
                     onClick = { uriHandler.openUri(viewModel.apiKeyUrlForCurrentInput()) },
                 )
                 PanelButton(

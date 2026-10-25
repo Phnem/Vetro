@@ -82,7 +82,11 @@ class BooksHomeViewModel(
 
     init {
         // Папки, добавленные раньше отдельной страницей, — в библиотеку (один раз на папку).
-        viewModelScope.launch { runCatching { importer.syncExisting() } }
+        viewModelScope.launch {
+            runCatching { importer.syncExisting() }
+            // Потом — обложки книгам, у которых их нет (каталоги и английские названия).
+            runCatching { importer.backfillCovers() }
+        }
         viewModelScope.launch {
             _weekListenedMs.value = repository.listenedSince(System.currentTimeMillis() - WEEK_MS)
         }

@@ -5,6 +5,8 @@ import android.util.Log
 import androidx.media3.common.util.UnstableApi
 import com.example.myapplication.audiobooks.data.AudiobookRepository
 import com.example.myapplication.audiobooks.data.LocalBookMeta
+import com.example.myapplication.audiobooks.domain.enrichment.BookCoverFinder
+import kotlinx.coroutines.flow.first
 import com.example.myapplication.audiobooks.domain.model.MediaManifest
 import com.example.myapplication.audiobooks.domain.source.AudiobookSearch
 import com.example.myapplication.audiobooks.domain.source.AudiobookSource
@@ -27,7 +29,23 @@ class LocalLibraryImporter(
     private val search: AudiobookSearch,
     private val sources: List<AudiobookSource>,
     private val repository: AudiobookRepository,
+    private val coverFinder: BookCoverFinder,
 ) {
+    /**
+     * Книги библиотеки без обложки: у части сайтов её нет, у своих папок — тем более. Ищется в
+     * каталогах обложек (в том числе по английскому названию); не нашлось — попробуем в следующий
+     * запуск (повторы внутри процесса и сетевые ответы уже кэшируются).
+     */
+    suspend fun backfillCovers(limit: Int = BACKFILL_LIMIT) {
+        repository.library().first()
+            .filter { it.coverUrl.isNullOrBlank() }
+            .take(limit)
+            .forEach { book ->
+                val url = runCatching { coverFinder.first(book.title, book.authors) }.getOrNull() ?: return@forEach
+                runCatching { repository.setCover(book.workId, url) }
+            }
+    }
+
     /** Папка из системного выбора: все книги в ней (или она сама) — в библиотеку. Число добавленных. */
     suspend fun importTree(treeUri: Uri): Int {
         val books = local.addTree(treeUri)
@@ -73,7 +91,8 @@ class LocalLibraryImporter(
                     title = title,
                     authors = authors.ifEmpty { match?.authors.orEmpty() },
                     narrators = narrators,
-                    coverUrl = book.artworkUri?.toString() ?: match?.coverUrl,
+                    coverUrl = book.artworkUri?.toString() ?: match?.coverUrl
+                        ?: runCatching { coverFinder.first(title, authors.ifEmpty { match?.authors.orEmpty() }) }.getOrNull(),
                     description = details?.description,
                     genres = match?.genres.orEmpty(),
                     year = match?.year,
@@ -100,6 +119,7 @@ class LocalLibraryImporter(
 
     private companion object {
         const val TAG = "LocalLibraryImporter"
+        const val BACKFILL_LIMIT = 8
     }
 }
 

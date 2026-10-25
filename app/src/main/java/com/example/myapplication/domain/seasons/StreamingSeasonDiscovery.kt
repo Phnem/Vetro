@@ -8,10 +8,8 @@ import com.example.myapplication.data.models.MediaType
 import com.example.myapplication.media.source.AnimeHeavenSource
 import com.example.myapplication.media.source.JutSuSource
 import com.example.myapplication.media.source.KodikDirectSearch
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.supervisorScope
-import kotlinx.coroutines.withTimeoutOrNull
+import com.example.myapplication.utils.gatherWithGrace
+import kotlinx.coroutines.CancellationException
 
 /** Сезон, найденный у источника просмотра: номер и сколько серий там реально лежит. */
 data class DiscoveredSeason(
@@ -248,27 +246,36 @@ class StreamingSeasonDiscovery(
     }
 
     /**
-     * Источники опрашиваются параллельно и под общим таймаутом: они независимы, а самый медленный
-     * из них не должен держать кнопку. Упавший просто выпадает из выдачи — как в `SourceEngine`.
+     * Источники опрашиваются параллельно, у каждого свой таймаут, и после первого ответа остальным
+     * даётся [GRACE_MS] — как в поиске: кнопка не ждёт самый медленный источник, пока уже есть
+     * что показать. Упавший просто выпадает из выдачи — как в `SourceEngine`.
      */
-    private suspend fun queryAllSources(anime: Anime): List<DiscoveredSeason> = supervisorScope {
-        listOf(
-            "Kodik" to suspend { kodikDirectSearch.findSeasons(anime) },
-            "jut.su" to suspend { jutSuSource.findSeasons(anime) },
-            "AnimeHeaven" to suspend { animeHeavenSource.findSeasons(anime) },
+    private suspend fun queryAllSources(anime: Anime): List<DiscoveredSeason> = gatherWithGrace(
+        blocks = listOf<Pair<String, suspend () -> List<DiscoveredSeason>?>>(
+            "Kodik" to { kodikDirectSearch.findSeasons(anime) },
+            "jut.su" to { jutSuSource.findSeasons(anime) },
+            "AnimeHeaven" to { animeHeavenSource.findSeasons(anime) },
         ).map { (label, block) ->
-            async {
-                runCatching { withTimeoutOrNull(SOURCE_TIMEOUT_MS) { block() } }
-                    .onFailure { Log.i(TAG, "$label season discovery failed: ${it.message}") }
-                    .getOrNull()
-                    .orEmpty()
+            suspend {
+                try {
+                    block().orEmpty()
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    Log.i(TAG, "$label season discovery failed: ${e.message}")
+                    emptyList()
+                }
             }
-        }.awaitAll().flatten()
-    }
+        },
+        hardTimeoutMs = SOURCE_TIMEOUT_MS,
+        graceMs = GRACE_MS,
+    ).flatten()
 
     companion object {
         private const val TAG = "SeasonDiscovery"
         private const val SOURCE_TIMEOUT_MS = 25_000L
+        /** Сколько ждём остальных источников после первого непустого ответа. */
+        private const val GRACE_MS = 8_000L
 
         /**
          * Значения [SeasonInfo.source], означающие «сезон пришёл от источника просмотра».
