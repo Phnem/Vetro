@@ -118,7 +118,6 @@ import kotlin.math.roundToInt
 
 private enum class PlayerMenu { AUDIO, SUBTITLES, SPEED }
 
-private val SPEED_OPTIONS = listOf(0.5f, 0.75f, 1f, 1.25f, 1.5f, 1.75f, 2f)
 private val Capsule = RoundedCornerShape(percent = 50)
 
 /** Шаг перемотки дабл-тапом; каждый следующий тап подряд добавляет ещё один такой шаг. */
@@ -861,7 +860,8 @@ fun PlayerControlsOverlay(
                 audioTracks = audioTracks,
                 subtitleOptions = subtitleOptions,
                 speed = speed,
-                onSelectSpeed = { onSelectSpeed(it); menuState.targetState = false },
+                // Как в аудиокнигах: шторка скорости остаётся открытой, пока крутишь линейку.
+                onSelectSpeed = onSelectSpeed,
                 onSelectAudio = { onSelectAudio(it); menuState.targetState = false },
                 // Раздел меню и настройки (язык, загрузка модели) меню не закрывают.
                 onSelectSubtitle = { onSelectSubtitle(it); if (!it.keepsMenuOpen) menuState.targetState = false },
@@ -1271,19 +1271,21 @@ private fun OptionMenu(
         PlayerAudioSheet(state, audioTracks, playerIsRu(), onSelectAudio, onDismiss)
         return
     }
+    if (menu == PlayerMenu.SPEED) {
+        PlayerSpeedSheet(state, speed, playerIsRu(), onSelectSpeed, onDismiss)
+        return
+    }
     BackHandler(enabled = true) { onDismiss() }
     val origin = TransformOrigin(1f, 0f) // «вытекает» из верхнего-правого дока
     val labels = when (menu) {
         PlayerMenu.AUDIO -> audioTracks.map { it.label }
         PlayerMenu.SUBTITLES -> subtitleOptions.map { it.label }
-        PlayerMenu.SPEED -> SPEED_OPTIONS.map { s ->
-            if (s == 1f) (if (playerIsRu()) "Обычная (1×)" else "Normal (1×)") else "${trimSpeed(s)}×"
-        }
+        PlayerMenu.SPEED -> emptyList()
     }
     val selectedIndex = when (menu) {
         PlayerMenu.AUDIO -> audioTracks.indexOfFirst { it.isSelected }.coerceAtLeast(0)
         PlayerMenu.SUBTITLES -> subtitleOptions.indexOfFirst { it.isSelected }.coerceAtLeast(0)
-        PlayerMenu.SPEED -> SPEED_OPTIONS.indexOfFirst { it == speed }.coerceAtLeast(0)
+        PlayerMenu.SPEED -> 0
     }
     /** true — после выбора меню закрывается. */
     fun commit(index: Int): Boolean {
@@ -1294,8 +1296,7 @@ private fun OptionMenu(
         }
         when (menu) {
             PlayerMenu.AUDIO -> audioTracks.getOrNull(index)?.let(onSelectAudio)
-            PlayerMenu.SUBTITLES -> Unit
-            PlayerMenu.SPEED -> SPEED_OPTIONS.getOrNull(index)?.let(onSelectSpeed)
+            PlayerMenu.SUBTITLES, PlayerMenu.SPEED -> Unit
         }
         return true
     }
@@ -1353,12 +1354,7 @@ private fun OptionMenu(
                             PlayerMenu.SUBTITLES -> subtitleOptions.forEach { opt ->
                                 MenuPill(opt.label, opt.isSelected) { onSelectSubtitle(opt) }
                             }
-                            PlayerMenu.SPEED -> SPEED_OPTIONS.forEach { s ->
-                                MenuPill(
-                                    label = if (s == 1f) (if (playerIsRu()) "Обычная (1×)" else "Normal (1×)") else "${trimSpeed(s)}×",
-                                    selected = s == speed,
-                                ) { onSelectSpeed(s) }
-                            }
+                            PlayerMenu.SPEED -> Unit
                         }
                     }
                 }
@@ -1693,9 +1689,6 @@ private fun formatTime(ms: Long): String {
     return if (h > 0) String.format(Locale.US, "%d:%02d:%02d", h, m, s)
     else String.format(Locale.US, "%02d:%02d", m, s)
 }
-
-private fun trimSpeed(s: Float): String =
-    if (s % 1f == 0f) s.toInt().toString() else s.toString().trimEnd('0').trimEnd('.')
 
 /**
  * Общая форма боковых кнопок и пунктов меню плеера: капсула без заливки с белым кантом — тот же

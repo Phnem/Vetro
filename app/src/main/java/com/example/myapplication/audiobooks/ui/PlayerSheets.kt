@@ -134,7 +134,7 @@ private fun PrimaryCapsule(text: String, modifier: Modifier = Modifier, onClick:
 }
 
 @Composable
-private fun Pill(text: String, selected: Boolean, onClick: () -> Unit) {
+internal fun Pill(text: String, selected: Boolean, onClick: () -> Unit) {
     Text(
         text = text,
         color = if (selected) Color(0xFF111111) else Muted,
