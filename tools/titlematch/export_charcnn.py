@@ -44,7 +44,7 @@ def export(model: CharCNN, calibration: list[tuple], output: Path, verification:
             x,y=self.encode(a),self.encode(b)
             comparison=tf.concat([tf.abs(x-y),x*y,features],axis=1)
             h=tf.nn.relu(tf.matmul(comparison,tf.transpose(self.hidden_weight))+self.hidden_bias)
-            return {"probability":tf.sigmoid(tf.matmul(h,tf.transpose(self.output_weight))+self.output_bias)}
+            return {"logit":tf.matmul(h,tf.transpose(self.output_weight))+self.output_bias}
 
     mirror=Mirror()
     concrete=mirror.serve.get_concrete_function()
@@ -53,7 +53,7 @@ def export(model: CharCNN, calibration: list[tuple], output: Path, verification:
         a,b,f=vector
         with torch.no_grad():
             return float(torch.sigmoid(model(torch.from_numpy(a).long(),torch.from_numpy(b).long(),torch.from_numpy(f))).item())
-    mirror_error=max(abs(reference(v)-float(mirror.serve(*v)["probability"].numpy().item())) for v in vectors)
+    mirror_error=max(abs(reference(v)-float(tf.sigmoid(mirror.serve(*v)["logit"]).numpy().item())) for v in vectors)
     if mirror_error>1e-5:raise ValueError(f"PyTorch/TF mirror mismatch:{mirror_error}")
     output.mkdir(parents=True,exist_ok=True)
     converter=tf.lite.TFLiteConverter.from_concrete_functions([concrete],mirror)
@@ -97,6 +97,7 @@ def export(model: CharCNN, calibration: list[tuple], output: Path, verification:
             value=float(interpreter.get_tensor(item["index"]).item())
             if item["dtype"]==np.int8:
                 scale,zero=item["quantization"];value=(value-zero)*scale
+            value=float(1/(1+np.exp(-np.clip(value,-80,80))))
             times.append((time.perf_counter()-start)*1000)
             errors.append(abs(value-reference(vector)));predictions.append(value)
         float_tensors=[i["name"] for i in interpreter.get_tensor_details() if i["dtype"]==np.float32]
@@ -112,7 +113,7 @@ def export(model: CharCNN, calibration: list[tuple], output: Path, verification:
         "parameters":sum(p.numel() for p in model.parameters()),"mirror_max_error":mirror_error,
         "float32":fp,"int8":int8,"int8_bytes":len(integer_model),"sha256":digest(path),
         "calibration_vectors":len(calibration),"verification_vectors":len(vectors),
-        "integer_input_contract":"Two int32 byte-token index arrays, int8 metadata/features; int8 probability output",
+        "integer_input_contract":"Two int32 byte-token index arrays, int8 features; int8 logit output (dequantize then sigmoid/calibration)",
         "device_benchmark":False}
     (output/"export-report.json").write_text(json.dumps(report,indent=2)+"\n",encoding="utf-8",newline="\n")
     return report

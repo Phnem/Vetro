@@ -1,0 +1,13 @@
+plugins { id 'com.android.application' version '8.13.2' }
+android {
+    namespace 'com.phnem.vetro.titlematchbench'
+    compileSdk 36
+    defaultConfig { applicationId 'com.phnem.vetro.titlematchbench'; minSdk 26; targetSdk 36; versionCode 1; versionName '1' }
+    compileOptions { sourceCompatibility JavaVersion.VERSION_21; targetCompatibility JavaVersion.VERSION_21 }
+    sourceSets { main { assets.srcDirs = ['../.cache/benchmark-assets'] } }
+}
+// Only the bundled compatibility Interpreter is used. No Play asset delivery/runtime downloads.
+dependencies {
+    implementation('com.google.ai.edge.litert:litert:2.3.0') { transitive = false }
+    implementation('com.google.ai.edge.litert:litert-api:2.3.0') { transitive = false }
+}
