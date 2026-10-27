@@ -450,8 +450,10 @@ class EpisodeMenuViewModel(
                     .distinctBy { it.url }
                     .ifEmpty { error("Поток не найден / No matching playable stream found") }
                 val options = availableQualityOptions(videos)
-                val sources = if (seasonAnime.mediaType == MediaType.MOVIE ||
-                    seasonAnime.mediaType == MediaType.SERIES
+                // Источник выбирается автоматически (первый по рангу), а пользователя спрашивают только про качество.
+                // Список источников и озвучек показывается лишь по явной просьбе его сменить.
+                val sources = if (forcePicker && (seasonAnime.mediaType == MediaType.MOVIE ||
+                        seasonAnime.mediaType == MediaType.SERIES)
                 ) {
                     MovieSeriesSourceOptions.from(hosters)
                 } else {

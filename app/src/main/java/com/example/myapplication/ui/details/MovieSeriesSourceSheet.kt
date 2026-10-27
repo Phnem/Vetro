@@ -54,16 +54,16 @@ fun MovieSeriesSourceSheet(
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Text(
-                text = if (ru) "Смотреть" else "Watch",
+                text = if (ru) "Источник и озвучка" else "Source and audio",
                 style = MaterialTheme.typography.headlineSmall,
                 fontFamily = SnProFamily,
                 fontWeight = FontWeight.SemiBold,
             )
             Text(
                 text = if (ru) {
-                    "Доступно несколько источников. Первый — наиболее подходящий."
+                    "По умолчанию берётся первый — наиболее подходящий. Здесь можно выбрать другой источник или озвучку."
                 } else {
-                    "Several sources are available. The first is the best match."
+                    "The first one, the best match, is used by default. Pick another source or audio here."
                 },
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 fontFamily = SnProFamily,
