@@ -157,7 +157,17 @@ val audiobookModule = module {
         )
     }
     single { com.example.myapplication.audiobooks.ui.AudiobookSubtitleModes(androidContext()) }
-    single { AudiobookRepository(get()) }
+    // Автор и чтец, поправленные руками: переживают повторное открытие книги у источника.
+    single {
+        com.example.myapplication.audiobooks.data.BookPeopleOverrides(
+            JsonMapFileStore(
+                File(androidContext().filesDir, "audiobooks/people.json"),
+                kotlinx.serialization.serializer<List<String>>(),
+                "BookPeople",
+            ),
+        )
+    }
+    single { AudiobookRepository(get(), get()) }
     // Ручная смена обложки книги: «обновить» (другая картинка) и «импорт» (файл → облако).
     single { com.example.myapplication.audiobooks.data.BookCoverManager(androidContext(), get(), get(), get()) }
     // Обложка там, где сайт её не дал: другие сайты, витрина Apple, Open Library, Google Books — в том
@@ -171,6 +181,7 @@ val audiobookModule = module {
             itunes = get(),
             alternatives = get(),
             client = get<OkHttpClient>(),
+            wikidata = get(),
         )
     }
     single {
@@ -203,6 +214,7 @@ val audiobookModule = module {
             source, key, title, get(named(SOURCES)), get(), get(), get(),
             workEnrichment = get(),
             coverFinder = get(),
+            covers = get(),
             language = { com.example.myapplication.data.local.AppLanguagePrefs.current(get(named("settings"))) },
         )
     }

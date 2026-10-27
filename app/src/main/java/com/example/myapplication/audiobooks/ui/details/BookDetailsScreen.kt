@@ -72,6 +72,18 @@ import androidx.compose.ui.zIndex
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.media3.common.util.UnstableApi
 import coil3.compose.AsyncImage
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.CheckCircle
+import androidx.compose.material.icons.rounded.Image
+import androidx.compose.material.icons.rounded.LinkOff
+import androidx.compose.material.icons.rounded.RecordVoiceOver
+import androidx.compose.ui.platform.LocalContext
+import com.example.myapplication.ui.details.DetailsMenuItem
+import com.example.myapplication.ui.details.DetailsOverflowMenu
+import com.example.myapplication.utils.Haptic
 import com.example.myapplication.audiobooks.domain.source.SourceBook
 import com.example.myapplication.audiobooks.domain.source.SourceBookDetails
 import com.example.myapplication.network.AppLanguage
@@ -140,7 +152,19 @@ fun BookDetailsScreen(
 
     val book = state.details?.book
     val shownTitle = book?.title ?: title
-    val shownCover = book?.coverUrl ?: cover ?: state.work?.coverUrl
+    // Обложка из базы важнее: туда пишут и находка из каталогов, и выбор пользователя в меню «⋯».
+    val shownCover = state.cover ?: book?.coverUrl ?: cover ?: state.work?.coverUrl
+    val menu = remember(language) { bookMenuStrings(language) }
+    val context = LocalContext.current
+    val galleryPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { picked ->
+        if (picked != null) viewModel.importCover(picked)
+    }
+    LaunchedEffect(state.notice?.seq) {
+        state.notice?.let { notice ->
+            Toast.makeText(context, noticeText(notice, menu), Toast.LENGTH_LONG).show()
+            viewModel.consumeNotice()
+        }
+    }
 
     Box(modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         Box(Modifier.fillMaxSize().layerBackdrop(backdrop)) {
@@ -191,6 +215,49 @@ fun BookDetailsScreen(
                 .zIndex(4f),
         )
 
+        // Меню «⋯» — то же, что у страницы тайтла: отметка, обложка, источник; плюс автор и чтец.
+        if (state.opened != null) {
+            val listened = state.progress?.finished == true
+            DetailsOverflowMenu(
+                backdrop = backdrop,
+                isDark = isDark,
+                ru = language == AppLanguage.RU,
+                items = listOf(
+                    DetailsMenuItem(
+                        Icons.Rounded.CheckCircle,
+                        if (listened) menu.markNotListened else menu.markListened,
+                        haptic = Haptic.Success,
+                        onClick = viewModel::toggleListened,
+                    ),
+                    DetailsMenuItem(Icons.Rounded.Image, menu.changeCover, onClick = viewModel::openCovers),
+                    DetailsMenuItem(Icons.Rounded.RecordVoiceOver, menu.editPeople, onClick = viewModel::openPeople),
+                    DetailsMenuItem(Icons.Rounded.LinkOff, menu.wrongSource, accent = true, onClick = viewModel::rejectSource),
+                ),
+            )
+        }
+
+        Box(Modifier.zIndex(10f)) {
+            BookPeopleSheet(
+                visible = state.sheet == BookSheet.People,
+                authors = book?.authors.orEmpty(),
+                narrators = book?.narrators.orEmpty(),
+                strings = menu,
+                isDark = isDark,
+                onSave = viewModel::savePeople,
+                onDismiss = viewModel::closeSheet,
+            )
+            BookCoverSheet(
+                visible = state.sheet == BookSheet.Cover,
+                picker = state.coverPicker,
+                strings = menu,
+                isDark = isDark,
+                onSearch = viewModel::searchCovers,
+                onPick = viewModel::pickCover,
+                onGallery = { galleryPicker.launch("image/*") },
+                onDismiss = viewModel::closeSheet,
+            )
+        }
+
         val dockEffects = rememberAdaptiveGlassEffects(GlassPreset.CompactNav)
         Row(
             Modifier
@@ -222,6 +289,18 @@ fun BookDetailsScreen(
             )
         }
     }
+}
+
+private fun noticeText(notice: BookNotice, s: BookMenuStrings): String = when (notice.kind) {
+    BookNoticeKind.PeopleSaved -> s.peopleSaved
+    BookNoticeKind.ListenedMarked -> s.listenedMarked
+    BookNoticeKind.ListenedCleared -> s.listenedCleared
+    BookNoticeKind.CoverChanged -> s.coverChanged
+    BookNoticeKind.CoverImported -> s.coverImported
+    BookNoticeKind.CoverImportedLocal -> s.coverImportedLocal
+    BookNoticeKind.CoverFailed -> s.coverFailed
+    BookNoticeKind.NoOtherSource -> s.noOtherSource
+    BookNoticeKind.SwitchedSource -> s.switchedSource(notice.arg)
 }
 
 // ---------- Страница «Детали» ----------

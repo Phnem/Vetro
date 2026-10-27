@@ -79,6 +79,46 @@ internal fun BoxScope.DetailsOverflowMenu(
     /** false у манги: каталоги аниме ей не нужны, в меню остаётся только секретная папка. */
     showCatalogActions: Boolean = true,
 ) {
+    val items = buildList {
+        if (showCatalogActions) {
+            add(DetailsMenuItem(Icons.Rounded.CheckCircle, if (ru) "Просмотрено" else "Mark as watched", haptic = Haptic.Success, onClick = onMarkWatched))
+            add(DetailsMenuItem(Icons.Rounded.Image, if (ru) "Сменить обложку" else "Change cover", onClick = onChangeCover))
+            add(DetailsMenuItem(Icons.Rounded.LinkOff, if (ru) "Источник неверен" else "Wrong source", accent = true, onClick = onWrongSource))
+        }
+        add(
+            DetailsMenuItem(
+                icon = if (isSecret) Icons.Rounded.LockOpen else Icons.Rounded.Lock,
+                label = when {
+                    isSecret && ru -> "Вернуть в ленту"
+                    isSecret -> "Move back to collection"
+                    ru -> "В секретную папку"
+                    else -> "Move to secret folder"
+                },
+                haptic = Haptic.Light,
+                onClick = onToggleSecret,
+            ),
+        )
+    }
+    DetailsOverflowMenu(backdrop, isDark, ru, items)
+}
+
+/** Пункт меню «⋯»: [accent] красит его в акцентный цвет (опасное или «исправить»), [haptic] — отклик. */
+internal data class DetailsMenuItem(
+    val icon: ImageVector,
+    val label: String,
+    val accent: Boolean = false,
+    val haptic: Haptic? = null,
+    val onClick: () -> Unit,
+)
+
+/** То же меню с произвольным набором пунктов: им пользуются и страница тайтла, и страница книги. */
+@Composable
+internal fun BoxScope.DetailsOverflowMenu(
+    backdrop: Backdrop,
+    isDark: Boolean,
+    ru: Boolean,
+    items: List<DetailsMenuItem>,
+) {
     val view = LocalView.current
     var expanded by remember { mutableStateOf(false) }
     val progress by animateFloatAsState(
@@ -153,49 +193,18 @@ internal fun BoxScope.DetailsOverflowMenu(
                 }
                 .padding(vertical = 6.dp),
         ) {
-            if (showCatalogActions) MenuRow(
-                icon = Icons.Rounded.CheckCircle,
-                label = if (ru) "Просмотрено" else "Mark as watched",
-                tint = textColor,
-                onClick = {
-                    expanded = false
-                    performHaptic(view, Haptic.Success)
-                    onMarkWatched()
-                },
-            )
-            if (showCatalogActions) MenuRow(
-                icon = Icons.Rounded.Image,
-                label = if (ru) "Сменить обложку" else "Change cover",
-                tint = textColor,
-                onClick = {
-                    expanded = false
-                    onChangeCover()
-                },
-            )
-            if (showCatalogActions) MenuRow(
-                icon = Icons.Rounded.LinkOff,
-                label = if (ru) "Источник неверен" else "Wrong source",
-                tint = BrandOrangeBright,
-                onClick = {
-                    expanded = false
-                    onWrongSource()
-                },
-            )
-            MenuRow(
-                icon = if (isSecret) Icons.Rounded.LockOpen else Icons.Rounded.Lock,
-                label = when {
-                    isSecret && ru -> "Вернуть в ленту"
-                    isSecret -> "Move back to collection"
-                    ru -> "В секретную папку"
-                    else -> "Move to secret folder"
-                },
-                tint = textColor,
-                onClick = {
-                    expanded = false
-                    performHaptic(view, Haptic.Light)
-                    onToggleSecret()
-                },
-            )
+            items.forEach { item ->
+                MenuRow(
+                    icon = item.icon,
+                    label = item.label,
+                    tint = if (item.accent) BrandOrangeBright else textColor,
+                    onClick = {
+                        expanded = false
+                        item.haptic?.let { performHaptic(view, it) }
+                        item.onClick()
+                    },
+                )
+            }
         }
     }
 }

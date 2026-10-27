@@ -7,6 +7,7 @@ import com.example.myapplication.audiobooks.domain.model.VariantId
 import com.example.myapplication.audiobooks.domain.model.WorkId
 import com.example.myapplication.audiobooks.domain.source.AudiobookSource
 import com.example.myapplication.audiobooks.domain.source.BookLanguage
+import com.example.myapplication.audiobooks.domain.source.SourceBook
 import com.example.myapplication.audiobooks.domain.source.SourceBookDetails
 import com.example.myapplication.data.local.AnimeDatabase
 import com.example.myapplication.data.local.Audiobook_narration
@@ -28,6 +29,8 @@ import kotlinx.serialization.json.Json
  */
 class AudiobookRepository(
     private val db: AnimeDatabase,
+    /** Исправленные руками автор и чтец; без него имена всегда берутся у источника. */
+    private val people: BookPeopleOverrides? = null,
     private val nowMs: () -> Long = System::currentTimeMillis,
 ) {
     private val q get() = db.audiobookQueries
@@ -38,16 +41,19 @@ class AudiobookRepository(
      * Полная кластеризация с порогами — AB-24; это её консервативное начало.
      */
     suspend fun saveOpened(source: AudiobookSource, details: SourceBookDetails): OpenedBook = io {
+        people?.load()
         val book = details.book
         val variantId = source.variantOf(book.ref)
         val language = source.languages.singleOrNull() ?: BookLanguage.RU
         q.transactionWithResult {
             val existing = q.variantById(variantId.value).executeAsOneOrNull()
             val narration = existing?.let { q.narrationById(it.narration_id).executeAsOneOrNull() }
-            val workFp = fingerprint(book.authors, book.title, language.name)
             val work = narration?.let { q.workById(it.work_id).executeAsOneOrNull() }
-                ?: q.worksByFingerprint(workFp).executeAsList().firstOrNull()
+                ?: q.worksByFingerprint(fingerprint(book.authors, book.title, language.name)).executeAsList().firstOrNull()
             val workId = work?.work_id ?: WorkId.new().value
+            // Автор, которого пользователь поправил руками, важнее того, что написал сайт.
+            val authors = people?.authors(WorkId(workId)) ?: book.authors
+            val workFp = fingerprint(authors, book.title, language.name)
             q.upsertWork(
                 Audiobook_work(
                     work_id = workId,
@@ -55,7 +61,7 @@ class AudiobookRepository(
                     collection_id = work?.collection_id,
                     title = book.title,
                     title_original = work?.title_original,
-                    authors_json = json.encodeToString(book.authors),
+                    authors_json = json.encodeToString(authors),
                     series_title = work?.series_title,
                     series_index = work?.series_index,
                     description = details.description ?: work?.description,
@@ -77,14 +83,15 @@ class AudiobookRepository(
             val narrationId = narration?.narration_id
                 ?: q.narrationsByWork(workId).executeAsList().firstOrNull { it.cluster_fingerprint == narrationFp }?.narration_id
                 ?: NarrationId.new().value
+            val narrators = people?.narrators(NarrationId(narrationId)) ?: book.narrators
             val durationMs = book.durationSec?.times(1000)
             val chapterCount = details.chapterDurationsSec.size.toLong().takeIf { it > 0 }
             q.upsertNarration(
                 Audiobook_narration(
                     narration_id = narrationId,
                     work_id = workId,
-                    cluster_fingerprint = narrationFp,
-                    narrators_json = json.encodeToString(book.narrators),
+                    cluster_fingerprint = fingerprint(narrators, "", ""),
+                    narrators_json = json.encodeToString(narrators),
                     kind = "SOLO",
                     duration_ms = durationMs,
                     chapter_count = chapterCount,
@@ -218,16 +225,19 @@ class AudiobookRepository(
         folderUri: String,
         meta: LocalBookMeta,
     ) = io {
+        people?.load()
+        val authors = people?.authors(workId) ?: meta.authors
+        val narrators = people?.narrators(narrationId) ?: meta.narrators
         q.transaction {
             val work = q.workById(workId.value).executeAsOneOrNull()
             q.upsertWork(
                 Audiobook_work(
                     work_id = workId.value,
-                    cluster_fingerprint = fingerprint(meta.authors, meta.title, ""),
+                    cluster_fingerprint = fingerprint(authors, meta.title, ""),
                     collection_id = work?.collection_id,
                     title = meta.title,
                     title_original = work?.title_original,
-                    authors_json = json.encodeToString(meta.authors),
+                    authors_json = json.encodeToString(authors),
                     series_title = work?.series_title,
                     series_index = work?.series_index,
                     description = meta.description ?: work?.description,
@@ -248,8 +258,8 @@ class AudiobookRepository(
                 Audiobook_narration(
                     narration_id = narrationId.value,
                     work_id = workId.value,
-                    cluster_fingerprint = fingerprint(meta.narrators, "", ""),
-                    narrators_json = json.encodeToString(meta.narrators),
+                    cluster_fingerprint = fingerprint(narrators, "", ""),
+                    narrators_json = json.encodeToString(narrators),
                     kind = "SOLO",
                     duration_ms = meta.durationMs,
                     chapter_count = meta.chapterCount?.toLong(),
@@ -300,6 +310,59 @@ class AudiobookRepository(
     /** Новая обложка произведения (адрес сайта, `collection-attachment://` или `file://`). */
     suspend fun setCover(workId: WorkId, coverUrl: String) = io {
         q.setWorkCover(coverUrl = coverUrl, updatedAt = nowMs(), workId = workId.value)
+    }
+
+    /**
+     * Автор и чтец, поправленные руками. Пишутся в произведение и озвучку (полки и «Продолжить»
+     * читают их оттуда и перестраиваются сами), запоминаются в [BookPeopleOverrides], чтобы повторное
+     * открытие книги не вернуло то, что написал сайт, и уходят в облако вместе с книгой.
+     */
+    suspend fun setPeople(workId: WorkId, narrationId: NarrationId, authors: List<String>, narrators: List<String>) = io {
+        val newAuthors = authors.map(String::trim).filter(String::isNotEmpty).distinctBy { it.lowercase() }
+        val newNarrators = narrators.map(String::trim).filter(String::isNotEmpty).distinctBy { it.lowercase() }
+        people?.set(workId, narrationId, newAuthors, newNarrators)
+        q.transaction {
+            val work = q.workById(workId.value).executeAsOneOrNull() ?: return@transaction
+            q.setWorkAuthors(
+                authorsJson = json.encodeToString(newAuthors),
+                fingerprint = fingerprint(newAuthors, work.title, work.language),
+                updatedAt = nowMs(),
+                workId = workId.value,
+            )
+            q.setNarrationNarrators(
+                narratorsJson = json.encodeToString(newNarrators),
+                fingerprint = fingerprint(newNarrators, "", ""),
+                narrationId = narrationId.value,
+            )
+        }
+    }
+
+    /** Книга источника с именами, как их поправил пользователь (если правил) — для страницы и плеера. */
+    suspend fun withPeople(opened: OpenedBook, book: SourceBook): SourceBook = io {
+        people?.load()
+        val authors = people?.authors(opened.workId)
+        val narrators = people?.narrators(opened.narrationId)
+        if (authors == null && narrators == null) book
+        else book.copy(authors = authors ?: book.authors, narrators = narrators ?: book.narrators)
+    }
+
+    /** «Прослушано» руками: книга уходит из «Продолжить»; позиция — в конец, если длина известна. */
+    suspend fun markFinished(opened: OpenedBook, finished: Boolean, totalMs: Long?) {
+        val old = io { q.progressByNarration(opened.narrationId.value).executeAsOneOrNull() }
+        val total = totalMs ?: old?.total_ms
+        saveProgress(
+            ProgressSnapshot(
+                workId = opened.workId,
+                narrationId = opened.narrationId,
+                variantId = opened.variantId,
+                globalMs = if (finished) total ?: old?.global_ms ?: 0L else old?.global_ms ?: 0L,
+                chapterIndex = old?.chapter_idx?.toInt() ?: 0,
+                chapterOffsetMs = old?.chapter_offset_ms ?: 0L,
+                totalMs = total,
+                speed = old?.speed?.toFloat() ?: 1f,
+                finished = finished,
+            ),
+        )
     }
 
     /** Копии одной озвучки на разных сайтах — звенья цепочки запасных (порядок задаёт вызывающий). */

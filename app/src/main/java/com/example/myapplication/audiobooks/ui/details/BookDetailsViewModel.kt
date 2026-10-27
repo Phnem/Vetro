@@ -9,6 +9,9 @@ import androidx.lifecycle.viewModelScope
 import androidx.media3.common.util.UnstableApi
 import com.example.myapplication.audiobooks.data.AudiobookRepository
 import com.example.myapplication.audiobooks.data.AudiobookRepository.Companion.normalize
+import com.example.myapplication.audiobooks.data.BookCoverManager
+import com.example.myapplication.audiobooks.data.BookPeopleOverrides
+import com.example.myapplication.audiobooks.domain.enrichment.CoverOption
 import com.example.myapplication.audiobooks.data.OpenedBook
 import com.example.myapplication.audiobooks.data.SavedProgress
 import com.example.myapplication.audiobooks.domain.source.AudiobookSearch
@@ -52,6 +55,8 @@ class BookDetailsViewModel(
     private val workEnrichment: BookWorkEnrichment? = null,
     /** Обложка из каталогов (в том числе по английскому названию), если сайт и база её не дали. */
     private val coverFinder: BookCoverFinder? = null,
+    /** Ручная смена обложки из меню «⋯»; без него пункт показывает пустой выбор. */
+    private val covers: BookCoverManager? = null,
     private val language: suspend () -> AppLanguage = { AppLanguage.RU },
 ) : ViewModel() {
 
@@ -64,6 +69,121 @@ class BookDetailsViewModel(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
 
     private var loadJob: Job? = null
+    private var coverJob: Job? = null
+    private var coverSearchJob: Job? = null
+    private var noticeSeq = 0
+
+    // ---------- Меню «⋯» ----------
+
+    fun openPeople() = _state.update { it.copy(sheet = BookSheet.People) }
+
+    fun closeSheet() = _state.update { it.copy(sheet = BookSheet.None) }
+
+    fun consumeNotice() = _state.update { it.copy(notice = null) }
+
+    private fun notice(kind: BookNoticeKind, arg: String = "") =
+        _state.update { it.copy(notice = BookNotice(kind, arg, ++noticeSeq)) }
+
+    /** Исправленные автор и чтец: пишутся в базу, и книга сама переезжает на полку нужного автора. */
+    fun savePeople(authorsRaw: String, narratorsRaw: String) {
+        val opened = _state.value.opened ?: return
+        val authors = BookPeopleOverrides.parse(authorsRaw)
+        val narrators = BookPeopleOverrides.parse(narratorsRaw)
+        viewModelScope.launch {
+            repository.setPeople(opened.workId, opened.narrationId, authors, narrators)
+            _state.update { s ->
+                s.copy(
+                    details = s.details?.let { d -> d.copy(book = d.book.copy(authors = authors, narrators = narrators)) },
+                    sheet = BookSheet.None,
+                )
+            }
+            notice(BookNoticeKind.PeopleSaved)
+        }
+    }
+
+    /** «Прослушано» / «Не прослушано»: переключатель по сохранённой позиции. */
+    fun toggleListened() {
+        val s = _state.value
+        val opened = s.opened ?: return
+        val finished = s.progress?.finished != true
+        val total = s.details?.chapterDurationsSec?.takeIf { d -> d.isNotEmpty() && d.all { it != null } }
+            ?.sumOf { it!! }?.times(1000) ?: s.details?.book?.durationSec?.times(1000)
+        viewModelScope.launch {
+            repository.markFinished(opened, finished, total)
+            val progress = repository.progress(opened.narrationId)
+            _state.update { it.copy(progress = progress) }
+            notice(if (finished) BookNoticeKind.ListenedMarked else BookNoticeKind.ListenedCleared)
+        }
+    }
+
+    /** Этот сайт отдал не ту книгу: помечаем его копию негодной и открываем ту же книгу на другом сайте. */
+    fun rejectSource() {
+        val s = _state.value
+        val opened = s.opened ?: return
+        val source = sources.firstOrNull { it.id.value == s.source } ?: return
+        viewModelScope.launch {
+            repository.markVariant(opened.variantId, false)
+            val alt = fallbackFor(source)
+            if (alt == null) {
+                notice(BookNoticeKind.NoOtherSource)
+            } else {
+                val name = sources.firstOrNull { it.id == alt.ref.source }?.displayName.orEmpty()
+                load(alt.ref.source.value, alt.ref.key, allowFallback = false)
+                notice(BookNoticeKind.SwitchedSource, name)
+            }
+        }
+    }
+
+    // ---------- Обложка ----------
+
+    fun openCovers() {
+        _state.update { it.copy(sheet = BookSheet.Cover, coverPicker = CoverPicker(loading = true)) }
+        loadCovers(null)
+    }
+
+    fun searchCovers(query: String) = loadCovers(query.trim().takeIf { it.isNotEmpty() })
+
+    private fun loadCovers(query: String?) {
+        val workId = _state.value.opened?.workId ?: return
+        coverSearchJob?.cancel()
+        _state.update { it.copy(coverPicker = it.coverPicker.copy(loading = true, query = query.orEmpty())) }
+        coverSearchJob = viewModelScope.launch {
+            val items = covers?.options(workId, query).orEmpty()
+            _state.update { it.copy(coverPicker = it.coverPicker.copy(items = items, loading = false)) }
+        }
+    }
+
+    fun pickCover(url: String) {
+        val workId = _state.value.opened?.workId ?: return
+        val manager = covers ?: return
+        _state.update { it.copy(coverPicker = it.coverPicker.copy(saving = true)) }
+        viewModelScope.launch { finishCover(manager.choose(workId, url)) }
+    }
+
+    fun importCover(uri: android.net.Uri) {
+        val workId = _state.value.opened?.workId ?: return
+        val manager = covers ?: return
+        _state.update { it.copy(coverPicker = it.coverPicker.copy(saving = true)) }
+        viewModelScope.launch { finishCover(manager.import(workId, uri)) }
+    }
+
+    private fun finishCover(result: BookCoverManager.Result) {
+        val ok = result is BookCoverManager.Result.Changed || result is BookCoverManager.Result.ChangedOnDevice
+        _state.update {
+            it.copy(
+                coverPicker = it.coverPicker.copy(saving = false),
+                sheet = if (ok) BookSheet.None else it.sheet,
+            )
+        }
+        notice(
+            when (result) {
+                is BookCoverManager.Result.Changed ->
+                    if (result.coverUrl.startsWith("collection-attachment://")) BookNoticeKind.CoverImported else BookNoticeKind.CoverChanged
+                is BookCoverManager.Result.ChangedOnDevice -> BookNoticeKind.CoverImportedLocal
+                else -> BookNoticeKind.CoverFailed
+            },
+        )
+    }
 
     init {
         load(sourceId, key)
@@ -122,7 +242,14 @@ class BookDetailsViewModel(
             }
             val opened = repository.saveOpened(source, details)
             val progress = repository.progress(opened.narrationId)
-            _state.update { it.copy(loading = false, details = details, opened = opened, progress = progress) }
+            // Автор и чтец — как их поправил пользователь, а не как написал сайт.
+            val shown = details.copy(book = repository.withPeople(opened, details.book))
+            _state.update { it.copy(loading = false, details = shown, opened = opened, progress = progress) }
+            // Обложка живёт в БД: смена из меню и находка из каталогов видны здесь сразу.
+            coverJob?.cancel()
+            coverJob = viewModelScope.launch {
+                repository.coverUrl(opened.workId).collect { url -> _state.update { it.copy(cover = url) } }
+            }
             // Сайт обложки не дал — ищем в каталогах; находка ложится в произведение и видна на полках.
             if (coverFinder != null && repository.coverInfo(opened.workId)?.coverUrl.isNullOrBlank()) {
                 launch {
@@ -197,4 +324,28 @@ data class BookDetailsState(
     val launching: Boolean = false,
     val launchFailed: Boolean = false,
     val work: BookWorkInfo? = null,
+    /** Обложка произведения из базы: после смены из меню она важнее той, что отдал сайт. */
+    val cover: String? = null,
+    val sheet: BookSheet = BookSheet.None,
+    val coverPicker: CoverPicker = CoverPicker(),
+    val notice: BookNotice? = null,
 )
+
+/** Какая шторка меню «⋯» открыта. */
+enum class BookSheet { None, People, Cover }
+
+/** Список обложек для выбора: [items] с подписями, [query] — то, что искал пользователь. */
+data class CoverPicker(
+    val items: List<CoverOption> = emptyList(),
+    val loading: Boolean = false,
+    val saving: Boolean = false,
+    val query: String = "",
+)
+
+enum class BookNoticeKind {
+    PeopleSaved, ListenedMarked, ListenedCleared, CoverChanged, CoverImported, CoverImportedLocal, CoverFailed,
+    NoOtherSource, SwitchedSource,
+}
+
+/** Короткое сообщение под меню; [seq] отличает повтор того же сообщения от старого. */
+data class BookNotice(val kind: BookNoticeKind, val arg: String, val seq: Int)

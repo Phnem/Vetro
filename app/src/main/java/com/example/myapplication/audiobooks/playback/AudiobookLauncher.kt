@@ -93,7 +93,8 @@ class AudiobookLauncher(
         }
         val opened = repository.saveOpened(source, details)
         val manifest = runCatching { resolver.manifest(opened.variantId) }.getOrElse { return Result.Unavailable }
-        val d = details.book
+        // Автор и чтец — как их поправил пользователь, а не как написал сайт.
+        val d = repository.withPeople(opened, details.book)
         return runCatching {
             start(opened, manifest, d.title, d.authors.joinToString(", "), d.narrators.joinToString(", "), d.coverUrl,
                 startFraction, startGlobalMs, startChapter)

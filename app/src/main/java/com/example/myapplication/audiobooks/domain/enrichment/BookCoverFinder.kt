@@ -6,6 +6,7 @@ import com.example.myapplication.network.LookupResult
 import com.example.myapplication.network.enrichment.GoogleBooksClient
 import com.example.myapplication.network.enrichment.ITunesClient
 import com.example.myapplication.network.enrichment.OpenLibraryClient
+import com.example.myapplication.network.ids.WikidataClient
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.coroutines.coroutineContext
 import kotlinx.coroutines.CancellationException
@@ -20,6 +21,9 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
+
+/** Обложка в списке ручного выбора; [caption] — что это за книга (пусто у находок по названию). */
+data class CoverOption(val url: String, val caption: String)
 
 /**
  * Поиск обложки книги там, где сам сайт-источник её не дал (у части сайтов обложки нет вовсе, а у
@@ -44,6 +48,7 @@ class BookCoverFinder(
     private val itunes: ITunesClient,
     private val alternatives: BookTitleAlternatives,
     private val client: OkHttpClient,
+    private val wikidata: WikidataClient,
 ) {
     private class Cached(val at: Long, val urls: List<String>)
 
@@ -81,6 +86,77 @@ class BookCoverFinder(
         if (url == null) misses[key] = System.currentTimeMillis()
         return url
     }
+
+    /**
+     * Обложки для ручного выбора, когда автоматика промолчала. Строго по названию здесь не
+     * фильтруем — выбирает человек, ему нужны и неточные находки с подписью:
+     *  1. то, что подошло по названию (как в [candidates]) — если [query] пуст;
+     *  2. каталоги по запросу пользователя ([query]): можно вписать английское название;
+     *  3. другие книги автора — когда название не перевести («Все эти миры» ↔ «All These Worlds»),
+     *     нужная книга всё равно оказывается среди его работ.
+     */
+    suspend fun options(title: String, authors: List<String>, query: String? = null): List<CoverOption> = coroutineScope {
+        val typed = query?.trim().orEmpty()
+        val matched = async {
+            if (typed.isEmpty()) candidates(title, authors).map { CoverOption(it, "") } else emptyList()
+        }
+        val fromQuery = async { if (typed.isEmpty()) emptyList() else guarded { catalogueOptions(typed) } }
+        val byAuthor = async { guarded { authorOptions(authors) } }
+        (matched.await() + fromQuery.await() + byAuthor.await()).distinctBy { it.url }
+    }
+
+    /** Все каталоги по произвольному запросу, без сверки названия; подпись — название и автор находки. */
+    private suspend fun catalogueOptions(query: String): List<CoverOption> = coroutineScope {
+        val apple = async {
+            guarded {
+                listOf("us", "ru").flatMap { country ->
+                    (itunes.audiobooks(query, country) as? LookupResult.Found)?.value.orEmpty()
+                        .mapNotNull { r -> r.artworkUrl?.let { CoverOption(it, caption(r.title, r.author)) } }
+                }
+            }
+        }
+        val openLib = async {
+            guarded {
+                (openLibrary.searchWorks(query, OPTION_LIMIT) as? LookupResult.Found)?.value.orEmpty().mapNotNull { w ->
+                    (w.matchedEdition?.coverIds?.firstOrNull() ?: w.coverId)
+                        ?.let { CoverOption(OpenLibraryClient.coverUrl(it), caption(w.title, w.authors.firstOrNull())) }
+                }
+            }
+        }
+        val google = async {
+            guarded {
+                (googleBooks.search(query, null) as? LookupResult.Found)?.value.orEmpty().mapNotNull { v ->
+                    v.thumbnail?.let { CoverOption(it.replace("&edge=curl", ""), caption(v.title, v.authors.firstOrNull())) }
+                }
+            }
+        }
+        openLib.await() + apple.await() + google.await()
+    }
+
+    /**
+     * Работы автора из Open Library. Автор по-русски → латинская подпись из Wikidata («Деннис
+     * Тейлор» → «Dennis E. Taylor»): так находится человек, а не однофамилец-снукерист.
+     */
+    private suspend fun authorOptions(authors: List<String>): List<CoverOption> {
+        val author = authors.firstOrNull()?.trim()?.takeIf { it.isNotEmpty() } ?: return emptyList()
+        val names = if (author.hasCyrillic()) {
+            (wikidata.authorNames(author, "ru") as? LookupResult.Found)?.value.orEmpty()
+        } else {
+            listOf(author)
+        }
+        return names.take(2).flatMap { name ->
+            val wanted = WorkMatch.words(listOf(name))
+            (openLibrary.searchWorks(name, OPTION_LIMIT) as? LookupResult.Found)?.value.orEmpty()
+                .filter { w -> WorkMatch.words(w.authors).any(wanted::contains) }
+                .mapNotNull { w ->
+                    (w.matchedEdition?.coverIds?.firstOrNull() ?: w.coverId)
+                        ?.let { CoverOption(OpenLibraryClient.coverUrl(it), caption(w.title, w.authors.firstOrNull())) }
+                }
+        }
+    }
+
+    private fun caption(title: String, author: String?): String =
+        listOfNotNull(title.takeIf { it.isNotBlank() }, author?.takeIf { it.isNotBlank() }).joinToString(" — ")
 
     /** Адрес отдаёт непустую картинку. */
     suspend fun isImage(url: String): Boolean = withContext(Dispatchers.IO) {
@@ -164,6 +240,7 @@ class BookCoverFinder(
     private fun String.isHttp() = startsWith("http://") || startsWith("https://")
 
     private companion object {
+        const val OPTION_LIMIT = 12
         const val SOURCE_TIMEOUT_MS = 8_000L
         /** Дольше этого одна ветка не задерживает остальные в [first]. */
         const val BRANCH_WAIT_MS = 6_000L

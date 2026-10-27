@@ -88,6 +88,24 @@ class WikidataClient(
         ).parse { WikidataParser.englishLabels(it, ids).takeIf(List<String>::isNotEmpty) }
     }
 
+    /**
+     * Латинские подписи писателей, которых на языке [lang] зовут [name] («Деннис Тейлор» →
+     * «Dennis E. Taylor»). Берутся только записи, описанные как писатель/автор: однофамильцев-
+     * футболистов в выдаче больше, чем писателей.
+     */
+    suspend fun authorNames(name: String, lang: String): LookupResult<List<String>> {
+        val clean = name.trim()
+        if (clean.isEmpty()) return LookupResult.NoMatch
+        val encoded = URLEncoder.encode(clean, "UTF-8")
+        return http.text(
+            provider = "Wikidata",
+            url = "$API?action=wbsearchentities&search=$encoded&language=$lang&uselang=en&type=item&limit=8&format=json",
+            rate = rate,
+            policy = CachePolicy("wikidata:author:$lang:${clean.lowercase()}", 30 * CacheTtl.DAY, negativeTtlMs = 3 * CacheTtl.DAY),
+            configure = { header("Accept", "application/json") },
+        ).parse { WikidataParser.writerLabels(it).takeIf(List<String>::isNotEmpty) }
+    }
+
     private suspend fun run(cacheKey: String, match: String): LookupResult<List<WikidataEntity>> {
         val query = buildQuery(match)
         val url = "$SPARQL?format=json&query=" + URLEncoder.encode(query, "UTF-8")
@@ -171,6 +189,19 @@ internal object WikidataParser {
             id.takeIf { BOOK_DESCRIPTION.containsMatchIn(description) }
         }.take(4)
     }
+
+    /** Подписи записей поиска, описанных как писатель, поэт, автор. */
+    fun writerLabels(body: String): List<String> {
+        val hits = EnrichmentJson.parseToJsonElement(body).jsonObject["search"] as? JsonArray ?: return emptyList()
+        return hits.mapNotNull { element ->
+            val o = element as? JsonObject ?: return@mapNotNull null
+            val description = (o["description"] as? JsonPrimitive)?.contentOrNull.orEmpty()
+            val label = (o["label"] as? JsonPrimitive)?.contentOrNull?.trim().orEmpty()
+            label.takeIf { it.isNotEmpty() && WRITER_DESCRIPTION.containsMatchIn(description) }
+        }.distinct().take(3)
+    }
+
+    private val WRITER_DESCRIPTION = Regex("(?i)(писател|поэт|автор|драматург|novelist|writer|author|poet|playwright)")
 
     /** Английские подписи записей в порядке [ids]; записи без подписи пропускаются. */
     fun englishLabels(body: String, ids: List<String>): List<String> {

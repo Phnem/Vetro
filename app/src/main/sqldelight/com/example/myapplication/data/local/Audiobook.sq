@@ -139,6 +139,18 @@ UPDATE audiobook_work
 SET cover_url = :coverUrl, cover_palette_json = NULL, cover_blurhash = NULL, updated_at = :updatedAt
 WHERE work_id = :workId;
 
+-- Имена, исправленные пользователем: автор и его отпечаток (по нему книга находит свою полку и
+-- свои копии у других сайтов). updated_at двигается, чтобы правка ушла в облако.
+setWorkAuthors:
+UPDATE audiobook_work
+SET authors_json = :authorsJson, cluster_fingerprint = :fingerprint, updated_at = :updatedAt
+WHERE work_id = :workId;
+
+setNarrationNarrators:
+UPDATE audiobook_narration
+SET narrators_json = :narratorsJson, cluster_fingerprint = :fingerprint
+WHERE narration_id = :narrationId;
+
 workById:
 SELECT * FROM audiobook_work WHERE work_id = ?;
 

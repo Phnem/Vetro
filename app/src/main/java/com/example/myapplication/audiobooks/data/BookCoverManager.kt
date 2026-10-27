@@ -5,6 +5,7 @@ import android.graphics.BitmapFactory
 import android.net.Uri
 import android.util.Log
 import com.example.myapplication.audiobooks.domain.enrichment.BookCoverFinder
+import com.example.myapplication.audiobooks.domain.enrichment.CoverOption
 import com.example.myapplication.audiobooks.domain.model.WorkId
 import com.example.myapplication.sync.supabase.AttachmentSyncManager
 import kotlinx.coroutines.Dispatchers
@@ -64,6 +65,27 @@ class BookCoverManager(
         repository.setCover(workId, next)
         release(info.coverUrl)
         Result.Changed(next)
+    }
+
+    /**
+     * Обложки для ручного выбора: то, что подошло по названию, результаты по запросу пользователя
+     * ([query] — можно вписать английское название) и другие книги автора.
+     */
+    suspend fun options(workId: WorkId, query: String? = null): List<CoverOption> = withContext(Dispatchers.IO) {
+        val info = repository.coverInfo(workId) ?: return@withContext emptyList()
+        runCatching { finder.options(info.title, info.authors, query) }
+            .onFailure { Log.w(TAG, "cover options failed: ${it.message}") }
+            .getOrDefault(emptyList())
+    }
+
+    /** Выбранная из списка обложка: проверяем, что адрес открывается, и записываем. */
+    suspend fun choose(workId: WorkId, url: String): Result = withContext(Dispatchers.IO) {
+        val previous = repository.coverInfo(workId)?.coverUrl
+        if (url == previous) return@withContext Result.Changed(url)
+        if (!finder.isImage(url)) return@withContext Result.Failed
+        repository.setCover(workId, url)
+        release(previous, keep = url)
+        Result.Changed(url)
     }
 
     /** Обложка из файла пользователя: сжатие, загрузка в облако, запись в `cover_url`. */
