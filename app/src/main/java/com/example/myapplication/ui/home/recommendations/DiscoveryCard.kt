@@ -52,6 +52,15 @@ data class RecommendationsStrings(
     val skipHint: String,
     val similarToPrefix: String,
     val emptyMessage: String,
+    val approvedLabel: String,
+    val rejectedLabel: String,
+    val undoAction: String,
+    val caughtUpTitle: String,
+    val caughtUpBody: String,
+    val loadMoreAction: String,
+    val typeAnime: String,
+    val typeMovie: String,
+    val typeSeries: String,
 )
 
 fun getRecommendationsStrings(language: AppLanguage): RecommendationsStrings = when (language) {
@@ -64,9 +73,18 @@ fun getRecommendationsStrings(language: AppLanguage): RecommendationsStrings = w
         sheetTitle = "Рекомендации",
         addAction = "В коллекцию",
         addedLabel = "Добавлено",
-        skipHint = "Свайп вниз — следующий тайтл",
+        skipHint = "Вверх — нравится, вниз — не интересно",
         similarToPrefix = "Похоже на",
         emptyMessage = "Не удалось собрать рекомендации.\nПроверь подключение к сети.",
+        approvedLabel = "Нравится",
+        rejectedLabel = "Не интересно",
+        undoAction = "Отменить",
+        caughtUpTitle = "Это всё на сейчас",
+        caughtUpBody = "Подборка уточняется по твоим оценкам.",
+        loadMoreAction = "Показать ещё",
+        typeAnime = "Аниме",
+        typeMovie = "Фильм",
+        typeSeries = "Сериал",
     )
     AppLanguage.EN -> RecommendationsStrings(
         overline = "RECOMMENDED FOR YOU",
@@ -77,9 +95,18 @@ fun getRecommendationsStrings(language: AppLanguage): RecommendationsStrings = w
         sheetTitle = "Recommendations",
         addAction = "Add to collection",
         addedLabel = "Added",
-        skipHint = "Swipe down for next title",
+        skipHint = "Swipe up to like, down to skip",
         similarToPrefix = "Similar to",
         emptyMessage = "Couldn't build recommendations.\nCheck your connection.",
+        approvedLabel = "Liked",
+        rejectedLabel = "Not interested",
+        undoAction = "Undo",
+        caughtUpTitle = "That's all for now",
+        caughtUpBody = "Picks sharpen with every rating.",
+        loadMoreAction = "Show more",
+        typeAnime = "Anime",
+        typeMovie = "Movie",
+        typeSeries = "Series",
     )
 }
 

@@ -10,6 +10,7 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -29,6 +30,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -38,6 +40,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -61,14 +64,22 @@ import coil3.request.ImageRequest
 import coil3.request.crossfade
 import coil3.size.Size
 import com.example.myapplication.data.repository.GenreRepository
+import com.example.myapplication.domain.recommendations.ContentType
+import com.example.myapplication.domain.recommendations.FeedbackVerdict
 import com.example.myapplication.domain.recommendations.RecommendationItem
 import com.example.myapplication.ui.shared.theme.isAppInDarkTheme
 import com.example.myapplication.network.AppLanguage
 import com.example.myapplication.ui.shared.components.GrabberHandle
+import com.example.myapplication.ui.shared.components.SwipeDeckController
+import com.example.myapplication.ui.shared.components.SwipeFeedback
+import com.example.myapplication.ui.shared.components.SwipeVerdict
 import com.example.myapplication.ui.shared.components.SwipeableCardDeck
+import com.example.myapplication.ui.shared.components.rememberSwipeDeckController
 import com.example.myapplication.ui.shared.components.rememberIosSheetSwipe
 import com.example.myapplication.ui.shared.fluidClickable
+import com.example.myapplication.ui.shared.theme.BrandDeepRed
 import com.example.myapplication.ui.shared.theme.BrandOrange
+import com.example.myapplication.ui.shared.theme.StatusSuccess
 import com.example.myapplication.ui.shared.theme.IosDesign
 import com.example.myapplication.ui.shared.theme.MotionTokens
 import com.example.myapplication.ui.shared.theme.OverlayThemeTokens
@@ -93,6 +104,10 @@ fun RecommendationsSheet(
     language: AppLanguage,
     genreRepository: GenreRepository,
     onAdd: (RecommendationItem) -> Unit,
+    /** Оценка свайпом: вверх — нравится, вниз — не интересно. */
+    onRate: (RecommendationItem, FeedbackVerdict) -> Unit,
+    onUndoRate: (RecommendationItem) -> Unit,
+    onLoadMore: () -> Unit,
     onDismiss: () -> Unit,
 ) {
     val isDark = isAppInDarkTheme()
@@ -175,6 +190,9 @@ fun RecommendationsSheet(
                             genreRepository = genreRepository,
                             isDark = isDark,
                             onAdd = onAdd,
+                            onRate = onRate,
+                            onUndoRate = onUndoRate,
+                            onLoadMore = onLoadMore,
                         )
                         is RecommendationsUiState.Loading -> Box(
                             modifier = Modifier.fillMaxWidth().height(360.dp),
@@ -209,6 +227,9 @@ private fun SheetContent(
     genreRepository: GenreRepository,
     isDark: Boolean,
     onAdd: (RecommendationItem) -> Unit,
+    onRate: (RecommendationItem, FeedbackVerdict) -> Unit,
+    onUndoRate: (RecommendationItem) -> Unit,
+    onLoadMore: () -> Unit,
 ) {
     Column(modifier = Modifier.fillMaxWidth()) {
         // Заголовок
@@ -230,24 +251,154 @@ private fun SheetContent(
             )
         }
 
-        CardDeck(
-            items = state.items,
-            addedKeys = state.addedKeys,
-            strings = strings,
-            language = language,
-            genreRepository = genreRepository,
-            onAdd = onAdd,
-            modifier = Modifier.fillMaxWidth()
-        )
+        val controller = rememberSwipeDeckController()
+        // Состояние привязано к списку: новый список (пересчёт/«Показать ещё») — новая колода.
+        var deckEmpty by remember(state.items) { mutableStateOf(state.items.isEmpty()) }
+        val verdicts = remember(state.items) { mutableStateListOf<SwipeVerdict>() }
 
+        Box(modifier = Modifier.fillMaxWidth()) {
+            CardDeck(
+                items = state.items,
+                addedKeys = state.addedKeys,
+                strings = strings,
+                language = language,
+                genreRepository = genreRepository,
+                onAdd = onAdd,
+                controller = controller,
+                onVerdict = { item, verdict ->
+                    verdicts += verdict
+                    onRate(
+                        item,
+                        if (verdict == SwipeVerdict.Approve) FeedbackVerdict.APPROVED else FeedbackVerdict.DISAPPROVED,
+                    )
+                },
+                onUndo = { item, _ ->
+                    verdicts.removeLastOrNull()
+                    onUndoRate(item)
+                },
+                onEmptyChanged = { deckEmpty = it },
+                modifier = Modifier.fillMaxWidth()
+            )
+            if (deckEmpty) {
+                CaughtUpPanel(
+                    strings = strings,
+                    isLoading = state.isRefreshing,
+                    onLoadMore = onLoadMore,
+                    modifier = Modifier.matchParentSize(),
+                )
+            }
+        }
+
+        val lastVerdict = verdicts.lastOrNull()
+        if (lastVerdict != null) {
+            UndoRow(
+                strings = strings,
+                verdict = lastVerdict,
+                onUndo = { controller.undo() },
+                modifier = Modifier
+                    .align(Alignment.CenterHorizontally)
+                    .padding(top = 8.dp, bottom = 16.dp),
+            )
+        } else {
+            Text(
+                text = strings.skipHint,
+                fontFamily = SnProFamily,
+                fontSize = 12.sp,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f),
+                modifier = Modifier
+                    .align(Alignment.CenterHorizontally)
+                    .padding(top = 8.dp, bottom = 16.dp),
+            )
+        }
+    }
+}
+
+/** Последний вердикт и «Отменить»: свайп необратим сам по себе, поэтому откат всегда под рукой. */
+@Composable
+private fun UndoRow(
+    strings: RecommendationsStrings,
+    verdict: SwipeVerdict,
+    onUndo: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val approved = verdict == SwipeVerdict.Approve
+    Row(
+        modifier = modifier,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            imageVector = if (approved) Icons.Rounded.Check else Icons.Rounded.Close,
+            contentDescription = null,
+            tint = if (approved) StatusSuccess else BrandDeepRed,
+            modifier = Modifier.size(16.dp),
+        )
+        Spacer(Modifier.width(6.dp))
         Text(
-            text = strings.skipHint,
+            text = if (approved) strings.approvedLabel else strings.rejectedLabel,
             fontFamily = SnProFamily,
+            fontWeight = FontWeight.SemiBold,
             fontSize = 12.sp,
-            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f),
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+        )
+        Spacer(Modifier.width(12.dp))
+        Text(
+            text = strings.undoAction,
+            fontFamily = SnProFamily,
+            fontWeight = FontWeight.Bold,
+            fontSize = 12.sp,
+            color = BrandOrange,
             modifier = Modifier
-                .align(Alignment.CenterHorizontally)
-                .padding(top = 8.dp, bottom = 16.dp),
+                .clip(CircleShape)
+                .fluidClickable { onUndo() }
+                .padding(horizontal = 8.dp, vertical = 4.dp),
+        )
+    }
+}
+
+/** Колода пуста: оценённое не возвращается, пока пул не пополнится с учётом оценок. */
+@Composable
+private fun CaughtUpPanel(
+    strings: RecommendationsStrings,
+    isLoading: Boolean,
+    onLoadMore: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier.padding(horizontal = 32.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        if (isLoading) {
+            CircularProgressIndicator(color = BrandOrange)
+            return@Column
+        }
+        Text(
+            text = strings.caughtUpTitle,
+            fontFamily = SnProFamily,
+            fontWeight = FontWeight.Bold,
+            fontSize = 20.sp,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        Spacer(Modifier.height(6.dp))
+        Text(
+            text = strings.caughtUpBody,
+            fontFamily = SnProFamily,
+            fontSize = 13.sp,
+            lineHeight = 18.sp,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+        )
+        Spacer(Modifier.height(16.dp))
+        Text(
+            text = strings.loadMoreAction,
+            fontFamily = SnProFamily,
+            fontWeight = FontWeight.SemiBold,
+            fontSize = 14.sp,
+            color = Color.White,
+            modifier = Modifier
+                .clip(CircleShape)
+                .background(BrandOrange)
+                .fluidClickable { onLoadMore() }
+                .padding(horizontal = 20.dp, vertical = 10.dp),
         )
     }
 }
@@ -265,13 +416,29 @@ private fun CardDeck(
     language: AppLanguage,
     genreRepository: GenreRepository,
     onAdd: (RecommendationItem) -> Unit,
+    controller: SwipeDeckController,
+    onVerdict: (RecommendationItem, SwipeVerdict) -> Unit,
+    onUndo: (RecommendationItem, SwipeVerdict) -> Unit,
+    onEmptyChanged: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val view = LocalView.current
+    // Вверх — зелёный (как «просмотрено»), вниз — красный из брендового градиента.
+    val feedback = SwipeFeedback(
+        controller = controller,
+        approveColor = StatusSuccess,
+        rejectColor = BrandDeepRed,
+        approveIcon = Icons.Rounded.Check,
+        rejectIcon = Icons.Rounded.Close,
+        onVerdict = onVerdict,
+        onUndo = onUndo,
+        onEmptyChanged = onEmptyChanged,
+    )
     SwipeableCardDeck(
         items = items,
         key = { it.key },
         modifier = modifier,
+        feedback = feedback,
     ) { card, isTop ->
         SwipeCardContent(
             card = card,
@@ -363,6 +530,31 @@ private fun BoxScope.SwipeCardContent(
                     color = Color.White,
                 )
             }
+        }
+
+        // Тип контента: в смешанной колоде аниме, фильмы и сериалы идут вперемешку.
+        AnimatedVisibility(
+            visible = isTop,
+            enter = infoEnter,
+            exit = infoExit,
+            modifier = Modifier.align(Alignment.TopEnd)
+        ) {
+            Text(
+                text = when (card.contentType) {
+                    ContentType.ANIME -> strings.typeAnime
+                    ContentType.MOVIE -> strings.typeMovie
+                    ContentType.TV -> strings.typeSeries
+                },
+                fontFamily = SnProFamily,
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 11.sp,
+                color = Color.White,
+                modifier = Modifier
+                    .padding(14.dp)
+                    .clip(CircleShape)
+                    .background(Color.Black.copy(alpha = 0.45f))
+                    .padding(horizontal = 10.dp, vertical = 5.dp),
+            )
         }
 
         AnimatedVisibility(

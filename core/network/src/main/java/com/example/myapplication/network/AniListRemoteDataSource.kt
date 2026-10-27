@@ -409,7 +409,10 @@ class AniListRemoteDataSource(
             mediaList.mapNotNull { seed ->
                 val seedId = seed.id ?: return@mapNotNull null
                 val recs = seed.recommendations?.nodes
-                    ?.mapNotNull { node -> node?.mediaRecommendation?.toApiSearchResult() }
+                    ?.mapNotNull { node ->
+                        // rating связи = голоса пользователей AniList «эти два тайтла похожи»; раньше терялся.
+                        node?.mediaRecommendation?.toApiSearchResult()?.copy(linkWeight = node.rating)
+                    }
                     .orEmpty()
                 seedId to recs
             }.toMap()

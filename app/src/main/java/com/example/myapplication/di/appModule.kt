@@ -12,6 +12,12 @@ import com.example.myapplication.data.repository.AppUpdateRepository
 import com.example.myapplication.data.repository.GenreRepository
 import com.example.myapplication.data.local.CoverDescriptorCacheStore
 import com.example.myapplication.data.local.RecommendationCacheStore
+import com.example.myapplication.data.local.RecommendationFeedbackStore
+import com.example.myapplication.data.local.RecommendationFlagsStore
+import com.example.myapplication.domain.recommendations.AnimeGraphProvider
+import com.example.myapplication.domain.recommendations.TasteDiveCandidateProvider
+import com.example.myapplication.domain.recommendations.TmdbCandidateProvider
+import com.example.myapplication.domain.recommendations.TraktCandidateProvider
 import com.example.myapplication.domain.inspect.InspectImageUseCase
 import com.example.myapplication.domain.recommendations.CoverDescriptorProvider
 import com.example.myapplication.domain.recommendations.RecommendationEngine
@@ -594,6 +600,7 @@ val appModule = module {
     single<AnimeNotifier> { AnimeNotifierImpl(context = androidContext()) }
     single<MangaNotifier> { MangaNotifierImpl(context = androidContext()) }
     single { RecommendationCacheStore(androidContext()) }
+    single { RecommendationFeedbackStore(androidContext()) }
     single { CoverDescriptorCacheStore(androidContext()) }
     single {
         CoverDescriptorProvider(
@@ -632,14 +639,25 @@ val appModule = module {
             appScope = get<com.example.myapplication.AppScope>(),
         )
     }
+    single { RecommendationFlagsStore(get(named("settings"))) }
     single {
+        val flags = get<RecommendationFlagsStore>()
         RecommendationEngine(
-            apiService = get(),
             localDataSource = get(),
             genreRepository = get(),
             cache = get(),
+            feedbackStore = get(),
             coverDescriptorProvider = get(),
             imageStorageRepository = get(),
+            // VETRO-TAIL[rec-source]: новый источник рекомендаций — класс CandidateProvider и строка здесь.
+            // Выключенные флагом/ключом провайдеры молча пропускаются (isEnabled).
+            providers = listOf(
+                AnimeGraphProvider(get()),
+                TmdbCandidateProvider(get()),
+                TraktCandidateProvider(get(), get()),
+                TasteDiveCandidateProvider(get(), get()),
+            ),
+            flagsSource = { flags.current() },
         )
     }
 }

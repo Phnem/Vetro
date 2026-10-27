@@ -66,4 +66,11 @@ data class ApiSearchResult(
     val titleRu: String? = null,
     /** TMDB/Kinopoisk id-пара для MOVIE/SERIES результатов. Пусто у аниме/манга-источников. */
     val externalIds: ExternalIds = ExternalIds(),
+    /**
+     * Сила связи «сид → этот кандидат» в сыром виде источника (AniList: число голосов за связь
+     * recommendations.rating). null = источник силу связи не отдаёт. Нужна рекомендациям.
+     */
+    val linkWeight: Int? = null,
+    /** Число голосов за рейтинг (TMDB vote_count). null = источник не сообщил; нужно для Bayesian-сглаживания. */
+    val voteCount: Int? = null,
 )

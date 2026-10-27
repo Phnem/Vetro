@@ -12,6 +12,12 @@ data class PoolEntry(
     val seedTitle: String,
     /** Пользовательский рейтинг сида (0..10); 0 — сид не оценён. */
     val seedRating: Float,
+    val contentType: ContentType = ContentType.ANIME,
+    /** Типизированный ключ сида (`ANIME:anilist:1`): два API про один тайтл от одного сида — одно подтверждение. */
+    val seedKey: String? = null,
+    val signal: SignalKind = SignalKind.RECOMMENDATION,
+    /** Позиция в выдаче источника по этому сиду (0 — первая). */
+    val rank: Int? = null,
 )
 
 /**
@@ -30,6 +36,8 @@ class RecommendationScorer(
      * RU → "Shikimori" (русские названия), EN → "AniList".
      */
     private val preferredSource: String? = null,
+    /** Доверие к сиду −1..1 по свайпам пользователя (см. [FeedbackSignals.seedTrust]); ключ — название сида. */
+    private val seedTrust: Map<String, Float> = emptyMap(),
 ) {
 
     /** Агрегирует дубли между сидами/источниками и возвращает отсортированный топ. */
@@ -81,7 +89,18 @@ class RecommendationScorer(
 
         val seedBoost = (entries.maxOf { it.seedRating } / 10f) * SEED_WEIGHT
 
-        return genreScore + coOccurrence + ratingBoost + seedBoost
+        return genreScore + coOccurrence + ratingBoost + seedBoost + seedFeedbackBoost(entries)
+    }
+
+    /**
+     * Среднее доверие к сидам, из графов которых пришёл кандидат: если пользователь чаще одобряет
+     * рекомендации «по» этому сиду, его кандидаты поднимаются, если отклоняет — опускаются.
+     */
+    private fun seedFeedbackBoost(entries: List<PoolEntry>): Float {
+        if (seedTrust.isEmpty()) return 0f
+        val trusts = entries.map { it.seedTitle }.distinct().mapNotNull { seedTrust[it] }
+        if (trusts.isEmpty()) return 0f
+        return trusts.average().toFloat() * FEEDBACK_SEED_WEIGHT
     }
 
     /**
@@ -159,5 +178,6 @@ class RecommendationScorer(
         const val COOCCURRENCE_CAP = 0.5f
         const val RATING_WEIGHT = 0.15f
         const val SEED_WEIGHT = 0.1f
+        const val FEEDBACK_SEED_WEIGHT = 0.15f
     }
 }

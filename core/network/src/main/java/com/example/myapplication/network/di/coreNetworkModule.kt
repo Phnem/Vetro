@@ -153,6 +153,7 @@ val coreNetworkModule = module {
     single { RemangaRemoteDataSource(get<HttpClient>()) }
     single { MangaDexRemoteDataSource(get<HttpClient>(), get(RATE_MANGADEX)) }
     single { TmdbRemoteDataSource(get<HttpClient>()) }
+    single { com.example.myapplication.network.trakt.TraktRemoteDataSource(get<HttpClient>()) }
     single { KinopoiskRemoteDataSource(get<HttpClient>()) }
     single { MovieSeriesRepository(get<TmdbRemoteDataSource>(), get<KinopoiskRemoteDataSource>()) }
     /**

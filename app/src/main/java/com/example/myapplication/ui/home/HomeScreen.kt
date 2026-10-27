@@ -1550,7 +1550,13 @@ fun HomeScreen(
                 language = currentLanguage,
                 genreRepository = genreRepository,
                 onAdd = { item -> recommendationsViewModel.addToCollection(item) },
-                onDismiss = { showRecsSheet = false },
+                onRate = { item, verdict -> recommendationsViewModel.rate(item, verdict) },
+                onUndoRate = { item -> recommendationsViewModel.undoRate(item) },
+                onLoadMore = { recommendationsViewModel.loadMore() },
+                onDismiss = {
+                    showRecsSheet = false
+                    recommendationsViewModel.onSheetClosed()
+                },
             )
         }
 

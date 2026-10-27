@@ -61,6 +61,9 @@ SUPABASE_ANON_KEY=
 #   Fanart.tv (логотипы, фоны): https://fanart.tv/get-an-api-key/
 #   NYT Books: https://developer.nytimes.com/get-started
 #   TasteDive: https://tastedive.com/read/api
+#   Trakt (второй related-граф фильмов/сериалов, по флагу в рекомендациях):
+#     https://trakt.tv/oauth/applications → Client ID (нужен верифицированный GitHub-аккаунт)
+TRAKT_CLIENT_ID=
 OPENSUBTITLES_API_KEY=
 OMDB_API_KEY=
 YOUTUBE_API_KEY=

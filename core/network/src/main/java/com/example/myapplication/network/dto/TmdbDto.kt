@@ -21,6 +21,10 @@ data class TmdbSearchResultDto(
     @SerialName("vote_average") val voteAverage: Double? = null,
     @SerialName("release_date") val releaseDate: String? = null,
     @SerialName("first_air_date") val firstAirDate: String? = null,
+    /** Только в списках (recommendations/similar/trending/discover); поиск их не отдаёт. */
+    @SerialName("genre_ids") val genreIds: List<Int> = emptyList(),
+    @SerialName("vote_count") val voteCount: Int? = null,
+    val popularity: Double? = null,
 )
 
 @Serializable

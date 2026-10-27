@@ -16,6 +16,7 @@ grep -rn "VETRO-TAIL\[" app core --include=*.kt
 | `stream-provider` | Легальный источник кино/сериалов | Класс `MovieSeriesStreamingProvider` + строка в `movieSeriesSources` (`appModule`), порядок = приоритет |
 | `connection-type` | Новый способ подключения источников (карточка + страница в панели «Дополнительные источники») | Объект `ConnectionType` и строка в `ConnectionTypes` (`ui/settings/ConnectionTypes.kt`). Только протокол или описание (JSON/HTTP), без загрузки чужого кода в приложение |
 | `manga-source` | Источник манги | Класс `MangaSource` + строка в списке `MangaSourceEngine` (`appModule`) |
+| `rec-source` | Источник кандидатов рекомендаций (аниме, фильмы, сериалы) | Класс `CandidateProvider` (`domain/recommendations/CandidateProvider.kt`) + строка в `providers` у `RecommendationEngine` (`appModule`). Флаг в `RecommendationFlags`, статус и условия — `docs/recommendations/sources.md` |
 
 Правила хвоста:
 - новый источник только дополняет, не перезаписывает уже найденное;

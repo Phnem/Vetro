@@ -383,6 +383,17 @@ class TasteDiveClient(
     }
 }
 
+/** Мультисид-запрос: один вызов по нескольким любимым названиям (`q=movie:A,movie:B`) → общие «похожие». */
+suspend fun TasteDiveClient.similarMany(
+    names: List<String>,
+    of: TasteType,
+    limit: Int = 20,
+): LookupResult<List<TasteItem>> {
+    // `similar` сам ставит префикс типа перед первым названием, поэтому остальным добавляем его в разделителе.
+    val joined = names.filter { it.isNotBlank() }.take(8).joinToString(",${of.param}:")
+    return similar(joined, of, want = of, limit = limit)
+}
+
 internal object TasteDiveParser {
     fun results(body: String): List<TasteItem> {
         val root = EnrichmentJson.parseToJsonElement(body).jsonObject

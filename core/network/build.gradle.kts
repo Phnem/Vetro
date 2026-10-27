@@ -66,6 +66,12 @@ android {
             "NYT_API_KEY",
             "\"${localProperties.getProperty("NYT_API_KEY", "")}\""
         )
+        // Trakt Client ID (публичные /related без OAuth). Пустой — источник выключен.
+        buildConfigField(
+            "String",
+            "TRAKT_CLIENT_ID",
+            "\"${localProperties.getProperty("TRAKT_CLIENT_ID", "")}\""
+        )
         buildConfigField(
             "String",
             "TASTEDIVE_API_KEY",

@@ -6,14 +6,21 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.myapplication.data.local.AnimeLocalDataSource
+import com.example.myapplication.domain.recommendations.ContentMixResolver
+import com.example.myapplication.domain.recommendations.ContentType
+import com.example.myapplication.domain.recommendations.FeedbackVerdict
+import com.example.myapplication.domain.recommendations.Quota
+import com.example.myapplication.domain.recommendations.QuotaAllocator
 import com.example.myapplication.domain.recommendations.RecommendationEngine
 import com.example.myapplication.domain.recommendations.RecommendationItem
 import com.example.myapplication.domain.recommendations.RecommendationsSnapshot
 import com.example.myapplication.domain.search.AddFromApiUseCase
 import com.example.myapplication.network.ApiSearchResult
+import com.example.myapplication.network.ExternalIds
 import com.example.myapplication.network.AppLanguage
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.ImmutableSet
+import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.persistentSetOf
 import kotlinx.collections.immutable.toImmutableList
 import kotlinx.collections.immutable.toImmutableSet
@@ -73,6 +80,12 @@ class RecommendationsViewModel(
      */
     private val sessionSalt: Int = kotlin.random.Random.nextInt()
 
+    /** Последний снапшот движка — из него добираются карточки, когда колода опустела. */
+    private var lastSnapshot: RecommendationsSnapshot? = null
+
+    /** Были оценки свайпом: при закрытии шторки пул тихо пересоберётся с их учётом. */
+    private var feedbackDirty = false
+
     private val language: StateFlow<AppLanguage> = settingsDataStore.data
         .map { prefs ->
             AppLanguagePrefs.from(prefs)
@@ -122,10 +135,13 @@ class RecommendationsViewModel(
         }
     }
 
-    private fun applySnapshot(snapshot: RecommendationsSnapshot, isRefreshing: Boolean) {
+    private suspend fun applySnapshot(snapshot: RecommendationsSnapshot, isRefreshing: Boolean) {
+        lastSnapshot = snapshot
+        // Старый кэш мог собраться до свайпов — уже оценённое в колоду не возвращаем.
+        val judged = engine.feedbackIndex()
         val previousAdded = (_uiState.value as? RecommendationsUiState.Ready)?.addedKeys ?: persistentSetOf()
         _uiState.value = RecommendationsUiState.Ready(
-            items = sessionSample(snapshot.items).toImmutableList(),
+            items = sessionSample(snapshot.items.filterNot { judged.isJudged(it) }, snapshot).toImmutableList(),
             confidence = snapshot.confidence,
             isColdStart = snapshot.isColdStart,
             addedKeys = previousAdded,
@@ -133,19 +149,29 @@ class RecommendationsViewModel(
         )
     }
 
+    /** Прошлая квота: вход гистерезиса около порога доминирования, чтобы 85/15 не «моргало» между перезапусками. */
+    private var lastQuota: Quota? = null
+
     /**
-     * Срез сессии: score + джиттер, детерминированный по (key, sessionSalt).
-     * Порядок стабилен внутри сессии (фоновый refresh не перетасовывает колоду),
-     * но различается между запусками приложения.
+     * Колода сессии: квота по составу коллекции (аниме / фильмы / сериалы) → внутри каждого типа
+     * score + малый джиттер, детерминированный по (key, sessionSalt) → равномерное чередование типов.
+     * Порядок стабилен внутри сессии (фоновый refresh не перетасовывает колоду), но различается
+     * между запусками. Квота считается ПОСЛЕ ранжирования по типам и не зависит от перезапуска сети.
      */
-    private fun sessionSample(items: List<RecommendationItem>): List<RecommendationItem> {
-        if (items.size <= SESSION_DECK_SIZE) return items
-        return items
-            .sortedByDescending { item ->
-                val jitter = kotlin.random.Random(item.key.hashCode() xor sessionSalt).nextFloat()
-                item.score + jitter * SESSION_JITTER
+    private fun sessionSample(items: List<RecommendationItem>, snapshot: RecommendationsSnapshot): List<RecommendationItem> {
+        val byType = items.groupBy { it.contentType }
+        val available = ContentType.entries.associateWith { byType[it]?.size ?: 0 }
+        val quota = ContentMixResolver.resolve(snapshot.mix, available, lastQuota)
+        lastQuota = quota
+        // Нормализованный скор лежит в [0,1] — джиттер на порядок меньше, чем у прежней шкалы.
+        val amplitude = if (snapshot.scorerVersion >= 2) SESSION_JITTER else LEGACY_SESSION_JITTER
+        val ranked = byType.mapValues { (_, list) ->
+            list.sortedByDescending { item ->
+                val noise = kotlin.random.Random(item.key.hashCode() xor sessionSalt).nextFloat()
+                item.score + noise * amplitude
             }
-            .take(SESSION_DECK_SIZE)
+        }
+        return QuotaAllocator.interleave(ranked, quota)
     }
 
     /** Быстрое добавление из колоды — той же машинерией, что и поиск по API. */
@@ -163,14 +189,65 @@ class RecommendationsViewModel(
         }
     }
 
+    /**
+     * Оценка свайпом: вверх — нравится, вниз — не интересно. Колоду не трогаем (она уже убрала
+     * карточку сама), а движок учтёт оценку при следующем пересчёте.
+     */
+    fun rate(item: RecommendationItem, verdict: FeedbackVerdict) {
+        feedbackDirty = true
+        viewModelScope.launch { engine.recordFeedback(item, verdict) }
+    }
+
+    /** Отмена оценки: карточка вернулась в колоду. */
+    fun undoRate(item: RecommendationItem) {
+        viewModelScope.launch { engine.clearFeedback(item.key) }
+    }
+
+    /** Шторка закрыта: если были оценки — пул пересобирается в фоне с их учётом (кэш уже устарел по ревизии). */
+    fun onSheetClosed() {
+        if (!feedbackDirty) return
+        feedbackDirty = false
+        viewModelScope.launch { refresh() }
+    }
+
+    /** Колода опустела: добираем неоценённое из пула, а если он исчерпан — пересобираем с учётом оценок. */
+    fun loadMore() {
+        viewModelScope.launch {
+            val judged = engine.feedbackIndex()
+            val snapshotNow = lastSnapshot
+            val remaining = snapshotNow?.items.orEmpty().filterNot { judged.isJudged(it) }
+            if (snapshotNow != null && remaining.isNotEmpty()) {
+                updateReady { copy(items = sessionSample(remaining, snapshotNow).toImmutableList(), isRefreshing = false) }
+                return@launch
+            }
+            updateReady { copy(items = persistentListOf(), isRefreshing = true) }
+            val snapshot = engine.refresh(readLanguage(), force = true)
+            if (snapshot != null) {
+                applySnapshot(snapshot, isRefreshing = false)
+            } else {
+                updateReady { copy(isRefreshing = false) }
+            }
+        }
+    }
+
+    private fun updateReady(transform: RecommendationsUiState.Ready.() -> RecommendationsUiState.Ready) {
+        _uiState.update { state -> if (state is RecommendationsUiState.Ready) state.transform() else state }
+    }
+
     companion object {
         const val LIBRARY_CHANGE_DEBOUNCE_MS = 3_000L
 
-        /** Сколько карточек показывается за сессию (пул в кэше шире — 40). */
-        const val SESSION_DECK_SIZE = 20
+        /** Сколько карточек показывается за сессию (пул каждого типа в кэше шире — 40). */
+        const val SESSION_DECK_SIZE = ContentMixResolver.TOTAL
 
-        /** Амплитуда джиттера в единицах score: заметно тасует, не ломая релевантность. */
-        const val SESSION_JITTER = 0.45f
+        /**
+         * Амплитуда джиттера на нормализованной шкале [0,1]: только перемешивает близкие по баллу карточки
+         * (±0.03–0.05 из плана), не ломая отбор по качеству. Значение подбирается на replay-тестах.
+         */
+        const val SESSION_JITTER = 0.04f
+
+        /** Прежняя шкала скора (до ~2): заметно тасует, не ломая релевантность. */
+        const val LEGACY_SESSION_JITTER = 0.45f
     }
 }
 
@@ -180,10 +257,16 @@ fun RecommendationItem.toApiSearchResult() = ApiSearchResult(
     posterUrl = coverUrl,
     episodes = episodes,
     description = description,
-    type = "",
+    type = when (contentType) {
+        ContentType.ANIME -> ""
+        ContentType.MOVIE -> "Movie"
+        ContentType.TV -> "TV"
+    },
     genres = genres,
     rating = externalRating,
     source = source,
     categoryType = categoryType,
     externalId = externalId,
+    // Фильм/сериал привязывается к TMDB по id, а не по названию: при склейке источник карточки мог быть Trakt/TasteDive.
+    externalIds = ExternalIds(tmdb = tmdbId),
 )

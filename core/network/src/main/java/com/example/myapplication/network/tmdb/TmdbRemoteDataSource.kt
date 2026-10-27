@@ -34,6 +34,9 @@ class TmdbRemoteDataSource(private val client: HttpClient) {
 
     private fun apiKey(): String = BuildConfig.TMDB_API_KEY
 
+    /** Ключ не задан → источники на TMDB молча выключены, а не сыплют 401. */
+    val hasApiKey: Boolean get() = apiKey().isNotBlank()
+
     suspend fun searchMovie(query: String, language: AppLanguage, year: Int? = null): LookupResult<List<ApiSearchResult>> =
         search("movie", query, language, year, yearParam = "primary_release_year") { dto ->
             dto.toApiSearchResult(categoryType = "MOVIE", language = language)
@@ -107,6 +110,62 @@ class TmdbRemoteDataSource(private val client: HttpClient) {
     }.flatMap { response ->
         val episodes = response.body<TmdbSeasonDetailsResponseDto>().episodes.map { it.toDomain() }
         LookupResult.Found(episodes)
+    }
+
+    // ---- Рекомендации: списки, а не карточки ---------------------------------------------------
+
+    /** Основной related-граф зрителей TMDB по сиду. */
+    suspend fun recommendations(isTv: Boolean, id: Int, language: AppLanguage, page: Int = 1): LookupResult<List<ApiSearchResult>> =
+        list(isTv, language, page, kind(isTv), id.toString(), "recommendations")
+
+    /** Дополнительный пул по жанрам/ключевым словам; это НЕ голосование зрителей, вес ниже. */
+    suspend fun similar(isTv: Boolean, id: Int, language: AppLanguage, page: Int = 1): LookupResult<List<ApiSearchResult>> =
+        list(isTv, language, page, kind(isTv), id.toString(), "similar")
+
+    suspend fun trending(isTv: Boolean, language: AppLanguage, window: String = "week"): LookupResult<List<ApiSearchResult>> =
+        list(isTv, language, 1, "trending", kind(isTv), window)
+
+    /** Cold start по жанрам, когда нет ни одного сида с TMDB id. */
+    suspend fun discover(
+        isTv: Boolean,
+        genreIds: List<Int>,
+        language: AppLanguage,
+        page: Int = 1,
+        minVotes: Int = 300,
+    ): LookupResult<List<ApiSearchResult>> = list(
+        isTv, language, page, "discover", kind(isTv),
+        extra = buildMap {
+            if (genreIds.isNotEmpty()) put("with_genres", genreIds.joinToString("|"))
+            put("sort_by", "vote_average.desc")
+            put("vote_count.gte", minVotes.toString())
+        },
+    )
+
+    private fun kind(isTv: Boolean) = if (isTv) "tv" else "movie"
+
+    private suspend fun list(
+        isTv: Boolean,
+        language: AppLanguage,
+        page: Int,
+        vararg path: String,
+        extra: Map<String, String> = emptyMap(),
+    ): LookupResult<List<ApiSearchResult>> = runRequest(notFoundById = false) {
+        client.get {
+            url {
+                protocol = URLProtocol.HTTPS
+                host = "api.themoviedb.org"
+                appendPathSegments("3", *path)
+                parameter("api_key", apiKey())
+                parameter("language", language.tmdbLocale())
+                parameter("page", page)
+                extra.forEach { (k, v) -> parameter(k, v) }
+            }
+        }
+    }.flatMap { response ->
+        // Пустой список — валидный ответ (у свежего тайтла рекомендаций ещё нет), а не NoMatch.
+        LookupResult.Found(
+            response.body<TmdbSearchResponseDto>().results.map { it.toRecommendationResult(isTv, language) }
+        )
     }
 
     /** Точечная проверка "TMDB id ещё существует" — не поиск, только различение Found/NotFoundById. */
@@ -204,6 +263,13 @@ internal fun TmdbSearchResultDto.toApiSearchResult(
         externalIds = ExternalIds(tmdb = id),
     )
 }
+
+/** Элемент списка рекомендаций: в отличие от результата поиска несёт жанры и число голосов. */
+internal fun TmdbSearchResultDto.toRecommendationResult(isTv: Boolean, language: AppLanguage): ApiSearchResult =
+    toApiSearchResult(categoryType = if (isTv) "SERIES" else "MOVIE", language = language).copy(
+        genres = TmdbGenres.names(genreIds, isTv),
+        voteCount = voteCount,
+    )
 
 private fun TmdbMovieDetailsDto.toAnimeDetails(): AnimeDetails = AnimeDetails(
     title = title.orEmpty(),
