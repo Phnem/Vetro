@@ -40,3 +40,25 @@ The fetched files are **research resources**, not an approved training set.
 `usage_status` records restrictions. No downloader invokes AniList, Shikimori,
 Jikan or TMDB APIs. Fribb and mixed-source anime data remain under source review.
 Wikidata samples demonstrate schema across domains; they are not a training corpus.
+
+## CC0 training preparation
+
+The continuation adds a separate Wikidata corpus; AOD/Fribb remain excluded.
+The policy is [SOURCE_POLICY.json](../../docs/titlematch/SOURCE_POLICY.json).
+
+```powershell
+uv venv --python 3.12 tools/titlematch/.cache/train-venv
+uv pip install --python tools/titlematch/.cache/train-venv/Scripts/python.exe numpy pyarrow rapidfuzz lightgbm scikit-learn
+python tools/titlematch/collect_wikidata.py --page-size 200 --limit-per-domain 10000
+tools/titlematch/.cache/train-venv/Scripts/python.exe tools/titlematch/data_pipeline.py
+python tools/titlematch/audit_snapshot_diff.py
+```
+
+The collector uses bounded ID lists, caches and hashes every raw response, and
+does not query third-party catalogues. Source pages are WDQS response snapshots;
+they do not claim per-entity revision history. A bounded QID-ordered sample has
+selection bias. Corpus tables include entities, aliases, typed IDs, relations,
+evidence and quarantine. Alias collisions remain multi-valued. External-ID
+conflicts are excluded. Franchise/part-of, same-QID adaptation and alias-collision
+groups are assigned together before training pairs exist. Editorial challenge
+groups are held out; this fixture set is not a representative production benchmark.
