@@ -65,6 +65,12 @@ interface ApiService {
     /** AniList: то же по списку MAL id — для записей без anilistId. */
     suspend fun episodeCheckByMalIds(malIds: List<Int>): Result<List<EpisodeCheckMedia>>
 
+    /** AniList: связи франшизы по AniList id — для отсева рекомендаций из уже имеющихся франшиз. */
+    suspend fun franchiseLinksByAnilistIds(ids: List<Int>): Result<List<FranchiseLinks>>
+
+    /** То же по MAL id (он же id Shikimori). */
+    suspend fun franchiseLinksByMalIds(malIds: List<Int>): Result<List<FranchiseLinks>>
+
     /** MAL-only search via Jikan (used as EN fallback). */
     suspend fun searchAnimeMalOnly(
         query: String,

@@ -1,0 +1,33 @@
+# Связи франшизы для отсева рекомендаций: какие тайтлы уже принадлежат франшизе из коллекции
+# (продолжения, фильмы, спин-оффы, другие экранизации). Отдельно от EpisodeCheck: там связи урезаны до
+# PREQUEL/SEQUEL ради подсчёта серий по сезонам, а здесь нужен более широкий набор типов.
+fragment FranchiseLinkFields on Media {
+  id
+  idMal
+  relations {
+    edges {
+      relationType(version: 2)
+      node {
+        id
+        idMal
+        type
+      }
+    }
+  }
+}
+
+query FranchiseLinksByIds($ids: [Int], $page: Int, $perPage: Int) {
+  Page(page: $page, perPage: $perPage) {
+    media(id_in: $ids, type: ANIME) {
+      ...FranchiseLinkFields
+    }
+  }
+}
+
+query FranchiseLinksByMalIds($idsMal: [Int], $page: Int, $perPage: Int) {
+  Page(page: $page, perPage: $perPage) {
+    media(idMal_in: $idsMal, type: ANIME) {
+      ...FranchiseLinkFields
+    }
+  }
+}

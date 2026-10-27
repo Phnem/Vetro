@@ -11,6 +11,9 @@ import com.example.myapplication.network.anilist.EpisodeCheckByMalIdsQuery
 import com.example.myapplication.network.anilist.MediaByIdQuery
 import com.example.myapplication.network.anilist.TitleEnrichmentQuery
 import com.example.myapplication.network.anilist.fragment.EpisodeCheckFields
+import com.example.myapplication.network.anilist.FranchiseLinksByIdsQuery
+import com.example.myapplication.network.anilist.FranchiseLinksByMalIdsQuery
+import com.example.myapplication.network.anilist.fragment.FranchiseLinkFields
 import com.example.myapplication.network.anilist.MediaListCollectionChunkQuery
 import com.example.myapplication.network.anilist.RecommendationsBatchQuery
 import com.example.myapplication.network.anilist.TrendingMediaQuery
@@ -199,6 +202,64 @@ class AniListRemoteDataSource(
                     .orEmpty()
             }
         }
+    }
+
+    /** Связи франшизы по AniList id (до 50 тайтлов на запрос): для отсева рекомендаций из уже имеющихся франшиз. */
+    suspend fun franchiseLinksByAnilistIds(ids: List<Int>): Result<List<FranchiseLinks>> = runCatching {
+        if (ids.isEmpty()) return@runCatching emptyList()
+        withContext(Dispatchers.IO) {
+            ids.distinct().chunked(EPISODE_CHECK_CHUNK).flatMap { chunk ->
+                rateLimiter.acquire()
+                val response = apolloClient.query(
+                    FranchiseLinksByIdsQuery(
+                        ids = Optional.present(chunk),
+                        page = Optional.present(1),
+                        perPage = Optional.present(EPISODE_CHECK_CHUNK)
+                    )
+                ).execute()
+                response.throwIfGraphQlErrors("FranchiseLinksByIds")
+                response.data?.Page?.media?.filterNotNull()
+                    ?.mapNotNull { it.franchiseLinkFields.toFranchiseLinks() }
+                    .orEmpty()
+            }
+        }
+    }
+
+    /** То же по MAL id: id Shikimori и MAL совпадают, а у их кандидатов AniList id нет. */
+    suspend fun franchiseLinksByMalIds(malIds: List<Int>): Result<List<FranchiseLinks>> = runCatching {
+        if (malIds.isEmpty()) return@runCatching emptyList()
+        withContext(Dispatchers.IO) {
+            malIds.distinct().chunked(EPISODE_CHECK_CHUNK).flatMap { chunk ->
+                rateLimiter.acquire()
+                val response = apolloClient.query(
+                    FranchiseLinksByMalIdsQuery(
+                        idsMal = Optional.present(chunk),
+                        page = Optional.present(1),
+                        perPage = Optional.present(EPISODE_CHECK_CHUNK)
+                    )
+                ).execute()
+                response.throwIfGraphQlErrors("FranchiseLinksByMalIds")
+                response.data?.Page?.media?.filterNotNull()
+                    ?.mapNotNull { it.franchiseLinkFields.toFranchiseLinks() }
+                    .orEmpty()
+            }
+        }
+    }
+
+    private fun FranchiseLinkFields.toFranchiseLinks(): FranchiseLinks? {
+        val mediaId = id ?: return null
+        return FranchiseLinks(
+            anilistId = mediaId,
+            malId = idMal,
+            edges = relations?.edges?.filterNotNull().orEmpty().mapNotNull { edge ->
+                val relType = edge.relationType?.name ?: return@mapNotNull null
+                if (relType !in SAME_FRANCHISE_RELATIONS) return@mapNotNull null
+                val node = edge.node ?: return@mapNotNull null
+                val nodeId = node.id ?: return@mapNotNull null
+                if (node.type?.name != "ANIME") return@mapNotNull null
+                FranchiseLink(anilistId = nodeId, malId = node.idMal, relationType = relType)
+            },
+        )
     }
 
     private fun EpisodeCheckFields.toEpisodeCheckMedia(): EpisodeCheckMedia? {

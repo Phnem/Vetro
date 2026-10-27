@@ -25,6 +25,8 @@ class RecommendationFilter {
         requirePoster: Boolean = true,
     ): List<PoolEntry> {
         val libraryTitleKeys = HashSet<String>(library.size * 2)
+        // Основа названия без «(TV)», «(2011)», «Season 2»: так находится тот же тайтл в другом оформлении.
+        val libraryStemKeys = HashSet<String>(library.size * 2)
         val libraryAnilistIds = HashSet<Int>()
         val libraryMalIds = HashSet<Int>()
         val libraryShikimoriIds = HashSet<Int>()
@@ -36,6 +38,9 @@ class RecommendationFilter {
             anime.title.normalizeForSearch().takeIf { it.isNotEmpty() }?.let { libraryTitleKeys.add(it) }
             anime.titleEn?.normalizeForSearch()?.takeIf { it.isNotEmpty() }?.let { libraryTitleKeys.add(it) }
             anime.titleRu?.normalizeForSearch()?.takeIf { it.isNotEmpty() }?.let { libraryTitleKeys.add(it) }
+            listOfNotNull(anime.title, anime.titleEn, anime.titleRu)
+                .mapNotNull(::titleStem)
+                .forEach { libraryStemKeys.add(it) }
             anime.anilistId?.let { libraryAnilistIds.add(it) }
             anime.malId?.let { libraryMalIds.add(it) }
             anime.shikimoriId?.let { libraryShikimoriIds.add(it) }
@@ -58,8 +63,24 @@ class RecommendationFilter {
             val titleKey = r.title.normalizeForSearch()
             val altKey = r.altTitle?.normalizeForSearch().orEmpty()
             if (titleKey in libraryTitleKeys || (altKey.isNotEmpty() && altKey in libraryTitleKeys)) return@filter false
+            if (listOfNotNull(r.title, r.altTitle).mapNotNull(::titleStem).any { it in libraryStemKeys }) return@filter false
             !judged.isJudged(titleKey, altKey)
         }
+    }
+
+    companion object {
+        private val FORMAT_SUFFIX = Regex("""\s*[(\[]\s*(tv|ova|ona|oad|movie|special|\d{4})\s*[)\]]""", RegexOption.IGNORE_CASE)
+        private val SEASON_MARKER = Regex(
+            """\b(the\s+)?(final\s+season|season\s*\d+|\d+(st|nd|rd|th)\s+season|part\s*\d+|cour\s*\d+|s\d+|\d+\s*сезон|сезон\s*\d+|часть\s*\d+)\b""",
+            RegexOption.IGNORE_CASE,
+        )
+
+        /**
+         * Основа названия: без формата и года в скобках и без номера сезона. Слишком короткая основа (меньше трёх
+         * символов) не используется: по ней совпали бы разные тайтлы.
+         */
+        internal fun titleStem(title: String): String? =
+            title.replace(FORMAT_SUFFIX, "").replace(SEASON_MARKER, "").normalizeForSearch().takeIf { it.length >= 3 }
     }
 
     private fun isInLibraryById(

@@ -641,6 +641,15 @@ val appModule = module {
     }
     single { RecommendationFlagsStore(get(named("settings"))) }
     single { com.example.myapplication.data.local.TmdbIdMissStore(androidContext()) }
+    single { com.example.myapplication.data.local.FranchiseLinksStore(androidContext()) }
+    single {
+        val api = get<com.example.myapplication.network.ApiService>()
+        com.example.myapplication.domain.recommendations.FranchiseOwnershipFilter(
+            fetchByAnilistIds = { api.franchiseLinksByAnilistIds(it) },
+            fetchByMalIds = { api.franchiseLinksByMalIds(it) },
+            cache = get<com.example.myapplication.data.local.FranchiseLinksStore>(),
+        )
+    }
     single {
         val resolver = get<com.example.myapplication.network.movie.TmdbIdResolver>()
         val local = get<com.example.myapplication.data.local.AnimeLocalDataSource>()
@@ -669,6 +678,7 @@ val appModule = module {
             ),
             flagsSource = { flags.current() },
             idBackfill = get(),
+            franchiseFilter = get(),
         )
     }
 }

@@ -301,6 +301,16 @@ class VetroApiService(
         aniList.episodeCheckByMalIds(malIds).getOrThrow()
     }
 
+    override suspend fun franchiseLinksByAnilistIds(ids: List<Int>): Result<List<FranchiseLinks>> = runCatching {
+        searchRate.acquire()
+        aniList.franchiseLinksByAnilistIds(ids).getOrThrow()
+    }
+
+    override suspend fun franchiseLinksByMalIds(malIds: List<Int>): Result<List<FranchiseLinks>> = runCatching {
+        searchRate.acquire()
+        aniList.franchiseLinksByMalIds(malIds).getOrThrow()
+    }
+
     override suspend fun searchAnimeMalOnly(
         query: String,
         language: AppLanguage,

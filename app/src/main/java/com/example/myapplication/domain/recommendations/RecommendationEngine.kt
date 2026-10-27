@@ -49,6 +49,8 @@ class RecommendationEngine(
     private val filter: RecommendationFilter = RecommendationFilter(),
     /** Подбирает TMDB id фильмам и сериалам коллекции без него: без id у них нет сидов. */
     private val idBackfill: LibraryTmdbIdBackfill? = null,
+    /** Отсеивает аниме из франшиз, которые уже есть в коллекции (продолжения, фильмы, другие экранизации). */
+    private val franchiseFilter: FranchiseOwnershipFilter? = null,
 ) {
 
     private val refreshMutex = Mutex()
@@ -218,7 +220,16 @@ class RecommendationEngine(
         }
 
         // Новый скор склеивает дубли сам: записи без постера оставляем до склейки, постер берёт другой источник.
-        val filtered = filter.filter(pool, library, judged, requirePoster = !flags.newScorer)
+        val unowned = filter.filter(pool, library, judged, requirePoster = !flags.newScorer)
+        // Сбой сети не должен прятать рекомендации: при ошибке фильтр франшиз пропускается.
+        val franchise = franchiseFilter
+        val filtered = if (type == ContentType.ANIME && franchise != null) {
+            runCatching { franchise.dropOwned(unowned, library) }
+                .onFailure { if (it is CancellationException) throw it else Log.w(TAG, "Franchise filter failed", it) }
+                .getOrDefault(unowned)
+        } else {
+            unowned
+        }
         val confidence = profileConfidence(profile)
         val preferred = when {
             type.isScreen -> "TMDB"
@@ -336,6 +347,8 @@ class RecommendationEngine(
         append(if (flags.aniDb) 'A' else 'a')
         append(if (flags.newScorer) 'S' else 's')
         append(if (flags.adaptiveMix) 'M' else 'm')
+        // Версия отсева: после изменения правил фильтра прежний кэш пересобирается.
+        append(FILTER_VERSION)
     }
 
     companion object {
@@ -351,5 +364,8 @@ class RecommendationEngine(
          * квота любой пропорции собирается из запаса, а новая сессия достаёт другой срез без лишней сети.
          */
         const val MAX_RESULTS = 40
+
+        /** 2 — добавлен отсев по франшизам и по основе названия. */
+        const val FILTER_VERSION = "F2"
     }
 }
