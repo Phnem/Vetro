@@ -11,6 +11,7 @@ import java.util.concurrent.ConcurrentHashMap
 import kotlin.coroutines.coroutineContext
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -49,6 +50,7 @@ class BookCoverFinder(
     private val alternatives: BookTitleAlternatives,
     private val client: OkHttpClient,
     private val wikidata: WikidataClient,
+    private val identity: BookAiIdentity,
 ) {
     private class Cached(val at: Long, val urls: List<String>)
 
@@ -75,8 +77,10 @@ class BookCoverFinder(
         misses[key]?.takeIf { System.currentTimeMillis() - it < MISS_TTL_MS }?.let { return null }
         val url = coroutineScope {
             var found: String? = null
-            for (branch in branches(title, authors)) {
-                val urls = withTimeoutOrNull(BRANCH_WAIT_MS) { branch.await() }.orEmpty()
+            for ((index, branch) in branches(title, authors).withIndex()) {
+                // Ветки ИИ (с третьей) делают запрос к модели и потом к каталогам — им нужно больше времени.
+                val wait = if (index >= AI_BRANCHES_FROM) AI_BRANCH_WAIT_MS else BRANCH_WAIT_MS
+                val urls = withTimeoutOrNull(wait) { branch.await() }.orEmpty()
                 found = urls.filter { it.isHttp() }.distinct().take(MAX_CHECKS).firstOrNull { isImage(it) }
                 if (found != null) break
             }
@@ -101,8 +105,12 @@ class BookCoverFinder(
             if (typed.isEmpty()) candidates(title, authors).map { CoverOption(it, "") } else emptyList()
         }
         val fromQuery = async { if (typed.isEmpty()) emptyList() else guarded { catalogueOptions(typed) } }
-        val byAuthor = async { guarded { authorOptions(authors) } }
-        (matched.await() + fromQuery.await() + byAuthor.await()).distinctBy { it.url }
+        val works = guarded { authorWorks(title, authors) }
+        // Если ИИ подключён и уверен, какая из работ автора — эта книга, она идёт первой.
+        val chosen = guarded { listOfNotNull(aiPick(title, authors, works)) }
+        val byAuthor = works.map { CoverOption(it.url, caption(it.title, it.author)) }
+        (chosen.map { CoverOption(it.url, caption(it.title, it.author)) } + matched.await() + fromQuery.await() + byAuthor)
+            .distinctBy { it.url }
     }
 
     /** Все каталоги по произвольному запросу, без сверки названия; подпись — название и автор находки. */
@@ -133,14 +141,18 @@ class BookCoverFinder(
         openLib.await() + apple.await() + google.await()
     }
 
+    /** Работа автора в каталоге: английское название, автор и адрес её обложки. */
+    private class AuthorWork(val title: String, val author: String?, val url: String)
+
     /**
-     * Работы автора из Open Library. Автор по-русски → латинская подпись из Wikidata («Деннис
-     * Тейлор» → «Dennis E. Taylor»): так находится человек, а не однофамилец-снукерист.
+     * Работы автора из Open Library. Автор по-русски → латинская подпись из Wikidata и от ИИ
+     * («Деннис Тейлор» → «Dennis E. Taylor»): так находится человек, а не однофамилец-снукерист.
      */
-    private suspend fun authorOptions(authors: List<String>): List<CoverOption> {
+    private suspend fun authorWorks(title: String, authors: List<String>): List<AuthorWork> {
         val author = authors.firstOrNull()?.trim()?.takeIf { it.isNotEmpty() } ?: return emptyList()
         val names = if (author.hasCyrillic()) {
-            (wikidata.authorNames(author, "ru") as? LookupResult.Found)?.value.orEmpty()
+            val fromWikidata = (wikidata.authorNames(author, "ru") as? LookupResult.Found)?.value.orEmpty()
+            (fromWikidata + identity.identify(title, authors)?.englishAuthors.orEmpty()).distinctBy { it.lowercase() }
         } else {
             listOf(author)
         }
@@ -150,9 +162,15 @@ class BookCoverFinder(
                 .filter { w -> WorkMatch.words(w.authors).any(wanted::contains) }
                 .mapNotNull { w ->
                     (w.matchedEdition?.coverIds?.firstOrNull() ?: w.coverId)
-                        ?.let { CoverOption(OpenLibraryClient.coverUrl(it), caption(w.title, w.authors.firstOrNull())) }
+                        ?.let { AuthorWork(w.title, w.authors.firstOrNull(), OpenLibraryClient.coverUrl(it)) }
                 }
-        }
+        }.distinctBy { it.url }
+    }
+
+    /** Какая из [works] — книга [title], по мнению ИИ пользователя; null — ИИ нет или он не уверен. */
+    private suspend fun aiPick(title: String, authors: List<String>, works: List<AuthorWork>): AuthorWork? {
+        val index = identity.pickWork(title, authors, works.map { it.title }) ?: return null
+        return works.getOrNull(index)
     }
 
     private fun caption(title: String, author: String?): String =
@@ -182,7 +200,35 @@ class BookCoverFinder(
             val wanted = (listOf(title) + alts).map(BookWorkMatching::normalize).filter(String::isNotBlank).toSet()
             coroutineScope { alts.map { query -> async { fromCatalogues(query, authors, wanted) } }.awaitAll().flatten() }
         }
-        return listOf(sites, direct, english)
+        // ИИ пользователя (если подключён): перевод названия и автора для сайтов и каталогов и выбор
+        // нужной книги среди работ автора. Идут последними: сначала пробуем то, что не тратит квоту.
+        // LAZY: в [first] ветка стартует, только когда дошла очередь, — удачная находка выше не тратит квоту ИИ.
+        val translated = async(start = CoroutineStart.LAZY) { fromTranslation(title, authors) }
+        val picked = async(start = CoroutineStart.LAZY) {
+            guarded { listOfNotNull(aiPick(title, authors, authorWorks(title, authors))?.url) }
+        }
+        return listOf(sites, direct, english, translated, picked)
+    }
+
+    /**
+     * Название и автор, переведённые ИИ: английское название ищется на сайтах-источниках (там тоже
+     * бывают англоязычные озвучки) и в каталогах — теперь вместе с латинским автором, по которому
+     * Open Library и Google отличают книгу от однофамилицы.
+     */
+    private suspend fun fromTranslation(title: String, authors: List<String>): List<String> {
+        val known = identity.identify(title, authors) ?: return emptyList()
+        val english = known.englishTitle ?: return emptyList()
+        val knownTitles = alternatives.english(title, authors).map(BookWorkMatching::normalize).toSet()
+        val wanted = setOf(BookWorkMatching.normalize(english), BookWorkMatching.normalize(title)).filter(String::isNotBlank).toSet()
+        return coroutineScope {
+            val sites = async { guarded { search.sameWork(english, emptyList()).mapNotNull { it.coverUrl } } }
+            // Каталоги по этому названию уже опрошены веткой «английские варианты» — не повторяем.
+            val catalogues = async {
+                if (BookWorkMatching.normalize(english) in knownTitles) emptyList()
+                else fromCatalogues(english, known.englishAuthors + authors, wanted)
+            }
+            sites.await() + catalogues.await()
+        }
     }
 
     private suspend fun fromCatalogues(query: String, authors: List<String>, wanted: Set<String>): List<String> = coroutineScope {
@@ -244,6 +290,8 @@ class BookCoverFinder(
         const val SOURCE_TIMEOUT_MS = 8_000L
         /** Дольше этого одна ветка не задерживает остальные в [first]. */
         const val BRANCH_WAIT_MS = 6_000L
+        const val AI_BRANCH_WAIT_MS = 15_000L
+        const val AI_BRANCHES_FROM = 3
         const val MAX_CHECKS = 6
         const val MISS_TTL_MS = 6L * 60 * 60 * 1000
         const val CACHE_TTL_MS = 15L * 60 * 1000

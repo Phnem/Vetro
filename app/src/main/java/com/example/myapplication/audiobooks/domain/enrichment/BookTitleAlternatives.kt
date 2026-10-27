@@ -1,15 +1,10 @@
 package com.example.myapplication.audiobooks.domain.enrichment
 
-import com.example.myapplication.data.ai.AiLlmFallbackRouter
 import com.example.myapplication.network.LookupResult
 import com.example.myapplication.network.enrichment.OpenLibraryClient
 import com.example.myapplication.network.ids.WikidataClient
 import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.CancellationException
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.contentOrNull
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
 
 /**
  * Альтернативные (английские) названия книги по русскому: аудиокнига на сайтах называется
@@ -23,7 +18,7 @@ import kotlinx.serialization.json.jsonPrimitive
 class BookTitleAlternatives(
     private val openLibrary: OpenLibraryClient,
     private val wikidata: WikidataClient,
-    private val ai: AiLlmFallbackRouter? = null,
+    private val identity: BookAiIdentity? = null,
 ) {
     private val found = ConcurrentHashMap<String, List<String>>()
     private val missedAt = ConcurrentHashMap<String, Long>()
@@ -47,30 +42,10 @@ class BookTitleAlternatives(
             .filter { it.hasLatin() && BookWorkMatching.normalize(it) != key }
             .distinctBy(BookWorkMatching::normalize)
             .take(MAX_ALTERNATIVES)
-        if (result.isEmpty()) result = listOfNotNull(safe { askAi(clean, authors) })
+        if (result.isEmpty()) result = listOfNotNull(safe { identity?.identify(clean, authors)?.englishTitle })
 
         if (result.isEmpty()) missedAt[key] = System.currentTimeMillis() else found[key] = result
         return result
-    }
-
-    private suspend fun askAi(title: String, authors: List<String>): String? {
-        val router = ai ?: return null
-        val system = "You are a book database expert. Given an audiobook title (it may be Russian) and " +
-            "its authors, return the OFFICIAL English title of the same literary work, as listed on " +
-            "Goodreads / Open Library. Do not translate literally. If you are not confident, return an " +
-            "empty string. Respond ONLY with a single JSON object, no prose, no markdown."
-        val user = "Title: \"$title\"\n" +
-            (if (authors.isNotEmpty()) "Authors: ${authors.joinToString()}\n" else "") +
-            "Return JSON exactly: {\"english\": \"<official english title, or empty string if unknown>\"}"
-        val text = router.completeText(userPrompt = user, systemPrompt = system, jsonMode = true)
-            .getOrNull()?.text?.trim() ?: return null
-        val start = text.indexOf('{')
-        val end = text.lastIndexOf('}')
-        if (start < 0 || end <= start) return null
-        val english = runCatching {
-            Json.parseToJsonElement(text.substring(start, end + 1)).jsonObject["english"]?.jsonPrimitive?.contentOrNull
-        }.getOrNull()?.trim().orEmpty()
-        return english.takeIf { it.isNotEmpty() && it.hasLatin() && !it.equals("unknown", ignoreCase = true) && !it.equals("null", ignoreCase = true) }
     }
 
     private suspend fun <T> safe(block: suspend () -> T?): T? = try {

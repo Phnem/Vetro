@@ -172,6 +172,13 @@ val audiobookModule = module {
     single { com.example.myapplication.audiobooks.data.BookCoverManager(androidContext(), get(), get(), get()) }
     // Обложка там, где сайт её не дал: другие сайты, витрина Apple, Open Library, Google Books — в том
     // числе по английскому названию (Wikidata → Open Library → ИИ пользователя, если подключён).
+    // ИИ пользователя (BYOK) как справочник по книгам: перевод названия и автора, выбор книги из работ автора.
+    single {
+        val router = get<com.example.myapplication.data.ai.AiLlmFallbackRouter>()
+        com.example.myapplication.audiobooks.domain.enrichment.BookAiIdentity(
+            ask = { user, system -> router.completeText(userPrompt = user, systemPrompt = system, jsonMode = true).map { it.text } },
+        )
+    }
     single { com.example.myapplication.audiobooks.domain.enrichment.BookTitleAlternatives(get(), get(), get()) }
     single {
         com.example.myapplication.audiobooks.domain.enrichment.BookCoverFinder(
@@ -182,6 +189,7 @@ val audiobookModule = module {
             alternatives = get(),
             client = get<OkHttpClient>(),
             wikidata = get(),
+            identity = get(),
         )
     }
     single {
