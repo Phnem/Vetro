@@ -154,6 +154,7 @@ val coreNetworkModule = module {
     single { MangaDexRemoteDataSource(get<HttpClient>(), get(RATE_MANGADEX)) }
     single { TmdbRemoteDataSource(get<HttpClient>()) }
     single { com.example.myapplication.network.trakt.TraktRemoteDataSource(get<HttpClient>()) }
+    single { com.example.myapplication.network.movie.TmdbIdResolver(get<TmdbRemoteDataSource>()) }
     single { KinopoiskRemoteDataSource(get<HttpClient>()) }
     single { MovieSeriesRepository(get<TmdbRemoteDataSource>(), get<KinopoiskRemoteDataSource>()) }
     /**

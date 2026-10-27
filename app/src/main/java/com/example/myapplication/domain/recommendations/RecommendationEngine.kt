@@ -47,6 +47,8 @@ class RecommendationEngine(
     private val breaker: SourceCircuitBreaker = SourceCircuitBreaker(),
     private val affinityCalculator: GenreAffinityCalculator = GenreAffinityCalculator(),
     private val filter: RecommendationFilter = RecommendationFilter(),
+    /** Подбирает TMDB id фильмам и сериалам коллекции без него: без id у них нет сидов. */
+    private val idBackfill: LibraryTmdbIdBackfill? = null,
 ) {
 
     private val refreshMutex = Mutex()
@@ -113,12 +115,18 @@ class RecommendationEngine(
     )
 
     private suspend fun compute(
-        library: List<Anime>,
+        storedLibrary: List<Anime>,
         language: AppLanguage,
         feedback: FeedbackState,
         flags: RecommendationFlags,
     ): RecommendationsSnapshot {
         val now = System.currentTimeMillis()
+        // Найденные id уже записаны в базу; подпись библиотеки от tmdbId не зависит, кэш из-за них не инвалидируется.
+        val library = if (flags.tmdbRec) {
+            idBackfill?.let { runCatching { it.run(storedLibrary) }.getOrNull() } ?: storedLibrary
+        } else {
+            storedLibrary
+        }
         val mix = ContentMix.of(library)
         val judged = FeedbackIndex(feedback.entries)
         val genreToTagId: (String) -> String? = { genre ->

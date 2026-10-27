@@ -640,6 +640,16 @@ val appModule = module {
         )
     }
     single { RecommendationFlagsStore(get(named("settings"))) }
+    single { com.example.myapplication.data.local.TmdbIdMissStore(androidContext()) }
+    single {
+        val resolver = get<com.example.myapplication.network.movie.TmdbIdResolver>()
+        val local = get<com.example.myapplication.data.local.AnimeLocalDataSource>()
+        com.example.myapplication.domain.recommendations.LibraryTmdbIdBackfill(
+            resolve = { resolver.resolve(it) },
+            persist = { animeId, tmdbId -> local.setTmdbId(animeId, tmdbId) },
+            ledger = get<com.example.myapplication.data.local.TmdbIdMissStore>(),
+        )
+    }
     single {
         val flags = get<RecommendationFlagsStore>()
         RecommendationEngine(
@@ -658,6 +668,7 @@ val appModule = module {
                 TasteDiveCandidateProvider(get(), get()),
             ),
             flagsSource = { flags.current() },
+            idBackfill = get(),
         )
     }
 }
