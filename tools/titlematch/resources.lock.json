@@ -1,0 +1,309 @@
+{
+  "schema_version": 1,
+  "prepared_on": "2026-10-27",
+  "purpose": "Research only. No production/training eligibility implied.",
+  "resources": [
+    {
+      "path": "data/manami/anime-offline-database.jsonl",
+      "url": "https://github.com/manami-project/anime-offline-database/releases/download/2026-27/anime-offline-database.jsonl",
+      "revision": "2026-27",
+      "source": "manami-project/anime-offline-database",
+      "bytes": 62331124,
+      "sha256": "8a63189782176fe19e00eca275288ba855ce54d6cb4d7ae97ec71450f861b1aa",
+      "usage_status": "research_only_upstream_rights_review",
+      "integrity_origin": "github_release_digest",
+      "release_id": 348980780
+    },
+    {
+      "path": "data/manami/LICENSE",
+      "url": "https://raw.githubusercontent.com/manami-project/anime-offline-database/96da26358c8e599a9c076818aee247c68cb69401/LICENSE",
+      "revision": "96da26358c8e599a9c076818aee247c68cb69401",
+      "source": "manami-project/anime-offline-database",
+      "bytes": 28214,
+      "sha256": "b618196160182d36789b352f8bc21ca645f049295bf8690eed4bd668ff391330",
+      "usage_status": "source_documentation",
+      "integrity_origin": "git_blob_verified"
+    },
+    {
+      "path": "data/manami/README.md",
+      "url": "https://raw.githubusercontent.com/manami-project/anime-offline-database/96da26358c8e599a9c076818aee247c68cb69401/README.md",
+      "revision": "96da26358c8e599a9c076818aee247c68cb69401",
+      "source": "manami-project/anime-offline-database",
+      "bytes": 19413,
+      "sha256": "91d8918f7216794e6557488ffb80def10a6e4ad3e1516205bf487982775dc2cf",
+      "usage_status": "source_documentation",
+      "integrity_origin": "git_blob_verified"
+    },
+    {
+      "path": "data/cedya/anime-offline-database.jsonl",
+      "url": "https://github.com/cedya77/anime-offline-database/releases/download/2026-43/anime-offline-database.jsonl",
+      "revision": "2026-43",
+      "source": "cedya77/anime-offline-database",
+      "bytes": 60764513,
+      "sha256": "123296d52dc753e9eb27d56059ac72a0519fc3b7b5831f9278b0ae263e955fd6",
+      "usage_status": "research_only_upstream_rights_review",
+      "integrity_origin": "github_release_digest",
+      "release_id": 417203242
+    },
+    {
+      "path": "data/cedya/LICENSE",
+      "url": "https://raw.githubusercontent.com/cedya77/anime-offline-database/c93dfa65477fd495ed8f76d6eac87145d563b01d/LICENSE",
+      "revision": "c93dfa65477fd495ed8f76d6eac87145d563b01d",
+      "source": "cedya77/anime-offline-database",
+      "bytes": 28214,
+      "sha256": "b618196160182d36789b352f8bc21ca645f049295bf8690eed4bd668ff391330",
+      "usage_status": "source_documentation",
+      "integrity_origin": "git_blob_verified"
+    },
+    {
+      "path": "data/cedya/README.md",
+      "url": "https://raw.githubusercontent.com/cedya77/anime-offline-database/c93dfa65477fd495ed8f76d6eac87145d563b01d/README.md",
+      "revision": "c93dfa65477fd495ed8f76d6eac87145d563b01d",
+      "source": "cedya77/anime-offline-database",
+      "bytes": 3622,
+      "sha256": "50992d5fdbd3d24d7fbb78b896f283945571c8ff9b0eded1d65ba385c5d5dde3",
+      "usage_status": "source_documentation",
+      "integrity_origin": "git_blob_verified"
+    },
+    {
+      "path": "data/fribb/README.md",
+      "url": "https://raw.githubusercontent.com/Fribb/anime-lists/08dc828de12e60e736e78b24a096aa7b4d77d7f1/README.md",
+      "revision": "08dc828de12e60e736e78b24a096aa7b4d77d7f1",
+      "source": "Fribb/anime-lists",
+      "bytes": 8411,
+      "sha256": "a0cfa1a699622d014283473e11141eec52273f5fe1f230109b35ecb479d3246e",
+      "usage_status": "quarantine_no_dataset_license_verified",
+      "integrity_origin": "git_blob_verified"
+    },
+    {
+      "path": "data/fribb/anime-list-full.json",
+      "url": "https://raw.githubusercontent.com/Fribb/anime-lists/08dc828de12e60e736e78b24a096aa7b4d77d7f1/anime-list-full.json",
+      "revision": "08dc828de12e60e736e78b24a096aa7b4d77d7f1",
+      "source": "Fribb/anime-lists",
+      "bytes": 7511224,
+      "sha256": "aec86ab3a8fcd5e6b106486751f94e89206f739849932bcec533e6743cc0aa96",
+      "usage_status": "quarantine_no_dataset_license_verified",
+      "integrity_origin": "git_blob_verified"
+    },
+    {
+      "path": "models/potion-2m/README.md",
+      "url": "https://huggingface.co/minishlab/potion-base-2M/resolve/389b9f64be5aa4ae7a6bc6fe95ef20ce485ae5da/README.md",
+      "revision": "389b9f64be5aa4ae7a6bc6fe95ef20ce485ae5da",
+      "source": "minishlab/potion-base-2M",
+      "bytes": 5202,
+      "sha256": "38af170acce93b5eb0c4e18659ab0b30581b2f6860f3e12d8ba8b8751e249363",
+      "usage_status": "offline_baseline_only_model_card_license",
+      "integrity_origin": "git_blob_verified"
+    },
+    {
+      "path": "models/potion-2m/config.json",
+      "url": "https://huggingface.co/minishlab/potion-base-2M/resolve/389b9f64be5aa4ae7a6bc6fe95ef20ce485ae5da/config.json",
+      "revision": "389b9f64be5aa4ae7a6bc6fe95ef20ce485ae5da",
+      "source": "minishlab/potion-base-2M",
+      "bytes": 200,
+      "sha256": "b2a89173391ca774c2d7323090a993a9a1553faa5b40eb37bb7cec6685fbea47",
+      "usage_status": "offline_baseline_only_model_card_license",
+      "integrity_origin": "git_blob_verified"
+    },
+    {
+      "path": "models/potion-2m/modules.json",
+      "url": "https://huggingface.co/minishlab/potion-base-2M/resolve/389b9f64be5aa4ae7a6bc6fe95ef20ce485ae5da/modules.json",
+      "revision": "389b9f64be5aa4ae7a6bc6fe95ef20ce485ae5da",
+      "source": "minishlab/potion-base-2M",
+      "bytes": 278,
+      "sha256": "a68dcbed0429dcdd5bfdca92b0b03cc30d09122c0a3fcf4758787d4b244e45b2",
+      "usage_status": "offline_baseline_only_model_card_license",
+      "integrity_origin": "git_blob_verified"
+    },
+    {
+      "path": "models/potion-2m/tokenizer.json",
+      "url": "https://huggingface.co/minishlab/potion-base-2M/resolve/389b9f64be5aa4ae7a6bc6fe95ef20ce485ae5da/tokenizer.json",
+      "revision": "389b9f64be5aa4ae7a6bc6fe95ef20ce485ae5da",
+      "source": "minishlab/potion-base-2M",
+      "bytes": 683666,
+      "sha256": "e67e803f624fb4d67dea1c730d06e1067e1b14d830e2c2202569e3ef0f70bb50",
+      "usage_status": "offline_baseline_only_model_card_license",
+      "integrity_origin": "git_blob_verified"
+    },
+    {
+      "path": "models/potion-2m/tokenizer_config.json",
+      "url": "https://huggingface.co/minishlab/potion-base-2M/resolve/389b9f64be5aa4ae7a6bc6fe95ef20ce485ae5da/tokenizer_config.json",
+      "revision": "389b9f64be5aa4ae7a6bc6fe95ef20ce485ae5da",
+      "source": "minishlab/potion-base-2M",
+      "bytes": 1431,
+      "sha256": "6725995e3ab3039857ff5bd99178a7cdf42863abb04449e7bb31feb1f55fe567",
+      "usage_status": "offline_baseline_only_model_card_license",
+      "integrity_origin": "git_blob_verified"
+    },
+    {
+      "path": "models/potion-2m/special_tokens_map.json",
+      "url": "https://huggingface.co/minishlab/potion-base-2M/resolve/389b9f64be5aa4ae7a6bc6fe95ef20ce485ae5da/special_tokens_map.json",
+      "revision": "389b9f64be5aa4ae7a6bc6fe95ef20ce485ae5da",
+      "source": "minishlab/potion-base-2M",
+      "bytes": 134,
+      "sha256": "a9e8fb6f99fb0b8803f0e6942fdf4d95d6645204620b67dc3310a1024bcbac59",
+      "usage_status": "offline_baseline_only_model_card_license",
+      "integrity_origin": "git_blob_verified"
+    },
+    {
+      "path": "models/potion-2m/model.safetensors",
+      "url": "https://huggingface.co/minishlab/potion-base-2M/resolve/389b9f64be5aa4ae7a6bc6fe95ef20ce485ae5da/model.safetensors",
+      "revision": "389b9f64be5aa4ae7a6bc6fe95ef20ce485ae5da",
+      "source": "minishlab/potion-base-2M",
+      "bytes": 7559256,
+      "sha256": "f95ffde02ad06f63ae38eb9d400038cd5ccaf8411ec3cb650c6025113f96cbb8",
+      "usage_status": "offline_baseline_only_model_card_license",
+      "integrity_origin": "huggingface_lfs_sha256"
+    },
+    {
+      "path": "models/multilingual-minilm/README.md",
+      "url": "https://huggingface.co/sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2/resolve/e8f8c211226b894fcb81acc59f3b34ba3efd5f42/README.md",
+      "revision": "e8f8c211226b894fcb81acc59f3b34ba3efd5f42",
+      "source": "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+      "bytes": 3888,
+      "sha256": "1e98ea05b0de579fcaad3d625b62ea55647142ed674d5f5ebf1440e4bbbb6f23",
+      "usage_status": "offline_baseline_only_model_card_license",
+      "integrity_origin": "git_blob_verified"
+    },
+    {
+      "path": "models/multilingual-minilm/config.json",
+      "url": "https://huggingface.co/sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2/resolve/e8f8c211226b894fcb81acc59f3b34ba3efd5f42/config.json",
+      "revision": "e8f8c211226b894fcb81acc59f3b34ba3efd5f42",
+      "source": "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+      "bytes": 645,
+      "sha256": "6300193cb75e01cf80c96decef7187dfb33094d97cc1490b7ead6ff134476e4e",
+      "usage_status": "offline_baseline_only_model_card_license",
+      "integrity_origin": "git_blob_verified"
+    },
+    {
+      "path": "models/multilingual-minilm/modules.json",
+      "url": "https://huggingface.co/sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2/resolve/e8f8c211226b894fcb81acc59f3b34ba3efd5f42/modules.json",
+      "revision": "e8f8c211226b894fcb81acc59f3b34ba3efd5f42",
+      "source": "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+      "bytes": 229,
+      "sha256": "8f4b264b80206c830bebbdcae377e137925650a433b689343a63bdc9b3145460",
+      "usage_status": "offline_baseline_only_model_card_license",
+      "integrity_origin": "git_blob_verified"
+    },
+    {
+      "path": "models/multilingual-minilm/1_Pooling/config.json",
+      "url": "https://huggingface.co/sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2/resolve/e8f8c211226b894fcb81acc59f3b34ba3efd5f42/1_Pooling/config.json",
+      "revision": "e8f8c211226b894fcb81acc59f3b34ba3efd5f42",
+      "source": "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+      "bytes": 190,
+      "sha256": "4be450dde3b0273bb9787637cfbd28fe04a7ba6ab9d36ac48e92b11e350ffc23",
+      "usage_status": "offline_baseline_only_model_card_license",
+      "integrity_origin": "git_blob_verified"
+    },
+    {
+      "path": "models/multilingual-minilm/sentence_bert_config.json",
+      "url": "https://huggingface.co/sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2/resolve/e8f8c211226b894fcb81acc59f3b34ba3efd5f42/sentence_bert_config.json",
+      "revision": "e8f8c211226b894fcb81acc59f3b34ba3efd5f42",
+      "source": "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+      "bytes": 53,
+      "sha256": "70f4448f31320443fe3557cacea5abf2dcc4915dda8c80646bec9f3bb0aa5a1f",
+      "usage_status": "offline_baseline_only_model_card_license",
+      "integrity_origin": "git_blob_verified"
+    },
+    {
+      "path": "models/multilingual-minilm/tokenizer.json",
+      "url": "https://huggingface.co/sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2/resolve/e8f8c211226b894fcb81acc59f3b34ba3efd5f42/tokenizer.json",
+      "revision": "e8f8c211226b894fcb81acc59f3b34ba3efd5f42",
+      "source": "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+      "bytes": 9081518,
+      "sha256": "2c3387be76557bd40970cec13153b3bbf80407865484b209e655e5e4729076b8",
+      "usage_status": "offline_baseline_only_model_card_license",
+      "integrity_origin": "huggingface_lfs_sha256"
+    },
+    {
+      "path": "models/multilingual-minilm/tokenizer_config.json",
+      "url": "https://huggingface.co/sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2/resolve/e8f8c211226b894fcb81acc59f3b34ba3efd5f42/tokenizer_config.json",
+      "revision": "e8f8c211226b894fcb81acc59f3b34ba3efd5f42",
+      "source": "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+      "bytes": 526,
+      "sha256": "5036ea374ffedd706e3bef33e2e0d6953cb868ef8a490e76e32ba0faa37a6b9b",
+      "usage_status": "offline_baseline_only_model_card_license",
+      "integrity_origin": "git_blob_verified"
+    },
+    {
+      "path": "models/multilingual-minilm/special_tokens_map.json",
+      "url": "https://huggingface.co/sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2/resolve/e8f8c211226b894fcb81acc59f3b34ba3efd5f42/special_tokens_map.json",
+      "revision": "e8f8c211226b894fcb81acc59f3b34ba3efd5f42",
+      "source": "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+      "bytes": 239,
+      "sha256": "378eb3bf733eb16e65792d7e3fda5b8a4631387ca04d2015199c4d4f22ae554d",
+      "usage_status": "offline_baseline_only_model_card_license",
+      "integrity_origin": "git_blob_verified"
+    },
+    {
+      "path": "models/multilingual-minilm/sentencepiece.bpe.model",
+      "url": "https://huggingface.co/sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2/resolve/e8f8c211226b894fcb81acc59f3b34ba3efd5f42/sentencepiece.bpe.model",
+      "revision": "e8f8c211226b894fcb81acc59f3b34ba3efd5f42",
+      "source": "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+      "bytes": 5069051,
+      "sha256": "cfc8146abe2a0488e9e2a0c56de7952f7c11ab059eca145a0a727afce0db2865",
+      "usage_status": "offline_baseline_only_model_card_license",
+      "integrity_origin": "huggingface_lfs_sha256"
+    },
+    {
+      "path": "models/multilingual-minilm/onnx/model_quint8_avx2.onnx",
+      "url": "https://huggingface.co/sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2/resolve/e8f8c211226b894fcb81acc59f3b34ba3efd5f42/onnx/model_quint8_avx2.onnx",
+      "revision": "e8f8c211226b894fcb81acc59f3b34ba3efd5f42",
+      "source": "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+      "bytes": 118453870,
+      "sha256": "98a01d88b7de996cdea58c32ca71208c09968d143798814b2ea09d3439dc334f",
+      "usage_status": "offline_baseline_only_model_card_license",
+      "integrity_origin": "huggingface_lfs_sha256"
+    },
+    {
+      "path": "data/wikidata/Q25188.json",
+      "url": "https://www.wikidata.org/wiki/Special:EntityData/Q25188.json?revision=2557100094",
+      "revision": "2557100094",
+      "source": "Wikidata",
+      "bytes": 292121,
+      "sha256": "ce08b6fd36b799a15b61460a9544e5d9aef7858eeff000f40f9a9c1c9dd2ac19",
+      "usage_status": "cc0_structured_data_sample",
+      "integrity_origin": "first_retrieval_sha256"
+    },
+    {
+      "path": "data/wikidata/Q23572.json",
+      "url": "https://www.wikidata.org/wiki/Special:EntityData/Q23572.json?revision=2542105894",
+      "revision": "2542105894",
+      "source": "Wikidata",
+      "bytes": 307952,
+      "sha256": "e2d6432a971bcd7a6b6aa5059ccdf2ef2da37b9fe89da3c9c2486bbf7774a92e",
+      "usage_status": "cc0_structured_data_sample",
+      "integrity_origin": "first_retrieval_sha256"
+    },
+    {
+      "path": "data/wikidata/Q673.json",
+      "url": "https://www.wikidata.org/wiki/Special:EntityData/Q673.json?revision=2551716559",
+      "revision": "2551716559",
+      "source": "Wikidata",
+      "bytes": 74877,
+      "sha256": "38cc664f14831e1f40d335bef24bcb4a8bc1a5ec91f7111817814e297b820cec",
+      "usage_status": "cc0_structured_data_sample",
+      "integrity_origin": "first_retrieval_sha256"
+    },
+    {
+      "path": "data/wikidata/Q74287.json",
+      "url": "https://www.wikidata.org/wiki/Special:EntityData/Q74287.json?revision=2549895075",
+      "revision": "2549895075",
+      "source": "Wikidata",
+      "bytes": 109089,
+      "sha256": "52167c7ab97a5a920b59a17282e5ddce66b857a98b6273ee9910809cf28fc268",
+      "usage_status": "cc0_structured_data_sample",
+      "integrity_origin": "first_retrieval_sha256"
+    },
+    {
+      "path": "data/wikidata/Q710324.json",
+      "url": "https://www.wikidata.org/wiki/Special:EntityData/Q710324.json?revision=2554328295",
+      "revision": "2554328295",
+      "source": "Wikidata",
+      "bytes": 507075,
+      "sha256": "331ffa19d2086942e8c203288afda262c462b9b2209f2180dcb6cb8e884303c8",
+      "usage_status": "cc0_structured_data_sample",
+      "integrity_origin": "first_retrieval_sha256"
+    }
+  ]
+}
