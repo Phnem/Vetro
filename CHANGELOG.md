@@ -1,5 +1,37 @@
 # Vetro changelog
 
+## v3.4.7-Beta — October 27, 2026
+
+App version: `v3.4.7-Beta`. Android version code: `347`.
+Changes since 3.4.6.
+
+### Recommendations: rate with a swipe
+
+- Swipe a recommendation card up to approve it (it turns green on the way) or down to reject it (it turns red). The verdict is saved as the card leaves the deck, an Undo button brings the last card back, and the ratings stay on the device.
+- Your verdicts now shape the picks: genres of approved cards count for you, genres of rejected ones count against you (the effect fades over about a year), a title you have already judged never comes back, and a title whose picks keep getting rejected loses weight as a source of new ones.
+
+### Movies and series in recommendations
+
+- Recommendations now include movies and series, not only anime. The mix follows your collection: an anime-only library gets anime picks, a mixed one gets both, interleaved in the deck, and each card carries a small type label. Movies and series come from TMDB.
+- Movies and series in your collection that have no TMDB id now get one automatically. The title is searched by name, year and type, and the match is checked: the name must match, the year may differ by at most one, and when two candidates fit equally (same-name remakes) nothing is guessed. Titles that do not match are not searched again for two weeks.
+- Ranking was reworked: scores are normalized, every pick is weighed by how strongly it is tied to the titles you rated highly, and the deck is built so it is not six near-copies of one show. The random shuffle between sessions is much smaller, so the picks are steadier.
+- Two more sources, Trakt and TasteDive, are built in but switched off until they are verified on real collections.
+
+### Fewer repeats in recommendations
+
+- Anime you already have are no longer offered under another name: sequels, later seasons, movies, spin-offs and other adaptations of the same story are filtered out through the AniList relations (for example, season 2 of a show whose first season is in your collection). On a test collection none of 40 anime picks was already covered by a franchise you own; before the change about a quarter were.
+- Titles are also compared without the format, year or season marker, so "Hunter x Hunter (2011)" is recognised as "Hunter x Hunter".
+- A network failure never empties the deck: if the relations cannot be loaded, the picks are shown unfiltered.
+
+### Movies and series: the source is picked for you
+
+- Opening a movie or an episode no longer asks you to choose from a list of torrent releases. The best-ranked source is used and you are asked only for the quality, the same as for anime. Downloads use the same flow.
+- The list of sources and audio is still there when you want to change it, behind the quality button. It is now titled "Source and audio"; it used to say "Watch", even for downloads.
+
+### Player
+
+- Playback speed in the local player is now a ruler sheet like in the audiobook player, and the sheet stays open while you drag.
+
 ## v3.4.6-Stable — October 25, 2026
 
 App version: `v3.4.6-Stable`. Android version code: `346`.
