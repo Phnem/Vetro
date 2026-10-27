@@ -68,24 +68,39 @@ class TorrentDataSource(private val engine: TorrentEngine) : BaseDataSource(true
         return read
     }
 
-    /** Кусок нужен сейчас, несколько следующих — чуть позже; ждём, пока придёт. */
+    /**
+     * Кусок нужен сейчас, несколько следующих — чуть позже; ждём, пока придёт. Запрос повторяется
+     * каждые [REASK_MS]: блок, отданный молчащему пиру, иначе ждёт своего таймаута, а плеер всё это
+     * время молчит.
+     */
     private fun awaitPiece(h: TorrentHandle, piece: Int) {
         if (h.havePiece(piece)) return
-        val last = h.torrentFile().numPieces() - 1
-        for (k in 0..READ_AHEAD_PIECES) {
-            val p = piece + k
-            if (p > last) break
-            if (!h.havePiece(p)) h.setPieceDeadline(p, k * DEADLINE_STEP_MS)
-        }
-        val deadline = System.currentTimeMillis() + STALL_MS
+        requestAhead(h, piece)
+        val started = System.currentTimeMillis()
+        val deadline = started + STALL_MS
+        var asked = started
         while (!h.havePiece(piece)) {
-            if (System.currentTimeMillis() > deadline) throw IOException("torrent stalled on piece $piece")
+            val now = System.currentTimeMillis()
+            if (now > deadline) throw IOException("torrent stalled on piece $piece")
+            if (now - asked >= REASK_MS) {
+                asked = now
+                requestAhead(h, piece)
+            }
             try {
                 Thread.sleep(POLL_MS)
             } catch (e: InterruptedException) {
                 Thread.currentThread().interrupt()
                 throw IOException("interrupted", e)
             }
+        }
+    }
+
+    private fun requestAhead(h: TorrentHandle, piece: Int) {
+        val last = h.torrentFile().numPieces() - 1
+        for (k in 0..READ_AHEAD_PIECES) {
+            val p = piece + k
+            if (p > last) break
+            if (!h.havePiece(p)) h.setPieceDeadline(p, k * DEADLINE_STEP_MS)
         }
     }
 
@@ -109,6 +124,7 @@ class TorrentDataSource(private val engine: TorrentEngine) : BaseDataSource(true
         const val READ_AHEAD_PIECES = 8
         const val DEADLINE_STEP_MS = 400
         const val POLL_MS = 50L
+        const val REASK_MS = 3_000L
         const val STALL_MS = 60_000L
     }
 }

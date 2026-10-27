@@ -5,6 +5,8 @@ import android.content.Intent
 import android.os.Handler
 import android.os.Looper
 import android.os.Bundle
+import android.os.SystemClock
+import android.util.Log
 import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
 import androidx.media3.common.PlaybackException
@@ -97,6 +99,27 @@ class AudiobookPlaybackService : MediaLibraryService() {
             if (player.isPlaying) handler.postDelayed(this, CHAPTER_UPDATE_INTERVAL_MS)
         }
     }
+    private val stallDetector = PlaybackStallDetector()
+    private var stallTickScheduled = false
+    private val stallTick = object : Runnable {
+        override fun run() {
+            stallTickScheduled = false
+            if (!::player.isInitialized) return
+            val wantsPlay = player.playWhenReady &&
+                player.playbackSuppressionReason == Player.PLAYBACK_SUPPRESSION_REASON_NONE
+            val stalled = stallDetector.onTick(
+                nowMs = SystemClock.elapsedRealtime(),
+                mediaId = player.currentMediaItem?.mediaId,
+                wantsPlay = wantsPlay,
+                buffering = player.playbackState == Player.STATE_BUFFERING,
+                ready = player.playbackState == Player.STATE_READY,
+                positionMs = player.currentPosition,
+            )
+            // Без сети переоткрывать нечего: вернётся связь — плеер доберёт сам.
+            if (stalled && NetworkState.isOnline(this@AudiobookPlaybackService)) restartStalledSource()
+            scheduleStallTick()
+        }
+    }
     private val playerListener = object : Player.Listener {
         override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
             if (!playWhenReady) {
@@ -128,6 +151,7 @@ class AudiobookPlaybackService : MediaLibraryService() {
             if (currentId != null && currentId != retryingMediaId) retryingMediaId = null
             handler.removeCallbacks(savePosition)
             if (player.isPlaying) handler.postDelayed(savePosition, POSITION_SAVE_INTERVAL_MS)
+            scheduleStallTick()
         }
 
         override fun onPlayerError(error: PlaybackException) {
@@ -319,7 +343,25 @@ class AudiobookPlaybackService : MediaLibraryService() {
         if (!player.playWhenReady) stopSelf()
     }
 
+    /** Тик сторожа живёт, пока пользователь хочет слушать; на паузе не будит процесс. */
+    private fun scheduleStallTick() {
+        if (stallTickScheduled || !player.playWhenReady) return
+        stallTickScheduled = true
+        handler.postDelayed(stallTick, STALL_TICK_MS)
+    }
+
+    /**
+     * Поток замолчал без ошибки (раздача не отдаёт кусок, сайт держит соединение): то же, что делает
+     * пользователь кнопкой «−10 с», — позиция чуть назад и источник открывается заново.
+     */
+    private fun restartStalledSource() {
+        val position = player.currentPosition.coerceAtLeast(0L)
+        Log.w(TAG, "playback stalled at ${position}ms (state=${player.playbackState}), reopening source")
+        player.seekTo(player.currentMediaItemIndex, (position - STALL_REWIND_MS).coerceAtLeast(0L))
+    }
+
     override fun onDestroy() {
+        handler.removeCallbacks(stallTick)
         handler.removeCallbacks(savePosition)
         handler.removeCallbacks(updateChapter)
         chapterLoadJob?.cancel()
@@ -640,6 +682,9 @@ class AudiobookPlaybackService : MediaLibraryService() {
         fun formatSpeed(speed: Float): String =
             String.format(Locale.US, "%.2f", speed).trimEnd('0').trimEnd('.') + "×"
 
+        const val TAG = "AudiobookService"
+        const val STALL_TICK_MS = 2_000L
+        const val STALL_REWIND_MS = 3_000L
         const val POSITION_SAVE_INTERVAL_MS = 5_000L
         const val CHAPTER_UPDATE_INTERVAL_MS = 1_000L
         const val PREFS = "audiobook_player_options"

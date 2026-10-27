@@ -14,6 +14,7 @@ import org.libtorrent4j.Sha1Hash
 import org.libtorrent4j.TorrentFlags
 import org.libtorrent4j.TorrentHandle
 import org.libtorrent4j.TorrentInfo
+import org.libtorrent4j.swig.settings_pack
 
 /**
  * Торрент-движок аудиокниг (libtorrent). Раздача качается в папку приложения по порядку файлов,
@@ -36,6 +37,9 @@ class TorrentEngine(private val root: File) {
                 .activeDownloads(3)
                 .activeSeeds(2)
                 .connectionsLimit(200)
+            // Запрошенный блок молчащий пир держит 50 с (по умолчанию) — для потокового чтения это
+            // минута тишины в книге; через 10 с блок уходит другому.
+            settings.setInteger(settings_pack.int_types.request_timeout.swigValue(), REQUEST_TIMEOUT_SEC)
             start(SessionParams(settings))
         }
     }
@@ -93,6 +97,7 @@ class TorrentEngine(private val root: File) {
     companion object {
         private const val UPLOAD_LIMIT_BYTES = 64 * 1024
         private const val MAGNET_TIMEOUT_SEC = 45
+        private const val REQUEST_TIMEOUT_SEC = 10
 
         /**
          * Есть ли libtorrent под этот телефон. В APK движок только для arm64-v8a (и x86_64 в debug
