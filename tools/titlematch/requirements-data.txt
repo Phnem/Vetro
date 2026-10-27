@@ -1,0 +1,10 @@
+cloudpickle==3.1.2
+joblib==1.6.0
+lightgbm==4.7.0
+narwhals==2.28.0
+numpy==2.5.4
+pyarrow==26.0.0
+rapidfuzz==3.14.6
+scikit-learn==1.9.1
+scipy==1.18.1
+threadpoolctl==3.7.0
