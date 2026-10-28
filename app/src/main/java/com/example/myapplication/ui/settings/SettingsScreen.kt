@@ -960,6 +960,27 @@ private fun DeveloperGroups(
                     )
                 },
                 {
+                    // Теневые наблюдения TitleMatch: что модель сказала бы о рекомендациях рядом с вашей
+                    // коллекцией. Только счётчики в памяти, названия не хранятся и не уходят.
+                    val ru = strings.languageName == "RU"
+                    val titleMatch = org.koin.compose.koinInject<com.example.myapplication.domain.titleidentityintegration.TitleIdentityService>()
+                    val observed = titleMatch.shadowCounts().entries
+                        .groupBy({ it.key.split(':').getOrNull(1).orEmpty() }, { it.value })
+                        .mapValues { (_, counts) -> counts.sum() }
+                        .entries.sortedByDescending { it.value }.take(5)
+                    IosRow(
+                        title = if (ru) "TitleMatch: наблюдения" else "TitleMatch: observations",
+                        subtitle = if (observed.isEmpty()) {
+                            if (ru) "Пока пусто: рекомендации ещё не считались или пакета модели нет" else "Empty so far: no recommendations yet or no model pack"
+                        } else {
+                            observed.joinToString(" · ") { "${it.key} ${it.value}" }
+                        },
+                        isDark = isDark,
+                        icon = Icons.Filled.Code,
+                        iconBackground = devIcon,
+                    )
+                },
+                {
                     val ru = strings.languageName == "RU"
                     IosRow(
                         title = if (ru) "Анимация «назад» как в extera" else "Extera-style back animation",

@@ -1,0 +1,16 @@
+plugins { id 'org.jetbrains.kotlin.jvm' version '2.1.0' }
+kotlin { jvmToolchain(21) }
+sourceSets {
+    main { kotlin.srcDirs = ['../../../app/src/main/java/com/example/myapplication/domain/titleidentity'] }
+    test { kotlin.srcDirs = ['../../../app/src/test/java/com/example/myapplication/domain/titleidentity'] }
+}
+dependencies {
+    compileOnly files("${System.getenv('ANDROID_HOME')}/platforms/android-36/android.jar")
+    testImplementation 'junit:junit:4.13.2'
+    testImplementation 'org.json:json:20240303'
+}
+test {
+    systemProperty 'titlematch.fixtureRoot', file('../.cache/benchmark-assets').absolutePath
+    inputs.files(fileTree('../.cache/benchmark-assets') { include 'feature-golden.json', 'model.vtmf' })
+    testLogging { events 'failed', 'skipped' }
+}

@@ -1,0 +1,31 @@
+{
+  "postings": 1369989,
+  "index_bytes": 62017536,
+  "sha256": "56d798315593543dafe0590c8ac8e2ea1910eaad8319afad74c1a965846aed73",
+  "replay": {
+    "scope": "known-corpus retrieval replay, not unseen identity generalization",
+    "counts": {
+      "test:alias:total": 1200,
+      "test:alias:hit50": 1200,
+      "test:alias:hit10": 1200,
+      "test:prefix:total": 1200,
+      "test:prefix:hit50": 1200,
+      "test:prefix:hit10": 1200,
+      "test:typo:total": 1200,
+      "test:typo:hit50": 1200,
+      "test:typo:hit10": 1200,
+      "validation:alias:total": 1200,
+      "validation:alias:hit50": 1200,
+      "validation:alias:hit10": 1200,
+      "validation:prefix:total": 1200,
+      "validation:prefix:hit50": 1200,
+      "validation:prefix:hit10": 1200,
+      "validation:typo:total": 1200,
+      "validation:typo:hit50": 1200,
+      "validation:typo:hit10": 1200
+    },
+    "latency_ms_p95": 92.19749999465421,
+    "sample_policy": "first eligible aliases by entity/language/text; bounded, not representative",
+    "index_bytes": 62017536
+  }
+}

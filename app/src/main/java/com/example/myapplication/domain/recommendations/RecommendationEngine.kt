@@ -51,6 +51,7 @@ class RecommendationEngine(
     private val idBackfill: LibraryTmdbIdBackfill? = null,
     /** Отсеивает аниме из франшиз, которые уже есть в коллекции (продолжения, фильмы, другие экранизации). */
     private val franchiseFilter: FranchiseOwnershipFilter? = null,
+    private val titleIdentity: com.example.myapplication.domain.titleidentityintegration.TitleIdentityService? = null,
 ) {
 
     private val refreshMutex = Mutex()
@@ -219,6 +220,14 @@ class RecommendationEngine(
             if (pool.isEmpty()) pool = collect(enabled) { it.getTrending(type, language) }
         }
 
+        // TitleMatch runs in shadow: observations never suppress or rewrite a recommendation.
+        titleIdentity?.let { identity ->
+            try { identity.observeRecommendations(pool, library) }
+            catch (error: Exception) {
+                if (error is CancellationException) throw error
+                Log.w(TAG, "TitleMatch shadow unavailable")
+            }
+        }
         // Новый скор склеивает дубли сам: записи без постера оставляем до склейки, постер берёт другой источник.
         val unowned = filter.filter(pool, library, judged, requirePoster = !flags.newScorer)
         // Сбой сети не должен прятать рекомендации: при ошибке фильтр франшиз пропускается.

@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "release_candidate_training": {
+    "wikidata_structured_data": {
+      "license": "CC0-1.0",
+      "fields": ["labels", "aliases", "typed_external_ids", "publication_dates", "series", "part_of"],
+      "training_eligible": true,
+      "redistribution_eligible": true,
+      "requires": ["query_receipt", "source_sha256", "known_namespace", "conflict_quarantine"],
+      "granularity": "Each media kind is distinct, including anime/manga on one Wikidata QID; Open Library work only.",
+      "limits": "Incomplete and possibly erroneous community catalogue. No claim of exhaustive/franchise-perfect identity."
+    }
+  },
+  "research_only": {
+    "manami": {"training_eligible": false, "redistribution_eligible": false, "reason": "Mixed-provider provenance unresolved for release candidate"},
+    "cedya": {"training_eligible": false, "redistribution_eligible": false, "reason": "Changed catalogue grouping and mixed-provider provenance"},
+    "fribb": {"training_eligible": false, "redistribution_eligible": false, "reason": "No verified dataset reuse license"}
+  },
+  "excluded_bulk_apis": ["AniList", "Jikan", "Shikimori", "TMDB"],
+  "models": {
+    "potion_2m": {"purpose": "offline English baseline", "license": "MIT", "identity_labels": false},
+    "multilingual_minilm": {"purpose": "offline semantic comparison", "license": "Apache-2.0", "identity_labels": false}
+  }
+}
