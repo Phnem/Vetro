@@ -20,15 +20,21 @@ import java.security.MessageDigest;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Collections;
+import com.example.myapplication.domain.titleidentity.*;
 
 /** Isolated offline benchmark. No collection access or network permission. */
 public final class MainActivity extends Activity {
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
+        getWindow().addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        final String runId = getIntent().getStringExtra("titlematch_run_id");
         TextView text = new TextView(this); text.setText("TitleMatch benchmark running"); setContentView(text);
         new Thread(() -> {
             JSONObject report = new JSONObject();
             try {
+                report.put("run_started_at_epoch_ms",System.currentTimeMillis());
+                report.put("run_id",runId == null ? "manual" : runId);
                 report.put("device", Build.MANUFACTURER + " " + Build.MODEL);
                 report.put("sdk", Build.VERSION.SDK_INT);
                 report.put("hardware", Build.HARDWARE);
@@ -80,13 +86,42 @@ public final class MainActivity extends Activity {
                     for(int i=-50;i<times.length;i++) { int j=Math.floorMod(i,inputs.length);rewind(inputs[j]);out.rewind();long t=System.nanoTime();interpreter.runForMultipleInputsOutputs(inputs[j],outputs);if(i>=0)times[i]=(System.nanoTime()-t)/1e6; }
                     report.put("neural",timing(times));
                 }
-                report.put("passed",report.getDouble("forest_max_probability_error")<1e-9&&report.getDouble("neural_max_probability_error")<.02&&report.getJSONObject("forest").getDouble("p95_ms")<=10);
-            } catch(Throwable error) { try { report.put("passed",false);report.put("error",error.toString()); } catch(Exception ignored) {} }
-            try (FileOutputStream file=new FileOutputStream(new File(getFilesDir(),"benchmark.json"))) { file.write(report.toString(2).getBytes(StandardCharsets.UTF_8)); } catch(Exception ignored) {}
+                started=System.nanoTime();
+                TitleMatchRuntime runtime=TitleMatchPack.INSTANCE.loadVerified(getAssets(),"titlematch/v1");
+                if(runtime==null)throw new IllegalStateException("Checksummed model/data pack failed to load");
+                report.put("pack_load_ms",(System.nanoTime()-started)/1e6);report.put("model_version",runtime.getVersion());
+                JSONArray golden=new JSONObject(new String(readAsset("feature-golden.json"),StandardCharsets.UTF_8)).getJSONArray("vectors");
+                double featureError=0,coreError=0;
+                for(int i=0;i<golden.length();i++) {
+                    JSONObject v=golden.getJSONObject(i);JSONArray expected=v.getJSONArray("features");
+                    float[] actual=TitleMatchFeatures.INSTANCE.compute(v.getString("a"),v.getString("b"),v.getString("kind_a"),v.getString("kind_b"),v.isNull("year_a")?null:v.getInt("year_a"),v.isNull("year_b")?null:v.getInt("year_b"));
+                    for(int j=0;j<actual.length;j++)featureError=Math.max(featureError,Math.abs(actual[j]-expected.getDouble(j)));
+                    coreError=Math.max(coreError,Math.abs(runtime.getForest().rawProbability(actual)-v.getDouble("raw_probability")));
+                }
+                report.put("kotlin_feature_max_error",featureError);report.put("kotlin_forest_max_error",coreError);
+                JSONArray cases=new JSONObject(new String(readAsset("challenge.json"),StandardCharsets.UTF_8)).getJSONArray("cases");
+                int falseSame=0,unsafeActions=0,verifiedPositives=0,positiveCases=0;
+                for(int i=0;i<cases.length();i++) {
+                    JSONObject c=cases.getJSONObject(i);TitleKind ka=TitleKind.valueOf(c.getString("kind"));TitleKind kb=TitleKind.valueOf(c.optString("kind_b",ka.name()));
+                    TitleIdentityResult result=runtime.getMatcher().compare(identity(c.getString("a"),ka,c.optString("id_a","")),identity(c.getString("b"),kb,c.optString("id_b","")));
+                    boolean positive=c.getString("expected").equals("SAME_ENTITY");
+                    if(positive){positiveCases++;if(result.getDecision()==TitleIdentityDecision.SAME_ENTITY&&result.getVerified())verifiedPositives++;}
+                    else {if(result.getDecision()==TitleIdentityDecision.SAME_ENTITY)falseSame++;if(TitleIdentityPolicies.INSTANCE.hideRecommendation(result)||TitleIdentityPolicies.INSTANCE.allowEnrichment(result))unsafeActions++;}
+                }
+                report.put("challenge_cases",cases.length());report.put("challenge_false_same",falseSame);report.put("challenge_unsafe_actions",unsafeActions);report.put("challenge_verified_positive",verifiedPositives);report.put("challenge_positive_cases",positiveCases);
+                report.put("process_pss_kb",android.os.Debug.getPss());
+                report.put("passed",report.getDouble("forest_max_probability_error")<1e-9&&report.getDouble("neural_max_probability_error")<.02&&report.getJSONObject("forest").getDouble("p95_ms")<=10&&featureError<1e-6&&coreError<1e-8&&falseSame==0&&unsafeActions==0);
+            } catch(Throwable error) { try { report.put("passed",false);report.put("error",error.toString());report.put("error_location",error.getStackTrace().length>0?error.getStackTrace()[0].toString():""); } catch(Exception ignored) {} }
+            android.util.Log.i("TitleMatchBench","BENCHMARK_RESULT "+report.toString());
+            try (FileOutputStream file=new FileOutputStream(new File(getFilesDir(),"benchmark.json"))) { file.write(report.toString(2).getBytes(StandardCharsets.UTF_8)); } catch(Exception error) {android.util.Log.e("TitleMatchBench","Result persistence failed",error);}
             String message=report.toString();runOnUiThread(()->text.setText(message));
         },"titlematch-benchmark").start();
     }
     byte[] readAsset(String name)throws Exception {try(InputStream input=getAssets().open(name);ByteArrayOutputStream output=new ByteArrayOutputStream()){byte[] buffer=new byte[8192];int n;while((n=input.read(buffer))!=-1)output.write(buffer,0,n);return output.toByteArray();}}
+    static TitleIdentity identity(String title,TitleKind kind,String external) {
+        java.util.Set<TitleExternalId> ids=external.isEmpty()?Collections.emptySet():Collections.singleton(new TitleExternalId(TitleNamespace.TMDB_MOVIE,external.substring(external.lastIndexOf(':')+1)));
+        return new TitleIdentity(Collections.singletonList(title),kind,ids,null,null,kind==TitleKind.BOOK_WORK?TitleLevel.WORK:TitleLevel.CATALOG_ENTRY);
+    }
     static void rewind(Object[] inputs){for(Object input:inputs)((ByteBuffer)input).rewind();}
     static JSONObject timing(double[] values)throws Exception {Arrays.sort(values);return new JSONObject().put("iterations",values.length).put("p50_ms",values[values.length/2]).put("p95_ms",values[(int)(values.length*.95)]).put("p99_ms",values[(int)(values.length*.99)]);}
     static float[] floats(JSONArray values)throws Exception {float[] result=new float[values.length()];for(int i=0;i<result.length;i++)result[i]=(float)values.getDouble(i);return result;}

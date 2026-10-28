@@ -1,0 +1,32 @@
+{
+  "model_apk_bytes": 96115207,
+  "baseline_apk_bytes": 93347111,
+  "apk_delta_bytes": 2768096,
+  "method": "Same compiled code; cleanPackageDebug before each assembleDebug; baseline asset directory empty",
+  "assets": {
+    "aliases.bin": {
+      "raw_bytes": 1633158,
+      "compressed_bytes": 1633658
+    },
+    "entities.bin": {
+      "raw_bytes": 300752,
+      "compressed_bytes": 295534
+    },
+    "ids.bin": {
+      "raw_bytes": 340083,
+      "compressed_bytes": 340188
+    },
+    "manifest.json": {
+      "raw_bytes": 1972,
+      "compressed_bytes": 1034
+    },
+    "model.vtmf": {
+      "raw_bytes": 1467920,
+      "compressed_bytes": 496989
+    }
+  },
+  "model_apk_sha256": "b2f859d130ef3a9d7399f1c9b1287b38f8081c5e65290a429cac3e68e763d9e7",
+  "baseline_apk_sha256": "dc6fe3e464921c08898bd27c359efb50f475fa3ec44adbd41bd6c606f5401e4b",
+  "new_ml_runtime_dependency": false,
+  "installed_user_app": false
+}

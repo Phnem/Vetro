@@ -1,0 +1,34 @@
+{
+  "run_started_at_epoch_ms": 1793150745990,
+  "run_id": "3dfe7987684a4fa9b965257797212f66",
+  "device": "Xiaomi 2211133C",
+  "sdk": 36,
+  "hardware": "qcom",
+  "forest_load_ms": 186.093802,
+  "forest_max_probability_error": 0,
+  "forest": {
+    "iterations": 1000,
+    "p50_ms": 0.039167,
+    "p95_ms": 0.062761,
+    "p99_ms": 1.590521
+  },
+  "neural_load_ms": 15.235521,
+  "neural_max_probability_error": 6.183567102802101e-09,
+  "neural": {
+    "iterations": 1000,
+    "p50_ms": 0.037084,
+    "p95_ms": 0.040104,
+    "p99_ms": 0.053646
+  },
+  "pack_load_ms": 1060.508333,
+  "model_version": "vetro-titlematch-2026-10-27-v2",
+  "kotlin_feature_max_error": 0,
+  "kotlin_forest_max_error": 0,
+  "challenge_cases": 32,
+  "challenge_false_same": 0,
+  "challenge_unsafe_actions": 0,
+  "challenge_verified_positive": 2,
+  "challenge_positive_cases": 6,
+  "process_pss_kb": 131494,
+  "passed": true
+}

@@ -1,0 +1,67 @@
+{
+  "release_status": "READY_FOR_GUARDED_SHADOW",
+  "verified_date": "2026-10-28",
+  "branch": "feat/title-identity-foundation",
+  "integration_base": "adb9488af4faf474a8a3203319e720e0b02f3505",
+  "model_version": "vetro-titlematch-2026-10-27-v2",
+  "selected_model": "LightGBM portable numeric forest",
+  "model_bytes": 1467920,
+  "model_sha256": "16fcd1ab0bf9d13957da138c9f39dd8d7ebd1112a1c33ed445c465da91a629a0",
+  "checks": {
+    "android_app": {
+      "tests": 40,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "kotlin_core": {
+      "tests": 19,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "python": {
+      "tests": 23,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    }
+  },
+  "data_reproduction": {
+    "train": {
+      "features": true,
+      "indices": true,
+      "labels": true
+    },
+    "validation": {
+      "features": true,
+      "indices": true,
+      "labels": true
+    },
+    "test": {
+      "features": true,
+      "indices": true,
+      "labels": true
+    }
+  },
+  "texts_and_tokens_reproduced": true,
+  "pinned_dependency_resolution_verified": true,
+  "android_apk_assemble_passed": true,
+  "device_report": {
+    "file": "device-v2.json",
+    "sha256": "018f62570fca0d77cf27c89c2d477d7cf78d76db129c275c72da8742f57d5fab"
+  },
+  "apk_size_report": {
+    "file": "apk-comparison.json",
+    "sha256": "70b9b2190809f232c4f0527a4516f02a89caf4e669fb7f38d13550c0df19246b"
+  },
+  "model_test_report": {
+    "file": "results-v2.json",
+    "sha256": "36dbb454928e0849c16e3e1394baf35dc4d4eaceea281134ef9fa4ecdd906fbc"
+  },
+  "evaluation_context": "post-correction-regression, not fresh independent test",
+  "learned_automatic_actions_enabled": false,
+  "production_precision_certified": false,
+  "rollout": "Recommendations observe only; manual search reranks without dropping candidates; enrichment writes require verified identity. Missing/corrupt pack uses legacy fallback.",
+  "remaining_before_autonomous_ml": "Fresh independent real-candidate labels, per-domain/language prevalence-aware validation, shadow observation; release/AAB size when publishing."
+}

@@ -3,6 +3,7 @@ package com.example.myapplication.domain.enrichment
 import com.example.myapplication.data.models.Anime
 import com.example.myapplication.data.repository.AnimeRepository
 import com.example.myapplication.domain.normalizeForSearch
+import com.example.myapplication.domain.titleidentityintegration.toTitleIdentity
 
 import com.example.myapplication.network.ApiSearchResult
 import com.example.myapplication.network.AppLanguage
@@ -46,7 +47,8 @@ data class PosterCandidate(
  * на русский запрос, и у разных записей появлялся один и тот же чужой тайтл. Здесь каталоги
  * опрашиваются все сразу, а выбирает человек.
  */
-class TitleCandidateSearch(private val repository: AnimeRepository) {
+class TitleCandidateSearch(private val repository: AnimeRepository,
+    private val identity: com.example.myapplication.domain.titleidentityintegration.TitleIdentityService? = null) {
 
     /**
      * Варианты для записи. [query] пуст — ищем по русскому и обычному названию записи; число —
@@ -61,7 +63,11 @@ class TitleCandidateSearch(private val repository: AnimeRepository) {
             byQueries(queries)
         }
         val needles = queries.map { it.normalizeForSearch() }
-        return merge(hits).sortedByDescending { relevance(it, needles) }.take(MAX_CANDIDATES)
+        val candidates = merge(hits).sortedByDescending { relevance(it, needles) }.take(MAX_CANDIDATES)
+        val service = identity ?: return candidates
+        val kind = anime.toTitleIdentity().kind
+        val queryIdentity = if (typed.isNotEmpty()) com.example.myapplication.domain.titleidentity.TitleIdentity(queries, kind) else anime.toTitleIdentity()
+        return service.rerank(queryIdentity, candidates) { it.toTitleIdentity(kind) }
     }
 
     /** Обложки из разных каталогов: по id записи и по поиску названия — с подписью, как тайтл назван там. */

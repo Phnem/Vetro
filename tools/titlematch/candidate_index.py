@@ -62,7 +62,9 @@ class CandidateIndex:
     def search(self, title: str, kind: str, limit: int=50) -> list[str]:
         if limit <= 0 or not key(title):
             return []
-        ordered = sorted(self.exact(title, kind))
+        from rapidfuzz import fuzz
+        exact = sorted(self.exact(title, kind))
+        ordered = list(exact)
         text = normalize(title)
         words = text.split()[:12]
         if words:
@@ -71,15 +73,27 @@ class CandidateIndex:
               JOIN entity e ON e.id=search.entity_id WHERE search MATCH ? AND e.kind=?
               ORDER BY bm25(search) LIMIT ?""",(expression,kind,limit*5))
             ordered.extend(r[0] for r in rows)
-        if self.has_grams and len(set(ordered)) < limit:
+        # Token hits must not crowd out a typo match with stronger character evidence.
+        if self.has_grams:
             query_grams = sorted(grams(title))[:100]
             if query_grams:
                 placeholders = ",".join("?" for _ in query_grams)
                 rows = self.db.execute(f"""SELECT e.id,COUNT(*) AS common FROM gram g
                     JOIN entity e ON e.rowid=g.entity_rowid WHERE g.gram IN ({placeholders}) AND e.kind=?
-                    GROUP BY e.id ORDER BY common DESC,e.id LIMIT ?""",(*query_grams,kind,limit*2))
+                    GROUP BY e.id ORDER BY common DESC,e.id LIMIT ?""",(*query_grams,kind,2000 if len(key(title))<9 else 500))
                 ordered.extend(r[0] for r in rows)
-        return list(dict.fromkeys(ordered))[:limit]
+        candidates=list(dict.fromkeys(ordered))
+        if not candidates:return []
+        q=key(title);scores={eid:0. for eid in candidates}
+        # Chunk below the conservative SQLite bound used by older Android versions.
+        for start in range(0,len(candidates),400):
+            chunk=candidates[start:start+400];marks=",".join("?" for _ in chunk)
+            for eid,k in self.db.execute(f"SELECT entity_id,key FROM alias WHERE entity_id IN ({marks})",chunk):
+                value=fuzz.ratio(q,k)/100
+                if k.startswith(q):value=max(value,.88+.12*len(q)/max(1,len(k)))
+                scores[eid]=max(scores[eid],value)
+        ranked=sorted(candidates,key=lambda eid:(-scores[eid],eid))
+        return list(dict.fromkeys(exact+ranked))[:limit]
 
 
 def replay(corpus: Path, index_path: Path, per_split: int=1200) -> dict:

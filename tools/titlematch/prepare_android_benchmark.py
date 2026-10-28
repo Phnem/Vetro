@@ -1,5 +1,6 @@
 """Prepare public validation vectors for a separate, offline benchmark APK."""
 import json
+import argparse
 from pathlib import Path
 import shutil
 
@@ -11,7 +12,11 @@ from fetch_resources import ROOT,digest
 
 
 def main():
-    models=ROOT/".cache/models-v1";pairs=ROOT/".cache/pairs-v1";out=ROOT/".cache/benchmark-assets"
+    parser=argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--models",type=Path,default=ROOT/".cache/models-v2")
+    parser.add_argument("--pairs",type=Path,default=ROOT/".cache/pairs-v2")
+    args=parser.parse_args()
+    models=args.models;pairs=args.pairs;out=ROOT/".cache/benchmark-assets"
     out.mkdir(parents=True,exist_ok=True)
     data=np.load(pairs/"validation.npz");tokens=np.load(pairs/"tokens.npy",mmap_mode="r")
     rng=np.random.default_rng(20261027);selection=rng.choice(len(data["labels"]),64,replace=False)

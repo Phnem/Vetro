@@ -124,6 +124,10 @@ android {
     }
 
     sourceSets.getByName("main").java.srcDir(if (castEnabled) "src/cast/java" else "src/nocast/java")
+    // Generated, checksummed local TitleMatch pack; a clone without it uses the existing fallback.
+    sourceSets.getByName("main").assets.srcDir(rootProject.file(
+        providers.gradleProperty("titleMatchAssetsDir").getOrElse("tools/titlematch/.cache/releases/current/android-assets")
+    ))
 
     buildFeatures {
         compose = true
@@ -134,6 +138,12 @@ android {
     // трансляции) тестируется целиком, а журнал в нём не главное.
     testOptions {
         unitTests.isReturnDefaultValues = true
+        unitTests.all {
+            it.systemProperty("titlematch.fixtureRoot", rootProject.file("tools/titlematch/.cache/benchmark-assets").absolutePath)
+            it.inputs.files(rootProject.fileTree("tools/titlematch/.cache/benchmark-assets") {
+                include("feature-golden.json", "model.vtmf")
+            })
+        }
     }
 
     compileOptions {
@@ -296,6 +306,7 @@ dependencies {
 
     // Test
     testImplementation(libs.junit)
+    testImplementation("org.json:json:20240303")
     // Тот же ONNX Runtime на ПК: конвейер перевода проверяется настоящими моделями (если они скачаны).
     testImplementation(libs.onnxruntime.jvm)
     testImplementation("io.ktor:ktor-client-mock")

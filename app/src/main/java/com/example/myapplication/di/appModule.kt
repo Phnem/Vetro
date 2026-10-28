@@ -257,7 +257,8 @@ val appModule = module {
             rateLimiter = get(named("remanga_rate")),
         )
     }
-    single { com.example.myapplication.domain.enrichment.TitleCandidateSearch(repository = get()) }
+    single { com.example.myapplication.domain.titleidentityintegration.TitleIdentityService(androidContext()) }
+    single { com.example.myapplication.domain.enrichment.TitleCandidateSearch(repository = get(), identity = get()) }
     single(named("inkstory_rate")) {
         // Inkstory лимиты не публикует: оглавление приходит одним ответом, поэтому спокойный темп.
         com.example.myapplication.network.TokenBucketRateLimiter(
@@ -679,6 +680,7 @@ val appModule = module {
             flagsSource = { flags.current() },
             idBackfill = get(),
             franchiseFilter = get(),
+            titleIdentity = get(),
         )
     }
 }

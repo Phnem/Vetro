@@ -92,7 +92,7 @@ def grouped_precision(scores,labels,rows,threshold,replicates=1500):
             "limit":"Generated pair distribution; no guarantee of production prevalence or label correctness"}
 
 
-def evaluate(pairs: Path,models: Path,corpus: Path):
+def evaluate(pairs: Path,models: Path,corpus: Path,test_context="first-heldout"):
     output=models/"evaluation.json"
     if output.exists():raise ValueError("Sealed test report already exists. Preserve it; use a new version for a new experiment.")
     reports={"lightgbm":json.loads((models/"lightgbm/training.json").read_text()),
@@ -127,6 +127,7 @@ def evaluate(pairs: Path,models: Path,corpus: Path):
     legacy=np.asarray([legacy_score(r["a"],r["b"]) for r in rows])
     exact=test["features"][:,NAMES.index("normalized_equal")]
     result={"winner_locked_before_test":winner,"test_pairs":len(labels),"models":results,
+            "evaluation_context":test_context,"prior_experiment_exposure":test_context!="first-heldout",
             "baselines":{"current_exact_normalization":metrics(exact,labels,.5),"legacy_fuzzy_structure":metrics(legacy,labels,.85)},
             "data_scope":"Wikidata CC0 alias identity plus synthetic typo perturbations and candidate negatives",
             "production_precision_certified":False,
@@ -144,6 +145,7 @@ if __name__=="__main__":
     parser.add_argument("--pairs",type=Path,default=ROOT/".cache/pairs-v1")
     parser.add_argument("--models",type=Path,default=ROOT/".cache/models-v1")
     parser.add_argument("--corpus",type=Path,default=ROOT/".cache/corpus-v1")
+    parser.add_argument("--test-context",choices=["first-heldout","post-correction-regression"],default="first-heldout")
     args=parser.parse_args()
-    result=finalize_charcnn(args.pairs,args.models) if args.command=="export-charcnn" else evaluate(args.pairs,args.models,args.corpus)
+    result=finalize_charcnn(args.pairs,args.models) if args.command=="export-charcnn" else evaluate(args.pairs,args.models,args.corpus,args.test_context)
     print(json.dumps(result,indent=2,ensure_ascii=True))

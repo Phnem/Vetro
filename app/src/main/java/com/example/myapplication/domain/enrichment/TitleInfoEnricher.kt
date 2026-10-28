@@ -22,6 +22,7 @@ import kotlinx.coroutines.CancellationException
 class TitleInfoEnricher(
     private val resolver: TitleIdResolver,
     private val repository: AnimeRepository,
+    private val identity: com.example.myapplication.domain.titleidentityintegration.TitleIdentityService? = null,
 ) {
     /** Что нашлось и записано; запись из базы при необходимости перечитывается вызывающим. */
     data class Outcome(val anime: Anime, val resolved: ResolvedTitle?, val changedFields: List<String>)
@@ -53,6 +54,8 @@ class TitleInfoEnricher(
             return Outcome(anime, null, emptyList())
         }
 
+        // A learned suggestion never authorizes writing IDs or translated names.
+        if (identity?.allowResolvedEnrichment(anime, resolved) == false) return Outcome(anime, resolved, emptyList())
         val changed = mutableListOf<String>()
         var updated = anime
         val tmdb = if (kind == TitleKind.MOVIE) resolved.ids.tmdbMovie else resolved.ids.tmdbTv

@@ -55,6 +55,19 @@ class IdentityDataTest(unittest.TestCase):
             with closing(sqlite3.connect(output/"dictionary.sqlite")) as db:
                 self.assertEqual(2,db.execute("SELECT count(DISTINCT entity_id) FROM alias WHERE key='sharedfixture'").fetchone()[0])
 
+    @unittest.skipUnless(importlib.util.find_spec("pyarrow"), "pyarrow training environment required")
+    def test_multiple_catalog_ids_on_one_qid_are_quarantined(self):
+        with tempfile.TemporaryDirectory() as folder:
+            raw=Path(folder)/"raw";raw.mkdir()
+            rows=[{"item":{"value":"http://www.wikidata.org/entity/Q1"},"external":{"value":str(i)},
+                   "text":{"value":"Different seasons grouped by source","xml:lang":"en"}} for i in (1,2)]
+            content=json.dumps({"results":{"bindings":rows}}).encode();(raw/"anime-000000.json").write_bytes(content)
+            (raw/"anime-000000.receipt.json").write_text(json.dumps({"kind":"ANIME","license":"CC0-1.0",
+                "sha256":hashlib.sha256(content).hexdigest(),"query_sha256":"fixture","retrieved_at":"fixture"}))
+            report=build(raw,Path(folder)/"out")
+            self.assertEqual(0,report["counts"]["entities"])
+            self.assertEqual(1,report["counts"]["quarantine"])
+
 
 if __name__ == "__main__":
     unittest.main()

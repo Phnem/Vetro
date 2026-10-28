@@ -76,7 +76,7 @@ def group_split(entities: list[dict], aliases: list[dict], relations: list[dict]
                          "largest_groups": group_counts.most_common(10)}
 
 
-def build(raw_dir: Path, output: Path) -> dict:
+def build(raw_dir: Path, output: Path, split_reference: Path | None = None) -> dict:
     import pyarrow as pa
     import pyarrow.parquet as pq
 
@@ -136,6 +136,14 @@ def build(raw_dir: Path, output: Path) -> dict:
     bad_entities = {e for ids in owners.values() if len(ids) > 1 for e in ids}
     for e in bad_entities:
         quarantine.append({"entity_id": e, "reason": "conflicting_external_id", "value": ""})
+    per_entity = defaultdict(list)
+    for row in external.values():
+        per_entity[row["entity_id"]].append(row["typed_id"])
+    for entity_id, typed_ids in per_entity.items():
+        counts = Counter(value.rsplit(":",1)[0] for value in typed_ids)
+        if any(count > 1 for count in counts.values()):
+            bad_entities.add(entity_id)
+            quarantine.append({"entity_id": entity_id, "reason": "multiple_ids_at_catalog_scope", "value": "|".join(sorted(typed_ids))})
     entity_rows = [e for e in entities.values() if e["entity_id"] not in bad_entities]
     keep = {e["entity_id"] for e in entity_rows}
     alias_rows = [a for a in aliases.values() if a["entity_id"] in keep]
@@ -149,6 +157,14 @@ def build(raw_dir: Path, output: Path) -> dict:
     for assignment in splits.values():
         if assignment["group_id"] in challenge_groups:
             assignment["split"] = "challenge"
+    if split_reference is not None:
+        reference = {r["entity_id"]:r for r in pq.read_table(split_reference).to_pylist()}
+        for entity_id in splits:
+            if entity_id not in reference:
+                raise ValueError("Split reference does not cover corrected corpus")
+            splits[entity_id] = {k:reference[entity_id][k] for k in ("split","group_id")}
+        split_report["reference_sha256"] = digest(split_reference)
+        split_report["reason"] = "Preserve all original groups/splits while quarantining source granularity errors"
     split_report["entities_per_split"] = dict(Counter(a["split"] for a in splits.values()))
     split_report["challenge_sha256"] = digest(challenge_path)
     for entity in entity_rows:
@@ -195,5 +211,6 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--raw-dir", type=Path, default=ROOT / ".cache/wikidata-corpus")
     parser.add_argument("--output", type=Path, default=ROOT / ".cache/corpus-v1")
+    parser.add_argument("--split-reference", type=Path)
     args = parser.parse_args()
-    print(json.dumps(build(args.raw_dir, args.output), indent=2))
+    print(json.dumps(build(args.raw_dir, args.output, args.split_reference), indent=2))

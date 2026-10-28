@@ -64,6 +64,8 @@ pooling и одинаковым preprocessing на Python/Android. Нельзя 
 
 Для каждого source/field отдельно хранить downloaded, training_eligible и
 redistribution_eligible. Сейчас downloaded подтверждается только integrity report;
-dataset eligibility ещё не утверждена. Даже CC0 sample проверяется на соответствие
+Manami/cedya/Fribb eligibility ещё не утверждена. CC0-корпус Wikidata для v2
+утверждён в SOURCE_POLICY.json с карантином конфликтов и неоднозначной
+гранулярности. Даже CC0 sample проверяется на соответствие
 сущности/уровня, прежде чем станет частью gold labels. Не смешивать отдельные
 условия моделей с лицензией кода и лицензией каталожных данных.
