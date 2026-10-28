@@ -13,6 +13,7 @@ import androidx.media3.common.PlaybackException
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.HttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.analytics.AnalyticsListener
 import androidx.media3.common.MediaItem
 import androidx.media3.session.CommandButton
 import androidx.media3.session.LibraryResult
@@ -100,6 +101,7 @@ class AudiobookPlaybackService : MediaLibraryService() {
         }
     }
     private val stallDetector = PlaybackStallDetector()
+    private val feedWatchdog = AudioFeedWatchdog()
     private var stallTickScheduled = false
     private val stallTick = object : Runnable {
         override fun run() {
@@ -116,7 +118,17 @@ class AudiobookPlaybackService : MediaLibraryService() {
                 positionMs = player.currentPosition,
             )
             // Без сети переоткрывать нечего: вернётся связь — плеер доберёт сам.
-            if (stalled && NetworkState.isOnline(this@AudiobookPlaybackService)) restartStalledSource()
+            if (stalled && NetworkState.isOnline(this@AudiobookPlaybackService)) {
+                restartStalledSource()
+            } else {
+                // Позиция идёт, а выход давно не принимает звук: микшер выбросил трек, плеер не в курсе.
+                val silentMs = feedWatchdog.silentForMs(
+                    nowMs = SystemClock.elapsedRealtime(),
+                    wantsPlay = wantsPlay,
+                    ready = player.playbackState == Player.STATE_READY,
+                )
+                if (silentMs >= 0L) restartDeadOutput(silentMs)
+            }
             scheduleStallTick()
         }
     }
@@ -181,7 +193,17 @@ class AudiobookPlaybackService : MediaLibraryService() {
     override fun onCreate() {
         super.onCreate()
         resumptionStore = PlaybackResumptionStore(this)
-        player = AudiobookPlayerFactory.create(this, manifestResolver, get(), silence)
+        player = AudiobookPlayerFactory.create(this, manifestResolver, get(), silence, feedWatchdog)
+        player.addAnalyticsListener(object : AnalyticsListener {
+            override fun onAudioUnderrun(
+                eventTime: AnalyticsListener.EventTime,
+                bufferSize: Int,
+                bufferSizeMs: Long,
+                elapsedSinceLastFeedMs: Long,
+            ) {
+                Log.w(TAG, "audio underrun: buffer=${bufferSizeMs}ms, ${elapsedSinceLastFeedMs}ms since last feed")
+            }
+        })
         applySilenceLevel(savedSilenceLevel())
         sleepTimer = SleepTimerController(player) { remaining ->
             sleepRemainingMs = remaining ?: -1L
@@ -358,6 +380,18 @@ class AudiobookPlaybackService : MediaLibraryService() {
         val position = player.currentPosition.coerceAtLeast(0L)
         Log.w(TAG, "playback stalled at ${position}ms (state=${player.playbackState}), reopening source")
         player.seekTo(player.currentMediaItemIndex, (position - STALL_REWIND_MS).coerceAtLeast(0L))
+    }
+
+    /**
+     * Выход молчит при живом плеере: трек выброшен из микшера. Перемотка сбрасывает декодер и пересоздаёт
+     * AudioTrack (то же лечит касание экрана) — а чтобы не потерять то, что «проиграно» в тишину, возвращаемся
+     * на время молчания (по скорости книги) и на буфер выхода.
+     */
+    private fun restartDeadOutput(silentMs: Long) {
+        val position = player.currentPosition.coerceAtLeast(0L)
+        val rewindMs = (silentMs * player.playbackParameters.speed).toLong() + DEAD_OUTPUT_MARGIN_MS
+        Log.w(TAG, "audio output silent for ${silentMs}ms at ${position}ms, recreating it (rewind ${rewindMs}ms)")
+        player.seekTo(player.currentMediaItemIndex, (position - rewindMs.coerceAtMost(DEAD_OUTPUT_MAX_REWIND_MS)).coerceAtLeast(0L))
     }
 
     override fun onDestroy() {
@@ -685,6 +719,9 @@ class AudiobookPlaybackService : MediaLibraryService() {
         const val TAG = "AudiobookService"
         const val STALL_TICK_MS = 2_000L
         const val STALL_REWIND_MS = 3_000L
+        /** Запас сверх времени молчания: звук мог умолкнуть раньше, чем выход перестал принимать. */
+        const val DEAD_OUTPUT_MARGIN_MS = 2_500L
+        const val DEAD_OUTPUT_MAX_REWIND_MS = 30_000L
         const val POSITION_SAVE_INTERVAL_MS = 5_000L
         const val CHAPTER_UPDATE_INTERVAL_MS = 1_000L
         const val PREFS = "audiobook_player_options"

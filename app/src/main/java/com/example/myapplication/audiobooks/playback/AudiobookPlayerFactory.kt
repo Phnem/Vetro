@@ -7,6 +7,7 @@ import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.audio.AudioSink
 import androidx.media3.exoplayer.audio.DefaultAudioSink
+import androidx.media3.exoplayer.audio.DefaultAudioTrackBufferSizeProvider
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import com.example.myapplication.audiobooks.domain.source.ManifestResolver
 import com.example.myapplication.audiobooks.torrent.TorrentEngine
@@ -19,7 +20,8 @@ object AudiobookPlayerFactory {
         manifestResolver: ManifestResolver,
         torrents: TorrentEngine,
         silence: LeveledSilenceChain,
-    ): ExoPlayer = ExoPlayer.Builder(context, SilenceAwareRenderers(context, silence))
+        feedWatchdog: AudioFeedWatchdog,
+    ): ExoPlayer = ExoPlayer.Builder(context, SilenceAwareRenderers(context, silence, feedWatchdog))
         .setMediaSourceFactory(
             DefaultMediaSourceFactory(context)
                 .setDataSourceFactory(VetroAudioDataSource.factory(context, manifestResolver, torrents)),
@@ -44,11 +46,28 @@ object AudiobookPlayerFactory {
 private class SilenceAwareRenderers(
     context: Context,
     private val silence: LeveledSilenceChain,
+    private val feedWatchdog: AudioFeedWatchdog,
 ) : DefaultRenderersFactory(context) {
     override fun buildAudioSink(context: Context, enableFloatOutput: Boolean, enableAudioTrackPlaybackParams: Boolean): AudioSink =
-        DefaultAudioSink.Builder(context)
-            .setEnableFloatOutput(enableFloatOutput)
-            .setEnableAudioTrackPlaybackParams(enableAudioTrackPlaybackParams)
-            .setAudioProcessorChain(silence)
-            .build()
+        MonitoredAudioSink(
+            DefaultAudioSink.Builder(context)
+                .setEnableFloatOutput(enableFloatOutput)
+                .setEnableAudioTrackPlaybackParams(enableAudioTrackPlaybackParams)
+                .setAudioProcessorChain(silence)
+                .setAudioTrackBufferSizeProvider(
+                    DefaultAudioTrackBufferSizeProvider.Builder()
+                        .setTargetPcmBufferDurationUs(PCM_BUFFER_US)
+                        .build(),
+                )
+                .build(),
+            feedWatchdog,
+        )
+
+    private companion object {
+        /**
+         * По умолчанию 0,5 с: по Bluetooth (A2DP) малейшая задержка подачи опустошает такой буфер, микшер
+         * выбрасывает трек из активных, и звук пропадает. Книге запас в пару секунд ничего не стоит.
+         */
+        const val PCM_BUFFER_US = 2_000_000
+    }
 }
