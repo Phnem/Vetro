@@ -16,6 +16,7 @@ grep -rn "VETRO-TAIL\[" app core --include=*.kt
 | `stream-provider` | Легальный источник кино/сериалов | Класс `MovieSeriesStreamingProvider` + строка в `movieSeriesSources` (`appModule`), порядок = приоритет |
 | `connection-type` | Новый способ подключения источников (карточка + страница в панели «Дополнительные источники») | Объект `ConnectionType` и строка в `ConnectionTypes` (`ui/settings/ConnectionTypes.kt`). Только протокол или описание (JSON/HTTP), без загрузки чужого кода в приложение |
 | `manga-source` | Источник манги | Класс `MangaSource` + строка в списке `MangaSourceEngine` (`appModule`) |
+| `marc-catalogue-sources` | Новый библиотечный MARC21-дамп для словаря книг (например, LC Books All) | Строка в списке источников `book-dictionary/run_v3/marc_links/extract.py`; поля 041$h/240/765/880 разбираются общим парсером. Только метаданные, лицензия дампа — в README линии |
 | `rec-source` | Источник кандидатов рекомендаций (аниме, фильмы, сериалы) | Класс `CandidateProvider` (`domain/recommendations/CandidateProvider.kt`) + строка в `providers` у `RecommendationEngine` (`appModule`). Флаг в `RecommendationFlags`, статус и условия — `docs/recommendations/sources.md` |
 
 Правила хвоста:
