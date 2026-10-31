@@ -1,83 +1,32 @@
 package com.example.myapplication.ui.home.cardmenu
 
-import androidx.compose.ui.draw.drawBehind
-import androidx.compose.animation.core.Animatable
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectDragGestures
-import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material.icons.rounded.StarBorder
-import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.ui.layout.boundsInRoot
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.IntOffset
-import androidx.compose.ui.unit.dp
-import com.example.myapplication.ui.shared.theme.isAppInDarkTheme
 import com.example.myapplication.ui.home.AnimeCardBody
 import com.example.myapplication.ui.home.AnimeCardState
 import com.example.myapplication.ui.home.FavoriteCollectionCard
-import com.example.myapplication.ui.shared.FrostedMaterials
-import com.example.myapplication.ui.shared.frostedGlass
-import com.example.myapplication.ui.shared.theme.MotionTokens
 import com.example.myapplication.ui.shared.theme.OverlayThemeTokens
+import com.example.myapplication.ui.shared.theme.isAppInDarkTheme
 import com.kyant.backdrop.Backdrop
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
-import kotlin.math.roundToInt
 
 // ==========================================
 // Контекстное меню карточки (долгое удержание).
 //
-// Карточка поднимается над затемнённым списком, под ней всплывает ряд действий. Оверлей
-// МОДАЛЕН: скрим съедает и тапы, и перетаскивания, поэтому под ним не скроллится список и не
-// листаются страницы рабочей области. Док гасит и отключает уже сама рабочая область — он ей
-// сосед, а не потомок.
-//
-// Блюр фона делает НЕ этот компонент: им занимается существующий `homeScrollBlur` на контенте
-// главной. Свой слой блюра здесь добавил бы ещё один узел над `layerBackdrop` и уронил стекло.
+// Карточка поднимается над затемнённым списком, под ней всплывает ряд действий. Раскладка,
+// анимации и модальность — в общем [ActionMenuOverlay]; здесь только набор кнопок карточки и
+// копия самой карточки.
 // ==========================================
-
-private val CARD_SCALE = 1.04f
-
-/** Число кнопок в ряду: от него зависит набор личных прогрессов «лесенки». */
-private const val ACTION_COUNT = 4
-private val ACTION_SIZE = 54.dp
-private val ACTION_SPACING = 14.dp
-private val CARD_TO_ACTIONS_GAP = 16.dp
 
 /** Что именно выделено: данные карточки и её место на экране в момент удержания. */
 @Immutable
@@ -116,233 +65,57 @@ fun CardActionMenuOverlay(
     modifier: Modifier = Modifier,
 ) {
     val isDark = isAppInDarkTheme()
-    val density = LocalDensity.current
-
-    // Собственное начало координат оверлея: карточку мы поймали в координатах КОРНЯ, а
-    // раскладываем внутри этого Box — без вычета его смещения копия уедет.
-    var overlayOrigin by remember { mutableStateOf<Offset?>(null) }
-
-    val progress = remember { Animatable(0f) }
-    LaunchedEffect(visible) {
-        if (visible) {
-            progress.animateTo(1f, animationSpec = MotionTokens.menuPop())
-        } else {
-            // Обратный ход той же дорогой, но без отскока: уходящее меню освобождает карточку,
-            // а не прощается с ней. Цель снимаем ПОСЛЕ анимации — иначе снимать было бы нечего.
-            progress.animateTo(0f, animationSpec = MotionTokens.sheetDismissForced())
-            onClosed()
-        }
-    }
-
-    // Кнопки выезжают «лесенкой»: у каждой своя пружина со сдвигом по времени, а не общий прогресс
-    // на весь ряд. Уход — без лесенки: меню освобождает карточку разом.
-    val actionProgress = remember { List(ACTION_COUNT) { Animatable(0f) } }
-    LaunchedEffect(visible) {
-        if (visible) {
-            actionProgress.forEachIndexed { index, animatable ->
-                launch {
-                    delay(index * MotionTokens.CardActionStaggerMillis.toLong())
-                    animatable.animateTo(1f, animationSpec = MotionTokens.menuPop())
-                }
-            }
-        } else {
-            actionProgress.forEach { animatable ->
-                launch { animatable.animateTo(0f, animationSpec = MotionTokens.sheetDismissForced()) }
-            }
-        }
-    }
-
-    BoxWithConstraints(
-        modifier = modifier
-            .fillMaxSize()
-            .onGloballyPositioned { overlayOrigin = it.boundsInRoot().topLeft },
-    ) {
-        val viewportHeightPx = with(density) { maxHeight.toPx() }
-        val actionsRowHeightPx = with(density) { ACTION_SIZE.toPx() }
-        val gapPx = with(density) { CARD_TO_ACTIONS_GAP.toPx() }
-        val topInsetPx = with(density) { topInset.toPx() }
-        val bottomInsetPx = with(density) { bottomInset.toPx() }
-
-        val origin = overlayOrigin
-        val cardLocalTop = if (origin != null) target.boundsInRoot.top - origin.y else 0f
-        val cardLocalLeft = if (origin != null) target.boundsInRoot.left - origin.x else 0f
-        // Высота с учётом увеличения: ряд кнопок отсчитывается от РЕАЛЬНОГО низа поднятой карточки.
-        val scaledHeight = target.boundsInRoot.height * CARD_SCALE
-        val grow = (scaledHeight - target.boundsInRoot.height) / 2f
-
-        val lift = cardLiftFor(
-            cardTop = cardLocalTop - grow,
-            cardHeight = scaledHeight,
-            menuHeight = actionsRowHeightPx,
-            gap = gapPx,
-            viewportHeight = viewportHeightPx,
-            topInset = topInsetPx,
-            bottomInset = bottomInsetPx,
-        )
-
-        // —— Скрим: гасит фон и запирает жесты —— //
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                // Прогресс читается в отрисовке, а не в композиции: иначе оверлей вместе с копией
-                // карточки пересобирался бы на каждом кадре открытия и закрытия.
-                .drawBehind { drawRect(Color.Black, alpha = 0.45f * progress.value) }
-                .pointerInput(Unit) { detectTapGestures { onDismiss() } }
-                // Перетаскивания съедаем отдельно: clickable их не перехватывает, и без этого
-                // палец по скриму листал бы страницы рабочей области.
-                .pointerInput(Unit) {
-                    detectDragGestures { change, _ -> change.consume() }
-                }
-        )
-
-        if (origin != null) {
-            val cardWidth = with(density) { target.boundsInRoot.width.toDp() }
-            val cardHeight = with(density) { target.boundsInRoot.height.toDp() }
-
-            // —— Копия карточки —— //
-            Box(
-                modifier = Modifier
-                    .offset {
-                        IntOffset(
-                            cardLocalLeft.roundToInt(),
-                            (cardLocalTop - lift * progress.value).roundToInt(),
-                        )
-                    }
-                    .width(cardWidth)
-                    .height(cardHeight)
-                    .graphicsLayer {
-                        val s = 1f + (CARD_SCALE - 1f) * progress.value
-                        scaleX = s
-                        scaleY = s
-                    }
-                    // Тап по самой карточке — тоже выход из режима: отдельного действия у неё нет.
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null,
-                    ) { onDismiss() },
-            ) {
-                val favoritePosition = target.favoritePosition
-                if (favoritePosition != null) {
-                    FavoriteCollectionCard(
-                        state = target.state,
-                        releaseYear = target.releaseYear,
-                        position = favoritePosition,
-                        onClick = onDismiss,
-                        onLongClick = {},
-                        modifier = Modifier.fillMaxSize(),
-                    )
-                } else {
-                    AnimeCardBody(state = target.state)
-                }
-            }
-
-            // —— Ряд действий —— //
-            val actionsRestTop = cardLocalTop + grow + scaledHeight + gapPx
-            // The four actions must still fit when the selected cover is only half a screen wide.
-            val actionsWidth = maxOf(cardWidth, ACTION_SIZE * ACTION_COUNT + ACTION_SPACING * (ACTION_COUNT - 1))
-                .coerceAtMost(maxWidth - 32.dp)
-            val actionsWidthPx = with(density) { actionsWidth.toPx() }
-            val marginPx = with(density) { 16.dp.toPx() }
-            val actionsLeft = (cardLocalLeft + target.boundsInRoot.width / 2f - actionsWidthPx / 2f)
-                .coerceIn(marginPx, (with(density) { maxWidth.toPx() } - actionsWidthPx - marginPx).coerceAtLeast(marginPx))
-            Row(
-                modifier = Modifier
-                    .offset {
-                        IntOffset(
-                            actionsLeft.roundToInt(),
-                            (actionsRestTop - lift * progress.value).roundToInt(),
-                        )
-                    }
-                    .width(actionsWidth)
-                    .testTag("card_action_row"),
-                horizontalArrangement = Arrangement.spacedBy(ACTION_SPACING, Alignment.CenterHorizontally),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                CardActionButton(
-                    icon = if (target.isFavorite) Icons.Rounded.Star else Icons.Rounded.StarBorder,
-                    tint = OverlayThemeTokens.FavoriteGold,
-                    backdrop = backdrop,
-                    entry = actionProgress[0],
-                    slideFromPx = gapPx,
-                    onClick = onToggleFavorite,
-                )
-                CardActionButton(
-                    icon = Icons.Rounded.Delete,
-                    tint = Color(0xFFE5382B),
-                    backdrop = backdrop,
-                    entry = actionProgress[1],
-                    slideFromPx = gapPx,
-                    onClick = onDelete,
-                )
-                CardActionButton(
-                    icon = Icons.Filled.Edit,
-                    tint = if (isDark) Color.White else Color(0xFF1C1C1E),
-                    backdrop = backdrop,
-                    entry = actionProgress[2],
-                    slideFromPx = gapPx,
-                    onClick = onEdit,
-                )
-                CardActionButton(
-                    icon = Icons.Outlined.Info,
-                    tint = if (isDark) Color.White else Color(0xFF1C1C1E),
-                    backdrop = backdrop,
-                    entry = actionProgress[3],
-                    slideFromPx = gapPx,
-                    onClick = onDetails,
-                )
-            }
-        }
-    }
-}
-
-/**
- * Круглая кнопка действия.
- *
- * Материал — матовое стекло, а не сплошная заливка: кнопка висит над затемнённым и размытым
- * списком, то есть ровно над той информацией, ради которой стекло и существует. Сплошной кружок
- * на этом фоне читался как вырезанная дырка.
- */
-@Composable
-private fun CardActionButton(
-    icon: ImageVector,
-    tint: Color,
-    backdrop: Backdrop,
-    /** Личный прогресс кнопки 0..1 (с перелётом): лесенку задаёт сдвиг запуска, см. оверлей. */
-    entry: Animatable<Float, *>,
-    /** Откуда кнопка выезжает: на столько пикселей выше места, «из-под» карточки. */
-    slideFromPx: Float,
-    onClick: () -> Unit,
-) {
-    Box(
-        modifier = Modifier
-            // Читается в графическом слое: прогресс кнопки не пересобирает композицию на кадрах.
-            .graphicsLayer {
-                val p = entry.value
-                alpha = p.coerceIn(0f, 1f)
-                translationY = (1f - p) * -slideFromPx
-                val s = 0.55f + 0.45f * p
-                scaleX = s
-                scaleY = s
-            }
-            .size(ACTION_SIZE)
-            .clip(CircleShape)
-            .frostedGlass(
-                backdrop = backdrop,
-                shape = CircleShape,
-                material = FrostedMaterials.dock(),
-            )
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                onClick = onClick,
-            ),
-        contentAlignment = Alignment.Center,
-    ) {
-        Icon(
-            imageVector = icon,
+    val neutralTint = if (isDark) Color.White else Color(0xFF1C1C1E)
+    val actions = listOf(
+        ActionMenuItem(
+            icon = if (target.isFavorite) Icons.Rounded.Star else Icons.Rounded.StarBorder,
+            tint = OverlayThemeTokens.FavoriteGold,
             contentDescription = null,
-            tint = tint,
-            modifier = Modifier.size(24.dp),
-        )
+            onClick = onToggleFavorite,
+        ),
+        ActionMenuItem(
+            icon = Icons.Rounded.Delete,
+            tint = Color(0xFFE5382B),
+            contentDescription = null,
+            onClick = onDelete,
+        ),
+        ActionMenuItem(
+            icon = Icons.Filled.Edit,
+            tint = neutralTint,
+            contentDescription = null,
+            onClick = onEdit,
+        ),
+        ActionMenuItem(
+            icon = Icons.Outlined.Info,
+            tint = neutralTint,
+            contentDescription = null,
+            onClick = onDetails,
+        ),
+    )
+
+    ActionMenuOverlay(
+        boundsInRoot = target.boundsInRoot,
+        visible = visible,
+        backdrop = backdrop,
+        bottomInset = bottomInset,
+        topInset = topInset,
+        actions = actions,
+        onDismiss = onDismiss,
+        onClosed = onClosed,
+        modifier = modifier,
+    ) {
+        val favoritePosition = target.favoritePosition
+        if (favoritePosition != null) {
+            FavoriteCollectionCard(
+                state = target.state,
+                releaseYear = target.releaseYear,
+                position = favoritePosition,
+                onClick = onDismiss,
+                onLongClick = {},
+                modifier = Modifier.fillMaxSize(),
+            )
+        } else {
+            AnimeCardBody(state = target.state)
+        }
     }
 }

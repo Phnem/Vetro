@@ -37,6 +37,13 @@ data class EpisodePlaybackProgress(
      * устройстве: в облачную строку прогресса поле не входит, при слиянии берётся большее.
      */
     val rewatchCount: Int = 0,
+    /**
+     * Ручная отметка «не смотрел». Нужна поверх позиции: серию, лежащую не дальше отметки
+     * «просмотрено до» (счётчик серий), одним обнулением позиции её не снять. Только на
+     * устройстве, как и [rewatchCount]; любая запись воспроизведения создаёт запись заново и
+     * отметку снимает.
+     */
+    val unwatched: Boolean = false,
 ) {
     val fraction: Float
         get() = if (durationMs > 0L) {
@@ -46,7 +53,7 @@ data class EpisodePlaybackProgress(
         }
 
     val watched: Boolean
-        get() = isEpisodeWatched(positionMs, durationMs)
+        get() = !unwatched && isEpisodeWatched(positionMs, durationMs)
 }
 
 @Serializable
@@ -193,6 +200,33 @@ class EpisodePlaybackStore(
                         durationMs = MANUAL_MARK_DURATION_MS,
                         updatedAt = now,
                         rewatchCount = previous?.rewatchCount ?: 0,
+                    )
+                }
+                preferences[preferenceKey] = encode(current)
+            }
+        }
+    }
+
+    /**
+     * Ручная отметка «не смотрел»: серии перестают считаться просмотренными, позиция обнуляется.
+     * Запись остаётся с [EpisodePlaybackProgress.unwatched], чтобы снять и «просмотрено» по
+     * счётчику серий, у которого собственной записи нет. Счётчик пересмотров сохраняется.
+     */
+    suspend fun markUnwatched(animeId: String, episodes: Collection<PlaybackEpisodeKey>) {
+        if (episodes.isEmpty()) return
+        val preferenceKey = progressKey(animeId)
+        val now = System.currentTimeMillis()
+        writeMutex.withLock {
+            edit { preferences ->
+                val current = decode(preferences[preferenceKey]).toMutableMap()
+                for (key in episodes) {
+                    val previous = current[key]
+                    current[key] = EpisodePlaybackProgress(
+                        positionMs = 0L,
+                        durationMs = previous?.durationMs?.takeIf { it > 0L } ?: MANUAL_MARK_DURATION_MS,
+                        updatedAt = now,
+                        rewatchCount = previous?.rewatchCount ?: 0,
+                        unwatched = true,
                     )
                 }
                 preferences[preferenceKey] = encode(current)

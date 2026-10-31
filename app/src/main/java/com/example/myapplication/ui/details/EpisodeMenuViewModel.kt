@@ -17,6 +17,7 @@ import com.example.myapplication.media.metadata.EpisodeArtworkRepository
 import com.example.myapplication.media.progress.EpisodePlaybackProgress
 import com.example.myapplication.media.progress.EpisodePlaybackStore
 import com.example.myapplication.media.progress.EpisodeRatingStore
+import com.example.myapplication.media.progress.PlaybackEpisodeKey
 import com.example.myapplication.media.source.flattenVideosWithSource
 import com.example.myapplication.media.source.VetroVideo
 import com.example.myapplication.data.models.MediaType
@@ -129,7 +130,10 @@ data class EpisodeMenuUiState(
 ) {
     /** Серия просмотрена: досмотрена в плеере или лежит не дальше [watchedThrough] (спецвыпуски — только по плееру). */
     fun isWatched(key: EpisodeKey, special: Boolean = false): Boolean {
-        if (playback[key]?.watched == true) return true
+        val stored = playback[key]
+        // Ручное «не смотрел» сильнее и записи плеера, и отметки «просмотрено до».
+        if (stored?.unwatched == true) return false
+        if (stored?.watched == true) return true
         val mark = watchedThrough ?: return false
         if (special) return false
         return key.season < mark.season || (key.season == mark.season && key.episode <= mark.episode)
@@ -217,6 +221,29 @@ class EpisodeMenuViewModel(
         viewModelScope.launch {
             runCatching { ratingStore.setRating(anime.id, season, episode, rating) }
                 .onFailure { Log.w(TAG, "Saving episode rating failed", it) }
+        }
+    }
+
+    /** Одна оценка всем сериям сезона (меню удержания на карточке сезона). 0 снимает оценку. */
+    fun rateSeason(season: SeasonInfo, rating: Float) {
+        val episodes = (1..season.episodes.coerceAtLeast(0)).toList()
+        viewModelScope.launch {
+            runCatching { ratingStore.setRatings(anime.id, season.seasonNumber, episodes, rating) }
+                .onFailure { Log.w(TAG, "Saving season rating failed", it) }
+        }
+    }
+
+    /**
+     * Ручная отметка «смотрел / не смотрел» для серии ([episode] задана) или для всех серий сезона.
+     * Пишет в то же хранилище прогресса, из которого экран и карточка главной считают «просмотрено».
+     */
+    fun setWatched(season: SeasonInfo, episode: Int?, watched: Boolean) {
+        val numbers = episode?.let(::listOf) ?: (1..season.episodes.coerceAtLeast(0)).toList()
+        val keys = numbers.map { PlaybackEpisodeKey(season.seasonNumber, it) }
+        viewModelScope.launch {
+            runCatching {
+                if (watched) playbackStore.markWatched(anime.id, keys) else playbackStore.markUnwatched(anime.id, keys)
+            }.onFailure { Log.w(TAG, "Marking watched=$watched failed", it) }
         }
     }
 

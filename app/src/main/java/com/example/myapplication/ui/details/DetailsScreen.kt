@@ -41,6 +41,8 @@ import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.PlayCircleFilled
 import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material.icons.rounded.Schedule
+import androidx.compose.material.icons.rounded.Visibility
+import androidx.compose.material.icons.rounded.VisibilityOff
 import com.example.myapplication.media.progress.TitleTracking
 import com.example.myapplication.data.models.RatingScale
 import androidx.compose.material3.CircularProgressIndicator
@@ -84,7 +86,10 @@ import com.example.myapplication.network.AppLanguage
 import com.example.myapplication.ui.shared.GlassPreset
 import com.example.myapplication.ui.shared.adaptiveGlassBackdrop
 import com.example.myapplication.ui.shared.rememberAdaptiveGlassEffects
+import com.example.myapplication.ui.home.cardmenu.ActionMenuItem
+import com.example.myapplication.ui.home.cardmenu.ActionMenuOverlay
 import com.example.myapplication.ui.shared.components.rating.RatingOverlayHost
+import com.example.myapplication.ui.shared.theme.OverlayThemeTokens
 import com.example.myapplication.ui.shared.components.rating.RatingSliderState
 import com.example.myapplication.ui.shared.theme.MotionTokens
 import com.example.myapplication.ui.shared.components.GrabberHandle
@@ -154,9 +159,16 @@ fun DetailsScreen(
     }
     val scope = rememberCoroutineScope()
     val view = LocalView.current
-    // Бабл оценки серии: жест удержания на строке серии двигает это состояние, а сам бабл
-    // рисуется ниже, последним ребёнком корня — поверх мини-дока и кнопок.
+    // Удержание на серии или сезоне: поднятая строка с круглыми кнопками (оценка / не смотрел /
+    // смотрел). Отдельный признак видимости — оверлей обязан доиграть уход, см. ActionMenuOverlay.
+    var episodeMenu by remember { mutableStateOf<EpisodeMenuRequest?>(null) }
+    var episodeMenuVisible by remember { mutableStateOf(false) }
+    // Бабл оценки по звёздочке меню. Живой: палец ставит значение, отпускание сохраняет; тап мимо
+    // и «назад» закрывают без сохранения. Рисуется ниже, последним ребёнком корня — поверх дока.
     val episodeRatingSlider = remember { RatingSliderState(0f) }
+    var episodeRatingShown by remember { mutableStateOf(false) }
+    var episodeRatingCommit by remember { mutableStateOf<((Float) -> Unit)?>(null) }
+    BackHandler(enabled = episodeMenuVisible) { episodeMenuVisible = false }
     val pagerState = rememberPagerState(
         initialPage = if (openEpisodes) 1 else 0,
         pageCount = { 2 },
@@ -285,7 +297,10 @@ fun DetailsScreen(
                                 fallbackEpisodes = current.episodes,
                                 posterPath = viewModel.getImgPath(current.imageFileName),
                                 viewModel = checkNotNull(episodeMenuViewModel),
-                                ratingSlider = episodeRatingSlider,
+                                onOpenRowMenu = { request ->
+                                    episodeMenu = request
+                                    episodeMenuVisible = true
+                                },
                             )
                         }
                     }
@@ -375,12 +390,75 @@ fun DetailsScreen(
                     }
                 }
 
-                // Бабл оценки серии — последним и с самым высоким zIndex: закрывает мини-док и кнопки.
-                // Жестом не владеет: палец остаётся на строке серии, бабл только рисует состояние.
                 if (!isManga) {
+                    // Меню удержания на серии/сезоне — над мини-доком и кнопками, под баблом оценки.
+                    episodeMenu?.let { request ->
+                        val ru = language == AppLanguage.RU
+                        val systemBars = WindowInsets.systemBars.asPaddingValues()
+                        val neutralTint = if (isDark) Color.White else Color(0xFF1C1C1E)
+                        val actions = listOf(
+                            ActionMenuItem(
+                                icon = Icons.Rounded.Star,
+                                tint = OverlayThemeTokens.FavoriteGold,
+                                contentDescription = if (ru) "Оценить" else "Rate",
+                                onClick = {
+                                    performHaptic(view, Haptic.Light)
+                                    episodeMenuVisible = false
+                                    scope.launch {
+                                        episodeRatingSlider.anchorBoundsInRoot = request.bounds
+                                        episodeRatingSlider.syncFromExternal(request.currentRating)
+                                        episodeRatingCommit = request.onRate
+                                        episodeRatingShown = true
+                                    }
+                                },
+                            ),
+                            ActionMenuItem(
+                                icon = Icons.Rounded.VisibilityOff,
+                                tint = neutralTint,
+                                contentDescription = if (ru) "Не смотрел" else "Not watched",
+                                onClick = {
+                                    performHaptic(view, Haptic.Light)
+                                    episodeMenuVisible = false
+                                    request.onSetWatched(false)
+                                },
+                            ),
+                            ActionMenuItem(
+                                icon = Icons.Rounded.Visibility,
+                                tint = neutralTint,
+                                contentDescription = if (ru) "Смотрел" else "Watched",
+                                onClick = {
+                                    performHaptic(view, Haptic.Success)
+                                    episodeMenuVisible = false
+                                    request.onSetWatched(true)
+                                },
+                            ),
+                        )
+                        ActionMenuOverlay(
+                            boundsInRoot = request.bounds,
+                            visible = episodeMenuVisible,
+                            backdrop = backdrop,
+                            // Ряд кнопок не должен уезжать под мини-док и нав-бар.
+                            bottomInset = systemBars.calculateBottomPadding() + 100.dp,
+                            topInset = systemBars.calculateTopPadding() + 8.dp,
+                            actions = actions,
+                            onDismiss = { episodeMenuVisible = false },
+                            onClosed = { episodeMenu = null },
+                            modifier = Modifier.zIndex(9f),
+                        ) {
+                            request.content()
+                        }
+                    }
+
+                    // Бабл оценки — последним и с самым высоким zIndex: закрывает мини-док и кнопки.
                     RatingOverlayHost(
                         state = episodeRatingSlider,
                         ru = language == AppLanguage.RU,
+                        shown = episodeRatingShown,
+                        onCommitted = { value ->
+                            episodeRatingCommit?.invoke(value)
+                            episodeRatingShown = false
+                        },
+                        onOutsideTap = { episodeRatingShown = false },
                         modifier = Modifier.zIndex(10f),
                     )
                 }

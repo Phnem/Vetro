@@ -150,12 +150,10 @@ fun StreamPlayerSurface(
         animationSpec = MotionTokens.standard(),
         label = "streamVideoFitScale",
     )
-    val studioTracks = remember(renditions, video.url) {
+    val allStudioTracks = remember(renditions, video.url) {
         renditions
             .filter { !it.sourceName.isNullOrBlank() }
             .distinctBy { it.sourceName }
-            .takeIf { it.size > 1 }
-            .orEmpty()
             // В списке озвучек сначала голоса, переводы-субтитры («… (субтитры)») — после.
             .sortedBy { it.sourceName.orEmpty().contains("субтитр", ignoreCase = true) || it.sourceName.orEmpty().contains("subtitles", ignoreCase = true) }
             .map { rendition ->
@@ -169,10 +167,13 @@ fun StreamPlayerSurface(
                 )
             }
     }
-    // A single embedded track adds no choice. Multiple embedded tracks remain available together
-    // with whole-studio renditions supplied by separate providers.
-    val audioTracks =
-        studioTracks + embeddedAudioTracks.takeIf { it.size > 1 }.orEmpty()
+    // Multiple embedded tracks remain available together with whole-studio renditions supplied by
+    // separate providers. When there is nothing to choose between, the lone track is still listed:
+    // the audio button must open a menu (with that one entry), not sit dead.
+    val audioTracks = (
+        allStudioTracks.takeIf { it.size > 1 }.orEmpty() +
+            embeddedAudioTracks.takeIf { it.size > 1 }.orEmpty()
+        ).ifEmpty { allStudioTracks.ifEmpty { embeddedAudioTracks } }
 
     val ru = playerIsRu()
     var subtitlePage by remember { mutableStateOf(SubtitlePage.ROOT) }

@@ -14,7 +14,9 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -57,6 +59,7 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -73,6 +76,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
@@ -93,8 +98,6 @@ import com.example.myapplication.media.ui.StreamPlayerActivity
 import com.example.myapplication.network.AppLanguage
 import com.example.myapplication.ui.shared.loading.BubbleClusterLoader
 import com.example.myapplication.data.models.RatingScale
-import com.example.myapplication.ui.shared.components.rating.RatingSliderState
-import com.example.myapplication.ui.shared.components.rating.ratingHoldGesture
 import com.example.myapplication.ui.shared.theme.IosDesign
 import com.example.myapplication.ui.shared.theme.MotionTokens
 import com.example.myapplication.ui.shared.theme.getRatingColor
@@ -102,6 +105,25 @@ import com.example.myapplication.ui.shared.theme.SnProFamily
 import com.example.myapplication.utils.Haptic
 import com.example.myapplication.utils.performHaptic
 import kotlinx.coroutines.flow.collectLatest
+
+/**
+ * Что выделили удержанием на экране серий: строка серии или карточка сезона. Меню с круглыми
+ * кнопками рисует экран Details поверх дока (см. [com.example.myapplication.ui.home.cardmenu.ActionMenuOverlay]),
+ * а страница только описывает, что и как менять.
+ */
+@Immutable
+class EpisodeMenuRequest(
+    /** Границы выделенного в координатах корня окна. */
+    val bounds: Rect,
+    /** Текущая оценка по десятибалльной шкале (у сезона — средняя по оценённым сериям), 0 — нет. */
+    val currentRating: Float,
+    /** Копия выделенного для поднятого вида. */
+    val content: @Composable () -> Unit,
+    /** Оценка из бабла; у сезона достаётся каждой его серии. */
+    val onRate: (Float) -> Unit,
+    /** true — «смотрел», false — «не смотрел»; у сезона — для всех его серий. */
+    val onSetWatched: (Boolean) -> Unit,
+)
 
 /**
  * Season-first episode menu. Season cards are collapsed on entry; tapping the card expands it,
@@ -123,13 +145,14 @@ fun ModernDetailsEpisodesPage(
     /** Создаёт экран Details — одна точка, чтобы у сезона не появилось двух разных VM. */
     viewModel: EpisodeMenuViewModel,
     /**
-     * Состояние бабла оценки серии. Бабл рисует экран Details поверх дока и кнопок, а жест
-     * удержания на строке только двигает это состояние.
+     * Удержание на серии или сезоне: меню с кнопками рисует экран Details поверх дока, а страница
+     * лишь передаёт ему описание выделенного.
      */
-    ratingSlider: RatingSliderState,
+    onOpenRowMenu: (EpisodeMenuRequest) -> Unit,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    val view = LocalView.current
     val ru = language == AppLanguage.RU
     var qualityAnchor by remember { mutableStateOf<Rect?>(null) }
     val normalizedSeasons = remember(seasons, fallbackEpisodes, anilistId, malId, animeTitle) {
@@ -242,16 +265,47 @@ fun ModernDetailsEpisodesPage(
                 val episodeCount = season.episodes.coerceAtLeast(0)
 
                 item(key = "season_head_${season.seasonNumber}") {
+                    val seasonCover = state.seasonCovers[season.seasonNumber]
+                    val seasonAction = aggregateSeasonAction(season, state.actions)
                     SeasonHeaderCard(
                         season = season,
                         expanded = expanded,
                         posterPath = posterPath,
-                        seasonCover = state.seasonCovers[season.seasonNumber],
-                        action = aggregateSeasonAction(season, state.actions),
+                        seasonCover = seasonCover,
+                        action = seasonAction,
                         ru = ru,
                         isDark = isDark,
                         onToggle = { viewModel.toggleSeason(season.seasonNumber) },
                         onSeasonAction = { viewModel.seasonAction(season) },
+                        onLongPress = { bounds ->
+                            performHaptic(view, Haptic.Light)
+                            val rated = state.ratings.filterKeys { it.season == season.seasonNumber }.values
+                            onOpenRowMenu(
+                                EpisodeMenuRequest(
+                                    bounds = bounds,
+                                    currentRating = if (rated.isEmpty()) 0f else rated.average().toFloat(),
+                                    content = {
+                                        LiftedSurface(isDark, RoundedCornerShape(SEASON_CARD_RADIUS)) {
+                                            // Поднятая копия всегда со скруглённым низом: сезон «закрыт».
+                                            SeasonHeaderCard(
+                                                season = season,
+                                                expanded = false,
+                                                posterPath = posterPath,
+                                                seasonCover = seasonCover,
+                                                action = seasonAction,
+                                                ru = ru,
+                                                isDark = isDark,
+                                                onToggle = {},
+                                                onSeasonAction = {},
+                                                onLongPress = null,
+                                            )
+                                        }
+                                    },
+                                    onRate = { viewModel.rateSeason(season, it) },
+                                    onSetWatched = { viewModel.setWatched(season, null, it) },
+                                )
+                            )
+                        },
                         modifier = Modifier.animateItem(placementSpec = MotionTokens.seasonExpansion()).zIndex(1f),
                     )
                 }
@@ -268,21 +322,56 @@ fun ModernDetailsEpisodesPage(
                             isDark = isDark,
                             modifier = reveals.getValue(season.seasonNumber).rowModifier(index),
                         ) {
+                            val visual = state.visuals[key]
+                            val fallbackImage = state.seasonCovers[season.seasonNumber] ?: posterPath
+                            val episodeAction = state.actions[key] ?: EpisodeActionState.Available
+                            // Запись «не смотрел» хранит условную длительность — таймкода у неё нет.
+                            val progress = state.playback[key]?.takeIf { !it.unwatched }
+                            val watched = state.isWatched(key, season.isSpecial)
+                            val rating = state.ratings[key]
                             EpisodeRow(
                                 episodeNumber = episode,
-                                visual = state.visuals[key],
-                                fallbackImage = state.seasonCovers[season.seasonNumber] ?: posterPath,
-                                action = state.actions[key] ?: EpisodeActionState.Available,
-                                progress = state.playback[key],
-                                watched = state.isWatched(key, season.isSpecial),
+                                visual = visual,
+                                fallbackImage = fallbackImage,
+                                action = episodeAction,
+                                progress = progress,
+                                watched = watched,
                                 streaming = state.streaming == key,
-                                rating = state.ratings[key],
-                                ratingSlider = ratingSlider,
+                                rating = rating,
                                 ru = ru,
                                 isDark = isDark,
                                 onClick = { viewModel.play(season, episode) },
                                 onAction = { viewModel.episodeAction(season, episode) },
-                                onRate = { viewModel.rateEpisode(season.seasonNumber, episode, it) },
+                                onLongPress = { bounds ->
+                                    performHaptic(view, Haptic.Light)
+                                    onOpenRowMenu(
+                                        EpisodeMenuRequest(
+                                            bounds = bounds,
+                                            currentRating = rating ?: 0f,
+                                            content = {
+                                                LiftedSurface(isDark, RoundedCornerShape(16.dp)) {
+                                                    EpisodeRow(
+                                                        episodeNumber = episode,
+                                                        visual = visual,
+                                                        fallbackImage = fallbackImage,
+                                                        action = episodeAction,
+                                                        progress = progress,
+                                                        watched = watched,
+                                                        streaming = false,
+                                                        rating = rating,
+                                                        ru = ru,
+                                                        isDark = isDark,
+                                                        onClick = {},
+                                                        onAction = {},
+                                                        onLongPress = null,
+                                                    )
+                                                }
+                                            },
+                                            onRate = { viewModel.rateEpisode(season.seasonNumber, episode, it) },
+                                            onSetWatched = { viewModel.setWatched(season, episode, it) },
+                                        )
+                                    )
+                                },
                             )
                         }
                     }
@@ -484,7 +573,39 @@ private fun HeaderQualityChip(
     }
 }
 
+/**
+ * Границы строки в координатах корня окна, прочитанные в момент удержания, а не на каждом кадре
+ * прокрутки списка.
+ */
+private class BoundsHolder {
+    var coordinates: LayoutCoordinates? = null
+
+    fun boundsOrNull(): Rect? = coordinates?.takeIf { it.isAttached }?.boundsInRoot()
+}
+
+/**
+ * Подложка поднятой копии: строки и карточки сезона полупрозрачные и держатся на фоне страницы,
+ * а над затемнённым списком без неё просвечивал бы он.
+ */
+@Composable
+private fun LiftedSurface(
+    isDark: Boolean,
+    shape: androidx.compose.ui.graphics.Shape,
+    content: @Composable () -> Unit,
+) {
+    Box(
+        Modifier
+            .fillMaxSize()
+            .clip(shape)
+            .background(MaterialTheme.colorScheme.background)
+            .background(seasonCardColor(isDark)),
+    ) {
+        content()
+    }
+}
+
 /** Шапка сезона. Раскрытые серии живут отдельными элементами списка — см. [SeasonEpisodeSlot]. */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun SeasonHeaderCard(
     season: SeasonInfo,
@@ -496,8 +617,11 @@ private fun SeasonHeaderCard(
     isDark: Boolean,
     onToggle: () -> Unit,
     onSeasonAction: () -> Unit,
+    /** Удержание на карточке; null — копия в оверлее меню, там жестов нет. */
+    onLongPress: ((Rect) -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
+    val bounds = remember { BoundsHolder() }
     // Раскрытый сезон: низ карточки срезан — её продолжают карточки серий следующими элементами.
     val cardShape = if (expanded) {
         RoundedCornerShape(topStart = SEASON_CARD_RADIUS, topEnd = SEASON_CARD_RADIUS)
@@ -513,15 +637,19 @@ private fun SeasonHeaderCard(
     Column(
         modifier = modifier
             .fillMaxWidth()
+            .onGloballyPositioned { bounds.coordinates = it }
             .clip(cardShape)
             .background(seasonCardColor(isDark)),
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .clickable(
+                .combinedClickable(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null,
+                    onLongClick = onLongPress?.let { open ->
+                        { bounds.boundsOrNull()?.let(open) }
+                    },
                     onClick = onToggle,
                 )
                 .padding(10.dp),
@@ -626,7 +754,7 @@ private fun SeasonEpisodeSlot(
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
+@OptIn(ExperimentalLayoutApi::class, ExperimentalFoundationApi::class)
 @Composable
 private fun EpisodeRow(
     episodeNumber: Int,
@@ -639,13 +767,14 @@ private fun EpisodeRow(
     streaming: Boolean,
     /** Личная оценка серии по десятибалльной шкале; null — не оценена. */
     rating: Float?,
-    ratingSlider: RatingSliderState,
     ru: Boolean,
     isDark: Boolean,
     onClick: () -> Unit,
     onAction: () -> Unit,
-    onRate: (Float) -> Unit,
+    /** Удержание на серии; null — копия в оверлее меню, там жестов нет. */
+    onLongPress: ((Rect) -> Unit)?,
 ) {
+    val bounds = remember { BoundsHolder() }
     val hasProgress = (progress?.positionMs ?: 0L) > 0L
     val statusColor = when {
         watched -> StatusSuccess
@@ -685,19 +814,16 @@ private fun EpisodeRow(
                     Modifier
                 },
             )
-            .clickable(
+            .onGloballyPositioned { bounds.coordinates = it }
+            // Тап запускает серию, удержание поднимает её над списком с кнопками оценки и отметок.
+            .combinedClickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
                 enabled = !streaming,
+                onLongClick = onLongPress?.let { open ->
+                    { bounds.boundsOrNull()?.let(open) }
+                },
                 onClick = onClick,
-            )
-            // Удержание + движение пальца = оценка серии. ПОСЛЕ clickable: жест первым получает
-            // события и, поглотив отпускание, не даёт строке принять его за тап (запуск серии).
-            .ratingHoldGesture(
-                state = ratingSlider,
-                currentRating = rating ?: 0f,
-                onCommitted = onRate,
-                enabled = !streaming,
             )
             .padding(8.dp),
         verticalAlignment = Alignment.CenterVertically,

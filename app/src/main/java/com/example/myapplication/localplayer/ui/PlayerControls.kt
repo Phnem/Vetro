@@ -682,7 +682,9 @@ fun PlayerControlsOverlay(
                         tint = Color.White,
                         iconSize = TOP_DOCK_ICON,
                         onClick = {
-                            if (audioTracks.isNotEmpty()) { menuKind = PlayerMenu.AUDIO; menuState.targetState = true }
+                            // Меню открывается и с единственной озвучкой (или пустым списком — шторка
+                            // это покажет): мёртвая кнопка выглядела как поломка.
+                            menuKind = PlayerMenu.AUDIO; menuState.targetState = true
                         },
                     )
                     if (subtitleOptions.isNotEmpty()) {

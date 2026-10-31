@@ -77,16 +77,30 @@ class EpisodeRatingStore(
      * Та же оценка, что уже стоит, ничего не пишет: иначе пустой жест двигал бы `updatedAt` и
      * выигрывал у честной правки с другого устройства.
      */
-    suspend fun setRating(animeId: String, season: Int, episode: Int, rating: Float) {
-        val target = PlaybackEpisodeKey(season, episode)
+    suspend fun setRating(animeId: String, season: Int, episode: Int, rating: Float) =
+        setRatings(animeId, season, listOf(episode), rating)
+
+    /**
+     * Та же оценка сразу нескольким сериям сезона — одним снимком, а не записью на серию.
+     * Серии, у которых уже стоит эта оценка, не трогаются (см. [setRating]).
+     */
+    suspend fun setRatings(animeId: String, season: Int, episodes: Collection<Int>, rating: Float) {
+        if (episodes.isEmpty()) return
         val stored = RatingScale.displayToStored(rating)
         val preferenceKey = ratingKey(animeId)
+        val now = System.currentTimeMillis()
         writeMutex.withLock {
             store.edit { preferences ->
                 val current = decode(preferences[preferenceKey]).toMutableMap()
-                if (current[target]?.stored == stored) return@edit
-                if (stored == 0 && current[target] == null) return@edit
-                current[target] = EpisodeRating(stored = stored, updatedAt = System.currentTimeMillis())
+                var changed = false
+                for (episode in episodes) {
+                    val target = PlaybackEpisodeKey(season, episode)
+                    if (current[target]?.stored == stored) continue
+                    if (stored == 0 && current[target] == null) continue
+                    current[target] = EpisodeRating(stored = stored, updatedAt = now)
+                    changed = true
+                }
+                if (!changed) return@edit
                 preferences[preferenceKey] = encode(current)
                 TitleTrackingStore.resetIfUnrated(preferences, animeId, current.values)
             }
