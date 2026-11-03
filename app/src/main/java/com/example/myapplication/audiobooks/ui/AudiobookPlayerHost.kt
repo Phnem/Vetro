@@ -47,6 +47,9 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -351,16 +354,18 @@ fun AudiobookPlayerHost(language: AppLanguage = AppLanguage.RU, modifier: Modifi
 
     BoxWithConstraints(modifier.fillMaxSize()) {
         val density = LocalDensity.current
-        val miniPx = with(density) { MiniSize.toPx() }
+        val miniWidthDp = minOf(maxWidth - 32.dp, MiniMaxWidth)
+        val miniW = with(density) { miniWidthDp.toPx() }
+        val miniH = with(density) { MiniHeight.toPx() }
         val marginPx = with(density) { 16.dp.toPx() }
         val dockPx = with(density) { 104.dp.toPx() }
         val topPx = WindowInsets.statusBars.getTop(density).toFloat() + marginPx
         val widthPx = with(density) { maxWidth.toPx() }
         val heightPx = with(density) { maxHeight.toPx() }
-        val right = (widthPx - miniPx - marginPx).coerceAtLeast(marginPx)
-        val bottom = (heightPx - miniPx - dockPx).coerceAtLeast(marginPx)
+        val right = (widthPx - miniW - marginPx).coerceAtLeast(marginPx)
+        val bottom = (heightPx - miniH - dockPx).coerceAtLeast(marginPx)
         val miniOffset = remember(widthPx, heightPx) { Animatable(Offset(right, bottom), Offset.VectorConverter) }
-        val miniRadiusPx = with(density) { MiniRadius.toPx() }
+        val miniRadiusPx = miniH / 2f
         fun snapToCorner(leftSide: Boolean, topSide: Boolean) {
             scope.launch {
                 miniOffset.animateTo(
@@ -371,7 +376,7 @@ fun AudiobookPlayerHost(language: AppLanguage = AppLanguage.RU, modifier: Modifi
         }
         fun windowRect(p: Float): Rect {
             val m = miniOffset.value
-            return Rect(lerp(m.x, 0f, p), lerp(m.y, 0f, p), lerp(m.x + miniPx, widthPx, p), lerp(m.y + miniPx, heightPx, p))
+            return Rect(lerp(m.x, 0f, p), lerp(m.y, 0f, p), lerp(m.x + miniW, widthPx, p), lerp(m.y + miniH, heightPx, p))
         }
 
         val backdrop = rememberLayerBackdrop()
@@ -430,7 +435,6 @@ fun AudiobookPlayerHost(language: AppLanguage = AppLanguage.RU, modifier: Modifi
                     book = shownBook,
                     state = state,
                     strings = strings,
-                    backdrop = backdrop,
                     // Закрыть: пауза и пустая очередь — мини-плеер уходит, место в книге сохранено,
                     // книга остаётся в «Продолжить».
                     onClose = {
@@ -448,14 +452,14 @@ fun AudiobookPlayerHost(language: AppLanguage = AppLanguage.RU, modifier: Modifi
                     },
                     onDragEnd = {
                         snapToCorner(
-                            leftSide = miniOffset.value.x + miniPx / 2 < widthPx / 2,
-                            topSide = miniOffset.value.y + miniPx / 2 < heightPx / 2,
+                            leftSide = miniOffset.value.x + miniW / 2 < widthPx / 2,
+                            topSide = miniOffset.value.y + miniH / 2 < heightPx / 2,
                         )
                     },
                     onMoveToCorner = ::snapToCorner,
                     modifier = Modifier
                         .offset { windowRect(expansion.value.coerceIn(0f, 1f)).topLeft.let { IntOffset(it.x.toInt(), it.y.toInt()) } }
-                        .size(MiniSize)
+                        .size(miniWidthDp, MiniHeight)
                         .graphicsLayer { alpha = (1f - expansion.value / 0.3f).coerceIn(0f, 1f) },
                 )
             }
@@ -617,12 +621,17 @@ private suspend fun findNarrations(
 
 // ---------- Мини-плеер ----------
 
+/**
+ * Мини-плеер — капсула: круглая обложка, полоса-«волна» (она же прогресс главы) и кнопка play/pause.
+ * Матовая капсула, а не стекло: настоящее стекло преломляло бы экран приложения под ним, а для этого
+ * весь экран пришлось бы гнать через общий бэкдроп. Поэтому цвет — тёмный/светлый, чуть отличный от фона
+ * своей темы. Тап раскрывает плеер, перетаскивание ведёт капсулу к углам, крестик закрывает.
+ */
 @Composable
 private fun MiniPlayerContent(
     book: PlayingBook,
     state: AudiobookPlayerState,
     strings: PlayerStrings,
-    backdrop: Backdrop,
     onClose: () -> Unit,
     onExpand: () -> Unit,
     onDrag: (Offset) -> Unit,
@@ -632,13 +641,21 @@ private fun MiniPlayerContent(
 ) {
     val pos = chapterPosition(book, state.timeline, state.trackPositionMs.longValue)
     val progress = pos.durationMs?.takeIf { it > 0 }?.let { pos.positionMs.toFloat() / it } ?: 0f
-    Box(
+    val dark = MaterialTheme.colorScheme.background.luminance() < 0.5f
+    val surface = if (dark) Color(0xFF1C1C1E) else Color.White
+    val ink = if (dark) Color.White else Color.Black
+    val onInk = if (dark) Color.Black else Color.White
+    val seed = remember(book.mediaId) { book.mediaId.hashCode() }
+    val label = listOf(book.title, book.author).filter { it.isNotBlank() }.joinToString(" — ")
+    Row(
         modifier
+            .background(surface)
             .pointerInput(book.mediaId) {
                 detectDragGestures(onDragEnd = onDragEnd, onDrag = { change, amount -> change.consume(); onDrag(amount) })
             }
             .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onExpand)
             .semantics {
+                contentDescription = label
                 customActions = listOf(
                     CustomAccessibilityAction(strings.moveMiniTopLeft) { onMoveToCorner(true, true); true },
                     CustomAccessibilityAction(strings.moveMiniTopRight) { onMoveToCorner(false, true); true },
@@ -646,60 +663,59 @@ private fun MiniPlayerContent(
                     CustomAccessibilityAction(strings.moveMiniBottomRight) { onMoveToCorner(false, false); true },
                 )
             }
-            .padding(9.dp),
+            .padding(horizontal = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        // Верх: капсула автор/чтец и крестик — закрыть мини-плеер (лайк — в полном плеере).
-        Row(Modifier.align(Alignment.TopStart).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            GlassSurface(backdrop, CircleShape, Modifier.weight(1f).height(38.dp)) {
-                Row(Modifier.fillMaxSize().padding(start = 4.dp, end = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                    BookArt(book.artworkUri, Modifier.size(30.dp).clip(CircleShape))
-                    Spacer(Modifier.width(7.dp))
-                    // Две строки обязаны поместиться в капсулу 38dp при любом масштабе шрифта: высота строк
-                    // задана явно, без шрифтовых полей, а масштаб в крошечной капсуле ограничен — иначе
-                    // вторая строка вылезала под капсулу поверх обложки.
-                    val density = LocalDensity.current
-                    CompositionLocalProvider(
-                        LocalDensity provides Density(density.density, density.fontScale.coerceAtMost(1.1f)),
-                    ) {
-                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.Center) {
-                            Text(book.author.ifBlank { book.title }, style = CapsuleLine.copy(fontSize = 11.sp, lineHeight = 13.sp,
-                                fontWeight = FontWeight.SemiBold), color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            if (book.narrator.isNotBlank()) {
-                                Text(book.narrator, style = CapsuleLine.copy(fontSize = 9.sp, lineHeight = 11.sp),
-                                    color = Color.White.copy(alpha = 0.6f), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            }
-                        }
+        BookArt(book.artworkUri, Modifier.size(56.dp).clip(CircleShape))
+        Spacer(Modifier.width(14.dp))
+        // «Волна»: высоты — детерминированный рисунок книги с колоколом к середине, как на референсе;
+        // сыгранная часть главы закрашена полным цветом, остаток — приглушён.
+        Box(
+            Modifier
+                .weight(1f)
+                .height(40.dp)
+                .drawBehind {
+                    val barW = 3.dp.toPx()
+                    val step = 6.dp.toPx()
+                    val count = (size.width / step).toInt().coerceAtLeast(1)
+                    val played = (progress.coerceIn(0f, 1f) * count).toInt()
+                    val mid = (count - 1) / 2f
+                    val spread = (count / 3.2f).coerceAtLeast(1f)
+                    for (i in 0 until count) {
+                        val bell = kotlin.math.exp(-((i - mid) / spread).let { it * it })
+                        val noise = ((((i * 7919L + seed) * 1103515245L + 12345L) and 0x7fffffffL) / 2147483647f)
+                        val h = size.height * (0.14f + 0.86f * bell * (0.55f + 0.45f * noise))
+                        val x = (size.width - (count - 1) * step - barW) / 2f + i * step
+                        drawRoundRect(
+                            color = if (i < played) ink else ink.copy(alpha = 0.32f),
+                            topLeft = Offset(x, (size.height - h) / 2f),
+                            size = Size(barW, h),
+                            cornerRadius = CornerRadius(barW / 2f),
+                        )
                     }
-                }
-            }
-            Spacer(Modifier.width(6.dp))
-            GlassCircleButton(
-                backdrop, R.drawable.ph_x, strings.closePlayer,
-                size = 38.dp, iconSize = 16.dp, tint = Color.White, onClick = onClose,
-            )
+                },
+        )
+        Box(
+            Modifier
+                .size(32.dp)
+                .clip(CircleShape)
+                .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClose)
+                .semantics { contentDescription = strings.closePlayer },
+            contentAlignment = Alignment.Center,
+        ) {
+            PhIcon(R.drawable.ph_x, 14.dp, ink.copy(alpha = 0.5f))
         }
-        // Низ: время, тонкая полоса и три стеклянные кнопки.
-        Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth()) {
-            Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp)) {
-                Text(formatClock(pos.positionMs), color = Color.White, fontFamily = SnProFamily,
-                    fontWeight = FontWeight.SemiBold, fontSize = 11.sp)
-                Spacer(Modifier.weight(1f))
-                Text(pos.durationMs?.let { "−" + formatClock((it - pos.positionMs).coerceAtLeast(0)) } ?: "",
-                    color = Color.White, fontFamily = SnProFamily, fontWeight = FontWeight.SemiBold, fontSize = 11.sp)
-            }
-            Spacer(Modifier.height(4.dp))
-            Box(Modifier.fillMaxWidth().padding(horizontal = 4.dp).height(3.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.3f))) {
-                Box(Modifier.fillMaxWidth(progress.coerceIn(0f, 1f)).height(3.dp).background(Color.White))
-            }
-            Spacer(Modifier.height(8.dp))
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
-                GlassCircleButton(backdrop, R.drawable.ph_rewind_fill, strings.back15, 38.dp, 16.dp) { state.seekBack() }
-                GlassCircleButton(
-                    backdrop, if (book.isPlaying) R.drawable.ph_pause_fill else R.drawable.ph_play_fill,
-                    if (book.isPlaying) strings.pause else strings.play, 44.dp, 20.dp,
-                ) { state.playPause() }
-                GlassCircleButton(backdrop, R.drawable.ph_fast_forward_fill, strings.forward30, 38.dp, 16.dp) { state.seekForward() }
-            }
+        Spacer(Modifier.width(2.dp))
+        Box(
+            Modifier
+                .size(56.dp)
+                .clip(CircleShape)
+                .background(ink)
+                .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { state.playPause() }
+                .semantics { contentDescription = if (book.isPlaying) strings.pause else strings.play },
+            contentAlignment = Alignment.Center,
+        ) {
+            PhIcon(if (book.isPlaying) R.drawable.ph_pause_fill else R.drawable.ph_play_fill, 24.dp, onInk)
         }
     }
 }
@@ -959,7 +975,9 @@ private fun SeekBar(
     )
 }
 
-private val MiniSize = 196.dp
+/** Мини-плеер — капсула; в полный экран она растёт той же пружиной, что и раньше квадрат. */
+private val MiniHeight = 72.dp
+private val MiniMaxWidth = 340.dp
 
 /** Сколько живёт кнопка «Вернуться» после дальнего прыжка. */
 private const val UNDO_SEEK_VISIBLE_MS = 7_000L
@@ -973,4 +991,3 @@ private val CapsuleLine = TextStyle(
 
 /** Доля «пути назад», которую окно проходит под пальцем; остаток доезжает само после отпускания. */
 private const val BackFollow = 0.85f
-private val MiniRadius = 30.dp
