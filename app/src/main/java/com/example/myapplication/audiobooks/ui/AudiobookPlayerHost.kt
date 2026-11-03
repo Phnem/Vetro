@@ -686,22 +686,29 @@ private fun MiniPlayerContent(
     val surface = if (dark) Color(0xFF1C1C1E) else Color.White
     val ink = if (dark) Color.White else Color.Black
     val onInk = if (dark) Color.Black else Color.White
-    // Живая «волна»: каждый столбик показывает громкость книги в своей точке вокруг «сейчас», слева
-    // недавнее, справа то, что прозвучит через миг, — картинка бежит вместе с голосом. Уровни снимает
-    // AudioLevelMeter с самого аудиовыхода плеера. На паузе столбики оседают и цикл кадров останавливается.
+    // Живая «волна»: каждый столбик показывает громкость книги в своей точке вокруг «сейчас» на гладкой
+    // кривой, которую AudioLevelMeter достраивает по отсчётам с самого аудиовыхода плеера (слева недавнее,
+    // справа то, что прозвучит через миг). Каждый кадр пересчитываются только семь высот; подъём быстрый,
+    // спад медленнее и считается по времени кадра, а не по их числу — на 60 и 120 Гц выглядит одинаково.
+    // На паузе столбики оседают и цикл кадров останавливается.
     val playing = book.isPlaying
     val levels = remember { FloatArray(WaveBars) }
     var waveFrame by remember { mutableIntStateOf(0) }
     LaunchedEffect(playing) {
+        var lastFrameNs = 0L
         while (isActive) {
-            withFrameNanos { }
+            val frameNs = withFrameNanos { it }
+            val dt = if (lastFrameNs == 0L) 0f else ((frameNs - lastFrameNs) / 1e9f).coerceIn(0f, 0.05f)
+            lastFrameNs = frameNs
+            val rise = 1f - kotlin.math.exp(-dt / WaveAttackSec)
+            val fall = 1f - kotlin.math.exp(-dt / WaveReleaseSec)
             val now = if (playing) AudioLevelMeter.nowUs() else Long.MIN_VALUE
             var settled = true
             for (i in levels.indices) {
                 val target = if (now == Long.MIN_VALUE || now < 0L) 0f
                 else AudioLevelMeter.levelAt(now + (i - WaveBars / 2) * WaveStepUs)
                 // Рост быстрый, спад мягкий: так голос читается как пульс, а не как дрожь.
-                levels[i] += (target - levels[i]) * (if (target > levels[i]) 0.6f else 0.2f)
+                levels[i] += (target - levels[i]) * (if (target > levels[i]) rise else fall)
                 if (levels[i] > 0.02f) settled = false
             }
             waveFrame++
@@ -1039,7 +1046,10 @@ private fun SeekBar(
 // 2×1 по сетке виджетов: две ячейки в ширину, одна в высоту.
 /** Столбиков в «волне» мини-плеера и шаг между точками времени, которые они показывают. */
 private const val WaveBars = 7
-private const val WaveStepUs = 70_000L
+private const val WaveStepUs = 35_000L
+/** Постоянные времени подъёма и спада столбика, секунды. */
+private const val WaveAttackSec = 0.012f
+private const val WaveReleaseSec = 0.09f
 private val MiniHeight = 56.dp
 private val MiniWidth = 160.dp
 
