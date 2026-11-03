@@ -81,8 +81,7 @@ import com.example.myapplication.domain.stats.StatsCardKind
 import com.example.myapplication.domain.stats.StatsExplanationCoordinator
 import com.example.myapplication.network.AppLanguage
 import com.example.myapplication.ui.shared.theme.isAppInDarkTheme
-import com.example.myapplication.ui.home.stats.StatsCardDeckContent
-import com.example.myapplication.ui.home.stats.StatsCardDetailContent
+import com.example.myapplication.ui.home.stats.StatsCardsColumn
 import com.example.myapplication.ui.home.stats.StatsInsightsSection
 import androidx.compose.foundation.layout.offset
 import androidx.compose.ui.geometry.Rect
@@ -125,8 +124,6 @@ fun StatsOverlay(
 ) {
     val isDark = isAppInDarkTheme()
     var visible by remember { mutableStateOf(false) }
-    // null — режим «колода», иначе — детальный режим тапнутой карточки
-    var expandedCard by remember { mutableStateOf<StatsCardKind?>(null) }
     val explanationCoordinator: StatsExplanationCoordinator = koinInject()
     val explanations by explanationCoordinator.state.collectAsState()
 
@@ -150,9 +147,7 @@ fun StatsOverlay(
         }
     }
 
-    BackHandler {
-        if (expandedCard != null) expandedCard = null else triggerDismiss()
-    }
+    BackHandler { triggerDismiss() }
 
     val collisionState = rememberInertialCollisionState()
     LaunchedEffect(visible) {
@@ -190,10 +185,7 @@ fun StatsOverlay(
                     isDark = isDark,
                     footerPhrase = footerPhrase,
                     collisionState = collisionState,
-                    expandedCard = expandedCard,
                     explanations = explanations,
-                    onCardTap = { expandedCard = it },
-                    onBackFromDetail = { expandedCard = null },
                     onDismiss = ::triggerDismiss
                 )
             }
@@ -202,8 +194,8 @@ fun StatsOverlay(
 }
 
 /**
- * Декомпозированный «контент» — два режима под AnimatedContent:
- * колода из трёх карточек (тап — детали) и детальный режим с AI-объяснением.
+ * Декомпозированный «контент»: три основные плитки (тап переворачивает — на обороте описание и
+ * комментарий ИИ) и блок «Инсайты» под ними.
  */
 @Composable
 private fun StatsContent(
@@ -213,10 +205,7 @@ private fun StatsContent(
     isDark: Boolean,
     footerPhrase: String,
     collisionState: com.example.myapplication.ui.shared.InertialCollisionState,
-    expandedCard: StatsCardKind?,
     explanations: Map<StatsCardKind, StatsCardExplanationState>,
-    onCardTap: (StatsCardKind) -> Unit,
-    onBackFromDetail: () -> Unit,
     onDismiss: () -> Unit
 ) {
     val scroll = rememberScrollState()
@@ -229,120 +218,79 @@ private fun StatsContent(
             .padding(horizontal = 28.dp, vertical = 20.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        // Morph «карточка → детали»: фоновые карточки уходят (fade+scale-out),
-        // детальный экран влетает тем же sheetPresent-спрингом, что и сама шторка.
-        AnimatedContent(
-            targetState = expandedCard,
-            transitionSpec = {
-                (fadeIn(tween(240, delayMillis = 80)) + slideInVertically(
-                    initialOffsetY = { it / 8 },
-                    animationSpec = MotionTokens.sheetPresent()
-                )).togetherWith(
-                    fadeOut(tween(150)) + scaleOut(targetScale = 0.94f, animationSpec = tween(180))
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .inertialCollision(state = collisionState, index = 0, baseMultiplier = 3f)
+            ) {
+                Text(
+                    text = strings.statsTitle,
+                    style = MaterialTheme.typography.titleLarge.copy(
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = SnProFamily,
+                        fontSize = 24.sp,
+                        letterSpacing = (-0.3).sp
+                    ),
+                    color = MaterialTheme.colorScheme.onSurface
                 )
-            },
-            label = "statsMode",
-            modifier = Modifier.fillMaxWidth()
-        ) { card ->
-            if (card == null) {
-                Column(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .inertialCollision(state = collisionState, index = 0, baseMultiplier = 3f)
-                    ) {
-                        Text(
-                            text = strings.statsTitle,
-                            style = MaterialTheme.typography.titleLarge.copy(
-                                fontWeight = FontWeight.Bold,
-                                fontFamily = SnProFamily,
-                                fontSize = 24.sp,
-                                letterSpacing = (-0.3).sp
-                            ),
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                    }
+            }
 
-                    Spacer(Modifier.height(6.dp))
+            Spacer(Modifier.height(6.dp))
 
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .inertialCollision(state = collisionState, index = 1, baseMultiplier = 3f)
-                    ) {
-                        Text(
-                            text = strings.statsSubtitle,
-                            style = OverlayThemeTokens.SectionLabel,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = OverlayThemeTokens.LabelMutedAlpha)
-                        )
-                    }
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .inertialCollision(state = collisionState, index = 1, baseMultiplier = 3f)
+            ) {
+                Text(
+                    text = strings.statsSubtitle,
+                    style = OverlayThemeTokens.SectionLabel,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = OverlayThemeTokens.LabelMutedAlpha)
+                )
+            }
 
-                    Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(12.dp))
 
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .inertialCollision(state = collisionState, index = 2, baseMultiplier = 3f)
-                    ) {
-                        StatsCardDeckContent(
-                            animeList = animeList,
-                            strings = strings,
-                            appLanguage = appLanguage,
-                            isDark = isDark,
-                            onCardTap = onCardTap
-                        )
-                    }
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .inertialCollision(state = collisionState, index = 2, baseMultiplier = 3f)
+            ) {
+                StatsCardsColumn(
+                    animeList = animeList,
+                    strings = strings,
+                    appLanguage = appLanguage,
+                    isDark = isDark,
+                    explanations = explanations,
+                    footerPhrase = footerPhrase,
+                )
+            }
 
-                    Spacer(Modifier.height(24.dp))
+            Spacer(Modifier.height(24.dp))
 
-                    StatsInsightsSection(
-                        animeList = animeList,
-                        appLanguage = appLanguage,
-                        isDark = isDark,
-                    )
+            StatsInsightsSection(
+                animeList = animeList,
+                appLanguage = appLanguage,
+                isDark = isDark,
+            )
 
-                    Spacer(Modifier.height(20.dp))
+            Spacer(Modifier.height(20.dp))
 
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .inertialCollision(state = collisionState, index = 3, baseMultiplier = 3f),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        StatsDoneButton(
-                            label = strings.statsOk,
-                            isDark = isDark,
-                            onClick = onDismiss
-                        )
-                    }
-                }
-            } else {
-                Column(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    StatsCardDetailContent(
-                        kind = card,
-                        animeList = animeList,
-                        strings = strings,
-                        appLanguage = appLanguage,
-                        isDark = isDark,
-                        explanationState = explanations[card] ?: StatsCardExplanationState.Loading,
-                        footerPhrase = footerPhrase,
-                        onBack = onBackFromDetail
-                    )
-
-                    Spacer(Modifier.height(24.dp))
-
-                    StatsDoneButton(
-                        label = strings.statsOk,
-                        isDark = isDark,
-                        onClick = onDismiss
-                    )
-                }
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .inertialCollision(state = collisionState, index = 3, baseMultiplier = 3f),
+                contentAlignment = Alignment.Center
+            ) {
+                StatsDoneButton(
+                    label = strings.statsOk,
+                    isDark = isDark,
+                    onClick = onDismiss
+                )
             }
         }
     }

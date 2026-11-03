@@ -49,6 +49,16 @@ data class StatsInsightsStrings(
     val sourcesEmpty: String,
     val sourcesNote: String,
     val sourcesDetail: (resolvePercent: Int?, startupSeconds: String?, heightPx: Int?) -> String,
+    /** Оборот плиток («рубашка»): что именно показывает пункт. */
+    val ratingDesc: String,
+    val frequencyDesc: String,
+    val overviewDesc: String,
+    val activityDesc: String,
+    val monthlyDesc: String,
+    val returnsDesc: String,
+    val genreQualityDesc: String,
+    val profileDesc: String,
+    val sourcesDesc: String,
 )
 
 fun statsInsightsStrings(language: AppLanguage): StatsInsightsStrings =
@@ -103,6 +113,15 @@ private val RU_STRINGS = StatsInsightsStrings(
             height?.let { "${it}p" },
         ).joinToString(" · ")
     },
+    ratingDesc = "Средняя оценка ваших тайтлов в самых частых жанрах по десятибалльной шкале. Чем выше столбец, тем больше этот жанр вам нравится. Под графиком — средняя оценка и число тайтлов.",
+    frequencyDesc = "Какие жанры встречаются в коллекции чаще всего. Доля считается от числа тайтлов, а у тайтла бывает несколько жанров, поэтому в сумме выходит больше ста процентов.",
+    overviewDesc = "Коротко о коллекции: сколько в ней тайтлов, какая средняя оценка, сколько серий отмечено просмотренными и сколько тайтлов в избранном.",
+    activityDesc = "Каждая клетка — один день. Чем ярче оранжевый, тем больше вы в этот день смотрели, читали или слушали. Фильтр сверху оставляет только нужный вид занятий.",
+    monthlyDesc = "Сколько вы посмотрели, прочитали и прослушали по месяцам за последний год. Точка на кривой — самый активный месяц.",
+    returnsDesc = "К чему вы возвращались после финала: пересмотренные сериалы и фильмы, перечитанные тайтлы и переслушанные книги.",
+    genreQualityDesc = "Как часто вы доводите до конца тайтлы каждого жанра и как часто бросаете. Зелёное — досмотрено, оранжевое — брошено: чем больше зелёного, тем лучше жанр вам заходит.",
+    profileDesc = "Ваши вкусы за последние 90 дней в сравнении со всей коллекцией. Оранжевая полоса — доля жанра сейчас, серая — за всё время; стрелка вверх значит, что вы смотрите его заметно чаще, чем раньше.",
+    sourcesDesc = "Рейтинг источников видео именно на этом телефоне: надёжность ответа, скорость старта, буферизация и разрешение. От него зависит, в каком порядке приложение пробует источники.",
 )
 
 private val EN_STRINGS = StatsInsightsStrings(
@@ -154,4 +173,13 @@ private val EN_STRINGS = StatsInsightsStrings(
             height?.let { "${it}p" },
         ).joinToString(" · ")
     },
+    ratingDesc = "The average rating of your titles in the most common genres on a ten-point scale. The taller the bar, the more you like that genre. Below the chart: average rating and title count.",
+    frequencyDesc = "Which genres show up in your collection most often. Shares are counted against the number of titles, and a title can have several genres, so they add up to more than a hundred percent.",
+    overviewDesc = "The collection in brief: how many titles it holds, the average rating, how many episodes are marked watched and how many titles are favorites.",
+    activityDesc = "Each cell is one day. The brighter the orange, the more you watched, read or listened that day. The filter on top keeps only the kind of activity you want.",
+    monthlyDesc = "How much you watched, read and listened to month by month over the last year. The dot on the curve is your busiest month.",
+    returnsDesc = "What you came back to after the ending: rewatched shows and films, reread titles and relistened books.",
+    genreQualityDesc = "How often you finish titles of each genre and how often you drop them. Green is finished, orange is dropped: the more green, the better the genre suits you.",
+    profileDesc = "Your taste over the last 90 days against the whole collection. The orange bar is a genre's share now, the grey one is all-time; an up arrow means you watch it noticeably more than before.",
+    sourcesDesc = "A ranking of video sources on this very phone: answer reliability, startup speed, buffering and resolution. It decides the order in which the app tries sources.",
 )

@@ -1,20 +1,16 @@
 package com.example.myapplication.ui.home.stats
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Favorite
@@ -37,6 +33,7 @@ import androidx.compose.ui.unit.sp
 import com.example.myapplication.data.models.Anime
 import com.example.myapplication.data.models.UiStrings
 import com.example.myapplication.data.repository.GenreRepository
+import com.example.myapplication.domain.stats.StatsCardExplanationState
 import com.example.myapplication.domain.stats.StatsCardKind
 import com.example.myapplication.domain.stats.buildBarChartData
 import com.example.myapplication.domain.stats.buildDonutChartData
@@ -46,124 +43,69 @@ import com.example.myapplication.ui.home.StatsBarChartCanvas
 import com.example.myapplication.ui.home.StatsDonutChartCanvas
 import com.example.myapplication.ui.home.StatsGenrePalette
 import com.example.myapplication.ui.home.StatsMetricTile
-import com.example.myapplication.ui.shared.components.SwipeableCardDeck
 import com.example.myapplication.ui.shared.theme.OverlayThemeTokens
 import com.example.myapplication.ui.shared.theme.SnProFamily
-import com.example.myapplication.ui.shared.theme.glassEdge
-import com.example.myapplication.ui.shared.theme.glassFill
 import androidx.compose.ui.graphics.Color
 import org.koin.compose.koinInject
 import java.util.Locale
 import kotlin.math.roundToInt
 
 // ==========================================
-// StatsCardDeckContent — режим «колода» шторки статистики:
-// три «постерные» карточки. Раскладка внутри карточки — вертикальная (как в референсах):
-// график во всю ширину сверху, легенда полноширинными строками снизу.
+// StatsCardsColumn — три основные карточки статистики: обычные плитки в колонку (как «Инсайты»
+// под ними), а не колода. Тап по плитке переворачивает её: на обороте описание и комментарий ИИ.
 // ==========================================
 
-/** Высота карточки статистики = ширина × ratio (выше «постерной» 5/4, чтобы уместить график + строки). */
-internal const val StatsCardHeightRatio = 1.52f
-
-private val StatsCardShape = RoundedCornerShape(30.dp)
+private val RatingChartHeight = 190.dp
+private val DonutChartHeight = 220.dp
 
 @Composable
-fun StatsCardDeckContent(
+fun StatsCardsColumn(
     animeList: List<Anime>,
     strings: UiStrings,
     appLanguage: AppLanguage,
     isDark: Boolean,
-    onCardTap: (StatsCardKind) -> Unit,
+    explanations: Map<StatsCardKind, StatsCardExplanationState>,
+    footerPhrase: String,
     modifier: Modifier = Modifier,
 ) {
-    Column(modifier = modifier.fillMaxWidth()) {
-        SwipeableCardDeck(
-            items = StatsCardKind.entries.toList(),
-            key = { it.name },
-            cardShape = StatsCardShape,
-            cardHeightRatio = StatsCardHeightRatio,
-            onTopCardTap = onCardTap,
-            modifier = Modifier.fillMaxWidth(),
-        ) { kind, _ ->
-            StatsCardSurface(isDark = isDark) {
-                StatsCardBody(
-                    kind = kind,
-                    animeList = animeList,
-                    strings = strings,
-                    appLanguage = appLanguage,
-                    isDark = isDark,
-                    modifier = Modifier.fillMaxSize(),
-                )
+    val insightStrings = remember(appLanguage) { statsInsightsStrings(appLanguage) }
+    Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        StatsCardKind.entries.forEach { kind ->
+            val title = when (kind) {
+                StatsCardKind.RATING_BY_GENRE -> strings.statsCardRatingTitle
+                StatsCardKind.GENRE_FREQUENCY -> strings.statsCardFrequencyTitle
+                StatsCardKind.OVERVIEW -> strings.statsCardOverviewTitle
             }
-        }
-        Text(
-            text = strings.statsDeckHint,
-            fontFamily = SnProFamily,
-            fontSize = 12.sp,
-            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f),
-            textAlign = TextAlign.Center,
-            modifier = Modifier
-                .align(Alignment.CenterHorizontally)
-                .padding(top = 8.dp),
-        )
-    }
-}
-
-/** Опаковая «стеклянная» подложка карточки — общая для колоды и детального режима. */
-@Composable
-internal fun StatsCardSurface(
-    isDark: Boolean,
-    modifier: Modifier = Modifier,
-    content: @Composable BoxScope.() -> Unit,
-) {
-    val tileBg = if (isDark) {
-        OverlayThemeTokens.TileBackgroundDark
-    } else {
-        MaterialTheme.colorScheme.surfaceVariant
-    }
-    val tileRim = if (isDark) {
-        OverlayThemeTokens.RimDark
-    } else {
-        MaterialTheme.colorScheme.outline.copy(alpha = 0.12f)
-    }
-    Box(
-        modifier = modifier
-            .fillMaxSize()
-            .clip(StatsCardShape)
-            .background(tileBg)
-            .glassFill(isDark)
-            .glassEdge(30.dp, isDark)
-            .border(1.dp, tileRim, StatsCardShape),
-        content = content,
-    )
-}
-
-/** Внутренность карточки: caps-заголовок + график/сетка метрик. Переиспользуется в detail-режиме. */
-@Composable
-internal fun StatsCardBody(
-    kind: StatsCardKind,
-    animeList: List<Anime>,
-    strings: UiStrings,
-    appLanguage: AppLanguage,
-    isDark: Boolean,
-    modifier: Modifier = Modifier,
-) {
-    val title = when (kind) {
-        StatsCardKind.RATING_BY_GENRE -> strings.statsCardRatingTitle
-        StatsCardKind.GENRE_FREQUENCY -> strings.statsCardFrequencyTitle
-        StatsCardKind.OVERVIEW -> strings.statsCardOverviewTitle
-    }
-    Column(modifier = modifier.padding(horizontal = 20.dp, vertical = 18.dp)) {
-        Text(
-            text = title,
-            style = OverlayThemeTokens.SectionLabel,
-            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
-        )
-        Spacer(Modifier.height(14.dp))
-        when (kind) {
-            StatsCardKind.RATING_BY_GENRE -> RatingByGenreCard(animeList, strings, appLanguage, isDark)
-            StatsCardKind.GENRE_FREQUENCY -> GenreFrequencyCard(animeList, strings, appLanguage, isDark)
-            StatsCardKind.OVERVIEW -> OverviewCard(animeList, strings, isDark)
+            val description = when (kind) {
+                StatsCardKind.RATING_BY_GENRE -> insightStrings.ratingDesc
+                StatsCardKind.GENRE_FREQUENCY -> insightStrings.frequencyDesc
+                StatsCardKind.OVERVIEW -> insightStrings.overviewDesc
+            }
+            StatsFlipTile(
+                isDark = isDark,
+                backTitle = title,
+                description = description,
+                comment = {
+                    StatsAiComment(
+                        state = explanations[kind] ?: StatsCardExplanationState.Loading,
+                        strings = strings,
+                        isDark = isDark,
+                        footerPhrase = if (kind == StatsCardKind.OVERVIEW) footerPhrase else "",
+                    )
+                },
+            ) {
+                Text(
+                    text = title,
+                    style = OverlayThemeTokens.SectionLabel,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
+                )
+                Spacer(Modifier.height(14.dp))
+                when (kind) {
+                    StatsCardKind.RATING_BY_GENRE -> RatingByGenreCard(animeList, strings, appLanguage, isDark)
+                    StatsCardKind.GENRE_FREQUENCY -> GenreFrequencyCard(animeList, strings, appLanguage, isDark)
+                    StatsCardKind.OVERVIEW -> OverviewCard(animeList, strings, isDark)
+                }
+            }
         }
     }
 }
@@ -182,17 +124,19 @@ private fun RatingByGenreCard(
         return
     }
     val palette = StatsGenrePalette
-    Column(modifier = Modifier.fillMaxSize()) {
+    val reveal = LocalStatsReveal.current
+    Column(modifier = Modifier.fillMaxWidth()) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .weight(1f)
+                .height(RatingChartHeight)
                 .padding(vertical = 6.dp)
         ) {
+            // Столбцы растут от нуля внутри самой диаграммы (см. LocalStatsReveal в StatsChartsRow).
             StatsBarChartCanvas(entries = barData, barColors = palette, isDark = isDark)
         }
         Spacer(Modifier.height(10.dp))
-        Column {
+        Column(Modifier.statsRevealFade(reveal)) {
             barData.forEachIndexed { i, e ->
                 StatsLegendRow(
                     color = palette.getOrElse(i) { palette[i % palette.size] },
@@ -221,11 +165,12 @@ private fun GenreFrequencyCard(
     }
     val palette = StatsGenrePalette
     val insightStrings = remember(appLanguage) { statsInsightsStrings(appLanguage) }
-    Column(modifier = Modifier.fillMaxSize()) {
+    val reveal = LocalStatsReveal.current
+    Column(modifier = Modifier.fillMaxWidth()) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .weight(1f)
+                .height(DonutChartHeight)
                 .padding(vertical = 6.dp),
             contentAlignment = Alignment.Center
         ) {
@@ -236,7 +181,7 @@ private fun GenreFrequencyCard(
             )
         }
         Spacer(Modifier.height(10.dp))
-        Column {
+        Column(Modifier.statsRevealFade(reveal)) {
             donutData.slices.forEachIndexed { i, s ->
                 StatsLegendRow(
                     color = palette.getOrElse(i) { palette[i % palette.size] },
@@ -276,13 +221,16 @@ private fun OverviewCard(
     }
     val totalEpisodes = remember(animeList) { animeList.sumOf { it.episodes } }
     val favorites = remember(animeList) { animeList.count { it.isFavorite } }
+    val reveal = LocalStatsReveal.current
+    // Метрики всплывают лесенкой: каждая стартует чуть позже предыдущей.
+    fun stagger(index: Int): () -> Float = { (reveal() * 1.6f - index * 0.2f).coerceIn(0f, 1f) }
 
     Column(
-        modifier = Modifier.fillMaxSize(),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         StatsMetricTile(
-            modifier = Modifier.fillMaxWidth().weight(1f),
+            modifier = Modifier.fillMaxWidth().statsRevealFade(stagger(0)),
             value = totalAnime.toString(),
             label = strings.statsTotal,
             accent = OverlayThemeTokens.AccentNeonBlue,
@@ -292,7 +240,7 @@ private fun OverviewCard(
             horizontal = true,
         )
         StatsMetricTile(
-            modifier = Modifier.fillMaxWidth().weight(1f),
+            modifier = Modifier.fillMaxWidth().statsRevealFade(stagger(1)),
             value = ratingFormatted,
             label = strings.avgRating,
             accent = OverlayThemeTokens.AccentNeonYellow,
@@ -302,7 +250,7 @@ private fun OverviewCard(
             horizontal = true,
         )
         StatsMetricTile(
-            modifier = Modifier.fillMaxWidth().weight(1f),
+            modifier = Modifier.fillMaxWidth().statsRevealFade(stagger(2)),
             value = totalEpisodes.toString(),
             label = strings.episodesWatched,
             accent = OverlayThemeTokens.AccentNeonPurple,
@@ -312,7 +260,7 @@ private fun OverviewCard(
             horizontal = true,
         )
         StatsMetricTile(
-            modifier = Modifier.fillMaxWidth().weight(1f),
+            modifier = Modifier.fillMaxWidth().statsRevealFade(stagger(3)),
             value = favorites.toString(),
             label = strings.favorites,
             accent = OverlayThemeTokens.AccentNeonPink,
@@ -389,7 +337,7 @@ private fun StatsLegendRow(
 
 @Composable
 private fun NoChartData(strings: UiStrings, isDark: Boolean) {
-    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+    Box(modifier = Modifier.fillMaxWidth().height(120.dp), contentAlignment = Alignment.Center) {
         Text(
             text = strings.statsNoGenreData,
             style = MaterialTheme.typography.bodySmall.copy(

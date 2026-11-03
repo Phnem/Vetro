@@ -6,6 +6,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
@@ -33,6 +34,8 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -117,7 +120,7 @@ fun StatsInsightsSection(
             color = MaterialTheme.colorScheme.onSurface.copy(alpha = OverlayThemeTokens.LabelMutedAlpha),
         )
 
-        InsightTile(isDark) {
+        InsightTile(isDark, strings.activityTitle, strings.activityDesc) {
             TileTitle(strings.activityTitle, isDark)
             Spacer(Modifier.height(10.dp))
             FilterChips(filter, strings, isDark) { filter = it }
@@ -133,7 +136,7 @@ fun StatsInsightsSection(
             }
         }
 
-        InsightTile(isDark) {
+        InsightTile(isDark, strings.monthlyTitle, strings.monthlyDesc) {
             TileTitle(strings.monthlyTitle, isDark)
             Spacer(Modifier.height(10.dp))
             if (months.all { it.units == 0 }) {
@@ -154,7 +157,7 @@ fun StatsInsightsSection(
             }
         }
 
-        InsightTile(isDark) {
+        InsightTile(isDark, strings.returnsTitle, strings.returnsDesc) {
             TileTitle(strings.returnsTitle, isDark)
             Spacer(Modifier.height(12.dp))
             ReturnsRow(insights.returns, strings, isDark)
@@ -162,7 +165,7 @@ fun StatsInsightsSection(
             MutedText(strings.returnsCaption, isDark)
         }
 
-        InsightTile(isDark) {
+        InsightTile(isDark, strings.genreQualityTitle, strings.genreQualityDesc) {
             TileTitle(strings.genreQualityTitle, isDark)
             Spacer(Modifier.height(10.dp))
             if (insights.genreQuality.isEmpty()) {
@@ -177,7 +180,7 @@ fun StatsInsightsSection(
             }
         }
 
-        InsightTile(isDark) {
+        InsightTile(isDark, strings.profileTitle, strings.profileDesc) {
             TileTitle(strings.profileTitle, isDark)
             Spacer(Modifier.height(10.dp))
             ProfileBlock(insights.profile, strings, isDark, ::genreName)
@@ -196,7 +199,7 @@ private fun SourceStandingsTile(strings: StatsInsightsStrings, appLanguage: AppL
         value = runCatching { intelligence.leaderboard() }.getOrDefault(emptyList())
             .filter { it.language == appLanguage && it.stats.evidence > 0 }
     }
-    InsightTile(isDark) {
+    InsightTile(isDark, strings.sourcesTitle, strings.sourcesDesc) {
         TileTitle(strings.sourcesTitle, isDark)
         Spacer(Modifier.height(10.dp))
         if (standings.isEmpty()) {
@@ -244,19 +247,13 @@ private fun SourceStandingsTile(strings: StatsInsightsStrings, appLanguage: AppL
 // --- Плитка ---------------------------------------------------------------------------------
 
 @Composable
-private fun InsightTile(isDark: Boolean, content: @Composable () -> Unit) {
-    val tileBg = if (isDark) OverlayThemeTokens.TileBackgroundDark else MaterialTheme.colorScheme.surfaceVariant
-    val tileRim = if (isDark) OverlayThemeTokens.RimDark else MaterialTheme.colorScheme.outline.copy(alpha = 0.12f)
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(TileShape)
-            .background(tileBg)
-            .glassFill(isDark)
-            .glassEdge(OverlayThemeTokens.TileCornerRadius, isDark)
-            .border(1.dp, tileRim, TileShape)
-            .padding(16.dp),
-    ) { content() }
+private fun InsightTile(
+    isDark: Boolean,
+    backTitle: String,
+    description: String,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    StatsFlipTile(isDark = isDark, backTitle = backTitle, description = description, front = content)
 }
 
 @Composable
@@ -334,6 +331,7 @@ private fun levelColor(level: Int, isDark: Boolean): Color = when (level) {
 @Composable
 private fun HeatmapGrid(heatmap: ActivityHeatmap, isDark: Boolean) {
     val weeks = heatmap.weeks
+    val reveal = LocalStatsReveal.current
     Canvas(
         modifier = Modifier
             .fillMaxWidth()
@@ -343,13 +341,19 @@ private fun HeatmapGrid(heatmap: ActivityHeatmap, isDark: Boolean) {
         val cell = step * 0.8f
         val inset = (step - cell) / 2f
         val radius = CornerRadius(cell * 0.28f)
+        val p = reveal().coerceIn(0f, 1f)
         weeks.forEachIndexed { x, column ->
+            // Клетки вырастают из точки волной слева направо: у каждого столбца своё запаздывание.
+            val k = (p * (weeks.size + 8) - x).coerceIn(0f, 1f)
+            if (k <= 0f) return@forEachIndexed
             column.forEachIndexed { y, day ->
                 if (day.future) return@forEachIndexed
+                val side = cell * k
+                val shrink = (cell - side) / 2f
                 drawRoundRect(
                     color = levelColor(day.level, isDark),
-                    topLeft = Offset(x * step + inset, y * step + inset),
-                    size = Size(cell, cell),
+                    topLeft = Offset(x * step + inset + shrink, y * step + inset + shrink),
+                    size = Size(side, side),
                     cornerRadius = radius,
                 )
             }
@@ -395,10 +399,15 @@ private fun MonthlyAreaChart(buckets: List<MonthBucket>, locale: Locale, isDark:
     val n = buckets.size
     val maxUnits = (buckets.maxOfOrNull { it.units } ?: 0).coerceAtLeast(1)
     val gridColor = inkOnTile(isDark, 0.08f)
+    val reveal = LocalStatsReveal.current
     Canvas(
         modifier = Modifier
             .fillMaxWidth()
-            .height(112.dp),
+            .height(112.dp)
+            .graphicsLayer {
+                scaleY = reveal().coerceIn(0f, 1f)
+                transformOrigin = TransformOrigin(0.5f, 1f)
+            },
     ) {
         val top = 10.dp.toPx()
         val usable = size.height - top
@@ -466,23 +475,25 @@ private fun MonthlyAreaChart(buckets: List<MonthBucket>, locale: Locale, isDark:
 
 @Composable
 private fun ReturnsRow(returns: ReturnsSummary, strings: StatsInsightsStrings, isDark: Boolean) {
+    val reveal = LocalStatsReveal.current
+    fun stagger(index: Int): () -> Float = { (reveal() * 1.5f - index * 0.2f).coerceIn(0f, 1f) }
     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         ReturnMetric(
-            modifier = Modifier.weight(1f),
+            modifier = Modifier.weight(1f).statsRevealFade(stagger(0)),
             value = returns.rewatchTitles,
             label = strings.rewatch,
             detail = strings.unitEpisodes(returns.rewatchEpisodes),
             isDark = isDark,
         )
         ReturnMetric(
-            modifier = Modifier.weight(1f),
+            modifier = Modifier.weight(1f).statsRevealFade(stagger(1)),
             value = returns.rereadTitles,
             label = strings.reread,
             detail = strings.unitChapters(returns.rereadChapters),
             isDark = isDark,
         )
         ReturnMetric(
-            modifier = Modifier.weight(1f),
+            modifier = Modifier.weight(1f).statsRevealFade(stagger(2)),
             value = returns.relistenBooks,
             label = strings.relisten,
             detail = strings.unitBooks(returns.relistenBooks),
@@ -557,10 +568,15 @@ private fun GenreQualityRow(g: GenreQuality, name: String, strings: StatsInsight
 
 @Composable
 private fun StackedRateBar(completed: Float, dropped: Float, isDark: Boolean) {
+    val reveal = LocalStatsReveal.current
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .height(7.dp)
+            .graphicsLayer {
+                scaleX = reveal().coerceIn(0f, 1f)
+                transformOrigin = TransformOrigin(0f, 0.5f)
+            }
             .clip(CircleShape)
             .background(inkOnTile(isDark, 0.08f)),
     ) {
@@ -655,6 +671,7 @@ private fun ProfileGenreRow(g: GenreShare, name: String, isDark: Boolean) {
 
 @Composable
 private fun ShareBar(share: Float, color: Color, isDark: Boolean) {
+    val reveal = LocalStatsReveal.current
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -667,6 +684,10 @@ private fun ShareBar(share: Float, color: Color, isDark: Boolean) {
                 Modifier
                     .fillMaxWidth(share.coerceIn(0.02f, 1f))
                     .height(5.dp)
+                    .graphicsLayer {
+                        scaleX = reveal().coerceIn(0f, 1f)
+                        transformOrigin = TransformOrigin(0f, 0.5f)
+                    }
                     .clip(CircleShape)
                     .background(color),
             )

@@ -36,6 +36,9 @@ import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.graphicsLayer
+import com.example.myapplication.ui.home.stats.LocalStatsReveal
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -315,6 +318,7 @@ internal fun StatsBarChartCanvas(
         return
     }
     val maxRating = 10f
+    val reveal = LocalStatsReveal.current
     val axisColor = (if (isDark) OverlayThemeTokens.LabelMutedDark
     else MaterialTheme.colorScheme.onSurface).copy(alpha = 0.5f)
     val gridColor = axisColor.copy(alpha = 0.22f)
@@ -380,6 +384,11 @@ internal fun StatsBarChartCanvas(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .fillMaxHeight(hFrac)
+                                .graphicsLayer {
+                                    // Столбец вырастает от нуля со своей задержкой — «лесенкой» слева направо.
+                                    scaleY = (reveal() * 1.5f - i * 0.1f).coerceIn(0f, 1f)
+                                    transformOrigin = TransformOrigin(0.5f, 1f)
+                                }
                                 .clip(RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 3.dp, bottomEnd = 3.dp))
                                 .background(c)
                         )
@@ -397,6 +406,7 @@ internal fun StatsDonutChartCanvas(
     centerCaption: String? = null
 ) {
     val slices: List<TagFrequencySlice> = data.slices
+    val reveal = LocalStatsReveal.current
     // В центре — число тайтлов коллекции, а не сумма жанровых вхождений (у тайтла несколько жанров).
     val centerLabel = data.totalTitles.toString()
     val startAngles = FloatArray(slices.size)
@@ -423,12 +433,14 @@ internal fun StatsDonutChartCanvas(
             val actualD = d - strokeW
             val topLeft = Offset((w - actualD) / 2f, (h - actualD) / 2f)
             val ringSize = Size(actualD, actualD)
+            // Кольцо «рисует себя»: углы всех долей растут от верхней точки пропорционально.
+            val p = reveal().coerceIn(0f, 1f)
             for (i in slices.indices) {
                 val col = colors[i]
-                val actualSweep = (fullSweeps[i] - DONUT_SEGMENT_GAP_DEG).coerceAtLeast(0.1f)
+                val actualSweep = (fullSweeps[i] - DONUT_SEGMENT_GAP_DEG).coerceAtLeast(0.1f) * p
                 drawArc(
                     color = col,
-                    startAngle = startAngles[i],
+                    startAngle = -90f + (startAngles[i] + 90f) * p,
                     sweepAngle = actualSweep,
                     useCenter = false,
                     topLeft = topLeft,
@@ -440,7 +452,10 @@ internal fun StatsDonutChartCanvas(
                 )
             }
         }
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Column(
+            modifier = Modifier.graphicsLayer { alpha = reveal().coerceIn(0f, 1f) },
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
             Text(
                 text = centerLabel,
                 style = MaterialTheme.typography.titleLarge.copy(
