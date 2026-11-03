@@ -278,6 +278,10 @@ class StreamPlayerActivity : ComponentActivity(), PipHostActivity {
                     // серии в switchToEpisode(), иначе выбор сбрасывался бы на дефолт резолвера каждый раз.
                     var preferredSourceName by remember { mutableStateOf<String?>(null) }
                     var failedRenditionUrls by remember { mutableStateOf<Set<String>>(emptySet()) }
+                    // Источники, на которых сторож буферизации сдался: из запасных на эту серию они
+                    // выпадают (иначе A→B→A по кругу), но в списке озвучек остаются — подвисание
+                    // не значит, что источник мёртв, и пользователь вправе выбрать его сам.
+                    var stalledRenditionUrls by remember { mutableStateOf<Set<String>>(emptySet()) }
                     var landscape by rememberSaveable { mutableStateOf(true) }
                     // Номер серии, которая сейчас резолвится. Он же — защёлка от гонки: пока не null,
                     // повторные нажатия ничего не запускают.
@@ -362,6 +366,9 @@ class StreamPlayerActivity : ComponentActivity(), PipHostActivity {
                         }
                     }
                     val player = playbackSession.player
+                    // Дошёл ли этот плеер хоть раз до READY: до того буферизация — это старт источника,
+                    // а не обрыв посреди показа, и ждать её можно дольше.
+                    var reachedReady by remember(player) { mutableStateOf(false) }
 
                     // Предпочтения, которые следуют за контентом: озвучка, язык звука и субтитры,
                     // выбранные раньше для этого тайтла (или, если нет, для его типа).
@@ -571,7 +578,7 @@ class StreamPlayerActivity : ComponentActivity(), PipHostActivity {
                     fun availableFallbacks(): List<VetroVideo> = rankRecoveryCandidates(
                         current = current,
                         candidates = candidates,
-                        failedUrls = failedRenditionUrls,
+                        failedUrls = failedRenditionUrls + stalledRenditionUrls,
                     )
 
                     fun switchToFallback(markCurrentFailed: Boolean): Boolean {
@@ -667,12 +674,18 @@ class StreamPlayerActivity : ComponentActivity(), PipHostActivity {
                                 current = current.copy(resolvedAt = System.currentTimeMillis())
                             }
                             StreamRecoveryAction.SWITCH_CANDIDATE -> {
-                                if (!switchToFallback(markCurrentFailed = true)) {
-                                    resolveFreshStream(markCurrentFailed = true)
+                                // Подвисание — не смерть источника: он выпадает из запасных, но не
+                                // вычёркивается из списка озвучек. Жёстко помечает только ошибка.
+                                val soft = reason == REASON_WATCHDOG
+                                if (soft) stalledRenditionUrls = stalledRenditionUrls + current.url
+                                if (!switchToFallback(markCurrentFailed = !soft)) {
+                                    resolveFreshStream(markCurrentFailed = !soft)
                                 }
                             }
                             StreamRecoveryAction.RERESOLVE -> {
-                                resolveFreshStream(markCurrentFailed = true)
+                                val soft = reason == REASON_WATCHDOG
+                                if (soft) stalledRenditionUrls = stalledRenditionUrls + current.url
+                                resolveFreshStream(markCurrentFailed = !soft)
                             }
                         }
                     }
@@ -735,6 +748,7 @@ class StreamPlayerActivity : ComponentActivity(), PipHostActivity {
                             candidates = resolved
                             currentIndex = 0
                             failedRenditionUrls = emptySet()
+                            stalledRenditionUrls = emptySet()
                             manualSwitchFallback = null
                             sameUrlRetryUsed = false
                             playbackError = null
@@ -805,8 +819,16 @@ class StreamPlayerActivity : ComponentActivity(), PipHostActivity {
                                 return@collectLatest
                             }
                             while (isActive) {
+                                // Сети нет — виноват не источник: переключение сожгло бы все запасные
+                                // ссылки впустую. Отсчёт обнуляется и начнётся заново, когда сеть вернётся.
+                                if (!isOnline()) {
+                                    bufferingWatchdog.sample(SystemClock.elapsedRealtime(), buffering = false)
+                                    delay(WATCHDOG_POLL_MS)
+                                    continue
+                                }
+                                val thresholdMs = if (reachedReady) WATCHDOG_BUFFERING_MS else WATCHDOG_STARTUP_MS
                                 if (
-                                    bufferingWatchdog.sample(SystemClock.elapsedRealtime(), buffering = true) &&
+                                    bufferingWatchdog.sample(SystemClock.elapsedRealtime(), buffering = true, thresholdMs = thresholdMs) &&
                                     !retrying &&
                                     switchingTo == null
                                 ) {
@@ -821,7 +843,7 @@ class StreamPlayerActivity : ComponentActivity(), PipHostActivity {
                                             hasFallback = availableFallbacks().isNotEmpty(),
                                         ),
                                     )
-                                    executeRecovery(action, reason = "buffering_watchdog")
+                                    executeRecovery(action, reason = REASON_WATCHDOG)
                                 }
                                 delay(WATCHDOG_POLL_MS)
                             }
@@ -884,6 +906,13 @@ class StreamPlayerActivity : ComponentActivity(), PipHostActivity {
                                     current = previousRendition.copy(resolvedAt = System.currentTimeMillis())
                                     return
                                 }
+                                if (!isOnline()) {
+                                    // Обрыв из-за сети — не вина источника: не переключаемся и не
+                                    // вычёркиваем ссылку, а ждём, пока пользователь нажмёт «Повторить».
+                                    resumePosition = player.currentPosition.coerceAtLeast(0L)
+                                    playbackError = "Нет подключения к сети. Попробуйте ещё раз."
+                                    return
+                                }
                                 val bufferedDurationMs =
                                     (player.bufferedPosition - player.currentPosition).coerceAtLeast(0L)
                                 val action = recoveryPolicy.decide(
@@ -899,6 +928,7 @@ class StreamPlayerActivity : ComponentActivity(), PipHostActivity {
                             }
 
                             override fun onPlaybackStateChanged(playbackState: Int) {
+                                if (playbackState == Player.STATE_READY) reachedReady = true
                                 if (
                                     playbackState == Player.STATE_READY &&
                                     current.url == listenerSessionUrl &&
@@ -1337,8 +1367,12 @@ class StreamPlayerActivity : ComponentActivity(), PipHostActivity {
 
     companion object {
         private const val TAG = "StreamPlayer"
-        private const val WATCHDOG_BUFFERING_MS = 8_000L
+        /** Подвисание посреди идущего показа, после которого берём запасной источник. */
+        private const val WATCHDOG_BUFFERING_MS = 12_000L
+        /** Старт источника (до первого READY): первый кадр, HLS-манифест, перемотка — ждём дольше. */
+        private const val WATCHDOG_STARTUP_MS = 20_000L
         private const val WATCHDOG_POLL_MS = 250L
+        private const val REASON_WATCHDOG = "buffering_watchdog"
         /** Сколько висит плашка «Источник переключён». */
         private const val SOURCE_NOTICE_MS = 3_500L
         /** К чему тянемся, если у текущей ссылки разрешение неизвестно. */
@@ -1444,6 +1478,14 @@ private fun selectStudioRenditions(
             abs((candidate.resolution ?: targetResolution) - targetResolution)
         }
     }.distinctBy { it.url }
+}
+
+/** Есть ли у телефона выход в интернет сейчас; при сомнении считаем, что есть. */
+private fun Context.isOnline(): Boolean {
+    val manager = getSystemService(android.net.ConnectivityManager::class.java) ?: return true
+    val network = manager.activeNetwork ?: return false
+    val caps = manager.getNetworkCapabilities(network) ?: return false
+    return caps.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET)
 }
 
 /** Стоит ли плеер в буферизации, желая играть. Отдаёт значение сразу и затем — только изменения. */

@@ -59,7 +59,11 @@ internal class ContinuousBufferingWatchdog(
     private var bufferingSinceMs: Long? = null
     private var recoveryIssued = false
 
-    fun sample(nowMs: Long, buffering: Boolean): Boolean {
+    /**
+     * [thresholdMs] можно задать на каждый замер: подвисание на старте источника (первый кадр, HLS,
+     * перемотка в нескрытый буфер) терпимее, чем посреди уже идущего показа.
+     */
+    fun sample(nowMs: Long, buffering: Boolean, thresholdMs: Long = this.thresholdMs): Boolean {
         if (!buffering) {
             bufferingSinceMs = null
             recoveryIssued = false

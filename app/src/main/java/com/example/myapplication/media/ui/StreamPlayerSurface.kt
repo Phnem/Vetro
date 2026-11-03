@@ -137,7 +137,10 @@ fun StreamPlayerSurface(
     }
     var tracksSnapshot by remember(player) { mutableStateOf(player.currentTracks) }
     var speed by remember(player) { mutableStateOf(1f) }
-    var fit by remember(player) { mutableStateOf(VideoFit.ORIGINAL) }
+    // Не привязано к player: источник меняется пересозданием плеера (озвучка, фолбэк, обновление
+    // ссылки), и развёрнутый на весь экран кадр не должен сбрасываться вместе с ним. Под новое
+    // соотношение сторон cropScale пересчитывается сам.
+    var fit by remember { mutableStateOf(VideoFit.ORIGINAL) }
     var viewportSize by remember { mutableStateOf(IntSize.Zero) }
     var videoAspect by remember(player) { mutableFloatStateOf(16f / 9f) }
     val viewportAspect = viewportSize.width.toFloat() / viewportSize.height.coerceAtLeast(1)
