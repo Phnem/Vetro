@@ -49,8 +49,23 @@ object AudioLevelMeter {
     /** Доля пика в итоговом уровне: RMS даёт «тело» голоса, пик — оживляет согласные. */
     private const val PEAK_WEIGHT = 0.35f
 
-    /** Позицию выход сообщает реже, чем кадры экрана; между сообщениями достраиваем, но недолго. */
-    private const val MAX_EXTRAPOLATION_MS = 60L
+    /**
+     * Позицию выход сообщает неровно (раз в секунду и реже, не на каждый кадр), поэтому между сообщениями
+     * часы идут сами по времени кадра со скоростью воспроизведения. Дольше этого без сообщений не верим.
+     */
+    private const val MAX_EXTRAPOLATION_MS = 1500L
+
+    /** Скорость воспроизведения оцениваем по сообщениям на таком окне: короче — шум позиции важнее сдвига. */
+    private const val RATE_WINDOW_MS = 4000L
+
+    /**
+     * Позиция от выхода шумит на 0.1–0.3 с (она идёт по меткам AudioTrack): каждое сообщение подтягивает
+     * наши часы лишь на эту долю расхождения, чтобы волна не дёргалась назад и вперёд.
+     */
+    private const val POSITION_GAIN = 0.25
+
+    /** Расхождение больше этого — перемотка или возобновление после паузы: часы встают на позицию сразу. */
+    private const val SNAP_US = 600_000L
 
     /** Дальше последнего принятого отсчёта кривую держим не дольше этого (звук ещё не пришёл). */
     private const val MAX_HOLD_US = 250_000L
@@ -63,6 +78,9 @@ object AudioLevelMeter {
     private var blockUs = 0L
     private var positionUs = C.TIME_UNSET
     private var positionAtMs = 0L
+    private var rate = 1.0
+    private var ratePosUs = C.TIME_UNSET
+    private var rateAtMs = 0L
 
     /** Новый блок звука на входе выхода. Буфер не двигаем: его заберёт сам выход. */
     @Synchronized
@@ -127,8 +145,31 @@ object AudioLevelMeter {
     /** Выход сообщает, докуда дошло воспроизведение (в той же шкале времени, что куски звука). */
     @Synchronized
     fun onPosition(us: Long) {
-        positionUs = us
-        positionAtMs = SystemClock.elapsedRealtime()
+        val wall = SystemClock.elapsedRealtime()
+        if (positionUs == C.TIME_UNSET) {
+            positionUs = us
+            positionAtMs = wall
+            ratePosUs = us
+            rateAtMs = wall
+            return
+        }
+        val error = us - nowUs()
+        if (abs(error) > SNAP_US) {
+            positionUs = us
+            ratePosUs = us
+            rateAtMs = wall
+        } else {
+            positionUs = nowUs() + (error * POSITION_GAIN).toLong()
+        }
+        positionAtMs = wall
+        // Скорость (1x, 1.5x, 2x…) видна по тому, как позиция уходит вперёд относительно часов телефона.
+        if (wall - rateAtMs >= RATE_WINDOW_MS) {
+            val measured = (us - ratePosUs) / ((wall - rateAtMs) * 1000.0)
+            // Перемотка и паузы дают значения вне разумных скоростей: их пропускаем.
+            if (measured in 0.2..4.5) rate += (measured - rate) * 0.5
+            ratePosUs = us
+            rateAtMs = wall
+        }
     }
 
     /** Где сейчас воспроизведение; [C.TIME_UNSET], пока выход ничего не сообщал. */
@@ -136,7 +177,7 @@ object AudioLevelMeter {
     fun nowUs(): Long {
         if (positionUs == C.TIME_UNSET) return C.TIME_UNSET
         val sinceMs = min(SystemClock.elapsedRealtime() - positionAtMs, MAX_EXTRAPOLATION_MS)
-        return positionUs + sinceMs * 1000L
+        return positionUs + (sinceMs * 1000L * rate).toLong()
     }
 
     /**
@@ -210,5 +251,6 @@ object AudioLevelMeter {
         lastRecordedUs = Long.MIN_VALUE
         blockUs = 0L
         positionUs = C.TIME_UNSET
+        ratePosUs = C.TIME_UNSET
     }
 }
