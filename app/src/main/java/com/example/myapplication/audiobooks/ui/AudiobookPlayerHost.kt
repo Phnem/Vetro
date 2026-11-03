@@ -80,6 +80,7 @@ import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.util.VelocityTracker
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
@@ -374,6 +375,22 @@ fun AudiobookPlayerHost(language: AppLanguage = AppLanguage.RU, modifier: Modifi
         val miniOffset = remember(widthPx, heightPx) { Animatable(Offset(right, bottom), Offset.VectorConverter) }
         val miniRadiusPx = miniH / 2f
         var atBottom by remember { mutableStateOf(true) }
+        // Закрыть: пауза и пустая очередь — мини-плеер уходит, место в книге сохранено, книга остаётся в «Продолжить».
+        fun closeMini() {
+            performHaptic(view, Haptic.Light)
+            state.controller?.run { pause(); stop(); clearMediaItems() }
+        }
+        // Смахнули капсулу вниз за край, как мини-плеер в YouTube: она уезжает, плеер закрывается, а в
+        // исходную точку капсула возвращается уже невидимой — к следующему запуску книги.
+        fun dismissMini() {
+            scope.launch {
+                miniOffset.animateTo(Offset(miniOffset.value.x, heightPx), MotionTokens.springSurface())
+                closeMini()
+                kotlinx.coroutines.delay(300)
+                atBottom = true
+                miniOffset.snapTo(Offset(right, bottom))
+            }
+        }
         fun snapToCorner(leftSide: Boolean, topSide: Boolean) {
             atBottom = !topSide
             scope.launch {
@@ -453,32 +470,37 @@ fun AudiobookPlayerHost(language: AppLanguage = AppLanguage.RU, modifier: Modifi
                     book = shownBook,
                     state = state,
                     strings = strings,
-                    // Закрыть: пауза и пустая очередь — мини-плеер уходит, место в книге сохранено,
-                    // книга остаётся в «Продолжить».
-                    onClose = {
-                        performHaptic(view, Haptic.Light)
-                        state.controller?.run { pause(); stop(); clearMediaItems() }
-                    },
+                    onClose = ::closeMini,
                     onExpand = { expand() },
                     onDrag = { delta ->
                         scope.launch {
                             miniOffset.snapTo(Offset(
                                 (miniOffset.value.x + delta.x).coerceIn(marginPx, right),
-                                (miniOffset.value.y + delta.y).coerceIn(topPx, bottom),
+                                // Вниз можно тянуть дальше стоянки: так капсулу смахивают, чтобы закрыть.
+                                (miniOffset.value.y + delta.y).coerceIn(topPx, bottom + miniH * 1.2f),
                             ))
                         }
                     },
-                    onDragEnd = {
-                        snapToCorner(
-                            leftSide = miniOffset.value.x + miniW / 2 < widthPx / 2,
-                            topSide = miniOffset.value.y + miniH / 2 < heightPx / 2,
-                        )
+                    onDragEnd = { velocityY ->
+                        val pushed = miniOffset.value.y - bottom
+                        if (pushed > miniH * 0.45f || (velocityY > 1800f && pushed > -miniH)) {
+                            dismissMini()
+                        } else {
+                            snapToCorner(
+                                leftSide = miniOffset.value.x + miniW / 2 < widthPx / 2,
+                                topSide = miniOffset.value.y + miniH / 2 < heightPx / 2,
+                            )
+                        }
                     },
                     onMoveToCorner = ::snapToCorner,
                     modifier = Modifier
                         .offset { windowRect(expansion.value.coerceIn(0f, 1f)).topLeft.let { IntOffset(it.x.toInt(), it.y.toInt()) } }
                         .size(miniWidthDp, MiniHeight)
-                        .graphicsLayer { alpha = (1f - expansion.value / 0.3f).coerceIn(0f, 1f) },
+                        .graphicsLayer {
+                            // Уходящая вниз капсула бледнеет: видно, что отпускание её закроет.
+                            val sinking = ((miniOffset.value.y - bottom) / (miniH * 1.2f)).coerceIn(0f, 1f)
+                            alpha = (1f - expansion.value / 0.3f).coerceIn(0f, 1f) * (1f - 0.5f * sinking)
+                        },
                 )
             }
 
@@ -644,7 +666,7 @@ private suspend fun findNarrations(
  * Матовая капсула, а не стекло: настоящее стекло преломляло бы экран приложения под ним, а для этого
  * весь экран пришлось бы гнать через общий бэкдроп. Поэтому цвет — тёмный/светлый, чуть отличный от фона
  * своей темы. Размер — 2×1 по сетке виджетов. Тап раскрывает плеер, перетаскивание ведёт капсулу к углам,
- * долгое нажатие закрывает (креста нет: в 56dp он не помещается).
+ * смахивание вниз за край (или долгое нажатие) закрывает: креста нет, в 56dp он не помещается.
  */
 @Composable
 private fun MiniPlayerContent(
@@ -654,7 +676,7 @@ private fun MiniPlayerContent(
     onClose: () -> Unit,
     onExpand: () -> Unit,
     onDrag: (Offset) -> Unit,
-    onDragEnd: () -> Unit,
+    onDragEnd: (velocityY: Float) -> Unit,
     onMoveToCorner: (Boolean, Boolean) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -670,7 +692,21 @@ private fun MiniPlayerContent(
         modifier
             .background(surface)
             .pointerInput(book.mediaId) {
-                detectDragGestures(onDragEnd = onDragEnd, onDrag = { change, amount -> change.consume(); onDrag(amount) })
+                // Скорость отличает «смахнуть вниз» от доводки к углу. Координаты внутри капсулы едут вместе
+                // с пальцем, поэтому пройденный путь копим сами.
+                val tracker = VelocityTracker()
+                var travelled = Offset.Zero
+                detectDragGestures(
+                    onDragStart = { tracker.resetTracking(); travelled = Offset.Zero },
+                    onDragEnd = { onDragEnd(tracker.calculateVelocity().y) },
+                    onDragCancel = { onDragEnd(0f) },
+                    onDrag = { change, amount ->
+                        change.consume()
+                        travelled += amount
+                        tracker.addPosition(change.uptimeMillis, travelled)
+                        onDrag(amount)
+                    },
+                )
             }
             .pointerInput(book.mediaId) { detectTapGestures(onTap = { onExpand() }, onLongPress = { onClose() }) }
             .semantics {
