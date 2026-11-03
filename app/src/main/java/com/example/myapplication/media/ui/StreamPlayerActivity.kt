@@ -596,7 +596,7 @@ class StreamPlayerActivity : ComponentActivity(), PipHostActivity {
                         return true
                     }
 
-                    fun resolveFreshStream(markCurrentFailed: Boolean) {
+                    fun resolveFreshStream(markCurrentFailed: Boolean, manual: Boolean = false) {
                         if (retrying) return
                         val previous = current
                         if (markCurrentFailed) failedRenditionUrls = failedRenditionUrls + previous.url
@@ -612,7 +612,9 @@ class StreamPlayerActivity : ComponentActivity(), PipHostActivity {
                                     resolver = episodeResolver,
                                     episode = refreshingEpisode,
                                     previous = previous,
-                                    excludedUrls = candidates.mapTo(
+                                    // Ручное «Повторить» берёт и уже известные ссылки: после обрыва сети они снова
+                                    // рабочие, а исключать их значило бы «ничего нового» и ту же плашку по кругу.
+                                    excludedUrls = if (manual) emptySet() else candidates.mapTo(
                                         failedRenditionUrls.toMutableSet(),
                                     ) { it.url },
                                 )
@@ -649,6 +651,11 @@ class StreamPlayerActivity : ComponentActivity(), PipHostActivity {
                                     sourceSwitchNotice = refreshed.sourceName ?: refreshed.label
                                 }
                                 current = refreshed.copy(resolvedAt = System.currentTimeMillis())
+                            } else if (manual) {
+                                // Резолвер молчит (сеть ещё не поднялась, сайт моргнул): пробуем текущую ссылку
+                                // заново, а не показываем ту же плашку, не дав плееру ни одной попытки.
+                                sameUrlRetryUsed = true
+                                current = current.copy(resolvedAt = System.currentTimeMillis())
                             } else if (player.playbackState != Player.STATE_READY) {
                                 // Замены нет — но исходный поток мог ожить сам, пока мы её искали:
                                 // короткий обрыв связи ExoPlayer переживает своим буфером. Плашка
@@ -690,14 +697,32 @@ class StreamPlayerActivity : ComponentActivity(), PipHostActivity {
                         }
                     }
 
+                    // «Повторить» значит «забудь, что было плохо». Раньше метки «мёртвых» ссылок переживали
+                    // кнопку: после обрыва сети в них оказывались все источники серии, поиск замены исключал
+                    // их же, и кнопка возвращала ту же плашку, пока плеер не закроют.
                     fun refreshStream() {
-                        recoveryOwner = null
-                        val action = if (availableFallbacks().isNotEmpty()) {
-                            StreamRecoveryAction.SWITCH_CANDIDATE
-                        } else {
-                            StreamRecoveryAction.RERESOLVE
+                        failedRenditionUrls = emptySet()
+                        stalledRenditionUrls = emptySet()
+                        sameUrlRetryUsed = false
+                        if (retrying) cancelRecoveryResolve()
+                        recoveryOwner = player
+                        Log.i(TAG, "Streaming recovery action=manual_retry")
+                        resolveFreshStream(markCurrentFailed = false, manual = true)
+                    }
+
+                    // Сеть вернулась, пока висит плашка, — нажимать «Повторить» не нужно.
+                    LaunchedEffect(playbackError) {
+                        if (playbackError == null) return@LaunchedEffect
+                        var wasOffline = !isOnline()
+                        while (isActive) {
+                            delay(1_000L)
+                            val online = isOnline()
+                            if (wasOffline && online && failedSwitchTarget == null) {
+                                refreshStream()
+                                return@LaunchedEffect
+                            }
+                            wasOffline = !online
                         }
-                        executeRecovery(action, reason = "manual_retry")
                     }
 
                     /**
