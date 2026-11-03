@@ -100,6 +100,7 @@ private fun mergeSettingsUi(
         devFullBleedCards = prefs[DevPreferencesKeys.FULL_BLEED_CARDS] ?: true,
         devExperimentalGrid = prefs[DevPreferencesKeys.EXPERIMENTAL_GRID] ?: true,
         devExteraBack = prefs[DevPreferencesKeys.EXTERA_BACK] ?: true,
+        devLegacySplash = prefs[DevPreferencesKeys.LEGACY_SPLASH] ?: false,
         isExportingLogs = t.isExportingLogs,
         isExportingPdf = t.isExportingPdf,
         isImportingDb = t.isImportingDb,
@@ -277,6 +278,12 @@ class SettingsViewModel(
     fun setDevExteraBack(enabled: Boolean) {
         viewModelScope.launch {
             settingsDataStore.edit { it[DevPreferencesKeys.EXTERA_BACK] = enabled }
+        }
+    }
+
+    fun setDevLegacySplash(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsDataStore.edit { it[DevPreferencesKeys.LEGACY_SPLASH] = enabled }
         }
     }
 

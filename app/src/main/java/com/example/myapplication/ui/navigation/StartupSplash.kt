@@ -2,19 +2,31 @@ package com.example.myapplication.ui.navigation
 
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.Preferences
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.myapplication.data.local.DevPreferencesKeys
 import com.example.myapplication.ui.splash.SplashViewModel
 import com.example.myapplication.ui.splash.VetroSplashScreen
 import com.example.myapplication.utils.getStrings
 import com.example.myapplication.utils.systemAppLanguage
+import kotlinx.coroutines.flow.first
 import org.koin.androidx.compose.koinViewModel
+import org.koin.compose.koinInject
+import org.koin.core.qualifier.named
 
 /**
  * Сплэш — слой поверх графа, а не его маршрут: так первый экран (главная или вход) строится под
@@ -57,6 +69,16 @@ internal fun StartupSplashOverlay(
     ) { uri ->
         splashViewModel.onLegacyFolderSelected(uri)
     }
+    // Какая заставка — решает dev-флаг; пока он читается (миллисекунды), держим фон темы.
+    val settingsStore: DataStore<Preferences> = koinInject(qualifier = named("settings"))
+    val legacyAnimation by produceState<Boolean?>(initialValue = null) {
+        value = settingsStore.data.first()[DevPreferencesKeys.LEGACY_SPLASH] ?: false
+    }
+    val useLegacy = legacyAnimation
+    if (useLegacy == null) {
+        Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background))
+        return
+    }
     VetroSplashScreen(
         uiState = splashState,
         migrationTitle = splashStrings.splashStorageMigrationTitle,
@@ -76,5 +98,6 @@ internal fun StartupSplashOverlay(
         },
         contentReady = contentReady,
         onSplashComplete = { state.visible = false },
+        useLegacyAnimation = useLegacy,
     )
 }

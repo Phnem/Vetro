@@ -623,6 +623,7 @@ fun SettingsScreen(
                                 onFullBleedCardsToggle = { performHaptic(view, Haptic.Light); viewModel.setDevFullBleedCards(it) },
                                 onExperimentalGridToggle = { performHaptic(view, Haptic.Light); viewModel.setDevExperimentalGrid(it) },
                                 onExteraBackToggle = { performHaptic(view, Haptic.Light); viewModel.setDevExteraBack(it) },
+                                onLegacySplashToggle = { performHaptic(view, Haptic.Light); viewModel.setDevLegacySplash(it) },
                                 onExportLogs = { performHaptic(view, Haptic.Light); viewModel.exportLogs(context) },
                                 onExportPdf = { performHaptic(view, Haptic.Light); viewModel.exportCollectionPdf(context) },
                                 onImportDb = { performHaptic(view, Haptic.Light); importDbPicker.launch("*/*") },
@@ -877,6 +878,7 @@ private fun DeveloperGroups(
     onFullBleedCardsToggle: (Boolean) -> Unit,
     onExperimentalGridToggle: (Boolean) -> Unit,
     onExteraBackToggle: (Boolean) -> Unit,
+    onLegacySplashToggle: (Boolean) -> Unit,
     onExportLogs: () -> Unit,
     onExportPdf: () -> Unit,
     onImportDb: () -> Unit,
@@ -996,6 +998,26 @@ private fun DeveloperGroups(
                             IosSwitch(
                                 checked = uiState.devExteraBack,
                                 onCheckedChange = onExteraBackToggle,
+                            )
+                        },
+                    )
+                },
+                {
+                    val ru = strings.languageName == "RU"
+                    IosRow(
+                        title = if (ru) "Старая заставка старта" else "Legacy startup splash",
+                        subtitle = if (ru) {
+                            "Переливание вместо анимации логотипа; применяется при следующем запуске"
+                        } else {
+                            "The wave instead of the logo animation; applies on the next launch"
+                        },
+                        isDark = isDark,
+                        icon = Icons.Filled.Code,
+                        iconBackground = devIcon,
+                        trailing = {
+                            IosSwitch(
+                                checked = uiState.devLegacySplash,
+                                onCheckedChange = onLegacySplashToggle,
                             )
                         },
                     )

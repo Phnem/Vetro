@@ -29,6 +29,8 @@ data class SettingsUiState(
     val devExperimentalGrid: Boolean = true,
     /** Анимация «назад» как в exteraGram, см. `DevPreferencesKeys.EXTERA_BACK`. */
     val devExteraBack: Boolean = true,
+    /** Старая заставка («переливание») вместо новой анимации логотипа, см. `DevPreferencesKeys.LEGACY_SPLASH`. */
+    val devLegacySplash: Boolean = false,
     val isExportingLogs: Boolean = false,
     val isExportingPdf: Boolean = false,
     val isImportingDb: Boolean = false,

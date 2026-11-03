@@ -4,6 +4,7 @@ import android.os.SystemClock
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -89,6 +90,8 @@ fun VetroSplashScreen(
     onBuildContent: (String) -> Unit,
     contentReady: () -> Boolean,
     onSplashComplete: () -> Unit,
+    /** Dev-флаг: прежнее «переливание» вместо анимации логотипа, см. `DevPreferencesKeys.LEGACY_SPLASH`. */
+    useLegacyAnimation: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     val waveProgress = remember { Animatable(0f) }
@@ -96,13 +99,23 @@ fun VetroSplashScreen(
     var waveInDone by remember { mutableStateOf(false) }
     var outroStarted by remember { mutableStateOf(false) }
 
-    // Intro: black hold → wave in
-    LaunchedEffect(Unit) {
-        delay(HoldBlackMs)
-        waveProgress.animateTo(
-            targetValue = 1f,
-            animationSpec = tween(WaveInMs, easing = FastOutSlowInEasing),
-        )
+    // Время анимации логотипа в секундах: линейное, всю форму считает чистая функция кадра.
+    val logoTime = remember { Animatable(0f) }
+
+    // Intro. Прежняя заставка: чёрная пауза → волна. Новая: «Vetro» схлопывается в знак.
+    LaunchedEffect(useLegacyAnimation) {
+        if (useLegacyAnimation) {
+            delay(HoldBlackMs)
+            waveProgress.animateTo(
+                targetValue = 1f,
+                animationSpec = tween(WaveInMs, easing = FastOutSlowInEasing),
+            )
+        } else {
+            logoTime.animateTo(
+                targetValue = LogoSplashDurationSec,
+                animationSpec = tween((LogoSplashDurationSec * 1000).toInt(), easing = LinearEasing),
+            )
+        }
         waveInDone = true
     }
 
@@ -161,25 +174,53 @@ fun VetroSplashScreen(
             .pointerInput(Unit) { awaitPointerEventScope { while (true) awaitPointerEvent() } },
         contentAlignment = Alignment.Center,
     ) {
-        SplashWaveBackground(
-            progress = { waveProgress.value },
-            exitProgress = { exitProgress.value },
-        )
+        if (useLegacyAnimation) {
+            SplashWaveBackground(
+                progress = { waveProgress.value },
+                exitProgress = { exitProgress.value },
+            )
 
-        VetroWordmark(
-            modifier = Modifier.graphicsLayer {
-                // Лёгкий zoom-out логотипа на outro
-                val wordmarkScale = 1f + exitProgress.value * 0.12f
-                scaleX = wordmarkScale
-                scaleY = wordmarkScale
-                alpha = splashWaveAlphaAt(
-                    xFrac = 0.5f,
-                    yFrac = 0.45f,
-                    progress = waveProgress.value,
-                    exitProgress = exitProgress.value,
+            VetroWordmark(
+                modifier = Modifier.graphicsLayer {
+                    // Лёгкий zoom-out логотипа на outro
+                    val wordmarkScale = 1f + exitProgress.value * 0.12f
+                    scaleX = wordmarkScale
+                    scaleY = wordmarkScale
+                    alpha = splashWaveAlphaAt(
+                        xFrac = 0.5f,
+                        yFrac = 0.45f,
+                        progress = waveProgress.value,
+                        exitProgress = exitProgress.value,
+                    )
+                },
+            )
+        } else {
+            val dark = isAppInDarkTheme()
+            val colors = remember(dark) {
+                // Те же цвета, что у значка приложения (values / values-night).
+                LogoSplashColors(
+                    word = if (dark) Color(0xFFD9C3AB) else Color.Black,
+                    sun = if (dark) Color(0xFFE85002) else Color(0xFFC10801),
+                    dark = dark,
                 )
-            },
-        )
+            }
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .graphicsLayer { alpha = 1f - exitProgress.value }
+                    .background(MaterialTheme.colorScheme.background),
+            ) {
+                LogoSplashCanvas(
+                    timeSec = { logoTime.value },
+                    colors = colors,
+                    modifier = Modifier.graphicsLayer {
+                        val s = 1f + exitProgress.value * 0.08f
+                        scaleX = s
+                        scaleY = s
+                    },
+                )
+            }
+        }
 
         AnimatedVisibility(
             visible = showMigrationCard,

@@ -49,6 +49,12 @@ object DevPreferencesKeys {
      */
     val EXTERA_BACK = booleanPreferencesKey("dev_extera_back")
 
+    /**
+     * Старая заставка старта («переливание»: волна и слово шрифтом Asgrike) вместо анимации логотипа,
+     * где «Vetro» схлопывается в знак. Отсутствие ключа = ВЫКЛ, то есть идёт новая. См. `ui/splash/LogoSplash.kt`.
+     */
+    val LEGACY_SPLASH = booleanPreferencesKey("dev_legacy_splash")
+
     /** Ключи удалённых настроек — стираются из файла настроек при старте (см. [LEGACY_UI]). */
     val RETIRED_UI_FLAGS = listOf(
         booleanPreferencesKey("dev_select_dock_navigation"),
