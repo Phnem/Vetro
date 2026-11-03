@@ -50,6 +50,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
+import com.example.myapplication.audiobooks.ui.MiniPlayerClearance
 import androidx.activity.compose.BackHandler
 import com.example.myapplication.ui.shared.components.IosSheetScaffold
 import androidx.compose.ui.Alignment
@@ -331,6 +332,11 @@ fun DetailsScreen(
                     onToggleSecret = viewModel::toggleSecret,
                     showCatalogActions = !isManga,
                 )
+
+                // Мини-плеер аудиокниг стоит над этим доком, пока Details на экране.
+                val miniClearanceOwner = remember { Any() }
+                SideEffect { MiniPlayerClearance.set(miniClearanceOwner, 72.dp) }
+                DisposableEffect(miniClearanceOwner) { onDispose { MiniPlayerClearance.clear(miniClearanceOwner) } }
 
                 DetailsMiniDock(
                     backdrop = backdrop,

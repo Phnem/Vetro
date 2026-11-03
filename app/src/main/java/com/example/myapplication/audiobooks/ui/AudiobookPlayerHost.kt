@@ -37,6 +37,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
@@ -58,6 +59,7 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -89,6 +91,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.util.lerp
@@ -354,11 +357,15 @@ fun AudiobookPlayerHost(language: AppLanguage = AppLanguage.RU, modifier: Modifi
 
     BoxWithConstraints(modifier.fillMaxSize()) {
         val density = LocalDensity.current
-        val miniWidthDp = minOf(maxWidth - 32.dp, MiniMaxWidth)
+        val miniWidthDp = minOf(maxWidth - 32.dp, MiniWidth)
         val miniW = with(density) { miniWidthDp.toPx() }
         val miniH = with(density) { MiniHeight.toPx() }
         val marginPx = with(density) { 16.dp.toPx() }
-        val dockPx = with(density) { 104.dp.toPx() }
+        // Над доком капсула стоит, только пока он на экране; на страницах без дока (и когда док спрятан)
+        // она садится к нижнему краю над навигацией, а не висит на высоте, где дока уже нет.
+        val dockClearance = MiniPlayerClearance.bottom
+        val dockPx = WindowInsets.navigationBars.getBottom(density).toFloat() +
+            with(density) { (if (dockClearance > 0.dp) dockClearance + 10.dp else 16.dp).toPx() }
         val topPx = WindowInsets.statusBars.getTop(density).toFloat() + marginPx
         val widthPx = with(density) { maxWidth.toPx() }
         val heightPx = with(density) { maxHeight.toPx() }
@@ -366,10 +373,21 @@ fun AudiobookPlayerHost(language: AppLanguage = AppLanguage.RU, modifier: Modifi
         val bottom = (heightPx - miniH - dockPx).coerceAtLeast(marginPx)
         val miniOffset = remember(widthPx, heightPx) { Animatable(Offset(right, bottom), Offset.VectorConverter) }
         val miniRadiusPx = miniH / 2f
+        var atBottom by remember { mutableStateOf(true) }
         fun snapToCorner(leftSide: Boolean, topSide: Boolean) {
+            atBottom = !topSide
             scope.launch {
                 miniOffset.animateTo(
                     Offset(if (leftSide) marginPx else right, if (topSide) topPx else bottom),
+                    MotionTokens.springSurface(),
+                )
+            }
+        }
+        // Док появился или спрятался: капсула, стоящая внизу, переезжает на новую высоту.
+        LaunchedEffect(bottom) {
+            if (atBottom && kotlin.math.abs(miniOffset.value.y - bottom) > 1f) {
+                miniOffset.animateTo(
+                    Offset(miniOffset.value.x.coerceIn(marginPx, right), bottom),
                     MotionTokens.springSurface(),
                 )
             }
@@ -625,7 +643,8 @@ private suspend fun findNarrations(
  * Мини-плеер — капсула: круглая обложка, полоса-«волна» (она же прогресс главы) и кнопка play/pause.
  * Матовая капсула, а не стекло: настоящее стекло преломляло бы экран приложения под ним, а для этого
  * весь экран пришлось бы гнать через общий бэкдроп. Поэтому цвет — тёмный/светлый, чуть отличный от фона
- * своей темы. Тап раскрывает плеер, перетаскивание ведёт капсулу к углам, крестик закрывает.
+ * своей темы. Размер — 2×1 по сетке виджетов. Тап раскрывает плеер, перетаскивание ведёт капсулу к углам,
+ * долгое нажатие закрывает (креста нет: в 56dp он не помещается).
  */
 @Composable
 private fun MiniPlayerContent(
@@ -653,7 +672,7 @@ private fun MiniPlayerContent(
             .pointerInput(book.mediaId) {
                 detectDragGestures(onDragEnd = onDragEnd, onDrag = { change, amount -> change.consume(); onDrag(amount) })
             }
-            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onExpand)
+            .pointerInput(book.mediaId) { detectTapGestures(onTap = { onExpand() }, onLongPress = { onClose() }) }
             .semantics {
                 contentDescription = label
                 customActions = listOf(
@@ -661,19 +680,20 @@ private fun MiniPlayerContent(
                     CustomAccessibilityAction(strings.moveMiniTopRight) { onMoveToCorner(false, true); true },
                     CustomAccessibilityAction(strings.moveMiniBottomLeft) { onMoveToCorner(true, false); true },
                     CustomAccessibilityAction(strings.moveMiniBottomRight) { onMoveToCorner(false, false); true },
+                    CustomAccessibilityAction(strings.closePlayer) { onClose(); true },
                 )
             }
-            .padding(horizontal = 8.dp),
+            .padding(horizontal = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        BookArt(book.artworkUri, Modifier.size(56.dp).clip(CircleShape))
-        Spacer(Modifier.width(14.dp))
+        BookArt(book.artworkUri, Modifier.size(44.dp).clip(CircleShape))
+        Spacer(Modifier.width(8.dp))
         // «Волна»: высоты — детерминированный рисунок книги с колоколом к середине, как на референсе;
         // сыгранная часть главы закрашена полным цветом, остаток — приглушён.
         Box(
             Modifier
                 .weight(1f)
-                .height(40.dp)
+                .height(30.dp)
                 .drawBehind {
                     val barW = 3.dp.toPx()
                     val step = 6.dp.toPx()
@@ -695,27 +715,17 @@ private fun MiniPlayerContent(
                     }
                 },
         )
+        Spacer(Modifier.width(8.dp))
         Box(
             Modifier
-                .size(32.dp)
-                .clip(CircleShape)
-                .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClose)
-                .semantics { contentDescription = strings.closePlayer },
-            contentAlignment = Alignment.Center,
-        ) {
-            PhIcon(R.drawable.ph_x, 14.dp, ink.copy(alpha = 0.5f))
-        }
-        Spacer(Modifier.width(2.dp))
-        Box(
-            Modifier
-                .size(56.dp)
+                .size(44.dp)
                 .clip(CircleShape)
                 .background(ink)
                 .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { state.playPause() }
                 .semantics { contentDescription = if (book.isPlaying) strings.pause else strings.play },
             contentAlignment = Alignment.Center,
         ) {
-            PhIcon(if (book.isPlaying) R.drawable.ph_pause_fill else R.drawable.ph_play_fill, 24.dp, onInk)
+            PhIcon(if (book.isPlaying) R.drawable.ph_pause_fill else R.drawable.ph_play_fill, 20.dp, onInk)
         }
     }
 }
@@ -976,8 +986,9 @@ private fun SeekBar(
 }
 
 /** Мини-плеер — капсула; в полный экран она растёт той же пружиной, что и раньше квадрат. */
-private val MiniHeight = 72.dp
-private val MiniMaxWidth = 340.dp
+// 2×1 по сетке виджетов: две ячейки в ширину, одна в высоту.
+private val MiniHeight = 56.dp
+private val MiniWidth = 160.dp
 
 /** Сколько живёт кнопка «Вернуться» после дальнего прыжка. */
 private const val UNDO_SEEK_VISIBLE_MS = 7_000L
@@ -991,3 +1002,22 @@ private val CapsuleLine = TextStyle(
 
 /** Доля «пути назад», которую окно проходит под пальцем; остаток доезжает само после отпускания. */
 private const val BackFollow = 0.85f
+
+/**
+ * Сколько снизу занято доком, над которым стоит капсула мини-плеера. Дока нет (страница без него, он
+ * спрятан) — запись снимают, и капсула садится к краю. Владельцев несколько (рабочая область, Details),
+ * берём наибольшее: пока один экран уезжает, а другой въезжает, оба могут быть в композиции.
+ */
+object MiniPlayerClearance {
+    private val owners = mutableStateMapOf<Any, Dp>()
+
+    val bottom: Dp get() = owners.values.maxOrNull() ?: 0.dp
+
+    fun set(owner: Any, value: Dp) {
+        if (value <= 0.dp) clear(owner) else if (owners[owner] != value) owners[owner] = value
+    }
+
+    fun clear(owner: Any) {
+        if (owner in owners) owners.remove(owner)
+    }
+}

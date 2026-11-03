@@ -51,6 +51,7 @@ import androidx.core.net.toUri
 import com.example.myapplication.NotificationSyncOverlay
 import com.example.myapplication.ui.home.HomeScreen
 import com.example.myapplication.ui.home.HomeViewModel
+import com.example.myapplication.audiobooks.ui.MiniPlayerClearance
 import com.example.myapplication.ui.home.CapsuleDockInset
 import com.example.myapplication.ui.calendar.ReleaseCalendarOverlay
 import com.example.myapplication.ui.home.StatsOverlay
@@ -138,6 +139,10 @@ fun WorkspaceScreen(
     val syncPanelState = remember { MutableTransitionState(false) }
     syncPanelState.targetState = showSyncPanel
     val dockHidden = homeOverlayVisible || settingsOverlayVisible || booksOverlayVisible || showSyncPanel || !pageDockVisible
+    // Капсула мини-плеера аудиокниг стоит над доком, пока он на экране (высота капсулы дока + отступ).
+    val miniClearanceOwner = remember { Any() }
+    SideEffect { MiniPlayerClearance.set(miniClearanceOwner, if (dockHidden) 0.dp else CapsuleDockInset - 12.dp) }
+    DisposableEffect(miniClearanceOwner) { onDispose { MiniPlayerClearance.clear(miniClearanceOwner) } }
 
     // Страницы резервируют место под док сами — ровно под капсулу, без запаса на всякий случай.
     val dockInset = CapsuleDockInset
