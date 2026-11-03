@@ -1,5 +1,56 @@
 # Vetro changelog
 
+## v3.4.8-Beta — November 3, 2026
+
+App version: `v3.4.8-Beta`. Android version code: `348`.
+Changes since 3.4.7.
+
+### Audiobooks: a live mini player
+
+- The mini player is now a small capsule, two cells wide and one tall on the widget grid: cover, a wave and play/pause. It sits above the dock only while a dock is on screen. To close it, flick it off the bottom edge of the screen, like the YouTube mini player.
+- The wave is alive: it follows the sound of the book itself. The microphone is not used and no permission is asked. The loudness (RMS and peak) of the audio that the player sends to the output is measured about every 20 ms, joined into a smooth curve, and the seven bars read that curve 35 ms apart, so the picture runs together with the narrator's voice. Bars rise in about 12 ms and fall in about 90 ms, the same on 60 and 120 Hz screens, and they settle when you pause.
+- The wave keeps time between the player's position reports, which arrive about once a second, so it no longer freezes and jumps.
+
+### Audiobooks: playback that recovers
+
+- If the sound disappears because the output died (a Bluetooth hiccup, for example), the player now notices after 2.5 seconds without audio and recreates the output where it left off. The output buffer grew from 0.5 to 2 seconds, so short stalls no longer empty it.
+- A streamed book that goes silent without an error is reopened: after 12 seconds of buffering (5 seconds when it claims to be ready) the player steps 3 seconds back and asks the source again. Torrent sources re-request the missing pieces every 3 seconds, and a silent peer is dropped after 10 seconds instead of 50.
+
+### Audiobooks: the book page
+
+- The book page has the same "..." menu as a title page: mark as listened, change the cover, edit author and narrator, "wrong source".
+- Author and narrator can be edited, with a swap button. The names are saved to the work, so the book moves to the right shelf, and they are remembered when you reopen the book at its source.
+- The cover picker offers matches by title, other works by the same author, results for your own query and a picture from the gallery.
+- With your own AI key connected, a Russian title and author are translated into the English title and Latin names for the cover search, and the AI picks the right work among the author's works. Nothing is sent without a key.
+
+### A new startup animation
+
+- "Vetro" collapses into the app's mark: the right leg of the V closes like scissors, the letters e, t and r are pulled into the o, and the o flies to its place on an arc and fills with colour with a glow and ripples. It plays in full on the first launch after you install or update, and about twice as fast on every launch after that.
+- The old animation is still there: Settings → developer options → "Legacy startup splash" (takes effect on the next launch).
+
+### Video player
+
+- "Retry" after the connection was lost now really retries. Before, sources that had failed stayed marked as dead until you reopened the episode, so Retry showed the same message again. Now Retry clears those marks, searches again without excluding anything, and reloads the current link if nothing else is found. When the internet comes back while the message is on screen, the retry starts by itself.
+- Fill-to-screen is kept when the player switches to another source.
+- Switching sources on a stall is calmer: the watchdog waits 20 seconds at the start of a source and 12 seconds during playback, does nothing while the phone is offline, and a switch it makes no longer removes the source from the dub list (it only leaves the fallback pool for that episode).
+
+### Title page
+
+- Hold an episode or a season to lift it with round glass buttons: rate, not watched, watched. Season actions apply to every episode in it. The old hold-and-drag rating gesture is gone.
+- The audio button in the player opens its sheet even when there is one track or none.
+
+### Statistics
+
+- The three-card deck is replaced with ordinary tiles, like the insights below them. Tap a tile to flip it to a back with the description of the metric and the AI comment. Charts, bars, the heatmap and rings grow in when the tile first comes into view.
+
+### Under the hood
+
+- A small on-device model for matching titles across catalogues ships in the app. For now it runs in the background in a shadow mode and does not change search or enrichment results.
+
+### Roadmap
+
+- **Vetro API.** We are planning an API of our own, so that the app asks one service for its data instead of many sites. It starts with books, then movies, anime, series and manga follow. Nothing changes in this build; sources you connect yourself keep working as they do now.
+
 ## v3.4.7-Beta — October 27, 2026
 
 App version: `v3.4.7-Beta`. Android version code: `347`.

@@ -18,8 +18,9 @@
 
 <p align="center">
   <a href="https://github.com/Phnem/Vetro/releases">Releases</a> ·
-  <a href="#whats-new-in-346">What's new</a> ·
+  <a href="#whats-new-in-348">What's new</a> ·
   <a href="CHANGELOG.md">Changelog</a> ·
+  <a href="#roadmap">Roadmap</a> ·
   <a href="#what-vetro-does">Features</a> ·
   <a href="#screens">Screens</a> ·
   <a href="#install">Install</a> ·
@@ -32,42 +33,42 @@ Vetro is an Android media library. Build a personal collection, follow new episo
 
 Vetro does not host any media. It connects to catalogues and sources that you choose, including your own servers.
 
-> **Current stable release:** [`v3.4.6-Stable`](https://github.com/Phnem/Vetro/releases/tag/v3.4.6-Stable). The app is actively evolving; source availability can vary by region.
+> **Current stable release:** [`v3.4.6-Stable`](https://github.com/Phnem/Vetro/releases/tag/v3.4.6-Stable). **Latest build:** [`v3.4.8-Beta`](https://github.com/Phnem/Vetro/releases/tag/v3.4.8-Beta). The app is actively evolving; source availability can vary by region.
 
 <p align="center"><img src="images/readme/divider.svg" alt="" width="880" /></p>
 
-## What's new in 3.4.6
+## What's new in 3.4.8
 
 <p align="center">
-  <img src="images/readme/whats-new.svg" alt="What's new in Vetro 3.4.6: hourly checks of airing titles and favorites, audiobook covers and English titles, faster source polling" width="880" />
+  <img src="images/readme/whats-new.svg" alt="What's new in Vetro 3.4.8: a startup animation where Vetro collapses into the logo, a live audiobook mini player, a Retry that works, and the plan for Vetro's own API" width="880" />
 </p>
 
 <table>
   <tr>
     <td width="50%" valign="top">
-      <b>Hourly checks</b><br />
-      Airing titles and your favorites are checked for new episodes every hour on their own, so the push arrives soon after the episode comes out.
+      <b>A live mini player</b><br />
+      The audiobook player folds into a 2×1 capsule whose wave follows the narrator's voice, with no microphone involved. Flick it off the bottom edge to close it.
     </td>
     <td width="50%" valign="top">
-      <b>Audiobook covers</b><br />
-      Covers come from more places (other sites, Apple's audiobook catalogue, Open Library, Google Books), and Russian books are also looked up by their English title.
+      <b>A new startup animation</b><br />
+      "Vetro" collapses into the app's mark. It plays in full after an install or update and twice as fast on later launches; the old one stays in developer options.
     </td>
   </tr>
   <tr>
     <td width="50%" valign="top">
-      <b>Faster source polling</b><br />
-      Playback, season discovery, manga and audiobook search answer as soon as the first source delivers, without waiting for the slowest one.
+      <b>Playback that recovers</b><br />
+      A dead audio output is recreated after 2.5 seconds, a silent streamed book is reopened, and Retry in the video player now brings back sources it had written off.
     </td>
     <td width="50%" valign="top">
-      <b>Seasons, countdown, calendar</b><br />
-      Announced seasons no longer appear as real ones, so airing titles keep their next-episode countdown and their place in the release calendar.
+      <b>The book page</b><br />
+      A "..." menu with cover and author/narrator editing, a manual cover picker, and AI-assisted cover search with your own key.
     </td>
   </tr>
 </table>
 
-<p align="center"><sub>Also in this build: the dub menu in the player scrolls again, the error panel has rounded corners, and Collection Enrichment now runs on its own and is gone from Settings.</sub></p>
+<p align="center"><sub>Also in this build: hold an episode or season for rate / watched / not watched, statistics tiles that flip over, and the plan for <a href="#roadmap">Vetro's own API</a>.</sub></p>
 
-<p align="center"><a href="CHANGELOG.md">Detailed 3.4.6 changelog</a></p>
+<p align="center"><a href="CHANGELOG.md">Detailed 3.4.8 changelog</a></p>
 
 <p align="center"><img src="images/readme/divider.svg" alt="" width="880" /></p>
 
@@ -145,7 +146,7 @@ Vetro does not host any media. It connects to catalogues and sources that you ch
 - A Books tab in the main search: find a book across all sources and add it to your library in one tap.
 - Some sources stream while the file is still downloading.
 - Add your own audiobook folders; the library then groups them into one shelf per author.
-- Sleep timer, skip silence (Off / Light / Normal / Aggressive), playback speed, bookmarks, undo seek and a mini player.
+- Sleep timer, skip silence (Off / Light / Normal / Aggressive), playback speed, bookmarks, undo seek and a mini player: a small capsule whose wave moves with the narrator's voice (no microphone), closed by flicking it off the bottom edge.
 - Smart rewind: after a long pause the book steps back 5–30 seconds, more the longer you were away.
 - Android Auto: browse Continue listening and your Library from the car screen and start a book where you stopped.
 - Chapters are recovered for books that ship without them: from CUE sheets, pauses in the audio or speech recognition.
@@ -248,6 +249,13 @@ Vetro is a Kotlin and Jetpack Compose Android application with unidirectional st
 - **Playback:** AndroidX Media3 / ExoPlayer; DLNA (and Google Cast in the GitHub build) for remote playback; libtorrent4j for streaming torrent sources.
 - **Native:** whisper.cpp built with the NDK for on-device speech recognition.
 - **Performance:** a shipped baseline profile, narrow R8 rules and ast-grep UI guardrails (`scripts/lint-ui.sh`).
+
+<p align="center"><img src="images/readme/divider.svg" alt="" width="880" /></p>
+
+## Roadmap
+
+- **Vetro API: our own API.** Today the app talks to many catalogues and sites, and each of them can change or go down. We are building an API of our own so that Vetro asks one service. It starts with **books**; **movies, anime, series and manga** follow. Nothing changes for you until each part is ready, and sources you connect yourself keep working as they do now.
+- Further work follows the [changelog](CHANGELOG.md): each release lists what has already shipped.
 
 <p align="center"><img src="images/readme/divider.svg" alt="" width="880" /></p>
 
