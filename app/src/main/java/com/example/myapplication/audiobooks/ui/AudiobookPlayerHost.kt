@@ -64,6 +64,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
+import com.example.myapplication.audiobooks.playback.AudioLevelMeter
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -680,13 +682,32 @@ private fun MiniPlayerContent(
     onMoveToCorner: (Boolean, Boolean) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val pos = chapterPosition(book, state.timeline, state.trackPositionMs.longValue)
-    val progress = pos.durationMs?.takeIf { it > 0 }?.let { pos.positionMs.toFloat() / it } ?: 0f
     val dark = MaterialTheme.colorScheme.background.luminance() < 0.5f
     val surface = if (dark) Color(0xFF1C1C1E) else Color.White
     val ink = if (dark) Color.White else Color.Black
     val onInk = if (dark) Color.Black else Color.White
-    val seed = remember(book.mediaId) { book.mediaId.hashCode() }
+    // Живая «волна»: каждый столбик показывает громкость книги в своей точке вокруг «сейчас», слева
+    // недавнее, справа то, что прозвучит через миг, — картинка бежит вместе с голосом. Уровни снимает
+    // AudioLevelMeter с самого аудиовыхода плеера. На паузе столбики оседают и цикл кадров останавливается.
+    val playing = book.isPlaying
+    val levels = remember { FloatArray(WaveBars) }
+    var waveFrame by remember { mutableIntStateOf(0) }
+    LaunchedEffect(playing) {
+        while (isActive) {
+            withFrameNanos { }
+            val now = if (playing) AudioLevelMeter.nowUs() else Long.MIN_VALUE
+            var settled = true
+            for (i in levels.indices) {
+                val target = if (now == Long.MIN_VALUE || now < 0L) 0f
+                else AudioLevelMeter.levelAt(now + (i - WaveBars / 2) * WaveStepUs)
+                // Рост быстрый, спад мягкий: так голос читается как пульс, а не как дрожь.
+                levels[i] += (target - levels[i]) * (if (target > levels[i]) 0.6f else 0.2f)
+                if (levels[i] > 0.02f) settled = false
+            }
+            waveFrame++
+            if (!playing && settled) break
+        }
+    }
     val label = listOf(book.title, book.author).filter { it.isNotBlank() }.joinToString(" — ")
     Row(
         modifier
@@ -724,26 +745,19 @@ private fun MiniPlayerContent(
     ) {
         BookArt(book.artworkUri, Modifier.size(44.dp).clip(CircleShape))
         Spacer(Modifier.width(8.dp))
-        // «Волна»: высоты — детерминированный рисунок книги с колоколом к середине, как на референсе;
-        // сыгранная часть главы закрашена полным цветом, остаток — приглушён.
         Box(
             Modifier
                 .weight(1f)
                 .height(30.dp)
                 .drawBehind {
+                    if (waveFrame < 0) return@drawBehind   // чтение кадра: перерисовка на каждый кадр цикла
                     val barW = 3.dp.toPx()
-                    val step = 6.dp.toPx()
-                    val count = (size.width / step).toInt().coerceAtLeast(1)
-                    val played = (progress.coerceIn(0f, 1f) * count).toInt()
-                    val mid = (count - 1) / 2f
-                    val spread = (count / 3.2f).coerceAtLeast(1f)
-                    for (i in 0 until count) {
-                        val bell = kotlin.math.exp(-((i - mid) / spread).let { it * it })
-                        val noise = ((((i * 7919L + seed) * 1103515245L + 12345L) and 0x7fffffffL) / 2147483647f)
-                        val h = size.height * (0.14f + 0.86f * bell * (0.55f + 0.45f * noise))
-                        val x = (size.width - (count - 1) * step - barW) / 2f + i * step
+                    val gap = (size.width - barW) / (WaveBars - 1)
+                    for (i in 0 until WaveBars) {
+                        val h = size.height * (0.14f + 0.86f * levels[i])
+                        val x = i * gap
                         drawRoundRect(
-                            color = if (i < played) ink else ink.copy(alpha = 0.32f),
+                            color = ink,
                             topLeft = Offset(x, (size.height - h) / 2f),
                             size = Size(barW, h),
                             cornerRadius = CornerRadius(barW / 2f),
@@ -1023,6 +1037,9 @@ private fun SeekBar(
 
 /** Мини-плеер — капсула; в полный экран она растёт той же пружиной, что и раньше квадрат. */
 // 2×1 по сетке виджетов: две ячейки в ширину, одна в высоту.
+/** Столбиков в «волне» мини-плеера и шаг между точками времени, которые они показывают. */
+private const val WaveBars = 7
+private const val WaveStepUs = 70_000L
 private val MiniHeight = 56.dp
 private val MiniWidth = 160.dp
 

@@ -63,7 +63,15 @@ class MonitoredAudioSink(
     sink: AudioSink,
     private val watchdog: AudioFeedWatchdog,
 ) : ForwardingAudioSink(sink) {
+    override fun getCurrentPositionUs(sourceEnded: Boolean): Long {
+        val position = super.getCurrentPositionUs(sourceEnded)
+        if (position != AudioSink.CURRENT_POSITION_NOT_SET) AudioLevelMeter.onPosition(position)
+        return position
+    }
+
     override fun handleBuffer(buffer: ByteBuffer, presentationTimeUs: Long, encodedAccessUnitCount: Int): Boolean {
+        // Громкость снимаем до того, как выход заберёт звук: после этого буфер уже пуст.
+        AudioLevelMeter.record(buffer, presentationTimeUs)
         val accepted = super.handleBuffer(buffer, presentationTimeUs, encodedAccessUnitCount)
         if (accepted) watchdog.onFed(SystemClock.elapsedRealtime())
         return accepted
@@ -81,11 +89,13 @@ class MonitoredAudioSink(
 
     override fun flush() {
         watchdog.onIdle()
+        AudioLevelMeter.clear()
         super.flush()
     }
 
     override fun reset() {
         watchdog.onIdle()
+        AudioLevelMeter.clear()
         super.reset()
     }
 }
