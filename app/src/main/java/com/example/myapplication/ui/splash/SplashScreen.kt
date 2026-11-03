@@ -92,6 +92,8 @@ fun VetroSplashScreen(
     onSplashComplete: () -> Unit,
     /** Dev-флаг: прежнее «переливание» вместо анимации логотипа, см. `DevPreferencesKeys.LEGACY_SPLASH`. */
     useLegacyAnimation: Boolean = false,
+    /** Множитель скорости: 2 — заставка и её выход вдвое короче (повторные запуски). */
+    speed: Float = 1f,
     modifier: Modifier = Modifier,
 ) {
     val waveProgress = remember { Animatable(0f) }
@@ -105,15 +107,15 @@ fun VetroSplashScreen(
     // Intro. Прежняя заставка: чёрная пауза → волна. Новая: «Vetro» схлопывается в знак.
     LaunchedEffect(useLegacyAnimation) {
         if (useLegacyAnimation) {
-            delay(HoldBlackMs)
+            delay((HoldBlackMs / speed).toLong())
             waveProgress.animateTo(
                 targetValue = 1f,
-                animationSpec = tween(WaveInMs, easing = FastOutSlowInEasing),
+                animationSpec = tween((WaveInMs / speed).toInt(), easing = FastOutSlowInEasing),
             )
         } else {
             logoTime.animateTo(
                 targetValue = LogoSplashDurationSec,
-                animationSpec = tween((LogoSplashDurationSec * 1000).toInt(), easing = LinearEasing),
+                animationSpec = tween((LogoSplashDurationSec * 1000 / speed).toInt(), easing = LinearEasing),
             )
         }
         waveInDone = true
@@ -135,10 +137,10 @@ fun VetroSplashScreen(
         withTimeoutOrNull(ContentReadyTimeoutMs) {
             snapshotFlow { contentReady() }.first { it }
         }
-        delay((HoldMinMs - (SystemClock.uptimeMillis() - holdStart)).coerceAtLeast(0L))
+        delay(((HoldMinMs / speed).toLong() - (SystemClock.uptimeMillis() - holdStart)).coerceAtLeast(0L))
         exitProgress.animateTo(
             targetValue = 1f,
-            animationSpec = tween(WaveOutMs, easing = FastOutSlowInEasing),
+            animationSpec = tween((WaveOutMs / speed).toInt(), easing = FastOutSlowInEasing),
         )
         onSplashComplete()
     }

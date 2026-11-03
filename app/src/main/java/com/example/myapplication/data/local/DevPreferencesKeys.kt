@@ -55,6 +55,13 @@ object DevPreferencesKeys {
      */
     val LEGACY_SPLASH = booleanPreferencesKey("dev_legacy_splash")
 
+    /**
+     * versionCode, с которым заставка последний раз стартовала. Совпадает с текущим — это повторный
+     * запуск той же сборки, и заставка идёт вдвое быстрее; нет ключа или другая сборка — первый
+     * запуск после установки или обновления, заставка целиком. См. `ui/navigation/StartupSplash.kt`.
+     */
+    val SPLASH_SEEN_VERSION = intPreferencesKey("splash_seen_version_code")
+
     /** Ключи удалённых настроек — стираются из файла настроек при старте (см. [LEGACY_UI]). */
     val RETIRED_UI_FLAGS = listOf(
         booleanPreferencesKey("dev_select_dock_navigation"),

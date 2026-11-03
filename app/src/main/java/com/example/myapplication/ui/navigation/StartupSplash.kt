@@ -17,12 +17,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.edit
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.myapplication.data.local.DevPreferencesKeys
 import com.example.myapplication.ui.splash.SplashViewModel
 import com.example.myapplication.ui.splash.VetroSplashScreen
 import com.example.myapplication.utils.getStrings
 import com.example.myapplication.utils.systemAppLanguage
+import com.phnem.vetro.BuildConfig
 import kotlinx.coroutines.flow.first
 import org.koin.androidx.compose.koinViewModel
 import org.koin.compose.koinInject
@@ -69,13 +71,18 @@ internal fun StartupSplashOverlay(
     ) { uri ->
         splashViewModel.onLegacyFolderSelected(uri)
     }
-    // Какая заставка — решает dev-флаг; пока он читается (миллисекунды), держим фон темы.
+    // Какая заставка и с какой скоростью — решают dev-флаг и версия сборки; пока они читаются
+    // (миллисекунды), держим фон темы. Первый запуск сборки (установка или обновление) — целиком,
+    // дальше вдвое быстрее. Отметку пишем сразу: оборванный на середине показ второй раз не повторяем.
     val settingsStore: DataStore<Preferences> = koinInject(qualifier = named("settings"))
-    val legacyAnimation by produceState<Boolean?>(initialValue = null) {
-        value = settingsStore.data.first()[DevPreferencesKeys.LEGACY_SPLASH] ?: false
+    val plan by produceState<SplashPlan?>(initialValue = null) {
+        val prefs = settingsStore.data.first()
+        val repeat = prefs[DevPreferencesKeys.SPLASH_SEEN_VERSION] == BuildConfig.VERSION_CODE
+        value = SplashPlan(legacy = prefs[DevPreferencesKeys.LEGACY_SPLASH] ?: false, repeatLaunch = repeat)
+        if (!repeat) settingsStore.edit { it[DevPreferencesKeys.SPLASH_SEEN_VERSION] = BuildConfig.VERSION_CODE }
     }
-    val useLegacy = legacyAnimation
-    if (useLegacy == null) {
+    val resolved = plan
+    if (resolved == null) {
         Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background))
         return
     }
@@ -98,6 +105,12 @@ internal fun StartupSplashOverlay(
         },
         contentReady = contentReady,
         onSplashComplete = { state.visible = false },
-        useLegacyAnimation = useLegacy,
+        useLegacyAnimation = resolved.legacy,
+        speed = if (resolved.repeatLaunch) RepeatLaunchSpeed else 1f,
     )
 }
+
+/** Во сколько раз заставка быстрее при повторных запусках той же сборки. */
+private const val RepeatLaunchSpeed = 2f
+
+private class SplashPlan(val legacy: Boolean, val repeatLaunch: Boolean)
