@@ -53,6 +53,7 @@ data class NotificationStrings(
     val title: String,
     val clearAll: String,
     val empty: String,
+    val emptyHint: String,
     val bell: String,
 )
 
@@ -61,12 +62,14 @@ fun notificationStrings(language: AppLanguage): NotificationStrings = when (lang
         title = "Уведомления",
         clearAll = "Очистить всё",
         empty = "Новых серий нет",
+        emptyHint = "Как только у избранного выйдет серия, она появится здесь.",
         bell = "Уведомления",
     )
     AppLanguage.EN -> NotificationStrings(
         title = "Notifications",
         clearAll = "Clear all",
         empty = "No new episodes",
+        emptyHint = "When a favorite gets a new episode, it shows up here.",
         bell = "Notifications",
     )
 }

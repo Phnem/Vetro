@@ -1,5 +1,7 @@
 package com.example.myapplication.audiobooks.ui
 
+import com.example.myapplication.ui.shared.mascot.MascotIllustration
+import com.example.myapplication.ui.shared.mascot.MascotScene
 import com.example.myapplication.ui.shared.theme.IosScroll
 import android.content.ComponentName
 import androidx.compose.foundation.layout.PaddingValues
@@ -203,8 +205,7 @@ fun LocalBooksPanel(
                         .padding(22.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
-                    Icon(painterResource(R.drawable.ph_books), null, tint = muted, modifier = Modifier.size(40.dp))
-                    Spacer(Modifier.height(12.dp))
+                    MascotIllustration(MascotScene.Empty, Modifier.size(150.dp), isDark)
                     Text(strings.emptyLibrary, color = ink, fontFamily = SnProFamily, fontWeight = FontWeight.SemiBold,
                         fontSize = 17.sp, textAlign = TextAlign.Center)
                     Spacer(Modifier.height(16.dp))

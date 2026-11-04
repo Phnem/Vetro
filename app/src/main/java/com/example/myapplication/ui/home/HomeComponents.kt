@@ -1,6 +1,8 @@
 package com.example.myapplication.ui.home
 
 import com.example.myapplication.ui.shared.theme.BrandSand
+import com.example.myapplication.ui.shared.mascot.MascotEmptyState
+import com.example.myapplication.ui.shared.mascot.MascotScene
 import com.example.myapplication.ui.shared.theme.BrandOrangeBright
 import com.example.myapplication.ui.shared.theme.BrandOrange
 import com.example.myapplication.ui.shared.theme.BrandLightGray
@@ -521,49 +523,24 @@ fun VetroWorkspaceTopBar(
 }
 
 // ==========================================
-// EmptyStateView — gentle, spacious
+// EmptyStateView — маскот Vetro по центру
 // ==========================================
 @Composable
 fun EmptyStateView(
     title: String,
-    subtitle: String
+    subtitle: String,
+    scene: MascotScene = MascotScene.Empty,
 ) {
     Box(
         modifier = Modifier.fillMaxSize(),
         contentAlignment = Alignment.Center
     ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.padding(48.dp)
-        ) {
-            Icon(
-                Icons.Outlined.FolderOpen,
-                contentDescription = null,
-                modifier = Modifier.size(56.dp),
-                tint = MaterialTheme.colorScheme.secondary.copy(alpha = 0.35f)
-            )
-            Spacer(Modifier.height(20.dp))
-            Text(
-                text = title,
-                style = MaterialTheme.typography.titleLarge.copy(
-                    fontWeight = FontWeight.Bold,
-                    fontFamily = SnProFamily
-                ),
-                textAlign = TextAlign.Center,
-                color = MaterialTheme.colorScheme.onBackground
-            )
-            if (subtitle.isNotEmpty()) {
-                Spacer(Modifier.height(8.dp))
-                Text(
-                    text = subtitle,
-                    style = MaterialTheme.typography.bodyMedium.copy(
-                        fontFamily = SnProFamily
-                    ),
-                    color = MaterialTheme.colorScheme.secondary,
-                    textAlign = TextAlign.Center
-                )
-            }
-        }
+        MascotEmptyState(
+            scene = scene,
+            title = title,
+            subtitle = subtitle,
+            modifier = Modifier.padding(vertical = 16.dp),
+        )
     }
 }
 

@@ -1,5 +1,7 @@
 package com.example.myapplication.ui.workspace
 
+import com.example.myapplication.ui.shared.mascot.MascotEmptyState
+import com.example.myapplication.ui.shared.mascot.MascotScene
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -64,30 +66,10 @@ fun BooksScreen(
             .padding(bottom = bottomInset),
         contentAlignment = Alignment.Center,
     ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            Icon(
-                painter = painterResource(R.drawable.dock_books_24),
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.45f),
-                modifier = Modifier.size(56.dp),
-            )
-            Text(
-                text = strings.books,
-                style = MaterialTheme.typography.titleLarge,
-                fontFamily = SnProFamily,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onBackground,
-            )
-            Text(
-                text = strings.emptyLibrary,
-                style = MaterialTheme.typography.bodyMedium,
-                fontFamily = SnProFamily,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center,
-            )
-        }
+        MascotEmptyState(
+            scene = MascotScene.Think,
+            title = strings.books,
+            subtitle = strings.emptyLibrary,
+        )
     }
 }

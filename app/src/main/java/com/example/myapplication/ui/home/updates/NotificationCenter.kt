@@ -59,6 +59,8 @@ import com.example.myapplication.ui.shared.FrostedMaterials
 import com.example.myapplication.ui.shared.frostedGlass
 import com.example.myapplication.ui.shared.theme.BrandOrange
 import com.example.myapplication.ui.shared.theme.MotionTokens
+import com.example.myapplication.ui.shared.mascot.MascotEmptyState
+import com.example.myapplication.ui.shared.mascot.MascotScene
 import com.example.myapplication.ui.shared.theme.SnProFamily
 import com.example.myapplication.ui.shared.theme.rememberReducedMotion
 import com.example.myapplication.utils.Haptic
@@ -207,14 +209,19 @@ fun NotificationCenter(
             }
             if (visible.isEmpty()) {
                 item(key = "empty") {
-                    Text(
-                        text = strings.empty,
-                        style = MaterialTheme.typography.bodyLarge,
-                        fontFamily = SnProFamily,
-                        color = Color.White.copy(alpha = 0.7f),
+                    // Центр уведомлений всегда на тёмной подложке — маскот в тёмной палитре.
+                    MascotEmptyState(
+                        scene = MascotScene.Think,
+                        title = strings.empty,
+                        subtitle = strings.emptyHint,
+                        illustrationSize = 170.dp,
+                        titleColor = Color.White,
+                        subtitleColor = Color.White.copy(alpha = 0.6f),
+                        isDark = true,
                         modifier = Modifier
+                            .fillMaxWidth()
                             .animateItem(fadeInSpec = MotionTokens.easeEnter(), fadeOutSpec = null, placementSpec = null)
-                            .padding(horizontal = 8.dp, vertical = 12.dp)
+                            .padding(vertical = 12.dp)
                             .flyFromBell(bellCenter) { itemReveal(p(), 0) },
                     )
                 }

@@ -1,5 +1,7 @@
 package com.example.myapplication.manga.ui
 
+import com.example.myapplication.ui.shared.mascot.MascotScene
+import com.example.myapplication.ui.shared.mascot.MascotEmptyState
 import com.example.myapplication.ui.shared.theme.IosScroll
 import android.content.Intent
 import androidx.core.net.toUri
@@ -180,22 +182,18 @@ fun MangaChaptersPage(
                     .padding(24.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                Text(
-                    text = if (ru) {
+                MascotEmptyState(
+                    scene = MascotScene.Question,
+                    title = if (ru) "Глав не нашлось" else "No chapters found",
+                    subtitle = if (ru) {
                         "У источника нет глав для этого тайтла"
                     } else {
                         "The source has no chapters for this title"
                     },
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontSize = 14.sp,
-                )
-                Spacer(Modifier.height(12.dp))
-                Text(
-                    text = if (ru) "Выбрать другой источник" else "Pick another source",
-                    color = BrandOrange,
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.clickable { viewModel.unbind() },
+                    actionLabel = if (ru) "Выбрать другой источник" else "Pick another source",
+                    onAction = { viewModel.unbind() },
+                    titleColor = MaterialTheme.colorScheme.onSurface,
+                    subtitleColor = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Spacer(Modifier.height(16.dp))
                 MihonExtensionsButton(ru = ru)
@@ -253,11 +251,16 @@ private fun SourcePickerContent(
         }
 
         if (state.results.isEmpty()) {
-            Text(
-                text = if (ru) "Ничего не найдено" else "Nothing found",
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                fontSize = 14.sp,
-                modifier = Modifier.padding(16.dp),
+            MascotEmptyState(
+                scene = MascotScene.Search,
+                title = if (ru) "Ничего не найдено" else "Nothing found",
+                subtitle = if (ru) "Попробуй другое название или другой источник." else "Try another title or another source.",
+                illustrationSize = 160.dp,
+                titleColor = MaterialTheme.colorScheme.onSurface,
+                subtitleColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 12.dp),
             )
         }
 
@@ -519,16 +522,20 @@ internal fun ChaptersContent(
         }
 
         if (visible.isEmpty()) {
-            Text(
-                text = when (filter) {
+            // «Всё прочитано» — повод порадоваться, остальное — пустая коробка.
+            MascotEmptyState(
+                scene = if (filter == ChapterFilter.Unread) MascotScene.Hello else MascotScene.Empty,
+                title = when (filter) {
                     ChapterFilter.Unread -> if (ru) "Всё прочитано" else "Everything is read"
                     ChapterFilter.Downloaded -> if (ru) "Нет загруженных глав" else "No downloaded chapters"
                     ChapterFilter.All -> if (ru) "Глав нет" else "No chapters"
                 },
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                fontFamily = SnProFamily,
-                fontSize = 14.sp,
-                modifier = Modifier.padding(24.dp),
+                illustrationSize = 170.dp,
+                titleColor = MaterialTheme.colorScheme.onSurface,
+                subtitleColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 16.dp),
             )
             return@Column
         }

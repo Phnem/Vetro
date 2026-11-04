@@ -1,5 +1,7 @@
 package com.example.myapplication.ui.details
 
+import com.example.myapplication.ui.shared.mascot.MascotEmptyState
+import com.example.myapplication.ui.shared.mascot.MascotScene
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -227,10 +229,12 @@ private fun androidx.compose.foundation.layout.ColumnScope.CoversContent(
     when {
         state.loading -> Centered { CircularProgressIndicator(color = BrandOrangeBright, strokeWidth = 2.5.dp) }
         state.items.isEmpty() -> Centered {
-            Text(
-                if (ru) "Обложки не найдены" else "No covers found",
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                fontFamily = SnProFamily,
+            MascotEmptyState(
+                scene = MascotScene.Search,
+                title = if (ru) "Обложки не найдены" else "No covers found",
+                illustrationSize = 150.dp,
+                titleColor = MaterialTheme.colorScheme.onSurface,
+                subtitleColor = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
         else -> Box(Modifier.weight(1f, fill = false)) { CoversGrid(state, onPick) }
@@ -409,16 +413,18 @@ private fun androidx.compose.foundation.layout.ColumnScope.SourcesContent(
                 }
                 if (state.items.isEmpty()) {
                     item {
-                        Text(
-                            if (ru) {
-                                "Ничего не нашлось — уточните запрос или выберите «Ни один из них»."
+                        MascotEmptyState(
+                            scene = MascotScene.Search,
+                            title = if (ru) "Ничего не нашлось" else "Nothing found",
+                            subtitle = if (ru) {
+                                "Уточните запрос или выберите «Ни один из них»."
                             } else {
-                                "Nothing found — refine the query or choose \"None of these\"."
+                                "Refine the query or choose \"None of these\"."
                             },
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            fontFamily = SnProFamily,
-                            fontSize = 13.sp,
-                            modifier = Modifier.padding(vertical = 12.dp),
+                            illustrationSize = 150.dp,
+                            titleColor = MaterialTheme.colorScheme.onSurface,
+                            subtitleColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
                         )
                     }
                 }

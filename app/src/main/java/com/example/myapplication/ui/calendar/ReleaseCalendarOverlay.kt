@@ -68,6 +68,8 @@ import com.example.myapplication.ui.shared.theme.BrandOrange
 import com.example.myapplication.ui.shared.theme.IosScroll
 import com.example.myapplication.ui.shared.theme.OverlayThemeTokens
 import com.example.myapplication.ui.shared.theme.SnProFamily
+import com.example.myapplication.ui.shared.mascot.MascotEmptyState
+import com.example.myapplication.ui.shared.mascot.MascotScene
 import com.example.myapplication.ui.shared.theme.isAppInDarkTheme
 import kotlinx.coroutines.flow.first
 import org.koin.compose.koinInject
@@ -206,10 +208,17 @@ private fun CalendarContent(language: AppLanguage, isDark: Boolean, onOpenTitle:
                 onSelect = { selected = it },
             )
             if (releases.orEmpty().isEmpty()) {
-                Spacer(Modifier.height(14.dp))
-                Text(strings.empty, color = ink, fontFamily = SnProFamily, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
-                Spacer(Modifier.height(4.dp))
-                Text(strings.emptyHint, color = muted, fontFamily = SnProFamily, fontSize = 12.sp, lineHeight = 17.sp)
+                Spacer(Modifier.height(8.dp))
+                MascotEmptyState(
+                    scene = MascotScene.Shrug,
+                    title = strings.empty,
+                    subtitle = strings.emptyHint,
+                    illustrationSize = 160.dp,
+                    titleColor = ink,
+                    subtitleColor = muted,
+                    isDark = isDark,
+                    modifier = Modifier.fillMaxWidth(),
+                )
             }
             selected?.let { day ->
                 Spacer(Modifier.height(16.dp))

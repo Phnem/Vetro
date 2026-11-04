@@ -99,6 +99,16 @@ class HomeViewModel(
      * Карточка показывает прогресс внутри сезона («S3 · 6 / 12 ep.»), а не сквозной счёт по
      * франшизе, поэтому числитель берётся как есть, без пересчёта через расклад.
      */
+    /**
+     * Вся коллекция пуста (без учёта поиска, фильтров и папок): пустая лента тогда — первый запуск,
+     * и маскот здоровается, а не показывает пустую коробку. null — ещё не загрузилось.
+     */
+    val collectionEmpty: StateFlow<Boolean?> =
+        localDataSource.observeAllAnime()
+            .map { list -> list.isEmpty() }
+            .distinctUntilChanged()
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
     val watchedMarks: StateFlow<Map<String, com.example.myapplication.media.progress.PlaybackEpisodeKey>> =
         localDataSource.observeAllAnime()
             .map { list -> list.map { anime -> anime.id } }

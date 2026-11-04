@@ -3,6 +3,7 @@ package com.example.myapplication.ui.home
 import com.example.myapplication.ui.shared.theme.BrandOrange
 import androidx.activity.compose.ReportDrawnWhen
 import com.example.myapplication.ui.shared.theme.IosScroll
+import com.example.myapplication.ui.shared.mascot.MascotScene
 import com.example.myapplication.ui.home.updates.notificationStrings
 import com.example.myapplication.ui.home.updates.NotificationCenter
 import com.example.myapplication.ui.home.updates.NotificationBellButton
@@ -189,6 +190,7 @@ fun HomeScreen(
     val syncReport by viewModel.syncReport.collectAsStateWithLifecycle()
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val list by viewModel.animeListFlow.collectAsStateWithLifecycle()
+    val collectionEmpty by viewModel.collectionEmpty.collectAsStateWithLifecycle()
     val experimentalGrid by viewModel.experimentalGrid.collectAsStateWithLifecycle()
     val favorites = remember(list, experimentalGrid) {
         if (experimentalGrid) list.filter { it.isFavorite } else emptyList()
@@ -884,7 +886,12 @@ fun HomeScreen(
                                             ) {
                                                 EmptyStateView(
                                                     title = strings.noResults,
-                                                    subtitle = ""
+                                                    subtitle = if (currentLanguage == AppLanguage.RU) {
+                                                        "Попробуй другое название — или поищи на английском."
+                                                    } else {
+                                                        "Try another title — or search in a different language."
+                                                    },
+                                                    scene = MascotScene.Search,
                                                 )
                                             }
                                         }
@@ -1029,9 +1036,21 @@ fun HomeScreen(
                                                 .padding(bottom = 120.dp),
                                             contentAlignment = Alignment.Center
                                         ) {
+                                            // Первый запуск — маскот здоровается; пустая папка или фильтр — пустая коробка.
+                                            val firstRun = collectionEmpty == true
+                                            val ru = currentLanguage == AppLanguage.RU
                                             EmptyStateView(
-                                                title = strings.emptyTitle,
-                                                subtitle = strings.emptySubtitle
+                                                title = when {
+                                                    !firstRun -> strings.emptyTitle
+                                                    ru -> "Коллекция пока пуста"
+                                                    else -> "Your collection is empty"
+                                                },
+                                                subtitle = when {
+                                                    !firstRun -> strings.emptySubtitle
+                                                    ru -> "Добавь первый тайтл через поиск — и он появится здесь."
+                                                    else -> "Add your first title from search — it will show up here."
+                                                },
+                                                scene = if (firstRun) MascotScene.Hello else MascotScene.Empty,
                                             )
                                         }
                                     }

@@ -1,5 +1,8 @@
 package com.example.myapplication.ui.secret
 
+import com.example.myapplication.ui.shared.mascot.MascotEmptyState
+import com.example.myapplication.ui.shared.mascot.MascotScene
+import androidx.compose.ui.graphics.luminance
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.ExperimentalSharedTransitionApi
@@ -622,111 +625,14 @@ private fun titlesCountLabel(count: Int, ru: Boolean): String {
 /** Пустая папка: засыпающая папка покачивается, над ней всплывают «z». */
 @Composable
 private fun SecretEmptyState(palette: SecretPalette, ru: Boolean, modifier: Modifier = Modifier) {
-    val transition = rememberInfiniteTransition(label = "secretEmpty")
-    val bob by transition.animateFloat(
-        initialValue = 0f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(tween(2600, easing = FastOutSlowInEasing), RepeatMode.Reverse),
-        label = "secretEmptyBob",
-    )
-    val rise by transition.animateFloat(
-        initialValue = 0f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(tween(3300, easing = LinearEasing), RepeatMode.Restart),
-        label = "secretEmptyRise",
-    )
-    Column(
-        modifier.fillMaxSize().padding(horizontal = 40.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
-    ) {
-        Box(Modifier.size(200.dp), contentAlignment = Alignment.Center) {
-            Canvas(
-                Modifier
-                    .size(150.dp)
-                    .graphicsLayer { translationY = (bob - 0.5f) * 14.dp.toPx() },
-            ) {
-                val stroke = 3.dp.toPx()
-                val corner = CornerRadius(18.dp.toPx())
-                // Язычок и корпус папки.
-                drawRoundRect(
-                    color = palette.surface,
-                    topLeft = Offset(10.dp.toPx(), 24.dp.toPx()),
-                    size = Size(54.dp.toPx(), 30.dp.toPx()),
-                    cornerRadius = CornerRadius(10.dp.toPx()),
-                )
-                drawRoundRect(
-                    color = palette.accent,
-                    topLeft = Offset(10.dp.toPx(), 24.dp.toPx()),
-                    size = Size(54.dp.toPx(), 30.dp.toPx()),
-                    cornerRadius = CornerRadius(10.dp.toPx()),
-                    style = Stroke(stroke),
-                )
-                drawRoundRect(
-                    color = palette.surface,
-                    topLeft = Offset(10.dp.toPx(), 40.dp.toPx()),
-                    size = Size(130.dp.toPx(), 92.dp.toPx()),
-                    cornerRadius = corner,
-                )
-                drawRoundRect(
-                    color = palette.accent,
-                    topLeft = Offset(10.dp.toPx(), 40.dp.toPx()),
-                    size = Size(130.dp.toPx(), 92.dp.toPx()),
-                    cornerRadius = corner,
-                    style = Stroke(stroke),
-                )
-                // Закрытые глаза и маленький рот.
-                listOf(52f, 98f).forEach { x ->
-                    drawArc(
-                        color = palette.ink,
-                        startAngle = 0f,
-                        sweepAngle = 180f,
-                        useCenter = false,
-                        topLeft = Offset((x - 9f).dp.toPx(), 74.dp.toPx()),
-                        size = Size(18.dp.toPx(), 12.dp.toPx()),
-                        style = Stroke(stroke, cap = StrokeCap.Round),
-                    )
-                }
-                drawCircle(
-                    color = palette.ink,
-                    radius = 4.dp.toPx(),
-                    center = Offset(75.dp.toPx(), 104.dp.toPx()),
-                    style = Stroke(stroke),
-                )
-            }
-            repeat(3) { index ->
-                val phase = (rise + index / 3f) % 1f
-                Text(
-                    text = "z",
-                    color = palette.accent,
-                    fontFamily = SnProFamily,
-                    fontWeight = FontWeight.Black,
-                    fontSize = (14 + 10 * phase).sp,
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .offset {
-                            IntOffset(
-                                (-26.dp.toPx() - 14.dp.toPx() * phase).toInt(),
-                                (36.dp.toPx() - 30.dp.toPx() * phase).toInt(),
-                            )
-                        }
-                        .graphicsLayer { alpha = sin(phase * PI.toFloat()).coerceIn(0f, 1f) },
-                )
-            }
-        }
-        Spacer(Modifier.height(20.dp))
-        Text(
-            text = if (ru) "Здесь пока пусто" else "Nothing here yet",
-            style = MaterialTheme.typography.titleLarge.copy(fontFamily = SnProFamily, fontWeight = FontWeight.Bold),
-            color = palette.ink,
-            textAlign = TextAlign.Center,
-        )
-        Spacer(Modifier.height(8.dp))
-        Text(
-            text = if (ru) "Добавьте тайтл через меню «⋯» на его странице — в ленте он больше не появится" else "Add a title from the “⋯” menu on its page — it will no longer appear in your feed",
-            style = MaterialTheme.typography.bodyMedium.copy(fontFamily = SnProFamily),
-            color = palette.muted,
-            textAlign = TextAlign.Center,
+    Box(modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        MascotEmptyState(
+            scene = MascotScene.Empty,
+            title = if (ru) "Здесь пока пусто" else "Nothing here yet",
+            subtitle = if (ru) "Добавьте тайтл через меню «⋯» на его странице — в ленте он больше не появится" else "Add a title from the “⋯” menu on its page — it will no longer appear in your feed",
+            titleColor = palette.ink,
+            subtitleColor = palette.muted,
+            isDark = palette.background.luminance() < 0.5f,
         )
     }
 }
