@@ -2,6 +2,41 @@ package com.example.myapplication.ui.calendar
 
 import com.example.myapplication.ui.shared.components.extendUnderGrabber
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.SizeTransform
+import androidx.compose.animation.core.animate
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.draggable
+import androidx.compose.foundation.gestures.rememberDraggableState
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Constraints
+import com.example.myapplication.data.models.Anime
+import com.example.myapplication.data.models.MediaType
+import com.example.myapplication.data.models.typeManga
+import com.example.myapplication.data.models.typeMovie
+import com.example.myapplication.data.models.typeSeries
+import com.example.myapplication.data.repository.GenreRepository
+import com.example.myapplication.ui.home.AnimeCardBody
+import com.example.myapplication.ui.home.AnimeCardState
+import com.example.myapplication.ui.shared.components.IosSegmentedControl
+import com.example.myapplication.ui.shared.theme.MotionTokens
+import com.example.myapplication.ui.shared.theme.SquircleShape
+import com.example.myapplication.utils.getStrings
+import kotlinx.collections.immutable.toPersistentList
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
+import java.time.temporal.ChronoUnit
+import kotlin.math.roundToInt
 import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -97,6 +132,17 @@ private class CalendarStrings(val ru: Boolean) {
         "Titles with a season in progress appear here: airing anime and series."
     }
     val nothingThatDay = if (ru) "В этот день серий нет" else "No episodes on this day"
+    val nothingThatDayHint = if (ru) "Выберите другой день недели или растяните календарь" else "Pick another day or pull the calendar open"
+    val month = if (ru) "Месяц" else "Month"
+    val week = if (ru) "Неделя" else "Week"
+    fun episodes(list: List<Int?>): String {
+        val known = list.filterNotNull().distinct().sorted()
+        return when {
+            known.isEmpty() -> episode(null)
+            known.size == 1 -> episode(known.first())
+            else -> (if (ru) "Серии " else "Episodes ") + "${known.first()}–${known.last()}"
+        }
+    }
     val projectedNote = if (ru) "по недельному ритму" else "by weekly rhythm"
     val released = if (ru) "вышла" else "out"
     val upcoming = if (ru) "выйдет" else "airs"
@@ -163,10 +209,26 @@ private fun CalendarContent(language: AppLanguage, isDark: Boolean, onOpenTitle:
     }
     val today = remember { LocalDate.now() }
     var month by remember { mutableStateOf(YearMonth.from(today)) }
-    var selected by remember { mutableStateOf<LocalDate?>(today) }
+    var selected by remember { mutableStateOf(today) }
     val byDate = remember(releases) { releases.orEmpty().groupBy { it.date } }
     val ink = if (isDark) Color.White else MaterialTheme.colorScheme.onSurface
     val muted = if (isDark) OverlayThemeTokens.LabelMutedDark else MaterialTheme.colorScheme.onSurfaceVariant
+    val imagePath: (String?) -> String? = { name -> name?.let(imageStorage::getImageFilePath) }
+
+    // Шкала: 0 — месяц, 1 — свёрнут до недели выбранного дня. Читается только в фазах раскладки и
+    // рисования (лямбдами), поэтому кадры сворачивания не пересобирают сетку.
+    var collapse by remember { mutableFloatStateOf(0f) }
+    var weekMode by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+    var settleJob by remember { mutableStateOf<Job?>(null) }
+    fun settle(toWeek: Boolean, velocity: Float = 0f) {
+        weekMode = toWeek
+        settleJob?.cancel()
+        settleJob = scope.launch {
+            animate(collapse, if (toWeek) 1f else 0f, velocity, MotionTokens.largeSurfaceEnter()) { v, _ -> collapse = v }
+        }
+    }
+    val scaleShown by remember { derivedStateOf { collapse > 0.02f } }
 
     Column(
         modifier = Modifier
@@ -176,19 +238,59 @@ private fun CalendarContent(language: AppLanguage, isDark: Boolean, onOpenTitle:
             .padding(top = com.example.myapplication.ui.shared.components.GrabberReservedTop)
             .padding(horizontal = 20.dp, vertical = 16.dp),
     ) {
-        Text(
-            text = strings.title,
-            style = MaterialTheme.typography.titleLarge.copy(
-                fontWeight = FontWeight.Bold,
-                fontFamily = SnProFamily,
-                fontSize = 24.sp,
-                letterSpacing = (-0.3).sp,
-            ),
-            color = MaterialTheme.colorScheme.onSurface,
-        )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = strings.title,
+                style = MaterialTheme.typography.titleLarge.copy(
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = SnProFamily,
+                    fontSize = 24.sp,
+                    letterSpacing = (-0.3).sp,
+                ),
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
+            )
+            // Переключатель шкалы проявляется вместе со сворачиванием: в режиме месяца его нет.
+            IosSegmentedControl(
+                optionCount = 2,
+                selectedIndex = if (weekMode) 1 else 0,
+                isDark = isDark,
+                modifier = Modifier
+                    .width(148.dp)
+                    .graphicsLayer {
+                        val c = collapse
+                        alpha = c
+                        scaleX = 0.9f + 0.1f * c
+                        scaleY = 0.9f + 0.1f * c
+                    },
+                onSelect = { if (scaleShown) settle(toWeek = it == 1) },
+            ) { index, isSelected ->
+                Text(
+                    text = if (index == 0) strings.month else strings.week,
+                    color = ink,
+                    fontFamily = SnProFamily,
+                    fontSize = 13.sp,
+                    fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
+                )
+            }
+        }
         Spacer(Modifier.height(12.dp))
 
-        MonthHeader(month, locale, ink, isDark, onPrev = { month = month.minusMonths(1) }, onNext = { month = month.plusMonths(1) })
+        MonthHeader(
+            month = month,
+            locale = locale,
+            ink = ink,
+            isDark = isDark,
+            // В режиме недели стрелки листают недели: выбранный день едет на ±7 дней, месяц за ним.
+            onPrev = {
+                if (weekMode) { selected = selected.minusWeeks(1); month = YearMonth.from(selected) } else month = month.minusMonths(1)
+            },
+            onNext = {
+                if (weekMode) { selected = selected.plusWeeks(1); month = YearMonth.from(selected) } else month = month.plusMonths(1)
+            },
+        )
         Spacer(Modifier.height(8.dp))
         WeekdayHeader(locale, muted)
         Spacer(Modifier.height(4.dp))
@@ -198,14 +300,33 @@ private fun CalendarContent(language: AppLanguage, isDark: Boolean, onOpenTitle:
                 Text(strings.loading, color = muted, fontFamily = SnProFamily, fontSize = 13.sp)
             }
         } else {
-            MonthGrid(
+            CollapsingMonthGrid(
                 month = month,
                 today = today,
                 selected = selected,
                 byDate = byDate,
-                imagePath = { name -> name?.let(imageStorage::getImageFilePath) },
+                imagePath = imagePath,
                 isDark = isDark,
-                onSelect = { selected = it },
+                collapse = { collapse },
+                grabberEnabled = scaleShown,
+                onSelect = { date ->
+                    selected = date
+                    // Месяц меняется только в режиме недели: в месяце строка дня должна остаться на месте,
+                    // иначе сворачивание поедет не к той неделе.
+                    if (weekMode) month = YearMonth.from(date) else settle(toWeek = true)
+                },
+                onDragBy = { fraction ->
+                    settleJob?.cancel()
+                    collapse = (collapse + fraction).coerceIn(0f, 1f)
+                },
+                onDragStop = { velocity ->
+                    val toWeek = when {
+                        velocity > FLING_FRACTION_PER_SECOND -> true
+                        velocity < -FLING_FRACTION_PER_SECOND -> false
+                        else -> collapse > 0.5f
+                    }
+                    settle(toWeek, velocity)
+                },
             )
             if (releases.orEmpty().isEmpty()) {
                 Spacer(Modifier.height(8.dp))
@@ -219,21 +340,237 @@ private fun CalendarContent(language: AppLanguage, isDark: Boolean, onOpenTitle:
                     isDark = isDark,
                     modifier = Modifier.fillMaxWidth(),
                 )
-            }
-            selected?.let { day ->
-                Spacer(Modifier.height(16.dp))
-                DayList(
-                    day = day,
-                    items = byDate[day].orEmpty(),
-                    strings = strings,
-                    locale = locale,
-                    isDark = isDark,
-                    imagePath = { name -> name?.let(imageStorage::getImageFilePath) },
-                    onOpenTitle = onOpenTitle,
-                )
+            } else if (scaleShown || weekMode) {
+                // Карточки встают на место, которое освободила сетка: их высота растёт вместе со
+                // сворачиванием, поэтому шторка не прыгает, а сумма высот меняется плавно.
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clipToBounds()
+                        .layout { measurable, constraints ->
+                            val placeable = measurable.measure(constraints)
+                            val c = collapse
+                            layout(placeable.width, (placeable.height * c).roundToInt()) {
+                                placeable.placeWithLayer(0, 0) {
+                                    alpha = c
+                                    translationY = (1f - c) * 28.dp.toPx()
+                                }
+                            }
+                        },
+                ) {
+                    AnimatedContent(
+                        targetState = selected,
+                        transitionSpec = {
+                            val forward = targetState.isAfter(initialState)
+                            (fadeIn(MotionTokens.tweenStandard()) + slideInHorizontally(MotionTokens.springSurface()) { w -> if (forward) w / 6 else -w / 6 })
+                                .togetherWith(fadeOut(MotionTokens.tweenFast()))
+                                .using(SizeTransform(clip = false))
+                        },
+                        label = "calendarDayCards",
+                    ) { day ->
+                        DayCards(
+                            day = day,
+                            items = byDate[day].orEmpty(),
+                            strings = strings,
+                            language = language,
+                            locale = locale,
+                            isDark = isDark,
+                            imagePath = imagePath,
+                            titleOf = repository::titleOf,
+                            onOpenTitle = onOpenTitle,
+                        )
+                    }
+                }
             }
         }
         Spacer(Modifier.height(12.dp))
+    }
+}
+
+/** Скорость броска ручки (доли пути сворачивания в секунду), с которой жест решает сам, без порога 50 %. */
+private const val FLING_FRACTION_PER_SECOND = 0.8f
+
+/**
+ * Сетка месяца, которая сворачивается к неделе выбранного дня: высота сжимается до одной строки,
+ * строка выбранного дня едет вверх, остальные гаснут. Под сеткой — ручка, как у шторок: тянешь
+ * вниз — месяц раскрывается за пальцем, вверх — сворачивается обратно.
+ */
+@Composable
+private fun CollapsingMonthGrid(
+    month: YearMonth,
+    today: LocalDate,
+    selected: LocalDate,
+    byDate: Map<LocalDate, List<CalendarRelease>>,
+    imagePath: (String?) -> String?,
+    isDark: Boolean,
+    collapse: () -> Float,
+    grabberEnabled: Boolean,
+    onSelect: (LocalDate) -> Unit,
+    onDragBy: (Float) -> Unit,
+    onDragStop: (Float) -> Unit,
+) {
+    BoxWithConstraints(Modifier.fillMaxWidth()) {
+        val gap = 4.dp
+        val cellHeight = (maxWidth - gap * 6) / 7 / 0.78f
+        val density = LocalDensity.current
+        val rowStepPx = with(density) { (cellHeight + gap).toPx() }
+        val cellPx = with(density) { cellHeight.toPx() }
+        val fullPx = cellPx * 6 + with(density) { gap.toPx() } * 5
+        val rangePx = fullPx - cellPx
+        val first = month.atDay(1)
+        val start = first.minusDays((first.dayOfWeek.value - 1).toLong())
+        val selectedRow = (ChronoUnit.DAYS.between(start, selected) / 7).toInt().coerceIn(0, 5)
+
+        Column {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clipToBounds()
+                    .layout { measurable, constraints ->
+                        val placeable = measurable.measure(constraints.copy(minHeight = 0, maxHeight = Constraints.Infinity))
+                        val c = collapse()
+                        layout(placeable.width, (fullPx + (cellPx - fullPx) * c).roundToInt()) {
+                            placeable.placeWithLayer(0, 0) { translationY = -selectedRow * rowStepPx * c }
+                        }
+                    },
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(gap)) {
+                    for (week in 0 until 6) {
+                        val isSelectedRow = week == selectedRow
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .graphicsLayer {
+                                    if (!isSelectedRow) alpha = (1f - collapse() * 1.6f).coerceIn(0f, 1f)
+                                },
+                            horizontalArrangement = Arrangement.spacedBy(gap),
+                        ) {
+                            for (d in 0 until 7) {
+                                val date = start.plusDays((week * 7 + d).toLong())
+                                val inMonth = YearMonth.from(date) == month
+                                // В свёрнутой неделе все семь дней равноправны: соседний месяц проявляется.
+                                val lifted = isSelectedRow && !inMonth
+                                DayCell(
+                                    date = date,
+                                    inMonth = inMonth || lifted,
+                                    isToday = date == today,
+                                    isSelected = date == selected,
+                                    inRange = false,
+                                    items = byDate[date].orEmpty(),
+                                    imagePath = imagePath,
+                                    isDark = isDark,
+                                    onClick = { onSelect(date) },
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .then(if (lifted) Modifier.graphicsLayer { alpha = 0.35f + 0.65f * collapse() } else Modifier),
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+            // Ручка той же формы, что у шторок; появляется со сворачиванием.
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .layout { measurable, constraints ->
+                        val placeable = measurable.measure(constraints)
+                        val c = collapse()
+                        layout(placeable.width, (placeable.height * (0.3f + 0.7f * c)).roundToInt()) {
+                            placeable.placeWithLayer(0, 0) { alpha = c }
+                        }
+                    }
+                    .draggable(
+                        state = rememberDraggableState { delta -> onDragBy(-delta / rangePx) },
+                        orientation = Orientation.Vertical,
+                        enabled = grabberEnabled,
+                        onDragStopped = { velocity -> onDragStop(-velocity / rangePx) },
+                    )
+                    .height(28.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Box(
+                    Modifier
+                        .size(width = 36.dp, height = 5.dp)
+                        .clip(SquircleShape(2.5.dp, smoothing = 0.3f))
+                        .background((if (isDark) Color.White else Color.Black).copy(alpha = 0.28f)),
+                )
+            }
+        }
+    }
+}
+
+/** Выходы дня — теми же карточками, что на главной. */
+@Composable
+private fun DayCards(
+    day: LocalDate,
+    items: List<CalendarRelease>,
+    strings: CalendarStrings,
+    language: AppLanguage,
+    locale: Locale,
+    isDark: Boolean,
+    imagePath: (String?) -> String?,
+    titleOf: (String) -> Anime?,
+    onOpenTitle: (String) -> Unit,
+) {
+    val ink = if (isDark) Color.White else MaterialTheme.colorScheme.onSurface
+    val muted = if (isDark) OverlayThemeTokens.LabelMutedDark else MaterialTheme.colorScheme.onSurfaceVariant
+    val genreRepository: GenreRepository = koinInject()
+    val ui = remember(language) { getStrings(language) }
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Text(
+            text = day.format(DateTimeFormatter.ofPattern("EEEE, d MMMM", locale)).replaceFirstChar { it.titlecase(locale) },
+            style = OverlayThemeTokens.SectionLabel,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = OverlayThemeTokens.LabelMutedAlpha),
+        )
+        Spacer(Modifier.height(10.dp))
+        if (items.isEmpty()) {
+            MascotEmptyState(
+                scene = MascotScene.Shrug,
+                title = strings.nothingThatDay,
+                subtitle = strings.nothingThatDayHint,
+                illustrationSize = 120.dp,
+                titleColor = ink,
+                subtitleColor = muted,
+                isDark = isDark,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            return@Column
+        }
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            items.groupBy { it.animeId }.values.sortedBy { it.first().title }.forEach { group ->
+                val release = group.first()
+                val anime = titleOf(release.animeId)
+                val state = remember(group, anime, language) {
+                    val status = if (group.all { it.released }) strings.released else strings.upcoming
+                    AnimeCardState(
+                        id = release.animeId,
+                        title = anime?.let {
+                            when (language) {
+                                AppLanguage.EN -> it.titleEn?.takeIf(String::isNotBlank)
+                                AppLanguage.RU -> it.titleRu?.takeIf(String::isNotBlank)
+                            } ?: it.title
+                        } ?: release.title,
+                        rating = anime?.rating ?: 0f,
+                        genres = anime?.tags.orEmpty().take(3)
+                            .mapNotNull { tag -> genreRepository.getLabel(tag, language).takeIf { it.isNotBlank() } }
+                            .toPersistentList(),
+                        episodesLabel = "${strings.episodes(group.map { it.episode })} · $status",
+                        imagePath = imagePath(anime?.imageFileName ?: release.imageFileName),
+                        mediaTypeLabel = when (anime?.mediaType ?: MediaType.ANIME) {
+                            MediaType.ANIME -> ui.typeAnime
+                            MediaType.MANGA -> ui.typeManga
+                            MediaType.MOVIE -> ui.typeMovie
+                            MediaType.SERIES -> ui.typeSeries
+                        },
+                        mediaType = anime?.mediaType ?: MediaType.ANIME,
+                        isFavorite = anime?.isFavorite == true,
+                        language = language,
+                    )
+                }
+                AnimeCardBody(state = state, onClick = { onOpenTitle(release.animeId) })
+            }
+        }
     }
 }
 
@@ -445,89 +782,6 @@ private fun PosterStack(
                     fontSize = 10.sp,
                     fontWeight = FontWeight.Bold,
                 )
-            }
-        }
-    }
-}
-
-@Composable
-private fun DayList(
-    day: LocalDate,
-    items: List<CalendarRelease>,
-    strings: CalendarStrings,
-    locale: Locale,
-    isDark: Boolean,
-    imagePath: (String?) -> String?,
-    onOpenTitle: (String) -> Unit,
-) {
-    val ink = if (isDark) Color.White else MaterialTheme.colorScheme.onSurface
-    val muted = if (isDark) OverlayThemeTokens.LabelMutedDark else MaterialTheme.colorScheme.onSurfaceVariant
-    Text(
-        text = day.format(DateTimeFormatter.ofPattern("EEEE, d MMMM", locale)).replaceFirstChar { it.titlecase(locale) },
-        style = OverlayThemeTokens.SectionLabel,
-        color = MaterialTheme.colorScheme.onSurface.copy(alpha = OverlayThemeTokens.LabelMutedAlpha),
-    )
-    Spacer(Modifier.height(8.dp))
-    if (items.isEmpty()) {
-        Text(strings.nothingThatDay, color = muted, fontFamily = SnProFamily, fontSize = 13.sp)
-        return
-    }
-    val context = LocalContext.current
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        items.sortedBy { it.title }.forEach { release ->
-            val path = imagePath(release.imageFileName)
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(if (isDark) OverlayThemeTokens.TileBackgroundDark else MaterialTheme.colorScheme.surfaceVariant)
-                    .fluidClickable { onOpenTitle(release.animeId) }
-                    .padding(8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(width = 44.dp, height = 62.dp)
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(Color(0xFF2A2A2A)),
-                ) {
-                    if (path != null) {
-                        AsyncImage(
-                            model = ImageRequest.Builder(context).data(File(path)).crossfade(true).build(),
-                            contentDescription = release.title,
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier.fillMaxSize(),
-                        )
-                    }
-                }
-                Spacer(Modifier.width(12.dp))
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = release.title,
-                        color = ink,
-                        fontFamily = SnProFamily,
-                        fontWeight = FontWeight.SemiBold,
-                        fontSize = 15.sp,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    Spacer(Modifier.height(2.dp))
-                    val status = if (release.released) strings.released else strings.upcoming
-                    Text(
-                        text = "${strings.episode(release.episode)} · $status",
-                        color = muted,
-                        fontFamily = SnProFamily,
-                        fontSize = 12.sp,
-                    )
-                    if (release.projected) {
-                        Text(
-                            text = strings.projectedNote,
-                            color = muted.copy(alpha = 0.7f),
-                            fontFamily = SnProFamily,
-                            fontSize = 11.sp,
-                        )
-                    }
-                }
             }
         }
     }

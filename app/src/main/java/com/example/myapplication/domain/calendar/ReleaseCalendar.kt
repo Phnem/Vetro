@@ -59,6 +59,11 @@ class ReleaseCalendarRepository(
     private val mutex = Mutex()
     private var memo: Memo? = null
 
+    /** Тайтлы последней сборки: календарь рисует по ним те же карточки, что на главной. */
+    @Volatile private var titles: Map<String, Anime> = emptyMap()
+
+    fun titleOf(animeId: String): Anime? = titles[animeId]
+
     suspend fun load(language: AppLanguage, force: Boolean = false): List<CalendarRelease> = mutex.withLock {
         memo?.takeIf { !force && it.language == language && nowMs() - it.at < MEMO_TTL_MS }?.let { return it.releases }
         val releases = build(language)
@@ -72,6 +77,7 @@ class ReleaseCalendarRepository(
         val airing = withContext(Dispatchers.IO) { localDataSource.getAiringProgressSnapshot() }
         val all = withContext(Dispatchers.IO) { localDataSource.getAllAnimeList() }
         val candidates = all.filter { isAiring(it, airing) }
+        titles = candidates.associateBy { it.id }
         val zone = zone()
         val today = Instant.ofEpochMilli(nowMs()).atZone(zone).toLocalDate()
         val observed = observations.all()
