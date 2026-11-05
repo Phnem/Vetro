@@ -19,9 +19,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Movie
-import androidx.compose.material.icons.rounded.Layers
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -32,7 +29,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.painterResource
+import com.phnem.vetro.R
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -68,13 +66,13 @@ fun InspectModeDock(
         horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         InspectModeItem(
-            icon = Icons.Rounded.Layers,
+            icon = R.drawable.ph_television_simple,
             label = animeLabel,
             selected = selectedIndex == 0,
             onClick = { onSelect(0) },
         )
         InspectModeItem(
-            icon = Icons.Rounded.Movie,
+            icon = R.drawable.ph_film_slate_fill,
             label = moviesLabel,
             selected = selectedIndex == 1,
             onClick = { onSelect(1) },
@@ -84,7 +82,7 @@ fun InspectModeDock(
 
 @Composable
 private fun InspectModeItem(
-    icon: ImageVector,
+    icon: Int,
     label: String,
     selected: Boolean,
     onClick: () -> Unit,
@@ -114,7 +112,7 @@ private fun InspectModeItem(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(
-            imageVector = icon,
+            painter = painterResource(icon),
             contentDescription = label,
             tint = tint,
             modifier = Modifier.size(22.dp),
