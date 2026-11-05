@@ -36,10 +36,22 @@ enum class MascotScene {
 
     /** Пустая коллекция при первом запуске: машет, сердечко. */
     Hello,
+
+    /**
+     * AnimD · «Кофе со звездой»: сидит в кресле нога на ногу, подбрасывает звезду, пьёт кофе с мизинчиком.
+     * Шторка поддержки проекта.
+     */
+    Coffee,
 }
 
 internal abstract class SceneSpec(val loop: Float, val blob: Int, val offsetX: Float = 0f, val still: Float) {
+    /** Масштаб всей сцены вокруг точки опоры (150, 262): AnimD с креслом чуть мельче остальных. */
+    open val sceneScale: Float = 1f
+
     abstract fun pose(t: Float): MascotPose
+
+    /** Дополнения рига: предмет в левой руке поверх корпуса, мизинчик, свои ноги. */
+    open fun extras(t: Float, c: MascotPalette): MascotExtras? = null
     open fun DrawScope.under(t: Float, c: MascotPalette) {}
     open fun DrawScope.over(t: Float, c: MascotPalette) {}
 
@@ -48,7 +60,7 @@ internal abstract class SceneSpec(val loop: Float, val blob: Int, val offsetX: F
 }
 
 /** Короткие «искры» вокруг эмоции: [lines] — x1, y1, x2, y2 подряд; вспыхивают масштабом от точки (ox, oy). */
-private fun DrawScope.ticks(lines: FloatArray, op: Float, s: Float, ox: Float, oy: Float) {
+internal fun DrawScope.ticks(lines: FloatArray, op: Float, s: Float, ox: Float, oy: Float) {
     if (op <= 0.001f) return
     val color = MascotOrange.copy(alpha = op)
     at(ox, oy, sx = s) {
@@ -72,6 +84,7 @@ internal fun MascotScene.spec(): SceneSpec = when (this) {
     MascotScene.Search -> SearchScene
     MascotScene.Empty -> EmptyBoxScene
     MascotScene.Hello -> HelloScene
+    MascotScene.Coffee -> CoffeeScene
 }
 
 /* 1 · «Вопрос» */
@@ -379,14 +392,18 @@ internal fun DrawScope.drawScene(spec: SceneSpec, time: Float, enter: Float, c: 
     at(150f, 150f, sx = blobS) { at(-150f, -150f) { drawPath(MascotPaths.blobs[spec.blob], c.blob) } }
     at(150f, 264f, sx = 0.85f + 0.15f * e) {
         at(-150f, -264f) {
-            val gx = 150f + spec.offsetX + pose.x * 0.72f
-            val gk = 1 - clamp01(-pose.jump / 60f) * 0.35f
-            ellipse(c.shadow, gx, 264f, 82f * gk, 9f * gk)
-            with(spec) { under(t, c) }
-            at(gx, 262f + pose.jump * 0.72f, sx = 0.72f) {
-                drawMascot(pose, c, handR = { with(spec) { handR(t, c) } })
+            at(150f, 262f, sx = spec.sceneScale) {
+                at(-150f, -262f) {
+                    val gx = 150f + spec.offsetX + pose.x * 0.72f
+                    val gk = 1 - clamp01(-pose.jump / 60f) * 0.35f
+                    ellipse(c.shadow, gx, 264f, 82f * gk, 9f * gk)
+                    with(spec) { under(t, c) }
+                    at(gx, 262f + pose.jump * 0.72f, sx = 0.72f) {
+                        drawMascot(pose, c, handR = { with(spec) { handR(t, c) } }, extras = spec.extras(t, c))
+                    }
+                    with(spec) { over(t, c) }
+                }
             }
-            with(spec) { over(t, c) }
         }
     }
 }

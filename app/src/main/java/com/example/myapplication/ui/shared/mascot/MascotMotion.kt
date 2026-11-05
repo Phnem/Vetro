@@ -90,7 +90,7 @@ internal class Breath(t: Float, loop: Float) {
 internal fun wrap(x: Float, m: Float): Float = ((x % m) + m) % m
 
 /**
- * Поза маскота. Корпус — псевдо-3D куб: [yaw] (поворот вокруг вертикали, + — лицом вправо),
+ * Поза маскота. Корпус — «обмылок» (суперэллипсоид): [yaw] (поворот вокруг вертикали, + — лицом вправо),
  * [pitch] (+ — кивок вперёд), [rot] (крен корпуса), [lean] (наклон всего тела от ступней).
  * Руки — гибкие «шланги»: [armL]/[armR] — куда смотрит кисть от плеча, [bendL]/[bendR] — изгиб в «локте»
  * (> 0 — кисть наружу/вверх), [frontR] — правая рука поверх корпуса (у подбородка).
@@ -114,12 +114,23 @@ internal data class MascotPose(
     val lookX: Float = 0f,
     val lookY: Float = 0f,
     val eyeS: Float = 1f,
+    /** Растяжение глаз по горизонтали (smear на быстром повороте). */
+    val eyeSX: Float = 1f,
     val eyeSY: Float = 1f,
     val happy: Float = 0f,
     val smile: Float = 1f,
     val sad: Float = 0f,
     val o: Float = 0f,
+    /** Открытая улыбка «до ушей». */
+    val grin: Float = 0f,
+    /** Прищур: верх глаза срезан наклонной «шторкой» — самодовольный взгляд. */
+    val lid: Float = 0f,
     val frontR: Float = 0f,
+    /** Левая рука поверх корпуса (тянется через себя). */
+    val frontL: Float = 0f,
+    /** 0..1 — корень руки уходит с края силуэта на плечо боковой грани (рука перед телом). */
+    val inL: Float = 0f,
+    val inR: Float = 0f,
     /** Запаздывание кончиков рук (градусы), считается из скорости позы. */
     val lagL: Float = 0f,
     val lagR: Float = 0f,
