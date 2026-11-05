@@ -31,6 +31,8 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Matrix
+import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
@@ -117,18 +119,17 @@ internal fun BookCover(
     }
 }
 
-/** Поза обложки в веере: крайние повёрнуты на ∓5°, средняя выше на 4 dp и поверх (spec/08). */
-internal data class FanPose(val dx: Dp, val dy: Dp, val rotation: Float)
+/** Поза обложки в веере: крайние слегка наклонены, средняя крупнее и поверх (spec/08). */
+internal data class FanPose(val dx: Dp, val dy: Dp, val rotation: Float, val width: Dp, val height: Dp)
 
 internal val FanPoses = listOf(
-    FanPose(dx = (-84).dp, dy = 6.dp, rotation = -5f),
-    FanPose(dx = 84.dp, dy = 6.dp, rotation = 5f),
-    FanPose(dx = 0.dp, dy = (-4).dp, rotation = 0f),
+    FanPose(dx = (-96).dp, dy = 3.dp, rotation = -1f, width = 94.dp, height = 120.dp),
+    FanPose(dx = 96.dp, dy = 3.dp, rotation = 1f, width = 94.dp, height = 120.dp),
+    FanPose(dx = 0.dp, dy = (-3).dp, rotation = 0f, width = 104.dp, height = 132.dp),
 )
 
 /** Книга в веере полки: «пухлее» обложки 2:3 — так модель читается как предмет, а не как картинка. */
-internal val FanBookWidth = 104.dp
-internal val FanBookHeight = 128.dp
+private val FanBookHeight = FanPoses.maxOf { it.height }
 
 /** Порядок в веере → индекс книги: средняя (третья по отрисовке) — первая книга полки. */
 internal val FanBookIndex = listOf(1, 2, 0)
@@ -197,7 +198,7 @@ internal fun FanShelfCard(
                         style = PlaceholderStyles[slot],
                         modifier = Modifier
                             .offset(x = pose.dx, y = pose.dy)
-                            .size(FanBookWidth, FanBookHeight)
+                            .size(pose.width, pose.height)
                             .graphicsLayer { rotationZ = pose.rotation },
                     )
                     return@forEachIndexed
@@ -206,7 +207,7 @@ internal fun FanShelfCard(
                     book = book,
                     modifier = Modifier
                         .offset(x = pose.dx, y = pose.dy)
-                        .size(FanBookWidth, FanBookHeight)
+                        .size(pose.width, pose.height)
                         .then(coverModifier(bookIndex))
                         .graphicsLayer { rotationZ = pose.rotation },
                 )
@@ -228,7 +229,7 @@ internal data class PlaceholderPalette(val card: Color, val circle: Color, val l
 
 internal val PlaceholderStyle.palette: PlaceholderPalette
     get() = when (this) {
-        PlaceholderStyle.ORANGE -> PlaceholderPalette(BrandOrange, PlaceholderInk, PlaceholderCream)
+        PlaceholderStyle.ORANGE -> PlaceholderPalette(Color(0xFFF55800), PlaceholderInk, PlaceholderCream)
         PlaceholderStyle.CREAM -> PlaceholderPalette(PlaceholderCream, BrandOrange, PlaceholderInk)
         PlaceholderStyle.DARK -> PlaceholderPalette(PlaceholderInk, BrandOrange, PlaceholderCream)
     }
@@ -259,12 +260,21 @@ private fun androidx.compose.foundation.layout.BoxScope.PlaceholderArt(style: Pl
     Canvas(Modifier.fillMaxSize()) {
         val fw = size.width
         val fh = size.height
-        val ax = fw * 0.08f
+        val ax = fw * 0.008f
         val aw = fw - ax
         if (title == null) {
-            drawCircle(p.circle, radius = fw * 0.21f, center = Offset(ax + aw * 0.5f, fh * 0.33f))
+            val center = Offset(fw * 0.475f, fh * 0.337f)
+            // The printed disc appears nearly circular on the photographed front board.
+            val shear = if (fw > 0f) 0.07f * fh / fw else 0f
+            val discProjection = Matrix().apply {
+                this[0, 1] = shear
+                this[3, 1] = -center.x * shear
+            }
+            withTransform({ transform(discProjection) }) {
+                drawCircle(p.circle, radius = fw * 0.23f, center = center)
+            }
             val bar = fh * 0.046f
-            listOf(0.60f to 0.72f, 0.70f to 0.72f, 0.80f to 0.48f).forEach { (y, width) ->
+            listOf(0.61f to 0.74f, 0.717f to 0.74f, 0.824f to 0.49f).forEach { (y, width) ->
                 drawRoundRect(
                     p.line,
                     topLeft = Offset(ax + aw * 0.13f, fh * y),
