@@ -70,12 +70,22 @@ private object CoffeePaths {
         })
     }
 
-    /** Нижняя нога: стоит на полу под корпусом. */
-    val farLeg by lazy { bezTube(Offset(8f, -60f), Offset(14f, -44f), Offset(18f, -30f), Offset(20f, -14f), 30f, 27f) }
+    /**
+     * Нижняя нога растёт из своего бедра (справа на экране) и выходит из-под колена верхней, а не из
+     * середины низа корпуса: корень спрятан под верхним бедром, поверх корпуса видна только голень.
+     */
+    private val farSides by lazy { bezSides(Offset(40f, -74f), Offset(43f, -58f), Offset(47f, -36f), Offset(50f, -14f), 30f, 27f) }
+    val farLeg by lazy { polyPath(farSides.first + farSides.second.asReversed()) }
+    val farEdges by lazy {
+        Path().also {
+            polyPath(farSides.first.subList(3, 18), close = false, into = it)
+            polyPath(farSides.second.subList(3, 18), close = false, into = it)
+        }
+    }
 }
 
-/** Трубка по кубической Безье s → c1 → c2 → h с толщиной w0 → w1. */
-private fun bezTube(s: Offset, c1: Offset, c2: Offset, h: Offset, w0: Float, w1: Float, n: Int = 20): Path {
+/** Левый и правый края трубки по кубической Безье s → c1 → c2 → h с толщиной w0 → w1 (n + 1 точек). */
+private fun bezSides(s: Offset, c1: Offset, c2: Offset, h: Offset, w0: Float, w1: Float, n: Int = 20): Pair<List<Offset>, List<Offset>> {
     val left = ArrayList<Offset>(n + 1)
     val right = ArrayList<Offset>(n + 1)
     for (i in 0..n) {
@@ -89,7 +99,7 @@ private fun bezTube(s: Offset, c1: Offset, c2: Offset, h: Offset, w0: Float, w1:
         left += p + nrm
         right += p - nrm
     }
-    return polyPath(left + right.asReversed())
+    return left to right
 }
 
 private val StarCore = Color(0xFFFFD36B)
@@ -217,7 +227,7 @@ internal object CoffeeScene : SceneSpec(loop = 9f, blob = 1, offsetX = 12f, stil
 
     private fun DrawScope.drawFarLeg(color: Color, style: DrawStyle) {
         drawPath(CoffeePaths.farLeg, color, style = style)
-        ellipse(color, 32f, -9f, 21f, 10.5f, style)
+        ellipse(color, 62f, -9f, 21f, 10.5f, style)
     }
 
     /** Верхняя нога: бедро лежит поверх низа корпуса и растворяется у корня, голень свисает и покачивает стопой. */
@@ -257,6 +267,9 @@ internal object CoffeeScene : SceneSpec(loop = 9f, blob = 1, offsetX = 12f, stil
             polyPath(left.subList(2, n), close = false, into = it)
             polyPath(right.subList(2, n), close = false, into = it)
         }
+        // голень нижней ноги поверх корпуса — её корень уходит под верхнее бедро
+        drawPath(CoffeePaths.farLeg, fill)
+        drawPath(CoffeePaths.farEdges, line, style = stroke(2.6f))
         at(fc.x, fc.y, rot = fa) { ellipse(line, 0f, 0f, 21f, 11f, stroke(5f)) }
         fadeLayer(s, s + Offset(62f, -14f), 1f, 0.1f) {
             drawPath(tube, fill)
