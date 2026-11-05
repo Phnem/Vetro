@@ -255,25 +255,25 @@ internal fun PlaceholderBook(style: PlaceholderStyle, modifier: Modifier = Modif
 @Composable
 private fun androidx.compose.foundation.layout.BoxScope.PlaceholderArt(style: PlaceholderStyle, title: String?) {
     val p = style.palette
-    // Корешок занимает левые ~13 % грани: арт центрируется по оставшейся части.
+    // Слева на крышке — сустав переплёта: арт центрируется по остальной её части.
     Canvas(Modifier.fillMaxSize()) {
         val fw = size.width
         val fh = size.height
-        val ax = fw * 0.13f
+        val ax = fw * 0.08f
         val aw = fw - ax
         if (title == null) {
-            drawCircle(p.circle, radius = fw * 0.20f, center = Offset(ax + aw * 0.5f, fh * 0.34f))
-            val bar = fh * 0.048f
-            listOf(0.60f to 0.70f, 0.70f to 0.70f, 0.80f to 0.46f).forEach { (y, width) ->
+            drawCircle(p.circle, radius = fw * 0.21f, center = Offset(ax + aw * 0.5f, fh * 0.33f))
+            val bar = fh * 0.046f
+            listOf(0.60f to 0.72f, 0.70f to 0.72f, 0.80f to 0.48f).forEach { (y, width) ->
                 drawRoundRect(
                     p.line,
-                    topLeft = Offset(ax + aw * 0.12f, fh * y),
+                    topLeft = Offset(ax + aw * 0.13f, fh * y),
                     size = Size(aw * width, bar),
                     cornerRadius = CornerRadius(bar / 2),
                 )
             }
         } else {
-            drawCircle(p.circle, radius = fw * 0.16f, center = Offset(ax + aw * 0.5f, fh * 0.27f))
+            drawCircle(p.circle, radius = fw * 0.17f, center = Offset(ax + aw * 0.5f, fh * 0.27f))
         }
     }
     if (title != null) {
@@ -289,7 +289,7 @@ private fun androidx.compose.foundation.layout.BoxScope.PlaceholderArt(style: Pl
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier
                     .align(Alignment.BottomStart)
-                    .padding(start = maxWidth * 0.2f, end = maxWidth * 0.08f, bottom = maxHeight * 0.1f),
+                    .padding(start = maxWidth * 0.16f, end = maxWidth * 0.08f, bottom = maxHeight * 0.1f),
             )
         }
     }
