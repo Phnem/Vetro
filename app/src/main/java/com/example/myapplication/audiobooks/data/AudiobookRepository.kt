@@ -282,6 +282,25 @@ class AudiobookRepository(
         }
     }
 
+    /** Своя книга по варианту: всё, что о ней известно в БД, — для страницы книги у папки без сайта. */
+    suspend fun localBook(variantId: VariantId): LocalBookRecord? = io {
+        val variant = q.variantById(variantId.value).executeAsOneOrNull() ?: return@io null
+        val narration = q.narrationById(variant.narration_id).executeAsOneOrNull() ?: return@io null
+        val work = q.workById(narration.work_id).executeAsOneOrNull() ?: return@io null
+        LocalBookRecord(
+            opened = OpenedBook(WorkId(work.work_id), NarrationId(narration.narration_id), variantId),
+            title = work.title,
+            authors = decode(work.authors_json),
+            narrators = decode(narration.narrators_json),
+            coverUrl = work.cover_url,
+            description = work.description,
+            genres = decode(work.genres_json),
+            year = work.year?.toInt(),
+            durationMs = variant.duration_ms ?: narration.duration_ms,
+            chapterCount = (variant.chapter_count ?: narration.chapter_count)?.toInt(),
+        )
+    }
+
     /** Есть ли книга уже в библиотеке (чтобы не добирать метаданные повторно). */
     suspend fun inLibrary(workId: WorkId): Boolean = io {
         q.workById(workId.value).executeAsOneOrNull()?.in_library == 1L
@@ -464,6 +483,20 @@ data class LibraryBook(
     val local: Boolean,
     /** Добавлена пользователем сам (не просто избранное): с первой такой книгой дом — это библиотека. */
     val own: Boolean,
+)
+
+/** Своя книга, как она лежит в БД. */
+data class LocalBookRecord(
+    val opened: OpenedBook,
+    val title: String,
+    val authors: List<String>,
+    val narrators: List<String>,
+    val coverUrl: String?,
+    val description: String?,
+    val genres: List<String>,
+    val year: Int?,
+    val durationMs: Long?,
+    val chapterCount: Int?,
 )
 
 /** Что известно о своей книге: теги файлов + добор у источников. */

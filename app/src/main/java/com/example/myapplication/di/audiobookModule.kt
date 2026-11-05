@@ -223,6 +223,7 @@ val audiobookModule = module {
             workEnrichment = get(),
             coverFinder = get(),
             covers = get(),
+            resolver = get(),
             language = { com.example.myapplication.data.local.AppLanguagePrefs.current(get(named("settings"))) },
         )
     }

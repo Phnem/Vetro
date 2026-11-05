@@ -109,7 +109,7 @@ class AudiobookLauncher(
      * Книга библиотеки из своей папки: манифест — через общий резолвер (он умеет локальные папки),
      * название, автор и обложка — из базы. Страницы у источника у неё нет, поэтому сразу играем.
      */
-    suspend fun playLocal(opened: OpenedBook, expand: Boolean = true): Result {
+    suspend fun playLocal(opened: OpenedBook, expand: Boolean = true, startChapter: Int? = null): Result {
         val manifest = runCatching { resolver.manifest(opened.variantId) }.getOrElse { return Result.Unavailable }
         val meta = repository.bookOf(opened.narrationId)
         return runCatching {
@@ -117,7 +117,7 @@ class AudiobookLauncher(
                 opened, manifest,
                 meta?.title.orEmpty(), meta?.authors.orEmpty().joinToString(", "),
                 meta?.narrators.orEmpty().joinToString(", "), meta?.coverUrl,
-                null, null, null,
+                null, null, startChapter,
             )
             if (expand) playerState.requestExpand()
             Result.Started
@@ -139,13 +139,14 @@ class AudiobookLauncher(
         // Продолжаем с места, где остановились в этой озвучке; шкала книги → (трек, смещение).
         val saved = repository.progress(book.narrationId)
         val timeline = runCatching { BookTimeline(manifest.tracks, manifest.chapters) }.getOrNull()
-        val chapterIndex = startChapter?.coerceIn(0, manifest.tracks.lastIndex)
+        // У одного файла с главами внутри глав больше, чем треков: границей служит большее из двух.
+        val chapterIndex = startChapter?.coerceIn(0, maxOf(manifest.tracks.lastIndex, manifest.chapters.lastIndex))
         val startGlobal = startGlobalMs
             ?: chapterIndex?.let { manifest.chapters.getOrNull(it)?.startMs }
             ?: saved?.takeIf { !it.finished && chapterIndex == null }?.globalMs
             ?: startFraction?.let { f -> timeline?.totalMs?.let { (it * f).toLong() } }
         // Глава без разметки на шкале (длины неизвестны) — просто начало её трека.
-        val (index, offset) = startGlobal?.let { timeline?.toTrack(it) } ?: ((chapterIndex ?: 0) to 0L)
+        val (index, offset) = startGlobal?.let { timeline?.toTrack(it) } ?: ((chapterIndex ?: 0).coerceAtMost(manifest.tracks.lastIndex) to 0L)
         val token = SessionToken(context, ComponentName(context, AudiobookPlaybackService::class.java))
         val future = MediaController.Builder(context, token).buildAsync()
         try {

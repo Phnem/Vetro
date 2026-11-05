@@ -84,6 +84,7 @@ import androidx.compose.ui.platform.LocalContext
 import com.example.myapplication.ui.details.DetailsMenuItem
 import com.example.myapplication.ui.details.DetailsOverflowMenu
 import com.example.myapplication.utils.Haptic
+import com.example.myapplication.audiobooks.data.LOCAL_SOURCE_ID
 import com.example.myapplication.audiobooks.domain.source.SourceBook
 import com.example.myapplication.audiobooks.domain.source.SourceBookDetails
 import com.example.myapplication.network.AppLanguage
@@ -222,7 +223,7 @@ fun BookDetailsScreen(
                 backdrop = backdrop,
                 isDark = isDark,
                 ru = language == AppLanguage.RU,
-                items = listOf(
+                items = listOfNotNull(
                     DetailsMenuItem(
                         Icons.Rounded.CheckCircle,
                         if (listened) menu.markNotListened else menu.markListened,
@@ -231,7 +232,9 @@ fun BookDetailsScreen(
                     ),
                     DetailsMenuItem(Icons.Rounded.Image, menu.changeCover, onClick = viewModel::openCovers),
                     DetailsMenuItem(Icons.Rounded.RecordVoiceOver, menu.editPeople, onClick = viewModel::openPeople),
-                    DetailsMenuItem(Icons.Rounded.LinkOff, menu.wrongSource, accent = true, onClick = viewModel::rejectSource),
+                    // У своей папки сайта нет — «источник неверен» ей не к чему.
+                    if (state.source == LOCAL_SOURCE_ID) null
+                    else DetailsMenuItem(Icons.Rounded.LinkOff, menu.wrongSource, accent = true, onClick = viewModel::rejectSource),
                 ),
             )
         }
@@ -419,7 +422,8 @@ private fun InfoPage(
 
                 when {
                     details != null -> {
-                        val facts = buildFacts(details, state.work, state.narrations.size, state.sourceName, strings)
+                        val sourceLabel = if (state.source == LOCAL_SOURCE_ID) strings.localSource else state.sourceName
+                        val facts = buildFacts(details, state.work, state.narrations.size, sourceLabel, strings)
                         SectionHeader(strings.information, onBg)
                         Spacer(Modifier.height(12.dp))
                         DetailFactGrid(facts, isDark)
@@ -587,8 +591,10 @@ private fun ChaptersPage(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Column(Modifier.weight(1f)) {
-                        Text(strings.chapterN(i + 1), color = if (listened) muted else onBg, fontFamily = SnProFamily,
-                            fontWeight = if (listened) FontWeight.Medium else FontWeight.SemiBold, fontSize = 14.sp)
+                        Text(state.chapterTitles.getOrNull(i)?.takeIf { it.isNotBlank() } ?: strings.chapterN(i + 1),
+                            color = if (listened) muted else onBg, fontFamily = SnProFamily,
+                            fontWeight = if (listened) FontWeight.Medium else FontWeight.SemiBold, fontSize = 14.sp,
+                            maxLines = 1, overflow = TextOverflow.Ellipsis)
                         Spacer(Modifier.height(3.dp))
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             if (!listened) {

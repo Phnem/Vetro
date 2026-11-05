@@ -14,8 +14,13 @@ import com.example.myapplication.audiobooks.data.BookPeopleOverrides
 import com.example.myapplication.audiobooks.domain.enrichment.CoverOption
 import com.example.myapplication.audiobooks.data.OpenedBook
 import com.example.myapplication.audiobooks.data.SavedProgress
+import com.example.myapplication.audiobooks.data.LOCAL_SOURCE_ID
+import com.example.myapplication.audiobooks.domain.model.VariantId
 import com.example.myapplication.audiobooks.domain.source.AudiobookSearch
 import com.example.myapplication.audiobooks.domain.source.AudiobookSource
+import com.example.myapplication.audiobooks.domain.source.ManifestResolver
+import com.example.myapplication.audiobooks.domain.source.SourceId
+import kotlinx.coroutines.CoroutineScope
 import com.example.myapplication.audiobooks.domain.source.WorkMatch
 import com.example.myapplication.audiobooks.domain.source.SourceBook
 import com.example.myapplication.audiobooks.domain.source.SourceBookDetails
@@ -57,6 +62,8 @@ class BookDetailsViewModel(
     private val coverFinder: BookCoverFinder? = null,
     /** Ручная смена обложки из меню «⋯»; без него пункт показывает пустой выбор. */
     private val covers: BookCoverManager? = null,
+    /** Манифест своей папки: из него берутся главы и их длины. */
+    private val resolver: ManifestResolver? = null,
     private val language: suspend () -> AppLanguage = { AppLanguage.RU },
 ) : ViewModel() {
 
@@ -120,6 +127,8 @@ class BookDetailsViewModel(
     fun rejectSource() {
         val s = _state.value
         val opened = s.opened ?: return
+        // У своей папки сайта нет — отвергать нечего.
+        if (s.source == LOCAL_SOURCE_ID) return
         val source = sources.firstOrNull { it.id.value == s.source } ?: return
         viewModelScope.launch {
             repository.markVariant(opened.variantId, false)
@@ -202,7 +211,13 @@ class BookDetailsViewModel(
         _state.update { it.copy(launching = true, launchFailed = false) }
         viewModelScope.launch {
             // Глава — индексом: у части сайтов длины глав известны только после запуска.
-            val result = launcher.play(details.book, startChapter = fromChapter)
+            val result = if (details.book.ref.source.value == LOCAL_SOURCE_ID) {
+                // Своя папка: страницы у сайта нет, играем её напрямую.
+                _state.value.opened?.let { launcher.playLocal(it, startChapter = fromChapter) }
+                    ?: AudiobookLauncher.Result.Unavailable
+            } else {
+                launcher.play(details.book, startChapter = fromChapter)
+            }
             _state.update { it.copy(launching = false, launchFailed = result != AudiobookLauncher.Result.Started) }
         }
     }
@@ -213,6 +228,10 @@ class BookDetailsViewModel(
     }
 
     private fun load(sourceId: String, key: String, allowFallback: Boolean = true) {
+        if (sourceId == LOCAL_SOURCE_ID) {
+            loadLocal(key)
+            return
+        }
         val source = sources.firstOrNull { it.id.value == sourceId } ?: run {
             _state.update { it.copy(source = sourceId, key = key, loading = false, error = true) }
             return
@@ -220,7 +239,7 @@ class BookDetailsViewModel(
         loadJob?.cancel()
         _state.update {
             it.copy(source = sourceId, sourceName = source.displayName, key = key, loading = true, error = false,
-                restricted = false, launchFailed = false)
+                restricted = false, launchFailed = false, chapterTitles = emptyList())
         }
         loadJob = viewModelScope.launch {
             val r = source.details(SourceBookRef(source.id, key))
@@ -245,28 +264,7 @@ class BookDetailsViewModel(
             // Автор и чтец — как их поправил пользователь, а не как написал сайт.
             val shown = details.copy(book = repository.withPeople(opened, details.book))
             _state.update { it.copy(loading = false, details = shown, opened = opened, progress = progress) }
-            // Обложка живёт в БД: смена из меню и находка из каталогов видны здесь сразу.
-            coverJob?.cancel()
-            coverJob = viewModelScope.launch {
-                repository.coverUrl(opened.workId).collect { url -> _state.update { it.copy(cover = url) } }
-            }
-            // Сайт обложки не дал — ищем в каталогах; находка ложится в произведение и видна на полках.
-            if (coverFinder != null && repository.coverInfo(opened.workId)?.coverUrl.isNullOrBlank()) {
-                launch {
-                    runCatching { coverFinder.first(details.book.title, details.book.authors) }.getOrNull()
-                        ?.let { runCatching { repository.setCover(opened.workId, it) } }
-                }
-            }
-            // Остальное — после основной карточки и независимо: не нашлось — секции просто нет.
-            val narrations = async { narrationsOf(details) }
-            val work = async {
-                workEnrichment?.let { enrichment ->
-                    runCatching {
-                        enrichment.lookup(details.book.title, details.book.authors, details.description, language())
-                    }.getOrNull()
-                }
-            }
-            val byAuthor = async {
+            followUp(details, opened) {
                 details.authorShelfId?.let { id ->
                     (source.shelf(id) as? SourceResult.Ok)?.value.orEmpty()
                         .filter { normalize(it.title) != normalize(details.book.title) }
@@ -274,8 +272,94 @@ class BookDetailsViewModel(
                         .take(AUTHOR_BOOKS)
                 }.orEmpty()
             }
-            _state.update { it.copy(narrations = narrations.await(), authorBooks = byAuthor.await(), work = work.await()) }
         }
+    }
+
+    /**
+     * Своя папка: сайта у неё нет, поэтому страница собирается из БД (теги файлов и добор по названию
+     * и автору, сделанный при добавлении) и из самих файлов (главы и их длины). Чего не знаем —
+     * секции просто нет; пустой, но настоящей страницы лучше, чем никакой.
+     */
+    private fun loadLocal(key: String) {
+        loadJob?.cancel()
+        _state.update {
+            it.copy(source = LOCAL_SOURCE_ID, sourceName = "", key = key, loading = true, error = false,
+                restricted = false, launchFailed = false)
+        }
+        loadJob = viewModelScope.launch {
+            val variant = VariantId(key)
+            val record = repository.localBook(variant)
+            if (record == null) {
+                _state.update { it.copy(loading = false, error = true) }
+                return@launch
+            }
+            // Папку могли убрать или отозвать доступ: тогда остаются итоги из БД без списка глав.
+            val manifest = resolver?.let { r -> runCatching { r.manifest(variant) }.getOrNull() }
+            val chapters = manifest?.chapters.orEmpty()
+            val durations: List<Long?> = when {
+                chapters.isNotEmpty() -> chapters.map { it.durationMs?.div(1000) }
+                manifest != null -> manifest.tracks.map { it.durationMs?.div(1000) }
+                else -> emptyList()
+            }
+            val trackMs = manifest?.tracks?.map { it.durationMs }
+            val totalMs = trackMs?.takeIf { l -> l.isNotEmpty() && l.all { it != null } }?.sumOf { it!! } ?: record.durationMs
+            val book = SourceBook(
+                ref = SourceBookRef(SourceId(LOCAL_SOURCE_ID), key),
+                title = record.title,
+                authors = record.authors,
+                narrators = record.narrators,
+                coverUrl = record.coverUrl,
+                durationSec = totalMs?.div(1000),
+                genres = record.genres,
+                year = record.year,
+            )
+            val details = SourceBookDetails(book = book, description = record.description, chapterDurationsSec = durations)
+            val progress = repository.progress(record.opened.narrationId)
+            _state.update {
+                it.copy(
+                    loading = false,
+                    details = details,
+                    opened = record.opened,
+                    progress = progress,
+                    chapterTitles = chapters.map { c -> c.title },
+                )
+            }
+            // Других книг автора «на сайте» у папки нет — секция не показывается.
+            followUp(details, record.opened) { emptyList() }
+        }
+    }
+
+    /**
+     * Остальное — после основной карточки и независимо: не нашлось — секции просто нет. Обложка
+     * живёт в БД (смена из меню и находка из каталогов видны сразу), произведение за озвучкой и
+     * другие озвучки подтягиваются по названию и автору.
+     */
+    private suspend fun CoroutineScope.followUp(
+        details: SourceBookDetails,
+        opened: OpenedBook,
+        authorBooks: suspend () -> List<SourceBook>,
+    ) {
+        coverJob?.cancel()
+        coverJob = viewModelScope.launch {
+            repository.coverUrl(opened.workId).collect { url -> _state.update { it.copy(cover = url) } }
+        }
+        // Обложки нет — ищем в каталогах; находка ложится в произведение и видна на полках.
+        if (coverFinder != null && repository.coverInfo(opened.workId)?.coverUrl.isNullOrBlank()) {
+            launch {
+                runCatching { coverFinder.first(details.book.title, details.book.authors) }.getOrNull()
+                    ?.let { runCatching { repository.setCover(opened.workId, it) } }
+            }
+        }
+        val narrations = async { narrationsOf(details) }
+        val work = async {
+            workEnrichment?.let { enrichment ->
+                runCatching {
+                    enrichment.lookup(details.book.title, details.book.authors, details.description, language())
+                }.getOrNull()
+            }
+        }
+        val byAuthor = async { authorBooks() }
+        _state.update { it.copy(narrations = narrations.await(), authorBooks = byAuthor.await(), work = work.await()) }
     }
 
     /** Та же книга на другом сайте, чьи детали открываются; сначала — по приоритету источников. */
@@ -329,6 +413,8 @@ data class BookDetailsState(
     val sheet: BookSheet = BookSheet.None,
     val coverPicker: CoverPicker = CoverPicker(),
     val notice: BookNotice? = null,
+    /** Названия глав из файлов своей папки; у сайтов пусто — там главы называются по номеру. */
+    val chapterTitles: List<String> = emptyList(),
 )
 
 /** Какая шторка меню «⋯» открыта. */

@@ -225,7 +225,9 @@ fun BooksHomeScreen(
                 onBook = { b ->
                     val own = libraryByKey["${b.source}:${b.key}"]
                     when {
-                        // Своя папка — страницы у источника нет, сразу играет.
+                        // Своя папка: страница собирается из БД и файлов, у сайта её нет.
+                        own != null && own.local && own.variantId != null ->
+                            onOpenBook(com.example.myapplication.audiobooks.data.LOCAL_SOURCE_ID, own.variantId.value, own.title, own.coverUrl)
                         own != null && own.local -> vm.playLibrary(own)
                         b.playable -> onOpenBook(b.source, b.key, b.title, b.coverUrl)
                         else -> sheetBook = b
