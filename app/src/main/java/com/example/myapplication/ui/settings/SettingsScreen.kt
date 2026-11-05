@@ -1038,6 +1038,21 @@ private fun DeveloperGroups(
             isDark = isDark,
             rows = listOf(
                 {
+                    // Проверка шторки «Поддержать Vetro» без ожидания трёх дней и набора очков.
+                    val ru = strings.languageName == "RU"
+                    val supportManager: com.example.myapplication.support.SupportReminderManager = org.koin.compose.koinInject()
+                    DevActionRow(
+                        title = if (ru) "Шторка поддержки" else "Support sheet",
+                        subtitle = if (ru) {
+                            "Показать сейчас; кнопки и закрытие в предпросмотре ничего не сохраняют"
+                        } else {
+                            "Show it now; buttons and closing in the preview save nothing"
+                        },
+                        icon = Icons.Filled.Code, iconBg = devIcon, isLoading = false,
+                        isDark = isDark, onClick = { supportManager.debugPreview() },
+                    )
+                },
+                {
                     DevActionRow(
                         title = strings.devExportLogsTitle, subtitle = strings.devExportLogsSubtitle,
                         icon = Icons.Filled.BugReport, iconBg = devIcon, isLoading = uiState.isExportingLogs,

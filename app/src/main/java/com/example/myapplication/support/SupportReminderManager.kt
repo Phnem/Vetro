@@ -230,6 +230,17 @@ class SupportReminderManager(
         return options != null
     }
 
+    /** Шторка открыта dev-кнопкой: реакции в ней ничего не записывают (счётчики, GitHub, интервалы — как были). */
+    @Volatile
+    private var preview = false
+
+    /** Dev: показать шторку сейчас со всеми вариантами, минуя условия и не трогая сохранённое состояние. */
+    fun debugPreview() {
+        if (_offer.value != null) return
+        preview = true
+        _offer.value = listOf(SupportOption.DONATE, SupportOption.GITHUB)
+    }
+
     /** Закрыли свайпом, кнопкой «назад» или тапом по фону. */
     fun dismiss() = react { s, now -> SupportReminderPolicy.onDismissed(s, now) }
 
@@ -238,6 +249,7 @@ class SupportReminderManager(
     /** Сначала сохраняем, что GitHub предложен и принят, потом вызывающий открывает ссылку. */
     suspend fun githubClicked() {
         _offer.value = null
+        if (endPreview()) return
         mutate { s, now, _ -> SupportReminderPolicy.onGithub(s, now) }
     }
 
@@ -246,7 +258,15 @@ class SupportReminderManager(
 
     private fun react(transform: (SupportReminderState, Long) -> SupportReminderState) {
         _offer.value = null
+        if (endPreview()) return
         scope.launch { mutate { s, now, _ -> transform(s, now) } }
+    }
+
+    /** true — закрылся dev-предпросмотр: ничего не записываем. */
+    private fun endPreview(): Boolean {
+        if (!preview) return false
+        preview = false
+        return true
     }
 
     private suspend fun mutate(transform: (SupportReminderState, Long, Long) -> SupportReminderState) {
