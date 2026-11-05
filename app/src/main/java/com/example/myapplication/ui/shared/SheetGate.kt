@@ -36,3 +36,31 @@ fun SheetGateEffect(active: Boolean) {
         onDispose { if (active) SheetGate.leave() }
     }
 }
+
+/**
+ * Занятой UI, который не шторка, но прерывать его нельзя: развёрнутый аудиоплеер и т.п. Вместе с
+ * [SheetGate] — единая проверка «спокойного момента» для ненавязчивых предложений (напоминание о поддержке).
+ */
+object BusyUi {
+    private var count by mutableIntStateOf(0)
+
+    /** Открыто ли что-то, что нельзя перекрывать. Чтение подписывает композицию на изменение. */
+    val anyBusy: Boolean get() = count > 0 || SheetGate.anyOpen
+
+    internal fun enter() {
+        count++
+    }
+
+    internal fun leave() {
+        count = (count - 1).coerceAtLeast(0)
+    }
+}
+
+/** Регистрирует занятой UI в [BusyUi], пока [active] истинно и composable в композиции. */
+@Composable
+fun BusyUiEffect(active: Boolean) {
+    DisposableEffect(active) {
+        if (active) BusyUi.enter()
+        onDispose { if (active) BusyUi.leave() }
+    }
+}

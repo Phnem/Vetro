@@ -243,6 +243,11 @@ class EpisodeMenuViewModel(
         viewModelScope.launch {
             runCatching {
                 if (watched) playbackStore.markWatched(anime.id, keys) else playbackStore.markUnwatched(anime.id, keys)
+            }.onSuccess {
+                // Сезон закрыт — очки активности для напоминания о поддержке (повтор не засчитывается).
+                if (watched && season.episodes > 0 && (episode == null || episode >= season.episodes)) {
+                    com.example.myapplication.support.SupportActivity.report(com.example.myapplication.support.SupportActivityEvent.SeasonCompleted(anime.id, season.seasonNumber))
+                }
             }.onFailure { Log.w(TAG, "Marking watched=$watched failed", it) }
         }
     }

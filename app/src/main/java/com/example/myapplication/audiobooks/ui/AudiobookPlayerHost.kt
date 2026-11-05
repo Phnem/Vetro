@@ -167,6 +167,8 @@ fun AudiobookPlayerHost(language: AppLanguage = AppLanguage.RU, modifier: Modifi
     // середину, и флаг «полный» не должен от этого выключать сам жест (иначе короткий бросок
     // отменялся и окно возвращалось в полный размер).
     var expanded by remember { mutableStateOf(false) }
+    // Развёрнутый плеер — не время для ненавязчивых предложений поверх него.
+    com.example.myapplication.ui.shared.BusyUiEffect(expanded)
 
     // Живое подключение к сессии: пишет общее состояние, частота опроса — по тому, что видно.
     LaunchedEffect(context) {

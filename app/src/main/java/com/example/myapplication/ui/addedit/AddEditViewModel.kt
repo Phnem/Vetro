@@ -170,6 +170,10 @@ class AddEditViewModel(
             )
             saveAnimeUseCase(params)
                 .onSuccess {
+                    // Новая запись вручную — очки активности для напоминания о поддержке (правка — нет).
+                    if (params.animeId == null) {
+                        com.example.myapplication.support.SupportActivity.report(com.example.myapplication.support.SupportActivityEvent.TitleAdded("manual:${params.title.trim().lowercase()}"))
+                    }
                     _uiState.update { it.copy(isLoading = false) }
                     _effect.send(AddEditEffect.NavigateBack)
                 }

@@ -177,7 +177,9 @@ class RecommendationsViewModel(
     /** Быстрое добавление из колоды — той же машинерией, что и поиск по API. */
     fun addToCollection(item: RecommendationItem, onDone: (Boolean) -> Unit = {}) {
         viewModelScope.launch {
-            val result = addFromApiUseCase(item.toApiSearchResult())
+            val api = item.toApiSearchResult()
+            val result = addFromApiUseCase(api)
+            result.getOrNull()?.let { com.example.myapplication.domain.search.reportUserAdded(api, it) }
             if (result.isSuccess) {
                 _uiState.update { state ->
                     if (state is RecommendationsUiState.Ready) {

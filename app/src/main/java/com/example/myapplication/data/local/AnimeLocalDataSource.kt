@@ -312,6 +312,8 @@ class AnimeLocalDataSource(
             id = animeId,
         )
         mirrorCoordinator.requestExportIfEnabled()
+        // Завершение произведения — очки активности (повтор того же тайтла не засчитывается).
+        if (status == WatchStatus.COMPLETED) com.example.myapplication.support.SupportActivity.report(com.example.myapplication.support.SupportActivityEvent.TitleCompleted(animeId))
     }
 
     /** Год релиза для фильтра библиотеки; 0 = источник года не дал (повторно не ищем). */

@@ -168,7 +168,9 @@ class InspectViewModel(
         val key = "${result.source}_${result.externalId ?: result.title}"
         viewModelScope.launch {
             _addingFromApiId.value = key
-            addFromApiUseCase(result).onFailure { it.printStackTrace() }
+            addFromApiUseCase(result)
+                .onSuccess { com.example.myapplication.domain.search.reportUserAdded(result, it) }
+                .onFailure { it.printStackTrace() }
             _addingFromApiId.value = null
         }
     }

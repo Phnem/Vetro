@@ -46,6 +46,9 @@ class VetroApplication : Application(), SingletonImageLoader.Factory {
         // AI-цепочкой и шифрованным хранилищем и его подписка на всю коллекцию — вторым полным
         // чтением БД параллельно с главной. Теперь — в фоне, когда старт уже позади.
         val koin = org.koin.core.context.GlobalContext.get()
+        // Учёт сессий для напоминания о поддержке: подписка на ProcessLifecycleOwner — на главном потоке,
+        // до первого onStart; сама работа — только на событиях, без таймеров и фона.
+        koin.get<com.example.myapplication.support.SupportReminderManager>().start()
         koin.get<AppScope>().launch {
             delay(DEFERRED_STARTUP_MS)
             WorkManager.getInstance(this@VetroApplication).cancelUniqueWork("AiRecommendationWork")

@@ -50,6 +50,8 @@ import com.example.myapplication.ui.navigation.navigateToDetails
 import com.example.myapplication.notifications.ACTION_OPEN_ANIME
 import com.example.myapplication.notifications.EXTRA_OPEN_ANIME_ID
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.launch
+import androidx.navigation.NavDestination.Companion.hasRoute
 import com.example.myapplication.sync.supabase.SupabaseAuthDeeplinkHandler
 import io.github.jan.supabase.SupabaseClient
 import com.example.myapplication.ui.shared.components.IosSheetScaffold
@@ -167,6 +169,31 @@ class MainActivity : FragmentActivity() {
 
                 val overlayVisible = showStartupUpdateOverlay
 
+                // Напоминание о поддержке — та же шторка: предложение обновиться в приоритете, а панель
+                // держит последнее содержимое, пока уезжает вниз.
+                val supportManager: com.example.myapplication.support.SupportReminderManager = org.koin.compose.koinInject()
+                val supportOffer by supportManager.offer.collectAsStateWithLifecycle()
+                val supportVisible = supportOffer != null && !overlayVisible
+                var lastShowedSupport by remember { mutableStateOf(false) }
+                var lastSupportOptions by remember { mutableStateOf(emptyList<com.example.myapplication.support.SupportOption>()) }
+                val sheetShowsSupport = when {
+                    overlayVisible -> false
+                    supportVisible -> true
+                    else -> lastShowedSupport
+                }
+                val supportOptions = supportOffer ?: lastSupportOptions
+                SideEffect {
+                    lastShowedSupport = sheetShowsSupport
+                    supportOffer?.let { lastSupportOptions = it }
+                }
+                BackHandler(enabled = supportVisible) { supportManager.dismiss() }
+                com.example.myapplication.ui.support.SupportReminderTrigger(
+                    manager = supportManager,
+                    atHome = navEntry?.destination?.hasRoute<com.example.myapplication.ui.navigation.HomeRoute>() == true,
+                    blocked = overlayVisible || splashVisible,
+                )
+                val supportScope = androidx.compose.runtime.rememberCoroutineScope()
+
                 val workspaceSearch = remember { WorkspaceSearchState() }
                 val overscrollFactory = remember { iosOverscrollFactory(this@MainActivity) }
                 CompositionLocalProvider(
@@ -186,8 +213,8 @@ class MainActivity : FragmentActivity() {
                     // Предложение обновиться - та же iOS-шторка, что и в настройках (а не отдельная
                     // карточка со своим скримом): одна панель на всё приложение.
                     IosSheetScaffold(
-                        sheetVisible = overlayVisible,
-                        onDismiss = { dismissStartupUpdateOverlay() },
+                        sheetVisible = overlayVisible || supportVisible,
+                        onDismiss = { if (overlayVisible) dismissStartupUpdateOverlay() else supportManager.dismiss() },
                         sheetHeightFraction = null,
                         content = {
                             // Dev-флаг «назад как в extera»: пока выключен, слой пропускает всё как есть.
@@ -200,11 +227,30 @@ class MainActivity : FragmentActivity() {
                             }
                         },
                         sheetContent = {
-                            UpdateSheet(
-                                language = settingsState.language,
-                                manual = false,
-                                onDismiss = { dismissStartupUpdateOverlay() },
-                            )
+                            if (sheetShowsSupport) {
+                                com.example.myapplication.ui.support.SupportReminderSheet(
+                                    language = settingsState.language,
+                                    options = supportOptions,
+                                    onDonate = {
+                                        supportManager.donateClicked()
+                                        com.example.myapplication.ui.support.openSupportLink(context, com.example.myapplication.ui.shared.DONATION_URL)
+                                    },
+                                    onGithub = {
+                                        // Сначала запоминаем, что GitHub принят (больше не предлагаем), потом открываем.
+                                        supportScope.launch {
+                                            supportManager.githubClicked()
+                                            com.example.myapplication.ui.support.openSupportLink(context, com.example.myapplication.ui.shared.GITHUB_REPO_URL)
+                                        }
+                                    },
+                                    onLater = { supportManager.dismiss() },
+                                )
+                            } else {
+                                UpdateSheet(
+                                    language = settingsState.language,
+                                    manual = false,
+                                    onDismiss = { dismissStartupUpdateOverlay() },
+                                )
+                            }
                         },
                     )
 

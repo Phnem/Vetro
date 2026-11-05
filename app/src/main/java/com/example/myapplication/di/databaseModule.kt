@@ -32,6 +32,8 @@ private val Context.migrationDataStore: DataStore<Preferences> by preferencesDat
 private val Context.settingsDataStore: DataStore<Preferences> by preferencesDataStore(name = "settings_prefs")
 /** Прогресс и качество серий — отдельно от настроек (см. EpisodePlaybackStore). */
 private val Context.playbackDataStore: DataStore<Preferences> by preferencesDataStore(name = "playback_prefs")
+/** Напоминание о поддержке: сессии, очки, интервалы (см. SupportReminderManager). */
+private val Context.supportDataStore: DataStore<Preferences> by preferencesDataStore(name = "support_prefs")
 
 val databaseModule = module {
     single { VetroStoragePaths(androidContext()) }
@@ -64,6 +66,14 @@ val databaseModule = module {
     }
     single<DataStore<Preferences>>(named("playback")) {
         androidContext().playbackDataStore
+    }
+    single { com.example.myapplication.support.SupportReminderStore(androidContext().supportDataStore) }
+    single {
+        com.example.myapplication.support.SupportReminderManager(
+            store = get(),
+            scope = get<com.example.myapplication.AppScope>(),
+            clock = com.example.myapplication.support.AndroidSupportClock(androidContext()),
+        )
     }
     single {
         LegacyStorageMigrator(

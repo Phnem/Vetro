@@ -128,6 +128,15 @@ internal fun ApiSearchResult.toDuplicateProbe(): Anime? {
 /** Чем закончилось добавление — записью или отказом, потому что тайтл уже в коллекции. */
 enum class AddFromApiOutcome { ADDED, ALREADY_IN_COLLECTION }
 
+/**
+ * Пользователь сам добавил тайтл из поиска/колоды/Inspect — очки активности для напоминания о поддержке.
+ * Не из use case: тем же use case пользуется синхронизация списков, а импорт очков приносить не должен.
+ */
+fun reportUserAdded(result: ApiSearchResult, outcome: AddFromApiOutcome) {
+    if (outcome != AddFromApiOutcome.ADDED) return
+    com.example.myapplication.support.SupportActivity.report(com.example.myapplication.support.SupportActivityEvent.TitleAdded("${result.source}:${result.externalId ?: result.title}"))
+}
+
 class AddFromApiUseCase(
     private val saveAnimeUseCase: SaveAnimeUseCase,
     private val imageStorage: ImageStorageRepository,

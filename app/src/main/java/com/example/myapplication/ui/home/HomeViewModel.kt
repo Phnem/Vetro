@@ -577,7 +577,8 @@ class HomeViewModel(
             _uiState.update { it.copy(addingFromApiId = key) }
             addFromApiUseCase(result)
                 .fold(
-                    onSuccess = {
+                    onSuccess = { outcome ->
+                        com.example.myapplication.domain.search.reportUserAdded(result, outcome)
                         // И ADDED, и ALREADY_IN_COLLECTION — успех с точки зрения кнопки: тайтл в
                         // коллекции, галочка правдива. Откатывать её во втором случае значило бы
                         // предлагать пользователю добавить то, что уже добавлено.

@@ -164,10 +164,12 @@ class EpisodePlaybackStore(
             updatedAt = System.currentTimeMillis(),
         )
         val preferenceKey = progressKey(animeId)
+        var becameWatched = false
         writeMutex.withLock {
             edit { preferences ->
                 val current = decode(preferences[preferenceKey]).toMutableMap()
                 val previous = current[target]
+                becameWatched = previous?.watched != true && normalized.watched
                 // Возврат: серия была досмотрена, прошёл перерыв, и её открыли заново с начала.
                 // Вторая запись того же просмотра уже видит позицию «не досмотрено» и не считается.
                 val restarted = previous != null && previous.watched &&
@@ -179,6 +181,14 @@ class EpisodePlaybackStore(
                 preferences[preferenceKey] = encode(current)
             }
         }
+        if (becameWatched) reportWatched(animeId, listOf(target))
+    }
+
+    /** Досмотренные серии — очки активности для напоминания о поддержке (дедуп и суточный лимит — в нём). */
+    private fun reportWatched(animeId: String, keys: Collection<PlaybackEpisodeKey>) {
+        for (key in keys) {
+            com.example.myapplication.support.SupportActivity.report(com.example.myapplication.support.SupportActivityEvent.EpisodeWatched(animeId, key.season, key.episode))
+        }
     }
 
     /**
@@ -189,12 +199,15 @@ class EpisodePlaybackStore(
         if (episodes.isEmpty()) return
         val preferenceKey = progressKey(animeId)
         val now = System.currentTimeMillis()
+        val newlyWatched = ArrayList<PlaybackEpisodeKey>()
         writeMutex.withLock {
             edit { preferences ->
+                newlyWatched.clear()
                 val current = decode(preferences[preferenceKey]).toMutableMap()
                 for (key in episodes) {
                     val previous = current[key]
                     if (previous?.watched == true) continue
+                    newlyWatched += key
                     current[key] = EpisodePlaybackProgress(
                         positionMs = MANUAL_MARK_DURATION_MS,
                         durationMs = MANUAL_MARK_DURATION_MS,
@@ -205,6 +218,7 @@ class EpisodePlaybackStore(
                 preferences[preferenceKey] = encode(current)
             }
         }
+        reportWatched(animeId, newlyWatched)
     }
 
     /**

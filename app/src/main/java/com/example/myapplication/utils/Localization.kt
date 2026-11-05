@@ -950,3 +950,38 @@ fun getCloudSyncPillStrings(lang: AppLanguage): CloudSyncPillStrings = when (lan
     AppLanguage.RU -> RussianCloudSyncPillStrings
     AppLanguage.EN -> EnglishCloudSyncPillStrings
 }
+
+/** Отдельно от [UiStrings] (лимит 255 параметров): шторка «Поддержать Vetro» с маскотом AnimD. */
+data class SupportStrings(
+    val title: String,
+    /** Текст, когда предлагаются и донат, и звезда на GitHub. */
+    val body: String,
+    /** Текст, когда GitHub уже предложен и принят — остаётся только донат. */
+    val bodyDonateOnly: String,
+    val donate: String,
+    val github: String,
+    val later: String,
+)
+
+private val RussianSupportStrings = SupportStrings(
+    title = "Нравится Vetro?",
+    body = "Vetro — независимый проект. Если вам нравится им пользоваться, поддержите разработку или поставьте звезду на GitHub.",
+    bodyDonateOnly = "Vetro — независимый проект. Если вам нравится им пользоваться, поддержите разработку.",
+    donate = "Поддержать разработку",
+    github = "Звезда на GitHub",
+    later = "Не сейчас",
+)
+
+private val EnglishSupportStrings = SupportStrings(
+    title = "Enjoying Vetro?",
+    body = "Vetro is an independent project. If you enjoy using it, consider supporting its development or giving it a star on GitHub.",
+    bodyDonateOnly = "Vetro is an independent project. If you enjoy using it, consider supporting its development.",
+    donate = "Support development",
+    github = "Star on GitHub",
+    later = "Not now",
+)
+
+fun getSupportStrings(lang: AppLanguage): SupportStrings = when (lang) {
+    AppLanguage.RU -> RussianSupportStrings
+    AppLanguage.EN -> EnglishSupportStrings
+}
