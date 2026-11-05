@@ -1,5 +1,6 @@
 package com.example.myapplication.audiobooks.ui.home
 
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -16,6 +17,10 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -37,6 +42,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
+import coil3.toBitmap
 import com.example.myapplication.audiobooks.data.CachedBook
 import com.example.myapplication.ui.shared.theme.BrandOrange
 import com.example.myapplication.ui.shared.theme.IosDesign
@@ -55,42 +61,39 @@ internal val CoverRadius = 10.dp
 internal val LocalBookProgress = androidx.compose.runtime.staticCompositionLocalOf<(CachedBook) -> String?> { { null } }
 
 /**
- * Обложка книги: 2:3, радиус 10, мягкая тень. Без картинки — нейтральная плашка с названием, а не
- * выдуманный арт (issues/39).
+ * Книга-моделька ([Book3D]): обложка сама ложится на переднюю грань, корешок, страницы и свет
+ * дорисовываются сверху, задняя крышка берёт средний цвет обложки. Без обложки (или если она не
+ * загрузилась) — шаблон в фирменной гамме с названием книги на грани.
+ *
+ * @param elevation сила контактной тени под книгой (6 dp — обычная полка).
  */
 @Composable
 internal fun BookCover(
     book: CachedBook,
     modifier: Modifier = Modifier,
-    radius: Dp = CoverRadius,
     elevation: Dp = 6.dp,
 ) {
-    val shape = RoundedCornerShape(radius)
-    Box(
-        modifier = modifier
-            .shadow(elevation, shape, clip = false, ambientColor = Color.Black, spotColor = Color.Black)
-            .clip(shape)
-            .background(Color.White.copy(alpha = 0.07f)),
-        contentAlignment = Alignment.Center,
+    val coverUrl = book.coverUrl
+    var loaded by remember(coverUrl) { mutableStateOf<android.graphics.Bitmap?>(null) }
+    var failed by remember(coverUrl) { mutableStateOf(false) }
+    val style = remember(book.title) { placeholderStyleFor(book.title) }
+    val tint = rememberCoverTint(coverUrl, loaded)
+    val showArt = coverUrl == null || failed
+    Book3D(
+        coverColor = if (showArt) style.palette.card else tint,
+        modifier = modifier,
+        shadowStrength = (0.2f + elevation.value * 0.05f).coerceAtMost(0.6f),
     ) {
-        if (book.coverUrl != null) {
+        if (showArt) {
+            PlaceholderArt(style, title = book.title)
+        } else {
             AsyncImage(
-                model = book.coverUrl,
+                model = coverUrl,
                 contentDescription = book.title,
                 contentScale = ContentScale.Crop,
+                onSuccess = { state -> loaded = state.result.image.toBitmap() },
+                onError = { failed = true },
                 modifier = Modifier.fillMaxSize(),
-            )
-        } else {
-            Text(
-                text = book.title,
-                color = Color.White.copy(alpha = 0.72f),
-                fontFamily = SnProFamily,
-                fontWeight = FontWeight.SemiBold,
-                fontSize = 13.sp,
-                textAlign = TextAlign.Center,
-                maxLines = 4,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(10.dp),
             )
         }
         LocalBookProgress.current(book)?.let { label ->
@@ -118,10 +121,14 @@ internal fun BookCover(
 internal data class FanPose(val dx: Dp, val dy: Dp, val rotation: Float)
 
 internal val FanPoses = listOf(
-    FanPose(dx = (-70).dp, dy = 6.dp, rotation = -5f),
-    FanPose(dx = 70.dp, dy = 6.dp, rotation = 5f),
+    FanPose(dx = (-84).dp, dy = 6.dp, rotation = -5f),
+    FanPose(dx = 84.dp, dy = 6.dp, rotation = 5f),
     FanPose(dx = 0.dp, dy = (-4).dp, rotation = 0f),
 )
+
+/** Книга в веере полки: «пухлее» обложки 2:3 — так модель читается как предмет, а не как картинка. */
+internal val FanBookWidth = 104.dp
+internal val FanBookHeight = 128.dp
 
 /** Порядок в веере → индекс книги: средняя (третья по отрисовке) — первая книга полки. */
 internal val FanBookIndex = listOf(1, 2, 0)
@@ -178,8 +185,8 @@ internal fun FanShelfCard(
             modifier = Modifier.fillMaxWidth(),
         )
         Spacer(Modifier.height(16.dp))
-        // Веер выше своей коробки: нижний край обрезает клип карточки, как на видео.
-        Box(Modifier.fillMaxWidth().height(118.dp), contentAlignment = Alignment.TopCenter) {
+        // Книги-модельки стоят целиком, с тенью под собой; снизу — небольшой воздух до края карточки.
+        Box(Modifier.fillMaxWidth().height(FanBookHeight + 22.dp), contentAlignment = Alignment.TopCenter) {
             FanPoses.forEachIndexed { slot, pose ->
                 val bookIndex = FanBookIndex[slot]
                 val book = books.getOrNull(bookIndex)
@@ -190,7 +197,7 @@ internal fun FanShelfCard(
                         style = PlaceholderStyles[slot],
                         modifier = Modifier
                             .offset(x = pose.dx, y = pose.dy)
-                            .size(ShelfCoverWidth * 0.86f, ShelfCoverHeight * 0.86f)
+                            .size(FanBookWidth, FanBookHeight)
                             .graphicsLayer { rotationZ = pose.rotation },
                     )
                     return@forEachIndexed
@@ -199,7 +206,7 @@ internal fun FanShelfCard(
                     book = book,
                     modifier = Modifier
                         .offset(x = pose.dx, y = pose.dy)
-                        .size(ShelfCoverWidth * 0.86f, ShelfCoverHeight * 0.86f)
+                        .size(FanBookWidth, FanBookHeight)
                         .then(coverModifier(bookIndex))
                         .graphicsLayer { rotationZ = pose.rotation },
                 )
@@ -208,72 +215,83 @@ internal fun FanShelfCard(
     }
 }
 
-/** Три карточки с постера «Recommended»: оранжевая, кремовая с тёмным кантом, тёмная с кремовым. */
+/** Три карточки с постера «Recommended»: оранжевая, кремовая, тёмная. */
 internal enum class PlaceholderStyle { ORANGE, CREAM, DARK }
 
 /** По слотам [FanPoses]: слева оранжевая, справа тёмная, посередине (сверху) кремовая. */
 internal val PlaceholderStyles = listOf(PlaceholderStyle.ORANGE, PlaceholderStyle.DARK, PlaceholderStyle.CREAM)
 
 private val PlaceholderCream = Color(0xFFF5ECDC)
-private val PlaceholderInk = Color(0xFF161616)
+private val PlaceholderInk = Color(0xFF1A1A1A)
+
+internal data class PlaceholderPalette(val card: Color, val circle: Color, val line: Color)
+
+internal val PlaceholderStyle.palette: PlaceholderPalette
+    get() = when (this) {
+        PlaceholderStyle.ORANGE -> PlaceholderPalette(BrandOrange, PlaceholderInk, PlaceholderCream)
+        PlaceholderStyle.CREAM -> PlaceholderPalette(PlaceholderCream, BrandOrange, PlaceholderInk)
+        PlaceholderStyle.DARK -> PlaceholderPalette(PlaceholderInk, BrandOrange, PlaceholderCream)
+    }
+
+/** Книга без обложки получает стиль по названию: один и тот же на всех экранах. */
+internal fun placeholderStyleFor(title: String): PlaceholderStyle =
+    PlaceholderStyle.entries[Math.floorMod(title.hashCode(), PlaceholderStyle.entries.size)]
 
 /**
- * Шаблон обложки для места, где книги ещё нет (загрузка, полка из одной-двух книг): круг и три
- * строки текста, как на постере. Рисуется по размеру, поэтому годится для любой обложки 2:3.
+ * Шаблон-моделька для места, где книги ещё нет (загрузка, полка из одной-двух книг): круг и три
+ * строки текста, как на постере.
  */
 @Composable
 internal fun PlaceholderBook(style: PlaceholderStyle, modifier: Modifier = Modifier) {
-    val shape = RoundedCornerShape(CoverRadius)
-    Box(
-        modifier
-            .shadow(6.dp, shape, clip = false, ambientColor = Color.Black, spotColor = Color.Black)
-            .drawBehind { drawPlaceholderBook(style) },
-    )
+    Book3D(coverColor = style.palette.card, modifier = modifier) {
+        PlaceholderArt(style, title = null)
+    }
 }
 
-private fun DrawScope.drawPlaceholderBook(style: PlaceholderStyle) {
-    val w = size.width
-    val h = size.height
-    val corner = CornerRadius(CoverRadius.toPx())
-    val (card, circle, line) = when (style) {
-        PlaceholderStyle.ORANGE -> Triple(BrandOrange, PlaceholderInk, PlaceholderCream)
-        PlaceholderStyle.CREAM -> Triple(PlaceholderCream, BrandOrange, PlaceholderInk)
-        PlaceholderStyle.DARK -> Triple(PlaceholderInk, BrandOrange, PlaceholderCream)
+/**
+ * Арт передней грани шаблона. Без [title] — круг и три полосы-«строки»; с названием — круг
+ * поменьше, а вместо полос само название, чтобы книгу без обложки можно было узнать.
+ */
+@Composable
+private fun androidx.compose.foundation.layout.BoxScope.PlaceholderArt(style: PlaceholderStyle, title: String?) {
+    val p = style.palette
+    // Корешок занимает левые ~13 % грани: арт центрируется по оставшейся части.
+    Canvas(Modifier.fillMaxSize()) {
+        val fw = size.width
+        val fh = size.height
+        val ax = fw * 0.13f
+        val aw = fw - ax
+        if (title == null) {
+            drawCircle(p.circle, radius = fw * 0.20f, center = Offset(ax + aw * 0.5f, fh * 0.34f))
+            val bar = fh * 0.048f
+            listOf(0.60f to 0.70f, 0.70f to 0.70f, 0.80f to 0.46f).forEach { (y, width) ->
+                drawRoundRect(
+                    p.line,
+                    topLeft = Offset(ax + aw * 0.12f, fh * y),
+                    size = Size(aw * width, bar),
+                    cornerRadius = CornerRadius(bar / 2),
+                )
+            }
+        } else {
+            drawCircle(p.circle, radius = fw * 0.16f, center = Offset(ax + aw * 0.5f, fh * 0.27f))
+        }
     }
-    drawRoundRect(card, cornerRadius = corner)
-    when (style) {
-        PlaceholderStyle.CREAM -> {
-            val stroke = 2.5.dp.toPx()
-            drawRoundRect(
-                PlaceholderInk,
-                topLeft = Offset(stroke / 2, stroke / 2),
-                size = Size(w - stroke, h - stroke),
-                cornerRadius = corner,
-                style = Stroke(stroke),
+    if (title != null) {
+        androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize()) {
+            Text(
+                text = title,
+                color = p.line,
+                fontFamily = SnProFamily,
+                fontWeight = FontWeight.Bold,
+                fontSize = (maxWidth.value * 0.105f).sp,
+                lineHeight = (maxWidth.value * 0.125f).sp,
+                maxLines = 3,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(start = maxWidth * 0.2f, end = maxWidth * 0.08f, bottom = maxHeight * 0.1f),
             )
         }
-        PlaceholderStyle.DARK -> {
-            val stroke = 1.dp.toPx()
-            drawRoundRect(
-                PlaceholderCream.copy(alpha = 0.85f),
-                topLeft = Offset(stroke / 2, stroke / 2),
-                size = Size(w - stroke, h - stroke),
-                cornerRadius = corner,
-                style = Stroke(stroke),
-            )
-        }
-        PlaceholderStyle.ORANGE -> Unit
-    }
-    drawCircle(circle, radius = w * 0.23f, center = Offset(w * 0.5f, h * 0.34f))
-    val barHeight = h * 0.045f
-    val barRadius = CornerRadius(barHeight / 2)
-    listOf(0.62f to 0.76f, 0.72f to 0.76f, 0.82f to 0.5f).forEach { (y, width) ->
-        drawRoundRect(
-            line,
-            topLeft = Offset(w * 0.12f, h * y),
-            size = Size(w * width, barHeight),
-            cornerRadius = barRadius,
-        )
     }
 }
 

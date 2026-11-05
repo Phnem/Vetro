@@ -658,7 +658,7 @@ private fun ShelfPage(
                         }
                         .clickable { onBook(book) },
                 ) {
-                    BookCover(book, Modifier.fillMaxWidth().aspectRatio(2f / 3f), radius = 14.dp)
+                    BookCover(book, Modifier.fillMaxWidth().aspectRatio(2f / 3f))
                     Spacer(Modifier.height(8.dp))
                     Text(book.title, color = ink, fontFamily = SnProFamily, fontWeight = FontWeight.SemiBold, fontSize = 14.sp,
                         maxLines = 2, overflow = TextOverflow.Ellipsis)

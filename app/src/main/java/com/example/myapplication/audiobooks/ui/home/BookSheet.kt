@@ -62,7 +62,7 @@ internal fun BookSheet(
     ) {
         Column(Modifier.padding(horizontal = 20.dp).padding(top = 28.dp).navigationBarsPadding().padding(bottom = 20.dp)) {
             Row {
-                BookCover(current, Modifier.size(110.dp, 165.dp), radius = 14.dp)
+                BookCover(current, Modifier.size(110.dp, 165.dp))
                 Spacer(Modifier.width(16.dp))
                 Column(Modifier.weight(1f)) {
                     Text(current.title, color = ink, fontFamily = SnProFamily, fontWeight = FontWeight.Bold, fontSize = 20.sp,
