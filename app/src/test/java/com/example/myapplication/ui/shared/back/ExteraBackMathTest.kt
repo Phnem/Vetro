@@ -1,9 +1,6 @@
 package com.example.myapplication.ui.shared.back
 
-import com.example.myapplication.data.local.DevPreferencesKeys
-import com.example.myapplication.ui.settings.SettingsUiState
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -13,13 +10,6 @@ class ExteraBackMathTest {
     private val w = 1000f
     private val h = 2000f
     private val dp = 3f
-
-    @Test
-    fun flag_is_on_by_default_and_can_be_turned_off() {
-        assertTrue(SettingsUiState().devExteraBack)
-        assertFalse(SettingsUiState(devExteraBack = false).devExteraBack)
-        assertEquals("dev_extera_back", DevPreferencesKeys.EXTERA_BACK.name)
-    }
 
     @Test
     fun adjust_ignores_start_threshold_and_saturates_at_half_the_gesture() {

@@ -96,10 +96,8 @@ private fun mergeSettingsUi(
         autoSkipSegments = prefs[PlayerSettingsKeys.AUTO_SKIP] ?: false,
         autoNextEpisode = prefs[PlayerSettingsKeys.AUTO_NEXT] ?: true,
         devAdaptiveGlassScroll = prefs[DevPreferencesKeys.ADAPTIVE_GLASS_SCROLL] ?: false,
-        devLegacyUi = prefs[DevPreferencesKeys.LEGACY_UI] ?: false,
         devFullBleedCards = prefs[DevPreferencesKeys.FULL_BLEED_CARDS] ?: true,
         devExperimentalGrid = prefs[DevPreferencesKeys.EXPERIMENTAL_GRID] ?: true,
-        devExteraBack = prefs[DevPreferencesKeys.EXTERA_BACK] ?: true,
         devLegacySplash = prefs[DevPreferencesKeys.LEGACY_SPLASH] ?: false,
         isExportingLogs = t.isExportingLogs,
         isExportingPdf = t.isExportingPdf,
@@ -272,12 +270,6 @@ class SettingsViewModel(
     fun setDevExperimentalGrid(enabled: Boolean) {
         viewModelScope.launch {
             settingsDataStore.edit { it[DevPreferencesKeys.EXPERIMENTAL_GRID] = enabled }
-        }
-    }
-
-    fun setDevExteraBack(enabled: Boolean) {
-        viewModelScope.launch {
-            settingsDataStore.edit { it[DevPreferencesKeys.EXTERA_BACK] = enabled }
         }
     }
 

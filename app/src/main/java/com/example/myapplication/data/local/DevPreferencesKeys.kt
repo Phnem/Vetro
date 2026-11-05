@@ -23,16 +23,6 @@ object DevPreferencesKeys {
     val JUTSU_MIRROR_DOMAIN = stringPreferencesKey("jutsu_mirror_domain")
 
     /**
-     * Классический интерфейс: прежний док с жидким стеклом и окна вместо страниц. Отсутствие
-     * ключа = ВЫКЛ, то есть по умолчанию работает новый интерфейс — рабочая область со свайпом
-     * между разделами, капсульный док из матового стекла и морф панелей из дока.
-     *
-     * Заменил три отдельных dev-флага (навигация свайпом, матовый док, морф панелей): из восьми
-     * их сочетаний осмысленных было два.
-     */
-    val LEGACY_UI = booleanPreferencesKey("dev_legacy_ui")
-
-    /**
      * Экспериментальные карточки коллекции: обложка на всю карточку, текст поверх затемнения.
      * Отсутствие ключа = ВЫКЛ (классическая карточка с постером сбоку).
      */
@@ -40,14 +30,6 @@ object DevPreferencesKeys {
 
     /** Избранные в горизонтальной ленте над коллекцией. Отсутствие ключа = ВЫКЛ. */
     val EXPERIMENTAL_GRID = booleanPreferencesKey("dev_experimental_grid")
-
-    /**
-     * Анимация «назад» в стиле exteraGram (интенсивность 2): страница уменьшается до 0.85, едет за
-     * пальцем и по вертикали, скругляется, а страница под ней проявляется со скримом. Та же
-     * логика (масштаб, вдавливание фона, скругление) ведёт и шторки. Отсутствие ключа = ВКЛ (с
-     * 2026-10-19); выключенный флаг возвращает прежние анимации. См. `ui/shared/back/ExteraBack.kt`.
-     */
-    val EXTERA_BACK = booleanPreferencesKey("dev_extera_back")
 
     /**
      * Старая заставка старта («переливание»: волна и слово шрифтом Asgrike) вместо анимации логотипа,
@@ -62,7 +44,7 @@ object DevPreferencesKeys {
      */
     val SPLASH_SEEN_VERSION = intPreferencesKey("splash_seen_version_code")
 
-    /** Ключи удалённых настроек — стираются из файла настроек при старте (см. [LEGACY_UI]). */
+    /** Ключи удалённых настроек — стираются из файла настроек при старте. */
     val RETIRED_UI_FLAGS = listOf(
         booleanPreferencesKey("dev_select_dock_navigation"),
         booleanPreferencesKey("dev_glass_capsule_dock"),
@@ -79,5 +61,8 @@ object DevPreferencesKeys {
         booleanPreferencesKey("dev_slider_band_style"),
         // v3.4.6: тумблер фонового обогащения убран, оно работает всегда; выключенное раньше — стирается.
         booleanPreferencesKey("live_maintenance_enabled"),
+        // v3.4.9: новый интерфейс и анимация «назад» влиты в основу, их dev-переключатели убраны.
+        booleanPreferencesKey("dev_legacy_ui"),
+        booleanPreferencesKey("dev_extera_back"),
     )
 }

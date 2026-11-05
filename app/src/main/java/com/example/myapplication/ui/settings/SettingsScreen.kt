@@ -622,7 +622,6 @@ fun SettingsScreen(
                                 onAdaptiveGlassToggle = { performHaptic(view, Haptic.Light); viewModel.setDevAdaptiveGlassScroll(it) },
                                 onFullBleedCardsToggle = { performHaptic(view, Haptic.Light); viewModel.setDevFullBleedCards(it) },
                                 onExperimentalGridToggle = { performHaptic(view, Haptic.Light); viewModel.setDevExperimentalGrid(it) },
-                                onExteraBackToggle = { performHaptic(view, Haptic.Light); viewModel.setDevExteraBack(it) },
                                 onLegacySplashToggle = { performHaptic(view, Haptic.Light); viewModel.setDevLegacySplash(it) },
                                 onExportLogs = { performHaptic(view, Haptic.Light); viewModel.exportLogs(context) },
                                 onExportPdf = { performHaptic(view, Haptic.Light); viewModel.exportCollectionPdf(context) },
@@ -877,7 +876,6 @@ private fun DeveloperGroups(
     onAdaptiveGlassToggle: (Boolean) -> Unit,
     onFullBleedCardsToggle: (Boolean) -> Unit,
     onExperimentalGridToggle: (Boolean) -> Unit,
-    onExteraBackToggle: (Boolean) -> Unit,
     onLegacySplashToggle: (Boolean) -> Unit,
     onExportLogs: () -> Unit,
     onExportPdf: () -> Unit,
@@ -985,26 +983,6 @@ private fun DeveloperGroups(
                 {
                     val ru = strings.languageName == "RU"
                     IosRow(
-                        title = if (ru) "Анимация «назад» как в extera" else "Extera-style back animation",
-                        subtitle = if (ru) {
-                            "Страница сжимается и едет за пальцем, шторки — тот же принцип"
-                        } else {
-                            "Page shrinks and follows the finger; sheets use the same motion"
-                        },
-                        isDark = isDark,
-                        icon = Icons.Filled.Code,
-                        iconBackground = devIcon,
-                        trailing = {
-                            IosSwitch(
-                                checked = uiState.devExteraBack,
-                                onCheckedChange = onExteraBackToggle,
-                            )
-                        },
-                    )
-                },
-                {
-                    val ru = strings.languageName == "RU"
-                    IosRow(
                         title = if (ru) "Старая заставка старта" else "Legacy startup splash",
                         subtitle = if (ru) {
                             "Переливание вместо анимации логотипа; применяется при следующем запуске"
@@ -1037,21 +1015,6 @@ private fun DeveloperGroups(
         IosListGroup(
             isDark = isDark,
             rows = listOf(
-                {
-                    // Проверка шторки «Поддержать Vetro» без ожидания трёх дней и набора очков.
-                    val ru = strings.languageName == "RU"
-                    val supportManager: com.example.myapplication.support.SupportReminderManager = org.koin.compose.koinInject()
-                    DevActionRow(
-                        title = if (ru) "Шторка поддержки" else "Support sheet",
-                        subtitle = if (ru) {
-                            "Показать сейчас; кнопки и закрытие в предпросмотре ничего не сохраняют"
-                        } else {
-                            "Show it now; buttons and closing in the preview save nothing"
-                        },
-                        icon = Icons.Filled.Code, iconBg = devIcon, isLoading = false,
-                        isDark = isDark, onClick = { supportManager.debugPreview() },
-                    )
-                },
                 {
                     DevActionRow(
                         title = strings.devExportLogsTitle, subtitle = strings.devExportLogsSubtitle,

@@ -22,13 +22,9 @@ data class SettingsUiState(
     /** Включать следующую серию по концу текущей. По умолчанию ВКЛ — см. `AUTO_NEXT_KEY`. */
     val autoNextEpisode: Boolean = true,
     val devAdaptiveGlassScroll: Boolean = false,
-    /** Классический интерфейс вместо нового (по умолчанию — новый), см. `DevPreferencesKeys.LEGACY_UI`. */
-    val devLegacyUi: Boolean = false,
     /** Карточки с обложкой на всю площадь, см. `DevPreferencesKeys.FULL_BLEED_CARDS`. */
     val devFullBleedCards: Boolean = true,
     val devExperimentalGrid: Boolean = true,
-    /** Анимация «назад» как в exteraGram, см. `DevPreferencesKeys.EXTERA_BACK`. */
-    val devExteraBack: Boolean = true,
     /** Старая заставка («переливание») вместо новой анимации логотипа, см. `DevPreferencesKeys.LEGACY_SPLASH`. */
     val devLegacySplash: Boolean = false,
     val isExportingLogs: Boolean = false,
@@ -47,6 +43,12 @@ data class SettingsUiState(
     val fullEnrichmentPromptGapCount: Int? = null,
     val currentVersion: String = "",
 ) {
-    /** Новый интерфейс (рабочая область, капсульный док, матовое стекло) — режим по умолчанию. */
-    val modernUi: Boolean get() = !devLegacyUi
+    /**
+     * Новый интерфейс (рабочая область, капсульный док, матовое стекло). С v3.4.9 — единственный:
+     * dev-флаг классического интерфейса убран, ключ стирается при старте (`RETIRED_UI_FLAGS`).
+     */
+    val modernUi: Boolean get() = true
+
+    /** Анимация «назад» как в exteraGram. С v3.4.9 всегда включена, переключатель убран. */
+    val devExteraBack: Boolean get() = true
 }
