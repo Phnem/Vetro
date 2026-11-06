@@ -51,6 +51,8 @@ import coil3.request.crossfade
 import com.example.myapplication.data.models.RatingScale
 import com.example.myapplication.ui.shared.components.WebLinkChipStack
 import com.example.myapplication.ui.shared.fluidClickable
+import com.example.myapplication.ui.shared.theme.LightSurface
+import com.example.myapplication.ui.shared.theme.LightTextPrimary
 import com.example.myapplication.ui.shared.theme.OverlayThemeTokens
 import com.example.myapplication.ui.shared.theme.SnProFamily
 import com.example.myapplication.ui.shared.theme.getRatingColor
@@ -63,32 +65,79 @@ import java.io.File
  *
  * Без постера сбоку освобождается ширина, поэтому раскладка другая: веб-ссылки поднялись в
  * верхний ряд к рейтингу, прогресс сезона делит нижний ряд с кнопкой Edit, а название стало
- * крупнее. Карточка всегда тёмная по содержимому — текст белый в обеих темах, читаемость держит
- * скрим, а не цвет поверхности.
+ * крупнее. Читаемость держит скрим, а не цвет поверхности: в тёмной теме он тёмный с белым текстом,
+ * в светлой — светлая дымка с тёмным текстом ([FullBleedPalette]).
  */
 private val FullBleedCardHeight = 192.dp
 private val FullBleedCardShape = RoundedCornerShape(24.dp)
-private val FullBleedBase = Color(0xFF1C1C1C)
 
-/** Тень под текстом поверх картинки: на светлых участках обложки скрима мало. */
-private val TextOnImageShadow = Shadow(
-    color = Color.Black.copy(alpha = 0.55f),
-    offset = Offset(0f, 1f),
-    blurRadius = 6f,
+/**
+ * Цвета карточки по теме. В тёмной — затемнение и белый текст; в светлой та же раскладка
+ * «развёрнута»: светлая дымка цвета поверхности и тёмный текст, иначе чёрный скрим режет глаз
+ * на светлом фоне.
+ */
+private class FullBleedPalette(
+    /** Цвет скрима: им слева и снизу закрывается обложка под текст. */
+    scrim: Color,
+    val base: Color,
+    val letter: Color,
+    val text: Color,
+    val textSecondary: Color,
+    /** Тень под текстом поверх картинки: на контрастных участках обложки скрима мало. */
+    val textShadow: Shadow,
+    val chipFill: Color,
+    val chipText: Color,
+    val ratingFill: Color,
+    val buttonFill: Color,
+    val track: Color,
+    val ring: Color,
+    val border: Color,
+) {
+    /** Слева плотная зона под текст, справа обложка видна почти без скрима. */
+    val sideScrim = Brush.horizontalGradient(
+        0f to scrim.copy(alpha = 0.86f),
+        0.45f to scrim.copy(alpha = 0.58f),
+        0.8f to scrim.copy(alpha = 0.12f),
+        1f to Color.Transparent,
+    )
+
+    /** Снизу — под ряд с прогрессом и кнопкой, который тянется на всю ширину. */
+    val bottomScrim = Brush.verticalGradient(
+        0.5f to Color.Transparent,
+        1f to scrim.copy(alpha = 0.6f),
+    )
+}
+
+private val DarkFullBleed = FullBleedPalette(
+    scrim = Color.Black,
+    base = Color(0xFF1C1C1C),
+    letter = Color.White.copy(alpha = 0.08f),
+    text = Color.White,
+    textSecondary = Color.White.copy(alpha = 0.78f),
+    textShadow = Shadow(color = Color.Black.copy(alpha = 0.55f), offset = Offset(0f, 1f), blurRadius = 6f),
+    chipFill = Color.White.copy(alpha = 0.16f),
+    chipText = Color.White.copy(alpha = 0.9f),
+    ratingFill = Color.Black.copy(alpha = 0.55f),
+    buttonFill = Color.White.copy(alpha = 0.18f),
+    track = Color.White.copy(alpha = 0.2f),
+    ring = Color.Black,
+    border = Color.White.copy(alpha = 0.12f),
 )
 
-/** Слева тёмная зона под текст, справа обложка видна почти без затемнения. */
-private val SideScrim = Brush.horizontalGradient(
-    0f to Color.Black.copy(alpha = 0.86f),
-    0.45f to Color.Black.copy(alpha = 0.58f),
-    0.8f to Color.Black.copy(alpha = 0.12f),
-    1f to Color.Transparent,
-)
-
-/** Снизу — под ряд с прогрессом и кнопкой, который тянется на всю ширину. */
-private val BottomScrim = Brush.verticalGradient(
-    0.5f to Color.Transparent,
-    1f to Color.Black.copy(alpha = 0.6f),
+private val LightFullBleed = FullBleedPalette(
+    scrim = LightSurface,
+    base = Color(0xFFECECEC),
+    letter = Color.Black.copy(alpha = 0.06f),
+    text = LightTextPrimary,
+    textSecondary = LightTextPrimary.copy(alpha = 0.68f),
+    textShadow = Shadow(color = Color.White.copy(alpha = 0.7f), offset = Offset(0f, 1f), blurRadius = 6f),
+    chipFill = Color.Black.copy(alpha = 0.07f),
+    chipText = LightTextPrimary.copy(alpha = 0.85f),
+    ratingFill = Color.White.copy(alpha = 0.8f),
+    buttonFill = Color.Black.copy(alpha = 0.08f),
+    track = Color.Black.copy(alpha = 0.12f),
+    ring = Color.White,
+    border = Color.Black.copy(alpha = 0.06f),
 )
 
 /** Кадрирование портретной обложки в широкую карточку: лица обычно в верхней трети. */
@@ -106,6 +155,7 @@ internal fun FullBleedAnimeCardBody(
     onRatingClick: ((Rect) -> Unit)?,
 ) {
     val isDark = isAppInDarkTheme()
+    val palette = if (isDark) DarkFullBleed else LightFullBleed
     val borderBrush = if (state.isFavorite) {
         Brush.linearGradient(
             0f to OverlayThemeTokens.FavoriteGold,
@@ -113,9 +163,9 @@ internal fun FullBleedAnimeCardBody(
             1f to Color.Transparent,
         )
     } else {
-        SolidColor(Color.White.copy(alpha = 0.12f))
+        SolidColor(palette.border)
     }
-    val textSecondary = Color.White.copy(alpha = 0.78f)
+    val textSecondary = palette.textSecondary
 
     Box(
         modifier = modifier
@@ -132,7 +182,7 @@ internal fun FullBleedAnimeCardBody(
                 spotColor = Color.Black.copy(alpha = if (isDark) 0.5f else 0.12f),
             )
             .clip(FullBleedCardShape)
-            .background(FullBleedBase)
+            .background(palette.base)
     ) {
         // Обложка — тот же shared element, что постер классической карточки: переход в Details
         // морфит её из полной карточки в постер. clip после posterModifier, чтобы скругление
@@ -142,14 +192,14 @@ internal fun FullBleedAnimeCardBody(
                 .matchParentSize()
                 .then(posterModifier)
                 .clip(FullBleedCardShape)
-                .background(FullBleedBase),
+                .background(palette.base),
             contentAlignment = Alignment.CenterEnd,
         ) {
             Text(
                 text = state.title.take(1).uppercase(),
                 fontSize = 96.sp,
                 fontWeight = FontWeight.Black,
-                color = Color.White.copy(alpha = 0.08f),
+                color = palette.letter,
                 fontFamily = SnProFamily,
                 modifier = Modifier.padding(end = 28.dp),
             )
@@ -171,8 +221,8 @@ internal fun FullBleedAnimeCardBody(
                 )
             }
         }
-        Box(Modifier.matchParentSize().background(SideScrim))
-        Box(Modifier.matchParentSize().background(BottomScrim))
+        Box(Modifier.matchParentSize().background(palette.sideScrim))
+        Box(Modifier.matchParentSize().background(palette.bottomScrim))
 
         Column(
             modifier = Modifier
@@ -200,14 +250,14 @@ internal fun FullBleedAnimeCardBody(
                         links = state.webLinks,
                         language = state.language,
                         chipSize = 24.dp,
-                        ringColor = Color.Black,
+                        ringColor = palette.ring,
                     )
                 }
                 if (state.rating > 0) {
                     Box(
                         modifier = Modifier
                             .clip(CircleShape)
-                            .background(Color.Black.copy(alpha = 0.55f))
+                            .background(palette.ratingFill)
                             .ratingChipTap(onRatingClick, onLongClick)
                     ) {
                         Text(
@@ -231,9 +281,9 @@ internal fun FullBleedAnimeCardBody(
                     fontWeight = FontWeight.Black,
                     fontSize = 21.sp,
                     lineHeight = 24.sp,
-                    shadow = TextOnImageShadow,
+                    shadow = palette.textShadow,
                 ),
-                color = Color.White,
+                color = palette.text,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.fillMaxWidth(0.8f),
@@ -242,7 +292,7 @@ internal fun FullBleedAnimeCardBody(
             if (en != null) {
                 Text(
                     text = en,
-                    style = TextStyle(fontFamily = SnProFamily, fontSize = 12.sp, shadow = TextOnImageShadow),
+                    style = TextStyle(fontFamily = SnProFamily, fontSize = 12.sp, shadow = palette.textShadow),
                     color = textSecondary,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
@@ -265,13 +315,13 @@ internal fun FullBleedAnimeCardBody(
                         Box(
                             modifier = Modifier
                                 .clip(CircleShape)
-                                .background(Color.White.copy(alpha = 0.16f))
+                                .background(palette.chipFill)
                                 .padding(horizontal = 8.dp, vertical = 3.dp)
                         ) {
                             Text(
                                 text = genre,
                                 fontSize = 11.sp,
-                                color = Color.White.copy(alpha = 0.9f),
+                                color = palette.chipText,
                                 fontWeight = FontWeight.Medium,
                                 fontFamily = SnProFamily,
                             )
@@ -293,7 +343,7 @@ internal fun FullBleedAnimeCardBody(
                             airing = airing,
                             language = state.language,
                             labelColor = textSecondary,
-                            trackColor = Color.White.copy(alpha = 0.2f),
+                            trackColor = palette.track,
                         )
                     } else {
                         Text(
@@ -302,7 +352,7 @@ internal fun FullBleedAnimeCardBody(
                                 fontFamily = SnProFamily,
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.SemiBold,
-                                shadow = TextOnImageShadow,
+                                shadow = palette.textShadow,
                             ),
                             color = textSecondary,
                             maxLines = 1,
@@ -315,10 +365,10 @@ internal fun FullBleedAnimeCardBody(
                     onClick = { onEditClick?.invoke() },
                     enabled = onEditClick != null,
                     colors = ButtonDefaults.filledTonalButtonColors(
-                        containerColor = Color.White.copy(alpha = 0.18f),
-                        contentColor = Color.White,
-                        disabledContainerColor = Color.White.copy(alpha = 0.18f),
-                        disabledContentColor = Color.White,
+                        containerColor = palette.buttonFill,
+                        contentColor = palette.text,
+                        disabledContainerColor = palette.buttonFill,
+                        disabledContentColor = palette.text,
                     ),
                     contentPadding = PaddingValues(horizontal = 16.dp, vertical = 0.dp),
                     modifier = Modifier.height(32.dp),
