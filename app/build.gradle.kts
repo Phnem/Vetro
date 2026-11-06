@@ -272,6 +272,9 @@ dependencies {
     implementation(libs.supabase.functions)
 
     // 7. OkHttp, WorkManager
+    // BOM выравнивает все модули okhttp3 по одной версии: Ktor тянет okhttp-sse 4.x, а он ссылается
+    // на okhttp3.internal.Util, которого в OkHttp 5 нет (R8 падал на missing class, SSE упало бы в рантайме).
+    implementation(platform(libs.okhttp.bom))
     implementation(libs.okhttp)
     // Расширения Mihon (manga/extensions): APK расширений собраны против этих библиотек и находят
     // их в загрузчике Vetro по имени. Версии не ниже, чем у keiyoushi (OkHttp 5, Kotlin 2.4).
