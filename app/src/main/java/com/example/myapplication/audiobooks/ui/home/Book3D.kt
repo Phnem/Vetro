@@ -50,12 +50,25 @@ private const val FACE_WIDTH = 161f
 private const val FACE_HEIGHT = 201f
 private const val SLOPE = 0.13f
 
-/** Android shares the drawable's decoded pixels between all visible books. */
+/**
+ * Ширина фактур обычного набора (400 px на всю модель). Крупнее этого книга берёт набор `_hd`
+ * (800 px): Android растягивает картинку только билинейно, и большая книга на полке размывалась.
+ * Маленькие книги главной остаются на 1x — сжатие 800 px втрое билинейно снова дало бы «пилу».
+ */
+private const val SD_TEXTURE_WIDTH_PX = 400f
+private const val HD_FROM_WIDTH_PX = SD_TEXTURE_WIDTH_PX * 1.1f
+
+/**
+ * Android shares the drawable's decoded pixels between all visible books. Decoded on first use, so
+ * a screen with only small books never loads the HD set.
+ */
 @Composable
-private fun bindingTexture(resourceId: Int): ImageBitmap {
+private fun bindingTexture(resourceId: Int): Lazy<ImageBitmap> {
     val resources = LocalResources.current
     return remember(resources, resourceId) {
-        (resources.getDrawable(resourceId, null) as BitmapDrawable).bitmap.asImageBitmap()
+        lazy(LazyThreadSafetyMode.NONE) {
+            (resources.getDrawable(resourceId, null) as BitmapDrawable).bitmap.asImageBitmap()
+        }
     }
 }
 
@@ -66,8 +79,10 @@ internal fun Book3D(
     shadowStrength: Float = 0.5f,
     content: @Composable BoxScope.() -> Unit,
 ) {
-    val silhouette = bindingTexture(R.drawable.book_binding_mask)
-    val material = bindingTexture(R.drawable.book_binding_light)
+    val silhouetteSd = bindingTexture(R.drawable.book_binding_mask)
+    val materialSd = bindingTexture(R.drawable.book_binding_light)
+    val silhouetteHd = bindingTexture(R.drawable.book_binding_mask_hd)
+    val materialHd = bindingTexture(R.drawable.book_binding_light_hd)
     Box(modifier.drawBehind {
         val radius = size.width * 0.57f
         if (radius > 0f) {
@@ -86,6 +101,9 @@ internal fun Book3D(
                     val sx = size.width / MODEL_WIDTH
                     val sy = size.height / MODEL_HEIGHT
                     val pixels = IntSize(size.width.roundToInt(), size.height.roundToInt())
+                    val hd = size.width > HD_FROM_WIDTH_PX
+                    val material = (if (hd) materialHd else materialSd).value
+                    val silhouette = (if (hd) silhouetteHd else silhouetteSd).value
                     val projection = Matrix().apply {
                         this[0, 1] = if (sx > 0f) -SLOPE * sy / sx else 0f
                         this[3, 1] = SLOPE * FACE_LEFT * sy
