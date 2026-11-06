@@ -118,6 +118,18 @@ class MangaLibraryViewModel(
         }
     }
 
+    /**
+     * Поставили или удалили расширения Mihon. В выборе источника — повторный поиск, чтобы новые
+     * источники попали в выдачу; на экране «глав не нашлось» — назад к выбору (там тот же поиск).
+     */
+    fun onExtensionsChanged() {
+        when (val current = _state.value) {
+            is MangaLibraryUiState.SourcePicker -> search(current.query)
+            is MangaLibraryUiState.Error -> unbind()
+            else -> Unit
+        }
+    }
+
     /** Пользователь подтвердил соответствие — с этого момента поиск для тайтла больше не нужен. */
     fun bind(item: MangaItem) {
         viewModelScope.launch {

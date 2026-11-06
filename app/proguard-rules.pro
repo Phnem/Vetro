@@ -53,3 +53,20 @@
 # libtorrent4j (торрент-источники аудиокниг): SWIG/JNI находит классы и методы по именам.
 -keep class org.libtorrent4j.swig.** { *; }
 -keep class org.libtorrent4j.** { *; }
+
+# --- Mihon extensions (manga/extensions) ---
+# Extension APKs are compiled against these classes (compileOnly stubs) and resolve them by name
+# from Vetro's classloader at runtime, so R8 must neither rename nor strip their public API.
+# Same set Mihon keeps; costs some APK size, without it every extension dies with NoSuchMethodError.
+-keep,allowoptimization class eu.kanade.tachiyomi.** { public protected *; }
+-keep,allowoptimization class kotlin.** { public protected *; }
+-keep,allowoptimization class kotlinx.coroutines.** { public protected *; }
+-keep,allowoptimization class kotlinx.serialization.** { public protected *; }
+-keep,allowoptimization class okhttp3.** { public protected *; }
+-keep,allowoptimization class okio.** { public protected *; }
+-keep,allowoptimization class org.jsoup.** { public protected *; }
+-keep,allowoptimization class uy.kohesive.injekt.** { public protected *; }
+-keep,allowoptimization class androidx.preference.** { public protected *; }
+-keep,allowoptimization class com.squareup.zstd.** { public protected *; }
+-dontwarn uy.kohesive.injekt.**
+-dontwarn org.slf4j.**

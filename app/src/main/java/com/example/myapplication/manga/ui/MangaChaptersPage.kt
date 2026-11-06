@@ -3,9 +3,10 @@ package com.example.myapplication.manga.ui
 import com.example.myapplication.ui.shared.mascot.MascotScene
 import com.example.myapplication.ui.shared.mascot.MascotEmptyState
 import com.example.myapplication.ui.shared.theme.IosScroll
-import android.content.Intent
-import androidx.core.net.toUri
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.runtime.rememberCoroutineScope
+import com.example.myapplication.manga.extensions.ui.MangaExtensionsSheet
+import com.example.myapplication.ui.shared.components.IosSheetScaffold
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -94,9 +95,6 @@ import org.koin.core.parameter.parametersOf
 import com.example.myapplication.manga.translate.ChapterTranslationPlan
 import com.example.myapplication.manga.translate.mangaTranslateStrings
 
-/** Каталог расширений Mihon — временная замена внутреннему экрану, пока нет `mihon-compat`. */
-private const val MIHON_EXTENSIONS_URL = "https://github.com/keiyoushi/extensions"
-
 /**
  * Запас снизу под плавающий мини-док Details (56dp + 16dp отступ + навигационная полоса).
  *
@@ -130,13 +128,37 @@ fun MangaChaptersPage(
     val context = LocalContext.current
     val isDark = isAppInDarkTheme()
 
+    // Шторка «Расширения Mihon». Установка идёт в скоупе страницы: закрытая шторка её не обрывает.
+    var extensionsOpen by rememberSaveable { mutableStateOf(false) }
+    var extensionsChanged by remember { mutableStateOf(false) }
+    val pageScope = rememberCoroutineScope()
+    val openExtensions = { extensionsOpen = true }
+
+    IosSheetScaffold(
+        sheetVisible = extensionsOpen,
+        onDismiss = {
+            extensionsOpen = false
+            if (extensionsChanged) {
+                extensionsChanged = false
+                viewModel.onExtensionsChanged()
+            }
+        },
+        modifier = modifier,
+        sheetContent = {
+            MangaExtensionsSheet(
+                ru = ru,
+                scope = pageScope,
+                onChanged = { extensionsChanged = true },
+            )
+        },
+        content = {
     // Фон — во всю высоту, включая зону статус-бара; отступ под плавающую шапку получает только
     // содержимое. Пока отступ накладывался снаружи, он ужимал и фон, и над градиентом оставалась
     // чёрная полоса корневого экрана Details.
     // Порядок модификаторов существенен: background стоит ДО отступов, поэтому фон занимает всю
     // высоту, а под плавающую шапку отодвигается только содержимое.
     Box(
-        modifier = modifier
+        modifier = Modifier
             .fillMaxSize()
             .background(IosDesign.screenGradient(isDark))
             .statusBarsPadding()
@@ -153,6 +175,7 @@ fun MangaChaptersPage(
                 ru = ru,
                 onSearch = viewModel::search,
                 onPick = viewModel::bind,
+                onOpenExtensions = openExtensions,
             )
 
             is MangaLibraryUiState.Chapters -> ChaptersContent(
@@ -196,10 +219,12 @@ fun MangaChaptersPage(
                     subtitleColor = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Spacer(Modifier.height(16.dp))
-                MihonExtensionsButton(ru = ru)
+                MihonExtensionsButton(ru = ru, onClick = openExtensions)
             }
         }
     }
+        },
+    )
 }
 
 @Composable
@@ -208,6 +233,7 @@ private fun SourcePickerContent(
     ru: Boolean,
     onSearch: (String) -> Unit,
     onPick: (MangaItem) -> Unit,
+    onOpenExtensions: () -> Unit,
 ) {
     var query by remember(state.query) { mutableStateOf(state.query) }
 
@@ -289,7 +315,7 @@ private fun SourcePickerContent(
             }
             item(key = "mihon_extensions") {
                 Box(modifier = Modifier.padding(top = 16.dp)) {
-                    MihonExtensionsButton(ru = ru)
+                    MihonExtensionsButton(ru = ru, onClick = onOpenExtensions)
                 }
             }
         }
@@ -297,21 +323,16 @@ private fun SourcePickerContent(
 }
 
 /**
- * Ссылка на каталог расширений Mihon. Пока внутреннего экрана расширений нет, отдаём страницу
- * внешнему браузеру — иначе тупик: нужного источника нет, и добавить его неоткуда.
+ * Вход в шторку «Расширения Mihon» ([MangaExtensionsSheet]): каталог и установка в один тап прямо
+ * в Vetro. Стоит там, где нужного источника не нашлось, — в выборе источника и на «глав нет».
  */
 @Composable
-private fun MihonExtensionsButton(ru: Boolean) {
-    val context = LocalContext.current
+private fun MihonExtensionsButton(ru: Boolean, onClick: () -> Unit) {
     Row(
         modifier = Modifier
             .clip(CircleShape)
             .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f))
-            .clickable {
-                runCatching {
-                    context.startActivity(Intent(Intent.ACTION_VIEW, MIHON_EXTENSIONS_URL.toUri()))
-                }
-            }
+            .clickable(onClick = onClick)
             .padding(horizontal = 14.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {

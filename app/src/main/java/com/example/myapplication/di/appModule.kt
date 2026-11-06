@@ -312,6 +312,17 @@ val appModule = module {
                 // VETRO-TAIL[manga-source]: новый источник манги — класс MangaSource + строка здесь.
             ),
             japaneseSources = get(named("ja_sources")),
+            extensionSources = get<com.example.myapplication.manga.extensions.MangaExtensionManager>().let { manager ->
+                { manager.sources() }
+            },
+        )
+    }
+    // Расширения Mihon: каталог Keiyoushi, установка в один тап, загрузка APK внутрь Vetro.
+    single {
+        com.example.myapplication.manga.extensions.MangaExtensionManager(
+            app = androidContext() as android.app.Application,
+            http = get<okhttp3.OkHttpClient>(),
+            settings = get(named("settings")),
         )
     }
     // Новые главы по привязкам — тем же фоновым проходом, что и новые серии.

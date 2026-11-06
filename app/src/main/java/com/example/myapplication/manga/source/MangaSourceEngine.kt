@@ -32,11 +32,26 @@ class MangaSourceEngine(
      * а страницы открывает этот же движок. В выборе источника и в поиске их нет - [sources] не меняется.
      */
     private val japaneseSources: List<VetroMangaSource> = emptyList(),
+    /**
+     * Источники расширений Mihon ([com.example.myapplication.manga.extensions.MangaExtensionManager]).
+     * Набор меняется во время работы (поставили/удалили расширение), поэтому это функция, а не
+     * список; первый вызов грузит APK расширений.
+     */
+    private val extensionSources: suspend () -> List<VetroMangaSource> = { emptyList() },
 ) {
+    /** Встроенные источники (без расширений). */
     fun sources(): List<VetroMangaSource> = sources
 
-    fun sourceById(id: MangaSourceId): VetroMangaSource? =
-        sources.firstOrNull { it.id == id } ?: japaneseSources.firstOrNull { it.id == id }
+    /** Встроенные + источники расширений: всё, среди чего ищет выбор источника. */
+    private suspend fun searchable(): List<VetroMangaSource> =
+        sources + runCatching { extensionSources() }
+            .onFailure { Log.w(TAG, "Extension sources unavailable", it) }
+            .getOrDefault(emptyList())
+
+    private suspend fun sourceById(id: MangaSourceId): VetroMangaSource? =
+        sources.firstOrNull { it.id == id }
+            ?: japaneseSources.firstOrNull { it.id == id }
+            ?: runCatching { extensionSources() }.getOrDefault(emptyList()).firstOrNull { it.id == id }
 
     /**
      * Поиск по всем источникам параллельно — для экрана привязки тайтл↔источник (§8 плана). Как в
@@ -46,7 +61,7 @@ class MangaSourceEngine(
     suspend fun searchAll(query: String): List<MangaSourceResults> {
         if (query.isBlank()) return emptyList()
         return gatherWithGrace(
-            blocks = sources.map { source ->
+            blocks = searchable().map { source ->
                 suspend {
                     val items = call(source.name, "search") { source.search(query, page = 1) }
                         ?.items
