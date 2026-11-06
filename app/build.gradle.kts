@@ -194,19 +194,17 @@ kotlin {
 
     compilerOptions {
         jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_21)
-        freeCompilerArgs.addAll(
-            "-Xcontext-receivers",
-        )
     }
 }
 
 configurations.all {
     resolutionStrategy {
         // Some libraries may bring Kotlin stdlib 2.x with a higher version.
-        // This project uses Kotlin 2.1.0, so we force stdlib artifacts to match it.
-        force("org.jetbrains.kotlin:kotlin-stdlib:2.1.0")
-        force("org.jetbrains.kotlin:kotlin-stdlib-jdk7:2.1.0")
-        force("org.jetbrains.kotlin:kotlin-stdlib-jdk8:2.1.0")
+        // Force stdlib artifacts to the compiler version. Mihon extensions are built against Kotlin
+        // 2.4 and load into this classloader, so the stdlib must be at least that new.
+        force("org.jetbrains.kotlin:kotlin-stdlib:${libs.versions.kotlin.get()}")
+        force("org.jetbrains.kotlin:kotlin-stdlib-jdk7:${libs.versions.kotlin.get()}")
+        force("org.jetbrains.kotlin:kotlin-stdlib-jdk8:${libs.versions.kotlin.get()}")
     }
 }
 
@@ -275,6 +273,18 @@ dependencies {
 
     // 7. OkHttp, WorkManager
     implementation(libs.okhttp)
+    // Расширения Mihon (manga/extensions): APK расширений собраны против этих библиотек и находят
+    // их в загрузчике Vetro по имени. Версии не ниже, чем у keiyoushi (OkHttp 5, Kotlin 2.4).
+    implementation(libs.okhttp.brotli)
+    implementation(libs.okhttp.zstd)
+    implementation(libs.injekt.core) {
+        exclude(group = "junit")
+        exclude(group = "ch.qos.logback")
+        exclude(group = "org.jetbrains.kotlin", module = "kotlin-test")
+    }
+    implementation(libs.androidx.preference)
+    implementation(libs.kotlinx.serialization.protobuf)
+    implementation(libs.kotlinx.serialization.json.okio)
     // Торрент-источники аудиокниг: движок libtorrent (Java-обёртка + нативные библиотеки телефонов;
     // x86_64 — только для эмулятора в debug, чтобы не раздувать релиз).
     implementation(libs.libtorrent4j)
