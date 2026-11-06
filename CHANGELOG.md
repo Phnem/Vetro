@@ -1,5 +1,45 @@
 # Vetro changelog
 
+## v3.4.9-Stable — November 7, 2026
+
+App version: `v3.4.9-Stable`. Android version code: `349`.
+Changes since 3.4.8.
+
+### Manga: Mihon extensions inside Vetro
+
+- The "Mihon extensions" button no longer sends you to GitHub. It opens a sheet with the Keiyoushi catalogue: one button installs the recommended sources for your app language (13 Russian or 9 English general catalogues), the rest of the catalogue is searchable, and installed extensions can be updated or removed. NSFW extensions are filtered out.
+- Nothing is installed on the system. An extension is downloaded into the app's own storage, checked (package name, extension library 1.6 and the Keiyoushi signing certificate), made read-only and loaded by Vetro. Its sources are searched together with the built-in ones, and the source picker searches again right after an install.
+- An extension that turns out to be incompatible fails its own search instead of closing the app.
+- Remanga works again: it moved to its v2 API after v1 started answering 404, so it had silently disappeared from catalogue search and from the reader's source picker. Chapter dates are read correctly again.
+- The built-in InkStory source is removed: the site no longer has a stable API. InkStory is still available as a Mihon extension.
+
+### Audiobooks: books as 3D models
+
+- Books on the shelves and on the home screen are drawn as small 3D models: a real binding with light, spine and page edges, the cover laid on the front board, and the back cover tinted from the cover's own colour. Books without a cover get a placeholder with the title.
+- The edge of the model is smooth instead of stair-stepped, and the large books on the shelf use a sharper texture than the small ones on the home screen.
+- A book added from a folder on your device now opens the same details page as any other book: facts, description and cover from the library record, chapters and their lengths from the files.
+- The dark rim around the mini player capsule is gone.
+
+### Release calendar: a week view
+
+- Tap a day to fold the month into that day's week; the freed space fills with the same release cards as on the home screen. A Month/Week switch appears with it, arrows page by week, and the handle under the week pulls the month back open.
+
+### Your collection
+
+- A title you add without any progress now reads as **Not Started** instead of Completed. Titles that were already in your collection keep their status, and a status you set yourself always wins.
+- Cover cards on the home screen get a light haze and dark text in the light theme instead of the dark shading meant for the dark theme.
+- Empty screens have a small animated mascot: on the first run, in an empty folder or search, in notifications, the release calendar, the secret folder, books and manga. It holds still when the system asks for reduced motion.
+- Search by frame is redrawn in the app's own style: a warm gradient, a frame zone with an orange "Choose a frame" button, and mascot scenes while it loads or when it fails.
+
+### Fixes
+
+- Returning to Vetro from Recents no longer flashes the update sheet for a moment.
+- The new navigation and the swipe-back animation are now the only option; their developer switches are gone.
+
+### Under the hood
+
+- Kotlin 2.4, OkHttp 5, kotlinx-serialization 1.11 and kotlinx-coroutines 1.11, the versions Mihon extensions are built against.
+
 ## v3.4.8-Beta — November 3, 2026
 
 App version: `v3.4.8-Beta`. Android version code: `348`.

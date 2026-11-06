@@ -1,0 +1,9 @@
+New
+• Mihon extensions: install manga sources from the Keiyoushi catalogue inside Vetro in one tap.
+• Audiobooks as 3D book models; folder books get a details page.
+• Release calendar: tap a day for its week with release cards.
+• Animated mascot on empty screens.
+Fixes
+• New titles without progress start as Not Started.
+• Light haze on cover cards in the light theme.
+• Remanga works again; no update sheet flash from Recents.

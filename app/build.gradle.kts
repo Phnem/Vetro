@@ -44,7 +44,7 @@ android {
         minSdk = 26
         targetSdk = 36
         versionCode = 349
-        versionName = "v3.4.9-Beta"
+        versionName = "v3.4.9-Stable"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         // Whisper (whisper.cpp) — только arm64: там есть dotprod/fp16, на остальных ABI меню честно

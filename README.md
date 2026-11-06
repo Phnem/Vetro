@@ -18,7 +18,7 @@
 
 <p align="center">
   <a href="https://github.com/Phnem/Vetro/releases">Releases</a> ·
-  <a href="#whats-new-in-348">What's new</a> ·
+  <a href="#whats-new-in-349">What's new</a> ·
   <a href="CHANGELOG.md">Changelog</a> ·
   <a href="#roadmap">Roadmap</a> ·
   <a href="#what-vetro-does">Features</a> ·
@@ -33,42 +33,42 @@ Vetro is an Android media library. Build a personal collection, follow new episo
 
 Vetro does not host any media. It connects to catalogues and sources that you choose, including your own servers.
 
-> **Current stable release:** [`v3.4.6-Stable`](https://github.com/Phnem/Vetro/releases/tag/v3.4.6-Stable). **Latest build:** [`v3.4.8-Beta`](https://github.com/Phnem/Vetro/releases/tag/v3.4.8-Beta). The app is actively evolving; source availability can vary by region.
+> **Current stable release:** [`v3.4.9-Stable`](https://github.com/Phnem/Vetro/releases/tag/v3.4.9-Stable). The app is actively evolving; source availability can vary by region.
 
 <p align="center"><img src="images/readme/divider.svg" alt="" width="880" /></p>
 
-## What's new in 3.4.8
+## What's new in 3.4.9
 
 <p align="center">
-  <img src="images/readme/whats-new.svg" alt="What's new in Vetro 3.4.8: a startup animation where Vetro collapses into the logo, a live audiobook mini player, a Retry that works, and the plan for Vetro's own API" width="880" />
+  <img src="images/readme/whats-new.svg" alt="What's new in Vetro 3.4.9: Mihon extensions installed inside the app in one tap, audiobooks as 3D book models, a week view in the release calendar, and an animated mascot on empty screens" width="880" />
 </p>
 
 <table>
   <tr>
     <td width="50%" valign="top">
-      <b>A live mini player</b><br />
-      The audiobook player folds into a 2×1 capsule whose wave follows the narrator's voice, with no microphone involved. Flick it off the bottom edge to close it.
+      <b>Mihon extensions in one tap</b><br />
+      The manga source sheet now holds the Keiyoushi catalogue: one button installs the recommended sources for your language. Extensions stay inside Vetro, are signature-checked and are searched with the built-in sources.
     </td>
     <td width="50%" valign="top">
-      <b>A new startup animation</b><br />
-      "Vetro" collapses into the app's mark. It plays in full after an install or update and twice as fast on later launches; the old one stays in developer options.
+      <b>Books as 3D models</b><br />
+      Audiobooks sit on the shelves as small books with a real binding and the cover on the front board. Books from your own folders now open a full details page.
     </td>
   </tr>
   <tr>
     <td width="50%" valign="top">
-      <b>Playback that recovers</b><br />
-      A dead audio output is recreated after 2.5 seconds, a silent streamed book is reopened, and Retry in the video player now brings back sources it had written off.
+      <b>A week view in the calendar</b><br />
+      Tap a day and the month folds into its week, with that day's release cards underneath. Pull the handle to open the month again.
     </td>
     <td width="50%" valign="top">
-      <b>The book page</b><br />
-      A "..." menu with cover and author/narrator editing, a manual cover picker, and AI-assisted cover search with your own key.
+      <b>A mascot on empty screens</b><br />
+      Empty folders, searches, notifications, the calendar, books and manga get a small animated character instead of a blank page.
     </td>
   </tr>
 </table>
 
-<p align="center"><sub>Also in this build: hold an episode or season for rate / watched / not watched, statistics tiles that flip over, and the plan for <a href="#roadmap">Vetro's own API</a>.</sub></p>
+<p align="center"><sub>Also in this build: new titles without progress start as <i>Not Started</i>, a light haze on cover cards in the light theme, search by frame in the app's own style, Remanga works again, and no more flash of the update sheet when you return from Recents.</sub></p>
 
-<p align="center"><a href="CHANGELOG.md">Detailed 3.4.8 changelog</a></p>
+<p align="center"><a href="CHANGELOG.md">Detailed 3.4.9 changelog</a></p>
 
 <p align="center"><img src="images/readme/divider.svg" alt="" width="880" /></p>
 
@@ -107,9 +107,9 @@ Vetro does not host any media. It connects to catalogues and sources that you ch
 
 - Anime, films, TV series, manga, manhwa and audiobooks in one library.
 - Add titles from search with cover art, genres, descriptions and a 0.0–10.0 score; favourites, notes and watch or reading progress.
-- A watch status on every title: Planned, Watching, Completed, Rewatching, On Hold, Dropped or Not Started. Left unset, it follows your progress: Watching for titles you are partway through, Completed for the rest.
+- A watch status on every title: Planned, Watching, Completed, Rewatching, On Hold, Dropped or Not Started. Left unset, it follows your progress: Watching for titles you are partway through, Completed for finished ones, and Not Started for a title you added without any progress.
 - Sort and filter in one sheet: by content type, status and genre (up to three each), release year, rating and number of episodes with two-handle sliders; search locally or online.
-- Rate more than titles: hold an episode and drag to give it its own 0.0–10.0 score, or tap the score on a card to change it in place. Episode scores sync with your account.
+- Rate more than titles: hold an episode or a season to rate it or mark it watched or not watched, or tap the score on a card to change it in place. Episode scores sync with your account.
 - Statistics with short AI-written explanations (optional), plus insights: an activity heatmap, a month-by-month curve, rewatch/reread/relisten counts, finished-vs-dropped rates per genre and your last 90 days against the whole collection. A recommendations deck you swipe through.
 - Background enrichment fills in missing titles, IDs and links, and keeps episode counts current.
 
@@ -119,7 +119,7 @@ Vetro does not host any media. It connects to catalogues and sources that you ch
 - Progress is counted by season: cards show `S3 E12` instead of a franchise-wide total. A new episode is never marked as watched for you: the counter moves only when you (or the player) move it.
 - New episodes arrive as a stack of notification cards. They fold into a bell next to the dock and open as a notification centre.
 - Titles that are airing or have unread episodes stay at the top of the library, under favourites.
-- A release calendar in the dock's menu: every airing title on its day, a stack of covers when several come out together. When no source names the day of a dub's next episode, Vetro learns it from the weekdays of the episodes that already came out.
+- A release calendar in the dock's menu: every airing title on its day, a stack of covers when several come out together. When no source names the day of a dub's next episode, Vetro learns it from the weekdays of the episodes that already came out. Tap a day to fold the month into its week with that day's release cards.
 - Details show a countdown to the next episode, a trailer, critic ratings, the title logo, backdrop art and Russian dub studios.
 
 ### Watch
@@ -145,7 +145,8 @@ Vetro does not host any media. It connects to catalogues and sources that you ch
 - A separate Books section with shelves from Russian and English sources, cross-source search and automatic fallback when a source goes down.
 - A Books tab in the main search: find a book across all sources and add it to your library in one tap.
 - Some sources stream while the file is still downloading.
-- Add your own audiobook folders; the library then groups them into one shelf per author.
+- Books are drawn as small 3D models with the cover on the front board.
+- Add your own audiobook folders; the library then groups them into one shelf per author, and each book opens its own details page.
 - Sleep timer, skip silence (Off / Light / Normal / Aggressive), playback speed, bookmarks, undo seek and a mini player: a small capsule whose wave moves with the narrator's voice (no microphone), closed by flicking it off the bottom edge.
 - Smart rewind: after a long pause the book steps back 5–30 seconds, more the longer you were away.
 - Android Auto: browse Continue listening and your Library from the car screen and start a book where you stopped.
@@ -157,6 +158,7 @@ Vetro does not host any media. It connects to catalogues and sources that you ch
 ### Read manga and manhwa
 
 - Chapters from supported sources, offline downloads, and vertical webtoon or paged layouts.
+- Mihon extensions: install sources from the Keiyoushi catalogue inside Vetro, one tap for the recommended set in your language. They are signature-checked, stay in the app's own storage and are searched together with the built-in sources.
 - Auto-translation (**in testing and refinement**; official GitHub builds with your own AI key): when the next chapters haven't come out in your language yet, Vetro finds them in Japanese on the publishers' own free-to-read sites, or in English on MangaDex, and translates them page by page in the reader. Only chapters a site gives to everyone without signing in are used. Japanese pages are read on the device and only the recognised lines go to your AI provider, with the title and its description as context; English pages are read by your AI provider, so the page image is sent to it. The small recognition models (about 128 MB) are downloaded from Hugging Face when you switch it on. Chapters that already have a translation in your language are always read as published.
 - Page direction, layout and scan-margin cropping are remembered per title; reading progress shows on library cards.
 
