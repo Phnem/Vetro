@@ -2,6 +2,7 @@ package com.example.myapplication.ui.home
 
 import com.example.myapplication.data.models.AiringProgress
 import com.example.myapplication.data.models.WatchStatus
+import com.example.myapplication.data.models.defaultWatchStatusFor
 import com.example.myapplication.domain.seasons.SeasonEpisodesEntry
 import com.example.myapplication.domain.seasons.isAiringNow
 import com.example.myapplication.domain.seasons.latestSeasonEpisode
@@ -73,10 +74,12 @@ internal fun computeCardProgress(
 /**
  * Статус просмотра «по умолчанию», пока пользователь не выбрал свой: тайтл в процессе — на карточке
  * есть полоска и она не закрыта (серий/глав меньше, чем всего, или всего ещё не известно) — это
- * «Смотрю»; всё остальное — «Просмотрено».
+ * «Смотрю»; полоска закрыта — «Просмотрено»; полоски нет — [defaultWatchStatusFor] по дате добавления
+ * ([addedAt]): новые тайтлы «Не начато», старая коллекция «Просмотрено».
  */
-internal fun AiringCardInfo?.autoWatchStatus(): WatchStatus {
-    val total = this?.totalEpisodes
-    val inProgress = this != null && (total == null || airedEpisodes < total)
+internal fun AiringCardInfo?.autoWatchStatus(addedAt: Long): WatchStatus {
+    if (this == null) return defaultWatchStatusFor(addedAt)
+    val total = totalEpisodes
+    val inProgress = total == null || airedEpisodes < total
     return if (inProgress) WatchStatus.WATCHING else WatchStatus.COMPLETED
 }

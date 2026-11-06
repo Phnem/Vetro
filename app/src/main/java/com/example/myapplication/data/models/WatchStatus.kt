@@ -34,9 +34,21 @@ enum class WatchStatus(
 }
 
 /**
+ * С этого момента (v3.4.9, 06.11.2026) тайтл без прогресса и без выбранного статуса — «Не начато».
+ * Добавленные раньше остаются «Просмотрено»: старая коллекция заводилась уже просмотренной, и
+ * переворачивать её всю в «Не начато» нельзя.
+ */
+const val NOT_STARTED_DEFAULT_SINCE_MILLIS = 1_793_973_954_238L
+
+/** Статус «по умолчанию» тайтла, у которого нет прогресса: зависит только от того, когда его добавили. */
+fun defaultWatchStatusFor(dateAdded: Long): WatchStatus =
+    if (dateAdded >= NOT_STARTED_DEFAULT_SINCE_MILLIS) WatchStatus.NOT_STARTED else WatchStatus.COMPLETED
+
+/**
  * Статус, который видит пользователь: выбранный вручную, а если не выбран — [auto], то есть статус «по
  * умолчанию» из прогресса (`AutoWatchStatusResolver`: «Смотрю» у тех, что в процессе, «Просмотрено» у
- * остальных). Пока [auto] ещё не посчитан (null), показываем «Просмотрено»: это итог для подавляющего
- * большинства тайтлов, и он не мигает при загрузке экрана — смена на «Смотрю» случается редко.
+ * досмотренных, у остальных — [defaultWatchStatusFor]). Пока [auto] ещё не посчитан (null), показываем
+ * [defaultWatchStatusFor]: это итог для подавляющего большинства тайтлов, и он не мигает при загрузке.
  */
-fun Anime.effectiveWatchStatus(auto: WatchStatus?): WatchStatus = watchStatus ?: auto ?: WatchStatus.COMPLETED
+fun Anime.effectiveWatchStatus(auto: WatchStatus?): WatchStatus =
+    watchStatus ?: auto ?: defaultWatchStatusFor(dateAdded)

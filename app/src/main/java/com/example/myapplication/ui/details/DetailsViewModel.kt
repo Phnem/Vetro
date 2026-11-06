@@ -117,8 +117,11 @@ class DetailsViewModel(
     val effectiveWatchStatus: StateFlow<WatchStatus?> = combine(
         _currentAnime,
         // Считаем статус только этого тайтла, а не всей коллекции.
-        autoWatchStatus?.observeOne(animeId, _currentAnime.map { it?.episodes ?: 0 }.distinctUntilChanged())
-            ?: kotlinx.coroutines.flow.flowOf(null),
+        autoWatchStatus?.observeOne(
+            animeId,
+            storedEpisodes = _currentAnime.map { it?.episodes ?: 0 }.distinctUntilChanged(),
+            dateAdded = _currentAnime.map { it?.dateAdded ?: 0L }.distinctUntilChanged(),
+        ) ?: kotlinx.coroutines.flow.flowOf(null),
     ) { anime, auto ->
         anime?.let { a -> a.watchStatus ?: auto }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), _currentAnime.value?.watchStatus)

@@ -76,7 +76,7 @@ class AutoWatchStatusResolver(
                     watched = w[anime.id],
                     airing = a[anime.id],
                     reading = r[anime.id],
-                ).autoWatchStatus()
+                ).autoWatchStatus(anime.dateAdded)
             }
         }
     }
@@ -84,9 +84,11 @@ class AutoWatchStatusResolver(
     /**
      * Статус одного тайтла — для Details. Те же источники, что в [statuses], но только по одному id:
      * экрану не нужен пересчёт всей коллекции на каждую запись прогресса. [storedEpisodes] — сохранённый
-     * счётчик серий тайтла (знаменатель, когда расклада сезонов нет).
+     * счётчик серий тайтла (знаменатель, когда расклада сезонов нет), [dateAdded] — когда тайтл добавлен
+     * (решает статус без прогресса, см. defaultWatchStatusFor).
      */
-    fun observeOne(animeId: String, storedEpisodes: Flow<Int>): Flow<WatchStatus> {
+    fun observeOne(animeId: String, storedEpisodes: Flow<Int>, dateAdded: Flow<Long>): Flow<WatchStatus> {
+        val stored = combine(storedEpisodes, dateAdded) { episodes, added -> episodes to added }
         val watched = episodePlaybackStore.furthestEpisodeFlow(listOf(animeId), completedOnly = true)
             .map { it[animeId]?.takeIf { key -> key.episode > 0 } }
         val airing = combine(localDataSource.observeAiringProgress(), seriesSeasonsStore.flow) { anime, series ->
@@ -95,14 +97,14 @@ class AutoWatchStatusResolver(
         val layout = combine(seasonEpisodesStore.flow, seriesSeasonsStore.flow) { anime, series ->
             anime[animeId] ?: series[animeId]
         }
-        return combine(storedEpisodes, watched, airing, layout, mangaReading(onlyId = animeId)) { stored, w, a, l, r ->
+        return combine(stored, watched, airing, layout, mangaReading(onlyId = animeId)) { (episodes, added), w, a, l, r ->
             computeCardProgress(
                 layout = l,
-                storedEpisodes = stored,
+                storedEpisodes = episodes,
                 watched = w,
                 airing = a,
                 reading = r[animeId],
-            ).autoWatchStatus()
+            ).autoWatchStatus(added)
         }.distinctUntilChanged()
     }
 

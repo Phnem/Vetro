@@ -17,6 +17,7 @@ class LibraryFilterTest {
         year: Int? = 2015,
         status: WatchStatus? = null,
         mediaType: MediaType = MediaType.ANIME,
+        dateAdded: Long = 0L,
     ) = Anime(
         id = "a",
         title = "T",
@@ -24,7 +25,7 @@ class LibraryFilterTest {
         rating = rating,
         imageFileName = null,
         orderIndex = 0,
-        dateAdded = 0,
+        dateAdded = dateAdded,
         mediaType = mediaType,
         watchStatus = status,
         releaseYear = year,
@@ -106,6 +107,7 @@ class LibraryFilterTest {
     @Test
     fun `without a choice and without progress data the status reads as completed`() {
         assertEquals(WatchStatus.COMPLETED, anime().effectiveWatchStatus(auto = null))
+        assertEquals(WatchStatus.NOT_STARTED, anime(dateAdded = NOT_STARTED_DEFAULT_SINCE_MILLIS).effectiveWatchStatus(auto = null))
         assertEquals(WatchStatus.WATCHING, anime().effectiveWatchStatus(auto = WatchStatus.WATCHING))
         assertEquals(WatchStatus.ON_HOLD, anime(status = WatchStatus.ON_HOLD).effectiveWatchStatus(auto = WatchStatus.WATCHING))
     }
