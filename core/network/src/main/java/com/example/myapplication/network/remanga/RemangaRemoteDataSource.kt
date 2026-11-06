@@ -3,9 +3,8 @@ package com.example.myapplication.network.remanga
 import com.example.myapplication.network.AnimeDetails
 import com.example.myapplication.network.ApiSearchResult
 import com.example.myapplication.network.remanga.dto.ImageDto
-import com.example.myapplication.network.remanga.dto.RemangaResponse
-import com.example.myapplication.network.remanga.dto.SearchTitleDto
-import com.example.myapplication.network.remanga.dto.TitleDetailsDto
+import com.example.myapplication.network.remanga.dto.RemangaPageV2
+import com.example.myapplication.network.remanga.dto.TitleV2Dto
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.request.get
@@ -21,35 +20,34 @@ class RemangaRemoteDataSource(
     private val baseUrl = "https://api.remanga.org/api"
     private val mediaBaseUrl = "https://remanga.org"
 
+    /**
+     * Поиск в каталоге. API v2: v1 (`/search/`, `/titles/{dir}/`) с осени 2026 отвечает 404, и
+     * Remanga молча выпадала из поиска манги — а она в нём первый источник.
+     */
     suspend fun searchManga(query: String, limit: Int = 30): List<ApiSearchResult> = coroutineScope {
         try {
-            val response: RemangaResponse<List<SearchTitleDto>> = httpClient.get("$baseUrl/search/") {
+            val response: RemangaPageV2<TitleV2Dto> = httpClient.get("$baseUrl/v2/search/") {
                 parameter("query", query)
                 parameter("count", 30)
                 remangaHeaders()
             }.body()
 
-            val items = response.content ?: return@coroutineScope emptyList()
-
-            val bestMatches = items
+            val bestMatches = response.results
                 .sortedWith(
-                    compareByDescending<SearchTitleDto> { calculateRelevanceScore(it, query) }
+                    compareByDescending<TitleV2Dto> { calculateRelevanceScore(it, query) }
                         .thenByDescending { it.avgRating ?: 0.0 }
                 )
                 .filter { calculateRelevanceScore(it, query) > 0 }
                 .take(limit)
 
+            // Описание и жанры есть только в карточке тайтла - догружаем её для первых совпадений.
             bestMatches.mapNotNull { item ->
                 val dir = item.dir ?: return@mapNotNull null
                 try {
-                    val detailsResponse: RemangaResponse<TitleDetailsDto> =
-                        httpClient.get("$baseUrl/titles/$dir/") {
-                            remangaHeaders()
-                        }.body()
-                    detailsResponse.content?.let { mapDetailsToResult(it) }
+                    mapToResult(titleV2(dir) ?: item)
                 } catch (e: Exception) {
                     e.printStackTrace()
-                    mapSearchItemToResult(item)
+                    mapToResult(item)
                 }
             }
         } catch (e: Exception) {
@@ -60,15 +58,11 @@ class RemangaRemoteDataSource(
 
     suspend fun getMangaDetails(slug: String): AnimeDetails? = withContext(Dispatchers.IO) {
         try {
-            val response: RemangaResponse<TitleDetailsDto> = httpClient.get("$baseUrl/titles/$slug/") {
-                remangaHeaders()
-            }.body()
-            val dto = response.content ?: return@withContext null
-
+            val dto = titleV2(slug) ?: return@withContext null
             AnimeDetails(
-                title = dto.rusName ?: dto.enName ?: "Unknown",
-                altTitle = dto.enName,
-                posterUrl = buildPosterUrl(dto.img, dto.dir),
+                title = dto.mainName ?: dto.secondaryName ?: "Unknown",
+                altTitle = dto.secondaryName,
+                posterUrl = buildPosterUrl(dto.cover, dto.dir),
                 episodesAired = dto.countChapters ?: 0,
                 episodesTotal = null,
                 nextEpisode = null,
@@ -85,10 +79,15 @@ class RemangaRemoteDataSource(
         }
     }
 
-    private fun mapDetailsToResult(dto: TitleDetailsDto): ApiSearchResult = ApiSearchResult(
-        title = dto.rusName ?: dto.enName ?: "Unknown",
-        altTitle = dto.enName,
-        posterUrl = buildPosterUrl(dto.img, dto.dir),
+    private suspend fun titleV2(dir: String): TitleV2Dto? =
+        httpClient.get("$baseUrl/v2/titles/$dir/") { remangaHeaders() }
+            .body<TitleV2Dto>()
+            .takeIf { it.dir != null }
+
+    private fun mapToResult(dto: TitleV2Dto): ApiSearchResult = ApiSearchResult(
+        title = dto.mainName ?: dto.secondaryName ?: "Unknown",
+        altTitle = dto.secondaryName,
+        posterUrl = buildPosterUrl(dto.cover, dto.dir),
         episodes = dto.countChapters ?: 0,
         description = dto.description ?: "",
         type = "Manga",
@@ -97,20 +96,6 @@ class RemangaRemoteDataSource(
         source = "Remanga",
         categoryType = "MANGA",
         externalId = dto.dir ?: dto.id?.toString()
-    )
-
-    private fun mapSearchItemToResult(item: SearchTitleDto): ApiSearchResult = ApiSearchResult(
-        title = item.rusName ?: item.enName ?: "Unknown",
-        altTitle = item.enName,
-        posterUrl = buildPosterUrl(item.img, item.dir),
-        episodes = item.countChapters ?: 0,
-        description = "",
-        type = item.type ?: "Manga",
-        genres = emptyList(),
-        rating = ratingToInt10(item.avgRating),
-        source = "Remanga",
-        categoryType = "MANGA",
-        externalId = item.dir ?: item.id?.toString()
     )
 
     private fun buildPosterUrl(img: ImageDto?, dir: String?): String =
@@ -128,10 +113,10 @@ class RemangaRemoteDataSource(
         }
     }
 
-    private fun calculateRelevanceScore(title: SearchTitleDto, query: String): Int {
+    private fun calculateRelevanceScore(title: TitleV2Dto, query: String): Int {
         val q = query.lowercase()
-        val rus = (title.rusName ?: "").lowercase()
-        val en = (title.enName ?: "").lowercase()
+        val rus = (title.mainName ?: "").lowercase()
+        val en = (title.secondaryName ?: "").lowercase()
 
         if (rus == q || en == q) return 100
         if (rus.startsWith(q) || en.startsWith(q)) return 75

@@ -259,19 +259,6 @@ val appModule = module {
     }
     single { com.example.myapplication.domain.titleidentityintegration.TitleIdentityService(androidContext()) }
     single { com.example.myapplication.domain.enrichment.TitleCandidateSearch(repository = get(), identity = get()) }
-    single(named("inkstory_rate")) {
-        // Inkstory лимиты не публикует: оглавление приходит одним ответом, поэтому спокойный темп.
-        com.example.myapplication.network.TokenBucketRateLimiter(
-            maxTokens = 2.0,
-            refillTokensPerSecond = 2.0,
-        )
-    }
-    single {
-        com.example.myapplication.manga.source.InkstorySource(
-            client = get(),
-            rateLimiter = get(named("inkstory_rate")),
-        )
-    }
     // Японская цепочка: бесплатные главы с сайтов издателей, которых ещё нет на языке пользователя.
     single { com.example.myapplication.manga.ja.JaHttp(get<okhttp3.OkHttpClient>()) }
     single(named("ja_sources")) {
@@ -319,7 +306,8 @@ val appModule = module {
             // Remanga первым: у русскоязычной коллекции шанс попадания выше.
             sources = listOf(
                 get<com.example.myapplication.manga.source.RemangaSource>(),
-                get<com.example.myapplication.manga.source.InkstorySource>(),
+                // Нативный Inkstory снят 2026-11-06: api.inkstory.net больше не существует, сайт ходит
+                // через серверные функции TanStack с хешем на каждый деплой. Читается расширением InkStory.
                 get<com.example.myapplication.manga.source.MangaDexSource>(),
                 // VETRO-TAIL[manga-source]: новый источник манги — класс MangaSource + строка здесь.
             ),

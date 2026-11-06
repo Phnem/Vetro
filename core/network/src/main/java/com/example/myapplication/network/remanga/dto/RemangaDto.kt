@@ -106,3 +106,59 @@ data class ChapterDto(
     @SerialName("chapter") val chapter: String? = null,
     @SerialName("name") val name: String? = null
 )
+
+// ---- API v2 ---------------------------------------------------------------------------------
+// С осени 2026 v1 отвечает 404 на поиск, карточку тайтла и страницы главы. В v2 нет обёртки
+// `content`: поиск и список глав приходят как `results`, карточка и глава - голым объектом;
+// `type`/`status` стали объектами, обложка - `cover` вместо `img`, имена - main/secondary.
+
+/** Ответ v2 со списком: поиск (`meta` + `results`) и главы ветки (`next` + `results`). */
+@Serializable
+data class RemangaPageV2<T>(
+    @SerialName("results") val results: List<T> = emptyList(),
+    /** Номер следующей страницы глав; null - страниц больше нет. */
+    @SerialName("next") val next: Int? = null,
+)
+
+@Serializable
+data class NamedDto(
+    @SerialName("id") val id: Int? = null,
+    @SerialName("name") val name: String? = null,
+)
+
+@Serializable
+data class TitleV2Dto(
+    @SerialName("id") val id: Int? = null,
+    @SerialName("dir") val dir: String? = null,
+    /** Русское название. */
+    @SerialName("main_name") val mainName: String? = null,
+    /** Английское (или оригинальное латиницей). */
+    @SerialName("secondary_name") val secondaryName: String? = null,
+    @SerialName("description") val description: String? = null,
+    @SerialName("issue_year") val issueYear: Int? = null,
+    @Serializable(with = FlexibleDoubleSerializer::class)
+    @SerialName("avg_rating") val avgRating: Double? = null,
+    @SerialName("type") val type: NamedDto? = null,
+    @SerialName("status") val status: NamedDto? = null,
+    @SerialName("cover") val cover: ImageDto? = null,
+    @SerialName("count_chapters") val countChapters: Int? = null,
+    @SerialName("genres") val genres: List<NamedDto>? = null,
+    @SerialName("branches") val branches: List<BranchDto>? = null,
+    /** Лицензия у издателя: главы обычно платные (ветка издательства) или сняты. */
+    @SerialName("is_licensed") val isLicensed: Boolean? = null,
+)
+
+@Serializable
+data class ChapterV2Dto(
+    @SerialName("id") val id: Int = 0,
+    @SerialName("tome") val tome: Int? = null,
+    @SerialName("chapter") val chapter: String? = null,
+    @SerialName("name") val name: String? = null,
+    @SerialName("is_paid") val isPaid: Boolean? = null,
+    @SerialName("is_bought") val isBought: Boolean? = null,
+    /** false - глава анонсирована, но ещё не вышла (отложенная публикация). */
+    @SerialName("is_published") val isPublished: Boolean? = null,
+    /** Время без зоны: "2024-06-28T05:00:05.213851". */
+    @SerialName("upload_date") val uploadDate: String? = null,
+    @SerialName("publishers") val publishers: List<NamedDto>? = null,
+)
