@@ -335,6 +335,11 @@ fun IosSheetScaffold(
                     .graphicsLayer {
                         val extra = SheetStyle.FloatExtraTravel.toPx()
                         translationY = (1f - progress.value) * (size.height + extra) + dragPx
+                        // Закрытая панель остаётся в композиции и прячется только сдвигом на свою
+                        // высоту. При возврате из «Недавних» первый кадр рисовался до того, как
+                        // высота известна, и шторка (на главной — «Обновление») мелькала на экране.
+                        // Закрытую не рисуем вовсе — это свойство слоя, структура не меняется.
+                        alpha = if (progress.value > 0.001f) 1f else 0f
                     }
                     .then(if (dragToDismiss) Modifier.nestedScroll(contentPull) else Modifier)
                     // iOS-глубина шторки (окантовка+блик+градиент+тень) — единый рецепт для всех
