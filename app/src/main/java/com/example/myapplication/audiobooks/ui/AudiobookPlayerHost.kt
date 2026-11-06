@@ -438,6 +438,7 @@ fun AudiobookPlayerHost(language: AppLanguage = AppLanguage.RU, modifier: Modifi
                         .graphicsLayer {
                             val r = windowRect(expansion.value.coerceIn(0f, 1f))
                             val s = maxOf(r.width / size.width, r.height / size.height)
+                            alpha = fullBackdropReveal(expansion.value)
                             transformOrigin = TransformOrigin.Center
                             scaleX = s
                             scaleY = s
@@ -463,6 +464,7 @@ fun AudiobookPlayerHost(language: AppLanguage = AppLanguage.RU, modifier: Modifi
                                 ),
                                 topLeft = r.topLeft,
                                 size = r.size,
+                                alpha = fullBackdropReveal(expansion.value),
                             )
                         },
                 )
@@ -1052,6 +1054,13 @@ private const val WaveStepUs = 35_000L
 /** Постоянные времени подъёма и спада столбика, секунды. */
 private const val WaveAttackSec = 0.012f
 private const val WaveReleaseSec = 0.09f
+/**
+ * Обложка и затемнение полного плеера проявляются, пока капсула гаснет (капсула — от 0 до 0.3).
+ * В свёрнутом виде их нет совсем: под белой капсулой с тем же сглаженным контуром тёмная обложка
+ * просвечивала по краю тёмной кромкой.
+ */
+private fun fullBackdropReveal(expansion: Float): Float = (expansion / 0.3f).coerceIn(0f, 1f)
+
 private val MiniHeight = 56.dp
 private val MiniWidth = 160.dp
 
