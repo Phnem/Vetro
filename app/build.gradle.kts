@@ -277,6 +277,8 @@ dependencies {
     // их в загрузчике Vetro по имени. Версии не ниже, чем у keiyoushi (OkHttp 5, Kotlin 2.4).
     implementation(libs.okhttp.brotli)
     implementation(libs.okhttp.zstd)
+    // Не ниже keiyoushi: расширения зовут API корутин 1.11 (runBlockingK), с 1.10 - NoSuchMethodError.
+    implementation(libs.kotlinx.coroutines.android)
     implementation(libs.injekt.core) {
         exclude(group = "junit")
         exclude(group = "ch.qos.logback")

@@ -2,6 +2,9 @@ package eu.kanade.tachiyomi.network
 
 import android.content.Context
 import android.webkit.CookieManager
+import eu.kanade.tachiyomi.network.interceptor.CloudflareInterceptor
+import eu.kanade.tachiyomi.network.interceptor.UncaughtExceptionInterceptor
+import eu.kanade.tachiyomi.network.interceptor.UserAgentInterceptor
 import okhttp3.Cache
 import okhttp3.Cookie
 import okhttp3.CookieJar
@@ -30,14 +33,11 @@ class NetworkHelper(context: Context) {
         .connectTimeout(30, TimeUnit.SECONDS)
         .readTimeout(30, TimeUnit.SECONDS)
         .callTimeout(2, TimeUnit.MINUTES)
-        .addInterceptor { chain ->
-            val request = chain.request()
-            if (request.header("User-Agent") != null) {
-                chain.proceed(request)
-            } else {
-                chain.proceed(request.newBuilder().header("User-Agent", userAgent).build())
-            }
-        }
+        // Порядок и имена — как у Mihon: общая библиотека keiyoushi ищет эти три перехватчика по
+        // имени класса и без них отказывается строить клиент источника.
+        .addInterceptor(UncaughtExceptionInterceptor())
+        .addInterceptor(UserAgentInterceptor { userAgent })
+        .addInterceptor(CloudflareInterceptor())
         .build()
 }
 
