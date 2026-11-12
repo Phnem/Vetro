@@ -14,7 +14,9 @@ param(
     [string]$Out = (Join-Path $PSScriptRoot "..\..\..\book-dictionary\v2\out"),
     [switch]$IndexOnly,
     [switch]$SkipCovers,
-    [switch]$CoversOnly
+    [switch]$CoversOnly,
+    # wrangler talks to the Cloudflare REST API, which answers 429 above a few requests per second; 50 failed after ~1000 files.
+    [int]$Concurrency = 3
 )
 $ErrorActionPreference = "Stop"
 $Out = (Resolve-Path $Out).Path
@@ -90,7 +92,7 @@ if (-not $IndexOnly -and -not $SkipCovers) {
             $last = [math]::Min($i + 4999, $items.Count - 1)
             [IO.File]::WriteAllText("$chunkDir\$name.json", (ConvertTo-Json -InputObject @($items[$i..$last]) -Compress), $noBom)
             Write-Host "  $name ($($last + 1)/$($items.Count))"
-            Wr r2 bulk put $Bucket --remote --force --filename "$chunkDir\$name.json" --content-type "image/avif" --concurrency 50
+            Wr r2 bulk put $Bucket --remote --force --filename "$chunkDir\$name.json" --content-type "image/avif" --concurrency $Concurrency
             New-Item "$chunkDir\$name.done" -ItemType File | Out-Null
         }
     }
