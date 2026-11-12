@@ -13,7 +13,8 @@
 param(
     [string]$Out = (Join-Path $PSScriptRoot "..\..\..\book-dictionary\v2\out"),
     [switch]$IndexOnly,
-    [switch]$SkipCovers
+    [switch]$SkipCovers,
+    [switch]$CoversOnly
 )
 $ErrorActionPreference = "Stop"
 $Out = (Resolve-Path $Out).Path
@@ -29,7 +30,9 @@ function Wr { & npx.cmd --yes wrangler@latest $args; if ($LASTEXITCODE -ne 0) { 
 Write-Host "== account" -ForegroundColor Cyan
 Wr whoami
 
-if (-not $IndexOnly) {
+if ($CoversOnly) { $IndexOnly = $false; $SkipIndexAndData = $true }
+
+if (-not $IndexOnly -and -not $SkipIndexAndData) {
     Write-Host "== R2 bucket $Bucket" -ForegroundColor Cyan
     try { Wr r2 bucket create $Bucket } catch { Write-Host "(bucket exists - fine)" }
 
@@ -52,23 +55,41 @@ if (-not $IndexOnly) {
     Wr d1 execute $Db --remote --yes --file "$Out\server\post-import.sql"
 }
 
-Write-Host "== phone index files" -ForegroundColor Cyan
-$manifest = Get-Content "$Out\manifest.json" -Raw | ConvertFrom-Json
-$files = @($manifest.base.url) + @($manifest.deltas | ForEach-Object { $_.url })
-foreach ($rel in $files) {
-    Wr r2 object put "$Bucket/$rel" --remote --file "$Out\$($rel -replace '/', '\')" --content-type "application/zstd" --cache-control "public, max-age=31536000, immutable"
+if (-not $SkipIndexAndData) {
+    Write-Host "== phone index files" -ForegroundColor Cyan
+    $manifest = Get-Content "$Out\manifest.json" -Raw | ConvertFrom-Json
+    $files = @($manifest.base.url) + @($manifest.deltas | ForEach-Object { $_.url })
+    foreach ($rel in $files) {
+        Wr r2 object put "$Bucket/$rel" --remote --file "$Out\$($rel -replace '/', '\')" --content-type "application/zstd" --cache-control "public, max-age=31536000, immutable"
+    }
+    # The manifest goes last: clients must never see a manifest that points at files not uploaded yet.
+    Wr r2 object put "$Bucket/index/manifest.json" --remote --file "$Out\manifest.json" --content-type "application/json"
 }
-# The manifest goes last: clients must never see a manifest that points at files not uploaded yet.
-Wr r2 object put "$Bucket/index/manifest.json" --remote --file "$Out\manifest.json" --content-type "application/json"
 
 if (-not $IndexOnly -and -not $SkipCovers) {
-    Write-Host "== covers (re-running uploads everything again, ~176k objects)" -ForegroundColor Cyan
+    # ~176k objects, ~7.5 GB. Uploaded in chunks of 5000; a finished chunk leaves out\server\covers-chunks\<name>.done,
+    # so a closed terminal or a dropped connection costs at most one chunk. Delete the folder to upload everything again.
+    Write-Host "== covers (resumable)" -ForegroundColor Cyan
+    $chunkDir = "$Out\server\covers-chunks"
+    New-Item -ItemType Directory -Force $chunkDir | Out-Null
+    $noBom = New-Object System.Text.UTF8Encoding $false
     foreach ($size in "small", "large") {
-        Wr r2 bulk put $Bucket --remote --force --filename "$Out\server\covers-$size.json" --content-type "image/avif" --concurrency 50
+        $items = @(Get-Content "$Out\server\covers-$size.json" -Raw -Encoding UTF8 | ConvertFrom-Json)
+        $n = 0
+        for ($i = 0; $i -lt $items.Count; $i += 5000) {
+            $n++
+            $name = "{0}-{1:D3}" -f $size, $n
+            if (Test-Path "$chunkDir\$name.done") { continue }
+            $last = [math]::Min($i + 4999, $items.Count - 1)
+            [IO.File]::WriteAllText("$chunkDir\$name.json", (ConvertTo-Json -InputObject @($items[$i..$last]) -Compress), $noBom)
+            Write-Host "  $name ($($last + 1)/$($items.Count))"
+            Wr r2 bulk put $Bucket --remote --force --filename "$chunkDir\$name.json" --content-type "image/avif" --concurrency 50
+            New-Item "$chunkDir\$name.done" -ItemType File | Out-Null
+        }
     }
 }
 
-if (-not $IndexOnly) {
+if (-not $IndexOnly -and -not $SkipIndexAndData) {
     Write-Host "== deploy Worker" -ForegroundColor Cyan
     Wr deploy
 }

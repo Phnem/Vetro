@@ -1,4 +1,4 @@
-name = "vetro-books-api"
+﻿name = "vetro-books-api"
 main = "src/worker.js"
 compatibility_date = "2026-11-01"
 
@@ -6,9 +6,12 @@ compatibility_date = "2026-11-01"
 # Custom domain: needs the zone vetrostudio.bid on this Cloudflare account. If `wrangler deploy` cannot attach it,
 # remove [[routes]] and add the domain by hand: Workers & Pages -> vetro-books-api -> Settings -> Domains & Routes
 # -> Add -> Custom Domain -> api.vetrostudio.bid.
-[[routes]]
-pattern = "api.vetrostudio.bid"
-custom_domain = true
+# Раскомментировать, когда зона vetrostudio.bid окажется в этом аккаунте (деплой 2026-11-12 ответил
+# «Can't infer zone from route»); до тех пор домен добавляется руками через панель, а Worker открыт и на workers.dev.
+# [[routes]]
+# pattern = "api.vetrostudio.bid"
+# custom_domain = true
+workers_dev = true
 
 # Created by tools/books-api/scripts/deploy-data.ps1 (wrangler r2 bucket create vetro-books).
 [[r2_buckets]]
@@ -19,7 +22,7 @@ bucket_name = "vetro-books"
 [[d1_databases]]
 binding = "DB"
 database_name = "vetro-books"
-database_id = "REPLACE_WITH_ID_FROM_wrangler_d1_create"
+database_id = "5574b392-dfb0-4ab6-9afc-336993d7947a"
 
 # Per-client throttle for the endpoints that hit D1. The binding keeps no IP history.
 [[ratelimits]]
