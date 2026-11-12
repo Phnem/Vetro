@@ -290,6 +290,7 @@ dependencies {
     implementation(libs.androidx.preference)
     implementation(libs.kotlinx.serialization.protobuf)
     implementation(libs.kotlinx.serialization.json.okio)
+    implementation(libs.zstd.kmp.okio)
     // Торрент-источники аудиокниг: движок libtorrent (Java-обёртка + нативные библиотеки телефонов;
     // x86_64 — только для эмулятора в debug, чтобы не раздувать релиз).
     implementation(libs.libtorrent4j)

@@ -1,0 +1,13 @@
+[
+  {"in": "Ёлка", "norm": "елка"},
+  {"in": "Война и мир", "norm": "война и мир"},
+  {"in": "Йод", "norm": "йод"},
+  {"in": "Les Misérables", "norm": "les miserables"},
+  {"in": "Straße — Æsop's Fables", "norm": "strasse aesop s fables"},
+  {"in": "1984", "norm": "1984"},
+  {"in": "Мы — Легион. Мы — Боб", "norm": "мы легион мы боб"},
+  {"in": "  ", "norm": ""},
+  {"in": "Łódź", "norm": "lodz"},
+  {"in": "Чайка", "norm": "чайка", "translit": "chayka"},
+  {"in": "Щёлково", "norm": "щелково", "translit": "shchelkovo"}
+]

@@ -1,0 +1,34 @@
+name = "vetro-books-api"
+main = "src/worker.js"
+compatibility_date = "2026-11-01"
+
+# Public read-only API for the Vetro book catalogue: index delivery, search, details, covers.
+# Custom domain: needs the zone vetrostudio.bid on this Cloudflare account. If `wrangler deploy` cannot attach it,
+# remove [[routes]] and add the domain by hand: Workers & Pages -> vetro-books-api -> Settings -> Domains & Routes
+# -> Add -> Custom Domain -> api.vetrostudio.bid.
+[[routes]]
+pattern = "api.vetrostudio.bid"
+custom_domain = true
+
+# Created by tools/books-api/scripts/deploy-data.ps1 (wrangler r2 bucket create vetro-books).
+[[r2_buckets]]
+binding = "BOOKS"
+bucket_name = "vetro-books"
+
+# Created by the same script; it writes the real id here (wrangler d1 create vetro-books).
+[[d1_databases]]
+binding = "DB"
+database_name = "vetro-books"
+database_id = "REPLACE_WITH_ID_FROM_wrangler_d1_create"
+
+# Per-client throttle for the endpoints that hit D1. The binding keeps no IP history.
+[[ratelimits]]
+name = "LIMITER"
+namespace_id = "1001"
+  [ratelimits.simple]
+  limit = 120
+  period = 60
+
+# Same promise as the other Vetro workers: no request metadata is logged.
+[observability]
+enabled = false

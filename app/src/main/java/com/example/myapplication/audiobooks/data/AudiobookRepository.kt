@@ -116,6 +116,85 @@ class AudiobookRepository(
     }
 
     /**
+     * Книга из каталога Vetro (BookIndex): произведение встаёт в БД с названием, автором и обложкой каталога,
+     * даже если озвучки пока нет. Озвучка подцепляется позже ([attachVariant]).
+     */
+    suspend fun saveCatalogWork(
+        title: String,
+        authors: List<String>,
+        year: Int?,
+        coverUrl: String?,
+        language: BookLanguage,
+    ): WorkId = io {
+        q.transactionWithResult {
+            val fp = fingerprint(authors, title, language.name)
+            val existing = q.worksByFingerprint(fp).executeAsList().firstOrNull()
+            val workId = existing?.work_id ?: WorkId.new().value
+            q.upsertWork(
+                Audiobook_work(
+                    work_id = workId, cluster_fingerprint = fp, collection_id = existing?.collection_id, title = title,
+                    title_original = existing?.title_original, authors_json = json.encodeToString(authors),
+                    series_title = existing?.series_title, series_index = existing?.series_index,
+                    description = existing?.description, genres_json = existing?.genres_json ?: "[]",
+                    language = language.name, year = year?.toLong() ?: existing?.year, is_collection = existing?.is_collection ?: 0,
+                    cover_url = coverUrl ?: existing?.cover_url, cover_palette_json = existing?.cover_palette_json,
+                    cover_blurhash = existing?.cover_blurhash, selected_narration_id = existing?.selected_narration_id,
+                    updated_at = nowMs(), is_favorite = existing?.is_favorite ?: 0, in_library = existing?.in_library ?: 0,
+                ),
+            )
+            WorkId(workId)
+        }
+    }
+
+    /**
+     * Название, автор, год и обложка каталога поверх того, что записал источник: каталог — первый источник
+     * правды о книге, сайт — только об озвучке. Библиотека и «добавлено» ищут книгу по этому названию.
+     */
+    suspend fun applyCatalogIdentity(workId: WorkId, title: String, authors: List<String>, year: Int?, coverUrl: String?) = io {
+        q.transaction {
+            val work = q.workById(workId.value).executeAsOneOrNull() ?: return@transaction
+            q.upsertWork(
+                work.copy(
+                    cluster_fingerprint = fingerprint(authors, title, work.language),
+                    title = title, authors_json = json.encodeToString(authors),
+                    year = year?.toLong() ?: work.year, cover_url = coverUrl ?: work.cover_url, updated_at = nowMs(),
+                ),
+            )
+        }
+    }
+
+    /** Озвучка, найденная для уже существующего произведения (каталожная книга без звука): озвучка + вариант под ним. */
+    suspend fun attachVariant(workId: WorkId, source: AudiobookSource, details: SourceBookDetails): OpenedBook = io {
+        people?.load()
+        val book = details.book
+        val variantId = source.variantOf(book.ref)
+        q.transactionWithResult {
+            val existing = q.variantById(variantId.value).executeAsOneOrNull()
+            val narrationFp = fingerprint(book.narrators, "", "")
+            val narrationId = existing?.narration_id
+                ?: q.narrationsByWork(workId.value).executeAsList().firstOrNull { it.cluster_fingerprint == narrationFp }?.narration_id
+                ?: NarrationId.new().value
+            val narrators = people?.narrators(NarrationId(narrationId)) ?: book.narrators
+            val durationMs = book.durationSec?.times(1000)
+            val chapterCount = details.chapterDurationsSec.size.toLong().takeIf { it > 0 }
+            q.upsertNarration(
+                Audiobook_narration(
+                    narration_id = narrationId, work_id = workId.value, cluster_fingerprint = fingerprint(narrators, "", ""),
+                    narrators_json = json.encodeToString(narrators), kind = "SOLO", duration_ms = durationMs, chapter_count = chapterCount,
+                ),
+            )
+            q.upsertVariant(
+                Audiobook_variant(
+                    variant_id = variantId.value, narration_id = narrationId, source_id = source.id.value, source_url = book.ref.key,
+                    duration_ms = durationMs, chapter_count = chapterCount, availability = "AVAILABLE",
+                    infrastructure = source.infrastructureGroup, last_verified_at = nowMs(), user_pinned = existing?.user_pinned ?: 0,
+                ),
+            )
+            OpenedBook(workId, NarrationId(narrationId), variantId)
+        }
+    }
+
+    /**
      * Плеер запущен с книгой, которой ещё нет в БД (локальная папка, старая очередь): заводим
      * минимальные записи из метаданных очереди, чтобы позиция было к чему привязать.
      */

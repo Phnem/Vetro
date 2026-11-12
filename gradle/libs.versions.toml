@@ -124,6 +124,8 @@ okhttp-bom = { module = "com.squareup.okhttp3:okhttp-bom", version.ref = "okhttp
 # Mihon extensions (manga/extensions): host libraries the extension APKs are compiled against.
 okhttp-brotli = { module = "com.squareup.okhttp3:okhttp-brotli", version.ref = "okhttp" }
 okhttp-zstd = { module = "com.squareup.okhttp3:okhttp-zstd", version.ref = "okhttp" }
+# Распаковка индекса каталога книг (уже приходит транзитивно через okhttp-zstd; здесь — явно, чтобы импорт не ломался).
+zstd-kmp-okio = { module = "com.squareup.zstd:zstd-kmp-okio", version = "0.4.0" }
 kotlinx-coroutines-android = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-android", version = "1.11.0" }
 injekt-core = { module = "com.github.null2264.injekt:injekt-core", version = "4135455a2a" }
 androidx-preference = { module = "androidx.preference:preference", version = "1.2.1" }

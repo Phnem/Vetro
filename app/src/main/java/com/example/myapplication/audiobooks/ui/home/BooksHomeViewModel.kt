@@ -28,7 +28,13 @@ class BooksHomeViewModel(
     private val repository: AudiobookRepository,
     private val launcher: AudiobookLauncher,
     private val importer: LocalLibraryImporter,
+    private val adder: com.example.myapplication.audiobooks.data.BookSearchAdder,
 ) : ViewModel() {
+
+    init {
+        // Книги из каталога, добавленные без озвучки: пока раздел открыт, ищем им озвучку у источников.
+        viewModelScope.launch { runCatching { adder.attachPending() } }
+    }
 
     /**
      * Библиотека пользователя (свои папки и избранное). null — ещё не прочитана: пока так, дом не

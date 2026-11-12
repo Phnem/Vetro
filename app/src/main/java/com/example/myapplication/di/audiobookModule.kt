@@ -89,7 +89,21 @@ val audiobookModule = module {
         }.map { com.example.myapplication.audiobooks.domain.source.OffMainSource(it) }
     }
     single { AudiobookSearch(get(named(SOURCES))) }
-    single { com.example.myapplication.audiobooks.data.BookSearchAdder(get(named(SOURCES)), get(), get(), alternatives = get()) }
+    // Каталог книг Vetro (BookIndex V2) — первый источник поиска: телефонный индекс → api.vetrostudio.bid → аудио-источники.
+    single { com.example.myapplication.audiobooks.catalog.BookIndexStore(File(androidContext().filesDir, "audiobooks/bookindex"), get<OkHttpClient>()) }
+    single { com.example.myapplication.audiobooks.catalog.BookCatalogApi(get<OkHttpClient>()) }
+    single { com.example.myapplication.audiobooks.catalog.BookCatalog(get(), get(), get<com.example.myapplication.AppScope>()) }
+    single {
+        com.example.myapplication.audiobooks.data.BookSearchAdder(
+            get(named(SOURCES)), get(), get(), alternatives = get(),
+            catalog = get(),
+            pending = JsonMapFileStore(
+                File(androidContext().filesDir, "audiobooks/catalog_pending.json"),
+                com.example.myapplication.audiobooks.data.PendingCatalogAudio.serializer(),
+                "CatalogPending",
+            ),
+        )
+    }
     single { NarrationChain(get(), get(named(SOURCES)), get(), get()) }
     // Резолвер знает все источники манифестов: сайты и локальную папку; принятые восстановленные
     // главы накладываются поверх разметки источника.
@@ -216,7 +230,7 @@ val audiobookModule = module {
             coverFinder = get(),
         )
     }
-    viewModel { BooksHomeViewModel(get(), get(), get(), get()) }
+    viewModel { BooksHomeViewModel(get(), get(), get(), get(), get()) }
     viewModel { (source: String, key: String, title: String) ->
         BookDetailsViewModel(
             source, key, title, get(named(SOURCES)), get(), get(), get(),
