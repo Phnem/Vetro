@@ -25,7 +25,13 @@ Set-Location $Root
 
 # npx.cmd, not npx.ps1, and `$args`, not `@args`: in Windows PowerShell 5.1 splatting through the .ps1 wrapper drops
 # every argument and wrangler just prints its help.
-function Wr { & npx.cmd --yes wrangler@latest $args; if ($LASTEXITCODE -ne 0) { throw "wrangler $($args -join ' ') failed ($LASTEXITCODE)" } }
+function Wr {
+    # wrangler writes warnings to stderr; with $ErrorActionPreference = "Stop" and redirected output that would abort the script.
+    $prev = $ErrorActionPreference; $ErrorActionPreference = "Continue"
+    & npx.cmd --yes wrangler@latest $args
+    $code = $LASTEXITCODE; $ErrorActionPreference = $prev
+    if ($code -ne 0) { throw "wrangler $($args -join ' ') failed ($code)" }
+}
 
 Write-Host "== account" -ForegroundColor Cyan
 Wr whoami
@@ -74,7 +80,8 @@ if (-not $IndexOnly -and -not $SkipCovers) {
     New-Item -ItemType Directory -Force $chunkDir | Out-Null
     $noBom = New-Object System.Text.UTF8Encoding $false
     foreach ($size in "small", "large") {
-        $items = @(Get-Content "$Out\server\covers-$size.json" -Raw -Encoding UTF8 | ConvertFrom-Json)
+        # -InputObject, not a pipe: Windows PowerShell 5.1 would hand a piped JSON array over as ONE object.
+        $items = ConvertFrom-Json -InputObject (Get-Content "$Out\server\covers-$size.json" -Raw -Encoding UTF8)
         $n = 0
         for ($i = 0; $i -lt $items.Count; $i += 5000) {
             $n++
