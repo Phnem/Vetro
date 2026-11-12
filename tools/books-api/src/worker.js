@@ -26,36 +26,54 @@ const MAX_TOKENS = 8;
 
 const ROW = "w.id, w.ru, w.en, w.ra, w.ea, w.y, w.f, w.cv";
 
+// Public read-only data, no cookies or credentials: any origin may read it (the Vetro Studio site lives on another origin).
+const CORS = {
+  "access-control-allow-origin": "*",
+  "access-control-allow-methods": "GET, HEAD, OPTIONS",
+  "access-control-allow-headers": "range, if-none-match",
+  "access-control-expose-headers": "etag, content-range, content-length, accept-ranges",
+  "access-control-max-age": "86400",
+};
+
 export default {
   async fetch(request, env, ctx) {
-    if (request.method !== "GET" && request.method !== "HEAD") return json({ error: "method_not_allowed" }, 405);
-    const url = new URL(request.url);
-    const path = url.pathname;
-    try {
-      let res;
-      if (path === "/v1/health") res = json({ ok: true }, 200, 0);
-      else if (path === "/v1/manifest") {
-        res = await serveR2(env, request, "index/manifest.json", `public, max-age=${MANIFEST_TTL}, stale-while-revalidate=3600`, "application/json");
-      } else if (INDEX_PATH.test(path)) {
-        res = await serveR2(env, request, "index/" + path.match(INDEX_PATH)[1], IMMUTABLE, "application/octet-stream");
-      } else if (COVER_PATH.test(path)) {
-        const [, size, id] = path.match(COVER_PATH);
-        res = await cached(ctx, url.href, () => serveR2(env, request, `covers/${size}/${id}.avif`, IMMUTABLE, "image/avif"));
-      } else if (path === "/v1/search") {
-        res = await search(env, ctx, request, url);
-      } else if (BOOK_PATH.test(path)) {
-        res = await bookById(env, ctx, request, path.match(BOOK_PATH)[1]);
-      } else if (path === "/v1/books") {
-        res = await booksBatch(env, request, url);
-      } else {
-        res = json({ error: "not_found" }, 404, 60);
-      }
-      return request.method === "HEAD" ? new Response(null, res) : res;
-    } catch (e) {
-      return json({ error: "internal" }, 500, 0);
-    }
+    if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS });
+    const res = await handle(request, env, ctx);
+    // Cached and R2 responses can carry immutable headers: copy before adding ours.
+    const out = new Response(res.body, res);
+    for (const [k, v] of Object.entries(CORS)) out.headers.set(k, v);
+    return out;
   },
 };
+
+async function handle(request, env, ctx) {
+  if (request.method !== "GET" && request.method !== "HEAD") return json({ error: "method_not_allowed" }, 405);
+  const url = new URL(request.url);
+  const path = url.pathname;
+  try {
+    let res;
+    if (path === "/v1/health") res = json({ ok: true }, 200, 0);
+    else if (path === "/v1/manifest") {
+      res = await serveR2(env, request, "index/manifest.json", `public, max-age=${MANIFEST_TTL}, stale-while-revalidate=3600`, "application/json");
+    } else if (INDEX_PATH.test(path)) {
+      res = await serveR2(env, request, "index/" + path.match(INDEX_PATH)[1], IMMUTABLE, "application/octet-stream");
+    } else if (COVER_PATH.test(path)) {
+      const [, size, id] = path.match(COVER_PATH);
+      res = await cached(ctx, url.href, () => serveR2(env, request, `covers/${size}/${id}.avif`, IMMUTABLE, "image/avif"));
+    } else if (path === "/v1/search") {
+      res = await search(env, ctx, request, url);
+    } else if (BOOK_PATH.test(path)) {
+      res = await bookById(env, ctx, request, path.match(BOOK_PATH)[1]);
+    } else if (path === "/v1/books") {
+      res = await booksBatch(env, request, url);
+    } else {
+      res = json({ error: "not_found" }, 404, 60);
+    }
+    return request.method === "HEAD" ? new Response(null, res) : res;
+  } catch (e) {
+    return json({ error: "internal" }, 500, 0);
+  }
+}
 
 function json(body, status = 200, ttl = 0) {
   return new Response(JSON.stringify(body), {

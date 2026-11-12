@@ -88,6 +88,18 @@ test("health and method guard", async () => {
   assert.equal((await get(e, "/nope")).status, 404);
 });
 
+test("CORS: every answer is readable from another origin, preflight is 204", async () => {
+  const e = env();
+  for (const path of ["/v1/health", "/v1/search?q=чайка", "/v1/manifest", "/covers/small/000000771.avif", "/nope"]) {
+    assert.equal((await get(e, path)).headers.get("access-control-allow-origin"), "*", path);
+  }
+  assert.equal((await get(e, "/v1/health", {}, "POST")).headers.get("access-control-allow-origin"), "*");
+  const pre = await get(e, "/v1/search", { origin: "https://vetrostudio.bid", "access-control-request-method": "GET" }, "OPTIONS");
+  assert.equal(pre.status, 204);
+  assert.match(pre.headers.get("access-control-allow-methods"), /GET/);
+  assert.match((await get(e, "/v1/manifest")).headers.get("access-control-expose-headers"), /etag/);
+});
+
 test("manifest is served with ETag and 304 on revalidation", async () => {
   const e = env();
   const res = await get(e, "/v1/manifest");
