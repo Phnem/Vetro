@@ -22,7 +22,9 @@ $Bucket = "vetro-books"
 $Db = "vetro-books"
 Set-Location $Root
 
-function Wr { & npx --yes wrangler@latest @args; if ($LASTEXITCODE -ne 0) { throw "wrangler $($args -join ' ') failed ($LASTEXITCODE)" } }
+# npx.cmd, not npx.ps1, and `$args`, not `@args`: in Windows PowerShell 5.1 splatting through the .ps1 wrapper drops
+# every argument and wrangler just prints its help.
+function Wr { & npx.cmd --yes wrangler@latest $args; if ($LASTEXITCODE -ne 0) { throw "wrangler $($args -join ' ') failed ($LASTEXITCODE)" } }
 
 Write-Host "== account" -ForegroundColor Cyan
 Wr whoami
@@ -33,7 +35,7 @@ if (-not $IndexOnly) {
 
     Write-Host "== D1 database $Db" -ForegroundColor Cyan
     try { Wr d1 create $Db } catch { Write-Host "(database exists - fine)" }
-    $list = (& npx --yes wrangler@latest d1 list --json) | ConvertFrom-Json
+    $list = (& npx.cmd --yes wrangler@latest d1 list --json) | ConvertFrom-Json
     $id = ($list | Where-Object { $_.name -eq $Db }).uuid
     if (-not $id) { throw "database $Db not found" }
     $toml = Get-Content "wrangler.toml" -Raw
