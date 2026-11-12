@@ -1,0 +1,13 @@
+name = "vetro-books-uploader"
+main = "src/worker.js"
+compatibility_date = "2026-11-01"
+workers_dev = true
+preview_urls = false
+
+# TEMPORARY: deployed for the cover upload only, deleted afterwards. The write token is a Worker secret (TOKEN).
+[[r2_buckets]]
+binding = "BOOKS"
+bucket_name = "vetro-books"
+
+[observability]
+enabled = false

@@ -35,6 +35,22 @@ Cloudflare Worker для `https://api.vetrostudio.bid`: каталог книг 
 
 Проверка: `https://api.vetrostudio.bid/v1/health`, `/v1/manifest`, `/v1/search?q=оруэлл`.
 
+### Быстрая заливка обложек (временный Worker)
+
+`wrangler r2 bulk put` ходит через REST API Cloudflare и упирается в `429` (≈4 файла/с, ~10 часов на 176 тысяч).
+Через привязку R2 внутри Worker лимита нет (≈60 файлов/с, около 45 минут). Порядок, как это было сделано 2026-11-12:
+
+1. `uploader/` — временный Worker с записью в бакет по секрету `TOKEN` (`wrangler deploy`, затем `wrangler secret put TOKEN`).
+2. `book-dictionary/v2/tools/upload_covers.py --base <url uploader> --token-file … --lists covers-small.json covers-large.json`
+   (возобновляется по `covers-uploaded.txt`; нужен свой User-Agent — Cloudflare режет `Python-urllib` ошибкой 1010).
+3. `wrangler delete vetro-books-uploader --force` и стереть файл токена. Постоянно держать такой Worker нельзя: он пишет в бакет.
+
+### Домен
+
+Деплой 2026-11-12 ответил `Can't infer zone`: зоны `vetrostudio.bid` не было в аккаунте. Пока домена нет, Worker доступен на
+`https://vetro-books-api.<поддомен аккаунта>.workers.dev` (`workers_dev = true`). Когда зона появится — раскомментировать
+`[[routes]]` в `wrangler.toml` и выполнить `npx wrangler deploy`.
+
 ## Тесты
 
 ```powershell
