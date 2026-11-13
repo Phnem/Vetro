@@ -47,9 +47,11 @@ Cloudflare Worker для `https://api.vetrostudio.bid`: каталог книг 
 
 ### Домен
 
-Деплой 2026-11-12 ответил `Can't infer zone`: зоны `vetrostudio.bid` не было в аккаунте. Пока домена нет, Worker доступен на
-`https://vetro-books-api.<поддомен аккаунта>.workers.dev` (`workers_dev = true`). Когда зона появится — раскомментировать
-`[[routes]]` в `wrangler.toml` и выполнить `npx wrangler deploy`.
+`api.vetrostudio.bid` привязан с 2026-11-13: регистрация `vetrostudio.bid` (Cloudflare Registrar) переехала на аккаунт с
+Worker, `[[routes]]` с `custom_domain = true` включён в `wrangler.toml`, `npx wrangler deploy` ответил `api.vetrostudio.bid
+(custom domain)`. (Раньше деплой отвечал `Can't infer zone`: зона жила на другом аккаунте.) Запасной адрес
+`https://vetro-books-api.<поддомен аккаунта>.workers.dev` оставлен (`workers_dev = true`, корневой ключ: после заголовка
+`[[routes]]` он стал бы полем маршрута и деплой упал бы).
 
 ## Тесты
 
