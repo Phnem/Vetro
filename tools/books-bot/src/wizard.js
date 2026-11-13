@@ -32,11 +32,11 @@ export function parseOrigins(raw) {
     .split(",")
     .map((s) => s.trim().toLowerCase())
     .filter(Boolean);
-  if (!parts.length) return null;
+  if (!parts.length || parts.length > 20) return null;
   const out = [];
   const seen = new Set();
   for (const p of parts) {
-    if (p.includes("://") || p.includes("/") || p.includes("?") || p.includes("#") || p.includes(":") || /\s/.test(p)) {
+    if (p.length > 253 || p.includes("://") || p.includes("/") || p.includes("?") || p.includes("#") || p.includes(":") || /\s/.test(p)) {
       return null;
     }
     if (p !== "localhost" && !DOMAIN_RE.test(p)) return null;
@@ -45,7 +45,39 @@ export function parseOrigins(raw) {
       out.push(p);
     }
   }
+  if (JSON.stringify(out).length > 1000) return null;
   return out;
+}
+
+export function validateDraftForSubmit(draft) {
+  if (!draft || typeof draft !== "object") return null;
+  const app_name = validateAppName(draft.app_name);
+  const description = validateDescription(draft.description);
+  const kind = ["website", "mobile", "server", "other"].includes(draft.kind) ? draft.kind : null;
+  if (!app_name || !description || !kind || !draft.tier) return null;
+
+  let origins = null;
+  if (kind === "website") {
+    if (!Array.isArray(draft.origins)) return null;
+    origins = parseOrigins(draft.origins.join(","));
+    if (!origins) return null;
+  }
+
+  let expected_per_day = null;
+  if (draft.expected_per_day != null) {
+    expected_per_day = parseExpectedPerDay(String(draft.expected_per_day));
+    if (expected_per_day === null) return null;
+  }
+
+  return {
+    app_name,
+    description,
+    kind,
+    origins,
+    commercial: draft.commercial ? 1 : 0,
+    expected_per_day,
+    tier: String(draft.tier),
+  };
 }
 
 export function parseExpectedPerDay(raw) {

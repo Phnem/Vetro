@@ -225,6 +225,10 @@ export function texts(lang) {
       ru
         ? `⚠️ На тарифе <b>${esc(tier.title)}</b> максимум активных ключей на покупателя: <b>${tier.max_keys}</b> (у вас сейчас ${activeCount}).\nОтзовите старый ключ (/revoke), продлите существующий (/key) или выберите тариф выше.`
         : `⚠️ Plan <b>${esc(tier.title)}</b> allows up to <b>${tier.max_keys}</b> active key(s) per customer (you currently have ${activeCount}).\nRevoke an old key (/revoke), renew an existing one (/key), or choose a higher plan.`,
+    tooManyOpenApps: (maxOpen) =>
+      ru
+        ? `⚠️ У вас уже открыто ${maxOpen} заявок в статусе ожидания/оплаты. Оплатите одну из них или дождитесь её завершения, прежде чем создавать новую.`
+        : `⚠️ You already have ${maxOpen} open applications awaiting payment. Please complete or cancel an existing one before creating a new application.`,
     step8Header: ru ? "<b>Шаг 8/8 · Проверка заявки и условия</b>" : "<b>Step 8/8 · Review & Terms</b>",
     invoiceSent: ru
       ? "💳 Счёт в Telegram Stars отправлен выше. После оплаты ключ придёт автоматически."

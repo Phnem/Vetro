@@ -8,12 +8,35 @@ const SESSIONS_DDL =
   "draft TEXT, " +
   "updated_at INTEGER NOT NULL)";
 
+const RATE_LIMITS_DDL =
+  "CREATE TABLE IF NOT EXISTS bot_rate_limits (" +
+  "chat_id INTEGER PRIMARY KEY, " +
+  "window_min INTEGER NOT NULL, " +
+  "count INTEGER NOT NULL)";
+
 const initializedDbs = new WeakSet();
 
 export async function ensureSessionsTable(db) {
   if (initializedDbs.has(db)) return;
   await db.prepare(SESSIONS_DDL).run();
+  await db.prepare(RATE_LIMITS_DDL).run();
   initializedDbs.add(db);
+}
+
+export async function hitChatRateLimit(db, chatId, now = Date.now(), maxPerMinute = 30) {
+  await ensureSessionsTable(db);
+  const windowMin = Math.floor(now / 60_000);
+  const row = await db
+    .prepare(
+      "INSERT INTO bot_rate_limits (chat_id, window_min, count) VALUES (?1, ?2, 1) " +
+        "ON CONFLICT(chat_id) DO UPDATE SET " +
+        "count = CASE WHEN bot_rate_limits.window_min = excluded.window_min THEN bot_rate_limits.count + 1 ELSE 1 END, " +
+        "window_min = excluded.window_min " +
+        "RETURNING count",
+    )
+    .bind(chatId, windowMin)
+    .first();
+  return Number(row?.count ?? 0) > maxPerMinute;
 }
 
 export async function upsertCustomer(db, from, now = Date.now()) {
@@ -90,6 +113,14 @@ export async function countActiveKeys(db, customerId, now = Date.now()) {
       "SELECT COUNT(*) AS cnt FROM api_keys WHERE customer_id = ?1 AND status = 'active' AND (expires_at IS NULL OR expires_at > ?2)",
     )
     .bind(customerId, now)
+    .first();
+  return Number(row?.cnt ?? 0);
+}
+
+export async function countOpenApplications(db, customerId) {
+  const row = await db
+    .prepare("SELECT COUNT(*) AS cnt FROM applications WHERE customer_id = ?1 AND status IN ('new', 'invoiced')")
+    .bind(customerId)
     .first();
   return Number(row?.cnt ?? 0);
 }

@@ -9,3 +9,9 @@ CREATE TABLE IF NOT EXISTS bot_sessions (
   draft       TEXT,
   updated_at  INTEGER NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS bot_rate_limits (
+  chat_id    INTEGER PRIMARY KEY,
+  window_min INTEGER NOT NULL,
+  count      INTEGER NOT NULL
+);

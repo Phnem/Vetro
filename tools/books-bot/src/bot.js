@@ -4,6 +4,7 @@ import {
   claimPaidOrder,
   clearWizardSession,
   countActiveKeys,
+  countOpenApplications,
   createApplication,
   createOrder,
   getApplication,
@@ -17,6 +18,7 @@ import {
   getSoldTiers,
   getTier,
   getUsageForKeys,
+  hitChatRateLimit,
   insertApiKey,
   listCustomerKeys,
   markOrderFailed,
@@ -51,7 +53,11 @@ import {
   renderWizardTierInfo,
   validateAppName,
   validateDescription,
+  validateDraftForSubmit,
 } from "./wizard.js";
+
+const MAX_OPEN_APPLICATIONS = 3;
+const MAX_MESSAGES_PER_MINUTE = 30;
 
 function inferLang(session, customer) {
   if (session?.lang === "ru" || session?.lang === "en") return session.lang;
@@ -242,6 +248,16 @@ async function showUsage(tg, db, chatId, customerId, lang, now) {
 }
 
 async function startWizard(tg, db, chatId, telegramId, lang, preselectedTier = null, now = Date.now()) {
+  const customer = await getCustomerByTelegramId(db, telegramId);
+  if (customer) {
+    const openCount = await countOpenApplications(db, customer.id);
+    if (openCount >= MAX_OPEN_APPLICATIONS) {
+      await tg.sendMessage(chatId, texts(lang).tooManyOpenApps(MAX_OPEN_APPLICATIONS), {
+        reply_markup: replyMenuKeyboard(lang),
+      });
+      return;
+    }
+  }
   const soldTiers = await getSoldTiers(db);
   if (!soldTiers.length) {
     await tg.sendMessage(chatId, texts(lang).noTiers, { reply_markup: replyMenuKeyboard(lang) });
@@ -605,19 +621,22 @@ async function handleCallback(tg, db, env, cq, customer, session, lang, now) {
   }
 
   if (data === "wiz:accept") {
-    const draft = session?.draft;
-    if (!draft?.app_name || !draft?.description || !draft?.kind || !draft?.tier) {
+    const validated = validateDraftForSubmit(session?.draft);
+    if (!validated) {
       await startWizard(tg, db, chatId, cq.from.id, lang, null, now);
       return;
     }
-    if (draft.kind === "website" && (!Array.isArray(draft.origins) || !draft.origins.length)) {
-      await saveSession(db, cq.from.id, { lang, step: STEPS.ORIGINS, draft }, now);
-      const prompt = renderStepPrompt(STEPS.ORIGINS, lang, draft, await getSoldTiers(db));
-      await tg.sendMessage(chatId, prompt.text, { reply_markup: prompt.reply_markup });
+
+    const openCount = await countOpenApplications(db, customer.id);
+    if (openCount >= MAX_OPEN_APPLICATIONS) {
+      await clearWizardSession(db, cq.from.id, lang, now);
+      await tg.sendMessage(chatId, t.tooManyOpenApps(MAX_OPEN_APPLICATIONS), {
+        reply_markup: replyMenuKeyboard(lang),
+      });
       return;
     }
 
-    const tier = await getTier(db, draft.tier);
+    const tier = await getTier(db, validated.tier);
     if (!tier || !tier.sold) {
       await tg.sendMessage(chatId, t.noTiers);
       return;
@@ -628,17 +647,17 @@ async function handleCallback(tg, db, env, cq, customer, session, lang, now) {
       return;
     }
 
-    const originsJson = draft.kind === "website" ? JSON.stringify(draft.origins) : null;
+    const originsJson = validated.kind === "website" ? JSON.stringify(validated.origins) : null;
     const app = await createApplication(
       db,
       {
         customerId: customer.id,
-        appName: draft.app_name,
-        description: draft.description,
-        kind: draft.kind,
+        appName: validated.app_name,
+        description: validated.description,
+        kind: validated.kind,
         origins: originsJson,
-        commercial: draft.commercial ? 1 : 0,
-        expectedPerDay: draft.expected_per_day ?? null,
+        commercial: validated.commercial,
+        expectedPerDay: validated.expected_per_day,
         tier: tier.name,
         status: "new",
         termsAcceptedAt: now,
@@ -909,6 +928,10 @@ export async function handleUpdate(update, env, tg, now = Date.now()) {
   const msg = update.message;
   if (!msg || !msg.from || msg.from.is_bot) return;
   if (msg.chat?.type && msg.chat.type !== "private") return;
+
+  if (!msg.successful_payment && !msg.refunded_payment) {
+    if (await hitChatRateLimit(db, msg.chat.id, now, MAX_MESSAGES_PER_MINUTE)) return;
+  }
 
   const customer = await upsertCustomer(db, msg.from, now);
   const session = await getSession(db, msg.from.id);
