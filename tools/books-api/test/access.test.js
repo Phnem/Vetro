@@ -327,3 +327,19 @@ test("the Worker answers 401 without a key (with CORS), and 200 with one", async
   assert.match(pre.headers.get("access-control-allow-headers"), /authorization/);
   assert.match(pre.headers.get("access-control-allow-headers"), /x-api-key/);
 });
+
+test("the alarm still flushes usage when the Durable Object was evicted and restarted in between", async () => {
+  const e = env();
+  const k = await addKey(e, "pro");
+  const state = fakeState();
+  const first = new KeyMeter(state, e);
+  const limits = { per_second: 0, per_minute: 0, per_day: 0 };
+  for (let i = 0; i < 3; i++) await first.fetch(new Request("https://meter/admit", { method: "POST", body: JSON.stringify({ keyId: k.id, route: "search", now: T0 + i, limits }) }));
+  await first.alarm(); // экземпляр жив: обычный случай
+  const second = new KeyMeter(state, e); // вытеснили и подняли заново: в памяти пусто, в хранилище есть
+  await second.alarm();
+  assert.equal(e.sqlite.prepare("SELECT requests FROM usage_daily WHERE key_id = ? AND route = 'search'").get(k.id).requests, 3);
+  e.sqlite.exec("DELETE FROM usage_daily");
+  await new KeyMeter(state, e).alarm(); // новый экземпляр без единого запроса
+  assert.equal(e.sqlite.prepare("SELECT requests FROM usage_daily WHERE key_id = ?").get(k.id).requests, 3);
+});

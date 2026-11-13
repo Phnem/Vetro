@@ -269,7 +269,10 @@ export class KeyMeter {
 
   async fetch(request) {
     const { keyId, route, now, limits } = await request.json();
-    this.keyId = keyId;
+    if (this.keyId !== keyId) {
+      this.keyId = keyId;
+      await this.state.storage.put("keyId", keyId); // будильник может сработать в новом экземпляре объекта: имя ключа должно пережить вытеснение
+    }
     const today = new Date(now).toISOString().slice(0, 10);
     if (!this.day) this.day = (await this.state.storage.get("day")) ?? { d: today, n: 0, denied: 0, routes: {} };
     if (this.day.d !== today) {
@@ -317,6 +320,7 @@ export class KeyMeter {
 
   async alarm() {
     this.alarmSet = false;
+    if (!this.keyId) this.keyId = await this.state.storage.get("keyId");
     if (!this.day) this.day = await this.state.storage.get("day");
     if (!this.day) return;
     await this.state.storage.put("day", this.day);
