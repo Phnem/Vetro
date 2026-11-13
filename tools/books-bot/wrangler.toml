@@ -1,0 +1,20 @@
+name = "vetro-books-bot"
+main = "src/worker.js"
+compatibility_date = "2026-11-01"
+workers_dev = true
+
+# Общая база D1 с vetro-books-api: бот пишет в customers, applications, orders, api_keys и читает tiers, usage_daily.
+[[d1_databases]]
+binding = "DB"
+database_name = "vetro-books"
+database_id = "5574b392-dfb0-4ab6-9afc-336993d7947a"
+
+# Секреты задаются только через `npx wrangler secret put <NAME>`:
+#   TELEGRAM_BOT_TOKEN
+#   TELEGRAM_WEBHOOK_SECRET
+#   OWNER_TELEGRAM_ID
+[observability]
+enabled = false
+
+[triggers]
+crons = ["* * * * *"]
