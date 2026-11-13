@@ -8,8 +8,11 @@
 //   GET /v1/books?ids=1,2,3                  up to 40 books, rows only
 //   GET /covers/{small|large}/{id9}.avif     covers (R2), URL carries ?v=<cv> for cache busting
 //
-// Bindings: BOOKS (R2), DB (D1), LIMITER (optional rate limit).
+// Access: every route but /v1/health needs a key when ACCESS_MODE=enforce (src/access.js, docs/adr/0003-api-access-keys-and-tiers.md).
+// Bindings: BOOKS (R2), DB (D1), LIMITER (optional rate limit), METER (Durable Object KeyMeter: per-key limits and usage).
+// Secrets/vars: ACCESS_MODE ("open" | "enforce"), APP_TOKEN_SECRET (HMAC of app install tokens, phase 2).
 
+import { authorize } from "./access.js";
 import { norm } from "./norm.js";
 
 const COVER_PATH = /^\/covers\/(small|large)\/(\d{9})\.avif$/;
@@ -30,21 +33,28 @@ const ROW = "w.id, w.ru, w.en, w.ra, w.ea, w.y, w.f, w.cv";
 const CORS = {
   "access-control-allow-origin": "*",
   "access-control-allow-methods": "GET, HEAD, OPTIONS",
-  "access-control-allow-headers": "range, if-none-match",
-  "access-control-expose-headers": "etag, content-range, content-length, accept-ranges",
+  "access-control-allow-headers": "range, if-none-match, authorization, x-api-key",
+  "access-control-expose-headers":
+    "etag, content-range, content-length, accept-ranges, retry-after, x-ratelimit-limit-minute, x-ratelimit-remaining-minute, " +
+    "x-ratelimit-limit-day, x-ratelimit-remaining-day",
   "access-control-max-age": "86400",
 };
 
 export default {
   async fetch(request, env, ctx) {
     if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS });
-    const res = await handle(request, env, ctx);
+    // Ключ и лимиты тарифа проверяются до кэша и маршрутов (docs/adr/0003): ответ из кэша тоже считается в расход ключа.
+    const gate = await authorize(request, env);
+    const res = gate.response ?? (await handle(gate.request ?? request, env, ctx));
     // Cached and R2 responses can carry immutable headers: copy before adding ours.
     const out = new Response(res.body, res);
     for (const [k, v] of Object.entries(CORS)) out.headers.set(k, v);
+    for (const [k, v] of Object.entries(gate.headers ?? {})) out.headers.set(k, v);
     return out;
   },
 };
+
+export { KeyMeter } from "./access.js";
 
 async function handle(request, env, ctx) {
   if (request.method !== "GET" && request.method !== "HEAD") return json({ error: "method_not_allowed" }, 405);

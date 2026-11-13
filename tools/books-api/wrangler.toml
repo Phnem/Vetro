@@ -35,3 +35,18 @@ namespace_id = "1001"
 # Same promise as the other Vetro workers: no request metadata is logged.
 [observability]
 enabled = false
+
+# Доступ по ключам (docs/adr/0003-api-access-keys-and-tiers.md).
+# "open": ключ не обязателен, но если пришёл, проверяется; "enforce": без ключа 401 (кроме /v1/health).
+# Включать "enforce" после выхода приложения с токеном установки и выдачи ключа сайту.
+[vars]
+ACCESS_MODE = "open"
+
+# Один объект на ключ: секундный, минутный и суточный счётчики и расход по маршрутам (src/access.js, класс KeyMeter).
+[[durable_objects.bindings]]
+name = "METER"
+class_name = "KeyMeter"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["KeyMeter"]

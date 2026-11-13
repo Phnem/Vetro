@@ -16,6 +16,33 @@ Cloudflare Worker для `https://api.vetrostudio.bid`: каталог книг 
 `/v1/search` и `/v1/books*` ходят в D1: ответы кэшируются на краю (10 минут / сутки) и ограничены лимитером
 (120 запросов в минуту на клиента; привязка `LIMITER`, без неё лимита нет).
 
+## Доступ по ключам (docs/adr/0003-api-access-keys-and-tiers.md)
+
+Всё, кроме `/v1/health`, закрывается ключом при `ACCESS_MODE = "enforce"` (в `wrangler.toml` сейчас `"open"`: ключ необязателен, но если пришёл,
+проверяется). Ключ передаётся заголовком `Authorization: Bearer vk_…` или `X-Api-Key`; для `<img>` на обложках допустим `?key=`.
+
+| Тариф | В секунду | В минуту | В сутки | `limit` / `ids` | Обложки | Индекс | Цена (⭐ за 30 дней, заготовка) |
+|---|---|---|---|---|---|---|---|
+| basic | 2 | 30 | 2 000 | 20 / 10 | нет | нет | 100 |
+| pro | 5 | 120 | 20 000 | 50 / 40 | да | нет | 400 |
+| ultra | 20 | 600 | 200 000 | 50 / 40 | да | да | 1 500 |
+| app (не продаётся) | – | 120 | – | 50 / 40 | да | да | – |
+
+Лимиты и цены лежат в таблице `tiers` и правятся без деплоя (кэш на краю 60 с). Отказы — JSON `{"error": …}`: `401 missing_key | invalid_key |
+expired_key`, `403 key_revoked | key_expired | origin_not_allowed | tier_forbids_route`, `429 rate_limited` (поля `scope`: `second|minute|day`,
+`retry_after`, заголовок `Retry-After`). Успешные ответы несут `X-RateLimit-Limit/Remaining-Minute|Day`. `limit=` и `ids=` сверх потолка тарифа
+обрезаются, а не отклоняются.
+
+```powershell
+npx wrangler d1 execute vetro-books --remote --file schema/access.sql              # один раз: тарифы, ключи, расход
+node scripts/new-key.mjs pro --label site --owner site --origins vetrostudio.bid,phnem.github.io --days 365   # ключ + INSERT
+npx wrangler d1 execute vetro-books --remote --command "<напечатанный INSERT>"      # ключ показывается один раз, в базе только хэш
+```
+
+Ключ для страниц сайта виден в браузере, поэтому для него обязателен `--origins`: он принимается только с этих сайтов. Учёт по ключам ведёт Durable
+Object `KeyMeter` (расход по маршрутам пишется в `usage_daily` раз в минуту). Токены приложения (`va_…`, аттестация ключа) и бот в Telegram с
+панелью — фазы 2–4 ADR 0003.
+
 ## Выкладка
 
 1. Собрать данные: `book-dictionary/v2/README.md` (получатся `out/manifest.json`, `out/index/*`, `out/server/*`).
