@@ -341,6 +341,11 @@ async function handlePreCheckout(tg, db, pcq, now) {
   }
 
   if (order.kind === "new") {
+    const app = await getApplication(db, order.application_id);
+    if (!app || app.terms_accepted_at == null) {
+      await tg.answerPreCheckoutQuery(pcq.id, false, t.preCheckoutBadOrder);
+      return;
+    }
     const activeCount = await countActiveKeys(db, customer.id, now);
     if (activeCount >= tier.max_keys) {
       await tg.answerPreCheckoutQuery(pcq.id, false, t.preCheckoutLimit);
@@ -375,6 +380,11 @@ async function handleSuccessfulPayment(tg, db, env, message, customer, lang, now
 
   const order = await getOrderByPayload(db, payload);
   if (!order || order.customer_id !== customer.id) return;
+
+  if (order.kind === "new") {
+    const app = await getApplication(db, order.application_id);
+    if (!app || app.terms_accepted_at == null) return;
+  }
 
   const claimed = await claimPaidOrder(db, payload, chargeId, now);
   if (!claimed) return;
