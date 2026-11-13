@@ -116,24 +116,32 @@ export function kindLabel(kind, lang) {
   return map[kind] ?? kind;
 }
 
-export function termsText(lang) {
+export function termsText(tier, lang) {
+  const limitsLine = tier
+    ? lang === "ru"
+      ? `• Выбранный тариф <b>${esc(tier.title)}</b>: ${fmtNum(tier.per_second, "ru")}/с, ${fmtNum(tier.per_minute, "ru")}/мин, ${fmtNum(tier.per_day, "ru")}/сут (UTC), поиск до ${tier.max_limit}, ids до ${tier.max_ids}, обложки: ${tier.allow_covers ? "да" : "нет"}, индекс: ${tier.allow_index ? "да" : "нет"}, срок ${tier.period_days} дн. (${tier.price_stars} ⭐).\n`
+      : `• Selected plan <b>${esc(tier.title)}</b>: ${fmtNum(tier.per_second, "en")}/s, ${fmtNum(tier.per_minute, "en")}/min, ${fmtNum(tier.per_day, "en")}/day (UTC), search up to ${tier.max_limit}, ids up to ${tier.max_ids}, covers: ${tier.allow_covers ? "yes" : "no"}, index: ${tier.allow_index ? "yes" : "no"}, period ${tier.period_days}d (${tier.price_stars} ⭐).\n`
+    : "";
+
   if (lang === "ru") {
     return (
-      "📜 <b>Условия использования API</b>\n\n" +
-      "1. Ключ является личным: передавать, публиковать в открытом доступе или перепродавать его запрещено.\n" +
-      "2. Запрещено копировать каталог целиком (исключение — тариф с доступом к файлам индекса, и только для личной офлайн-работы).\n" +
-      "3. Обязательна ссылка на источники данных (в карточках книг указаны поле <code>cover.page</code> и источники описаний).\n" +
-      "4. Часть обложек и описаний имеет ограничения по лицензии (в т.ч. FantLab, Википедия CC BY-SA).\n" +
-      "5. Владелец API вправе отозвать ключ при нарушении условий или злоупотреблении."
+      "📜 <b>Условия использования</b>\n" +
+      limitsLine +
+      "• Ключ личный: перепродажа, передача и выкладывание полной копии данных запрещены (файлы индекса — только для личной офлайн-работы на соответствующем тарифе).\n" +
+      "• Обложки и описания принадлежат правообладателям (в т.ч. FantLab, Википедия CC BY-SA; источники указаны в полях книги, например <code>cover.page</code>) и отдаются как есть, без гарантий.\n" +
+      "• Ключ можно отозвать при злоупотреблении.\n" +
+      "• Возврат Telegram Stars — только по решению владельца в течение 7 дней.\n" +
+      "• Открытый ключ показывается один раз после оплаты; при утере используйте /rotate."
     );
   }
   return (
-    "📜 <b>API Terms of Use</b>\n\n" +
-    "1. Your API key is personal: sharing, publishing, or reselling it is prohibited.\n" +
-    "2. Scraping or copying the entire catalogue is prohibited (except on a plan with index file access, for personal offline use only).\n" +
-    "3. Attribution to data sources is required (book records include <code>cover.page</code> and description source fields).\n" +
-    "4. Some covers and descriptions are subject to third-party licenses (including FantLab and Wikipedia CC BY-SA).\n" +
-    "5. The API owner reserves the right to revoke a key in case of abuse or violation of these terms."
+    "📜 <b>Terms of Use</b>\n" +
+    limitsLine +
+    "• Your key is personal: reselling, sharing, or publishing a full copy of the data is prohibited (index files are for personal offline use only on an eligible plan).\n" +
+    "• Covers and descriptions belong to their copyright holders (including FantLab and Wikipedia CC BY-SA; sources are in book fields such as <code>cover.page</code>) and are provided as-is without warranties.\n" +
+    "• The key may be revoked for abuse.\n" +
+    "• Telegram Stars refunds are issued only at the owner's discretion within 7 days.\n" +
+    "• The plaintext key is shown once after payment; if lost, use /rotate."
   );
 }
 

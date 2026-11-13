@@ -231,7 +231,7 @@ export function renderStepPrompt(step, lang, draft, soldTiers = []) {
         `\n• ${ru ? "Коммерческий" : "Commercial"}: ${draft?.commercial ? (ru ? "да" : "yes") : ru ? "нет" : "no"}` +
         loadLine +
         `\n• ${ru ? "Тариф" : "Plan"}: <b>${tierLine}</b>\n\n` +
-        termsText(lang);
+        termsText(chosenTier, lang);
 
       return {
         text: summary,
