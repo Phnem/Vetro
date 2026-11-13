@@ -27,7 +27,8 @@ CREATE TABLE IF NOT EXISTS api_keys (
   status          TEXT NOT NULL DEFAULT 'active',   -- active | revoked
   label           TEXT,
   owner           TEXT,                     -- telegram:<id> | site | partner:<имя>
-  customer_id     INTEGER,                  -- customers.id (фаза 3)
+  customer_id     INTEGER,                  -- customers.id (schema/bot.sql)
+  application_id  INTEGER,                  -- applications.id: заявка, по которой ключ выдан (schema/bot.sql)
   allowed_origins TEXT,                     -- JSON ["vetrostudio.bid","*.example.com"]; NULL = без проверки Origin
   created_at      INTEGER NOT NULL,         -- мс
   expires_at      INTEGER,                  -- мс; NULL = бессрочно

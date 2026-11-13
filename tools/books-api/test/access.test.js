@@ -93,6 +93,26 @@ const req = (path, headers = {}) => new Request("https://api.vetrostudio.bid" + 
 const bearer = (key) => ({ authorization: `Bearer ${key}` });
 const errorOf = async (gate) => (await gate.response.json()).error;
 
+test("access.sql and bot.sql load in order, twice, and tie a key to its application and order", () => {
+  const db = new DatabaseSync(":memory:");
+  const load = (name) => db.exec(readFileSync(new URL(`../schema/${name}`, import.meta.url), "utf8"));
+  load("access.sql"); load("bot.sql"); load("access.sql"); load("bot.sql");
+  db.exec("PRAGMA foreign_keys = ON");
+  assert.deepEqual(db.prepare("SELECT name FROM tiers WHERE sold = 1 ORDER BY sort").all().map((r) => r.name), ["basic", "pro", "ultra"]);
+  const now = Date.now();
+  db.prepare("INSERT INTO customers (telegram_id, username, created_at) VALUES (111, 'buyer', ?)").run(now);
+  db.prepare(
+    "INSERT INTO applications (customer_id, app_name, description, kind, origins, tier, status, terms_accepted_at, created_at, updated_at) " +
+      "VALUES (1, 'My Reader', 'Reading tracker', 'website', '[\"reader.example\"]', 'pro', 'new', ?, ?, ?)",
+  ).run(now, now, now);
+  db.prepare("INSERT INTO orders (application_id, customer_id, tier, stars, invoice_payload, created_at) VALUES (1, 1, 'pro', 400, 'p-1', ?)").run(now);
+  db.prepare("INSERT INTO api_keys (id, key_hash, key_prefix, tier, customer_id, application_id, created_at) VALUES ('k_1', 'h', 'vk_pro_x…', 'pro', 1, 1, ?)").run(now);
+  db.prepare("UPDATE orders SET charge_id = 'charge-1', status = 'paid', key_id = 'k_1' WHERE id = 1").run();
+  // повторная доставка того же платежа не создаёт второй оплаченный заказ
+  assert.throws(() => db.prepare("INSERT INTO orders (application_id, customer_id, tier, stars, invoice_payload, charge_id, created_at) VALUES (1, 1, 'pro', 400, 'p-2', 'charge-1', ?)").run(now));
+  assert.throws(() => db.prepare("INSERT INTO applications (customer_id, app_name, description, kind, tier, created_at, updated_at) VALUES (1, 'x', 'y', 'website', 'gold', ?, ?)").run(now, now)); // нет такого тарифа
+});
+
 test("routeOf classifies every public path", () => {
   assert.equal(routeOf("/v1/health"), "health");
   assert.equal(routeOf("/v1/search"), "search");
