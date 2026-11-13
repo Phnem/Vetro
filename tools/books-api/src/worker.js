@@ -13,6 +13,7 @@
 // Secrets/vars: ACCESS_MODE ("open" | "enforce"), APP_TOKEN_SECRET (HMAC of app install tokens, phase 2).
 
 import { authorize } from "./access.js";
+import { handleAuth } from "./auth.js";
 import { norm } from "./norm.js";
 
 const COVER_PATH = /^\/covers\/(small|large)\/(\d{9})\.avif$/;
@@ -32,8 +33,8 @@ const ROW = "w.id, w.ru, w.en, w.ra, w.ea, w.y, w.f, w.cv";
 // Public read-only data, no cookies or credentials: any origin may read it (the Vetro Studio site lives on another origin).
 const CORS = {
   "access-control-allow-origin": "*",
-  "access-control-allow-methods": "GET, HEAD, OPTIONS",
-  "access-control-allow-headers": "range, if-none-match, authorization, x-api-key",
+  "access-control-allow-methods": "GET, HEAD, POST, OPTIONS",
+  "access-control-allow-headers": "range, if-none-match, authorization, x-api-key, content-type",
   "access-control-expose-headers":
     "etag, content-range, content-length, accept-ranges, retry-after, x-ratelimit-limit-minute, x-ratelimit-remaining-minute, " +
     "x-ratelimit-limit-day, x-ratelimit-remaining-day",
@@ -57,9 +58,10 @@ export default {
 export { KeyMeter } from "./access.js";
 
 async function handle(request, env, ctx) {
-  if (request.method !== "GET" && request.method !== "HEAD") return json({ error: "method_not_allowed" }, 405);
   const url = new URL(request.url);
   const path = url.pathname;
+  if (path.startsWith("/v1/auth/")) return handleAuth(request, env); // выдача токена установки по аттестации (src/auth.js)
+  if (request.method !== "GET" && request.method !== "HEAD") return json({ error: "method_not_allowed" }, 405);
   try {
     let res;
     if (path === "/v1/health") res = json({ ok: true }, 200, 0);

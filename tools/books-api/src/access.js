@@ -24,8 +24,13 @@ export function routeOf(path) {
 
 // --- криптография ----------------------------------------------------------------------------------------------
 
-const b64url = (bytes) => btoa(String.fromCharCode(...new Uint8Array(bytes))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-const unb64url = (s) => Uint8Array.from(atob(s.replace(/-/g, "+").replace(/_/g, "/")), (c) => c.charCodeAt(0));
+export const b64url = (bytes) => btoa(String.fromCharCode(...new Uint8Array(bytes))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+export const unb64url = (s) => Uint8Array.from(atob(s.replace(/-/g, "+").replace(/_/g, "/")), (c) => c.charCodeAt(0));
+
+/** HMAC-SHA256 от `data` ключом `secret` (строка); `data` — Uint8Array. */
+export async function macOf(secret, data) {
+  return new Uint8Array(await crypto.subtle.sign("HMAC", await hmacKey(secret, "sign"), data));
+}
 
 export async function sha256Hex(text) {
   const d = await crypto.subtle.digest("SHA-256", te.encode(text));
@@ -147,6 +152,22 @@ async function loadKey(env, hash) {
   return row;
 }
 
+/** Отозванные установки приложения (панель: installs.status = 'revoked'); список маленький и кэшируется на краю на 60 с. */
+async function installRevoked(env, installId) {
+  if (!env.DB) return false;
+  const cacheKey = new Request("https://cache.invalid/access/revoked-installs");
+  const hit = await caches.default.match(cacheKey);
+  let ids;
+  if (hit) {
+    ids = await hit.json();
+  } else {
+    const { results } = await env.DB.prepare("SELECT id FROM installs WHERE status = 'revoked'").all();
+    ids = results.map((r) => r.id);
+    await caches.default.put(cacheKey, new Response(JSON.stringify(ids), { headers: { "cache-control": `public, max-age=${KEY_CACHE_SECONDS}` } }));
+  }
+  return ids.includes(installId);
+}
+
 async function admit(env, key, route, now) {
   if (!env.METER) return { ok: true }; // нет привязки (локально, тесты): без учёта
   const stub = env.METER.get(env.METER.idFromName(key.id));
@@ -182,6 +203,7 @@ export async function authorize(request, env, now = Date.now()) {
   if (cred.value.startsWith("va_")) {
     const t = await verifyAppToken(env.APP_TOKEN_SECRET, cred.value, now);
     if (!t.ok) return deny(401, t.error);
+    if (await installRevoked(env, t.installId)) return deny(403, "install_revoked");
     return { route, request: req, principal: { kind: "app", id: t.installId, tier: "app" } };
   }
   if (!cred.value.startsWith("vk_")) return deny(401, "invalid_key");

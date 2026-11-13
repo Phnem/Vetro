@@ -45,6 +45,31 @@ CREATE TABLE IF NOT EXISTS usage_daily (
   PRIMARY KEY (key_id, day, route)
 );
 
+-- Подписи APK, которым выдаётся токен установки (аттестация, ADR 0003). Пусто = приложению токен не выдаётся никому.
+-- Добавить: node scripts/add-signature.mjs <package> <sha256 подписи> "<метка>"  (подпись: apksigner verify --print-certs app.apk)
+CREATE TABLE IF NOT EXISTS app_signatures (
+  package TEXT NOT NULL,                    -- com.phnem.vetro
+  sha256  TEXT NOT NULL,                    -- hex в нижнем регистре, SHA-256 сертификата подписи APK
+  label   TEXT,                             -- release | fdroid | debug-perf
+  enabled INTEGER NOT NULL DEFAULT 1,
+  PRIMARY KEY (package, sha256)
+);
+
+-- Установки приложения, получившие токен. id = первые 32 hex SHA-256 открытого ключа, который телефон создал для аттестации.
+CREATE TABLE IF NOT EXISTS installs (
+  id             TEXT PRIMARY KEY,
+  package        TEXT NOT NULL,
+  signature      TEXT NOT NULL,             -- SHA-256 подписи APK из аттестации
+  security_level TEXT NOT NULL,             -- tee | strongbox
+  boot_state     TEXT,                      -- verified | self_signed | unverified | failed
+  os_patch       INTEGER,                   -- YYYYMM
+  first_seen     INTEGER NOT NULL,          -- мс
+  last_seen      INTEGER NOT NULL,
+  tokens_issued  INTEGER NOT NULL DEFAULT 1,
+  status         TEXT NOT NULL DEFAULT 'active'   -- active | revoked
+);
+CREATE INDEX IF NOT EXISTS installs_status ON installs(status);
+
 INSERT OR IGNORE INTO tiers (name, title, per_second, per_minute, per_day, max_limit, max_ids, allow_covers, allow_index, max_keys, price_stars, period_days, sold, sort) VALUES
   ('basic', 'Basic',  2,  30,   2000, 20, 10, 0, 0, 1,  100, 30, 1, 1),
   ('pro',   'Pro',    5, 120,  20000, 50, 40, 1, 0, 2,  400, 30, 1, 2),

@@ -40,8 +40,36 @@ npx wrangler d1 execute vetro-books --remote --command "<напечатанны�
 ```
 
 Ключ для страниц сайта виден в браузере, поэтому для него обязателен `--origins`: он принимается только с этих сайтов. Учёт по ключам ведёт Durable
-Object `KeyMeter` (расход по маршрутам пишется в `usage_daily` раз в минуту). Токены приложения (`va_…`, аттестация ключа) и бот в Telegram с
-панелью — фазы 2–4 ADR 0003.
+Object `KeyMeter` (расход по маршрутам пишется в `usage_daily` раз в минуту). Бот в Telegram и панель — фазы 3–4 ADR 0003.
+
+### Токен установки приложения (аттестация ключа Android)
+
+Приложение получает токен `va_…` (30 дней), доказав серверу, что это настоящий APK, а не скрипт:
+
+```
+GET  /v1/auth/challenge                 → {"challenge": "...", "expires_in": 120}
+POST /v1/auth/register {"challenge", "chain": [base64 DER, лист первым]}
+                                        → {"token": "va_...", "expires_at": ms, "install_id": "..."}
+```
+
+Телефон создаёт ключ в аппаратном хранилище с этим `challenge`, цепочка идёт до корня Google (`src/attest-roots.js`, обновление:
+`node scripts/fetch-attestation-roots.mjs`). В листе записаны пакет, SHA-256 подписи APK, уровень защиты и состояние загрузчика. Токен выдаётся,
+если: цепочка и подписи верны, `challenge` свежий и тот же, защита TEE/StrongBox (не программная), пакет и **все** подписи есть в `app_signatures`,
+загрузчик не в состоянии `failed` (`ATTEST_REJECT_BOOT_STATES` ужесточает: `failed,unverified` не пустит и телефоны с разблокированным загрузчиком).
+Отказ: `403 {"error":"attestation_failed","reason":…}` (`bad_signature`, `untrusted_root`, `certificate_expired`, `challenge_mismatch`,
+`software_attestation`, `package_not_allowed`, `signature_not_allowed`, `boot_state_rejected`…), у приложения в этом случае остаются старые источники.
+Установку можно отозвать: `UPDATE installs SET status = 'revoked' WHERE id = '…'` (действует в пределах минуты, повторная регистрация закрыта).
+
+Секрет подписи токенов и заданий — `APP_TOKEN_SECRET`; задаёт владелец и в репозиторий он не попадает:
+
+```powershell
+npx wrangler secret put APP_TOKEN_SECRET      # длинная случайная строка, например: node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))"
+node scripts/add-signature.mjs com.phnem.vetro <sha256 подписи релиза> release     # → INSERT для app_signatures (wrangler d1 execute ... --command)
+```
+
+Проверено на Xiaomi 13 (Android 16): цепочка из 5 сертификатов, корень «Key Attestation CA1», защита TEE, KeyMint 200; её копия лежит в
+`test/fixtures/attestation-xiaomi13.json`, на ней идут тесты (`test/attest.test.js`, `test/auth.test.js`). Промежуточные сертификаты Google
+короткоживущие, поэтому проверка срока идёт по времени снятия фикстуры.
 
 ## Выкладка
 
