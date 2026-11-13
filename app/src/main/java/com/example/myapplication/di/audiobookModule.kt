@@ -10,7 +10,9 @@ import com.example.myapplication.audiobooks.ui.AudiobookPlayerState
 import com.example.myapplication.audiobooks.ui.home.BooksHomeViewModel
 import com.example.myapplication.audiobooks.ui.details.BookDetailsViewModel
 import com.example.myapplication.data.local.JsonMapFileStore
+import android.content.Context
 import java.io.File
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.koin.android.ext.koin.androidContext
 import org.koin.core.module.dsl.viewModel
 import com.example.myapplication.audiobooks.data.local.LocalFolderSource
@@ -90,8 +92,24 @@ val audiobookModule = module {
     }
     single { AudiobookSearch(get(named(SOURCES))) }
     // Каталог книг Vetro (BookIndex V2) — первый источник поиска: телефонный индекс → api.vetrostudio.bid → аудио-источники.
-    single { com.example.myapplication.audiobooks.catalog.BookIndexStore(File(androidContext().filesDir, "audiobooks/bookindex"), get<OkHttpClient>()) }
-    single { com.example.myapplication.audiobooks.catalog.BookCatalogApi(get<OkHttpClient>()) }
+    // Токен установки (аттестация ключа, ADR 0003): CatalogAccess ходит за ним обычным клиентом, а каталог, индекс и обложки (Coil) —
+    // клиентом с перехватчиком, который подставляет токен только в запросы к API. Токена нет — всё идёт без него, как раньше.
+    single {
+        com.example.myapplication.audiobooks.catalog.access.CatalogAccess(
+            File(androidContext().filesDir, "audiobooks"), get<OkHttpClient>(), catalogApiBase(androidContext()),
+        )
+    }
+    single(named(CATALOG_HTTP)) {
+        get<OkHttpClient>().newBuilder()
+            .addInterceptor(com.example.myapplication.audiobooks.catalog.access.CatalogAuthInterceptor(get(), catalogApiBase(androidContext()).toHttpUrl().host))
+            .build()
+    }
+    single {
+        com.example.myapplication.audiobooks.catalog.BookIndexStore(
+            File(androidContext().filesDir, "audiobooks/bookindex"), get<OkHttpClient>(named(CATALOG_HTTP)), catalogApiBase(androidContext()),
+        )
+    }
+    single { com.example.myapplication.audiobooks.catalog.BookCatalogApi(get<OkHttpClient>(named(CATALOG_HTTP)), catalogApiBase(androidContext())) }
     single { com.example.myapplication.audiobooks.catalog.BookCatalog(get(), get(), get<com.example.myapplication.AppScope>()) }
     single {
         com.example.myapplication.audiobooks.data.BookSearchAdder(
@@ -248,4 +266,16 @@ private const val SOURCES = AUDIOBOOK_SOURCES
 
 /** Сеть сайта-источника: общий клиент и свой вежливый лимит — 2 запроса в секунду с запасом 3. */
 private fun site(http: OkHttpClient) =
+/** Имя клиента с перехватчиком токена установки (его берёт и загрузчик изображений: обложки каталога тоже требуют токен). */
+const val CATALOG_HTTP = "catalogHttp"
+
+/**
+ * Адрес API каталога. В debug-сборке его можно подменить файлом `files/audiobooks/api-base.txt` (например, `http://localhost:8787/v1` через
+ * `adb reverse` на локальный `wrangler dev`): так проверяется регистрация и работа с токеном без выкладки в Cloudflare. В релизе файла нет.
+ */
+private fun catalogApiBase(context: Context): String =
+    (if (BuildConfig.DEBUG) File(context.filesDir, "audiobooks/api-base.txt").takeIf { it.isFile }?.readText()?.trim() else null)
+        ?.takeIf { it.startsWith("http") }
+        ?: com.example.myapplication.audiobooks.catalog.BookCatalogConfig.API_V1
+
     SourceHttp(http, TokenBucketRateLimiter(maxTokens = 3.0, refillTokensPerSecond = 2.0))

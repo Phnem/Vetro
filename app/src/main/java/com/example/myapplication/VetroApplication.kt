@@ -77,7 +77,12 @@ class VetroApplication : Application(), SingletonImageLoader.Factory {
             .components {
                 add(
                     OkHttpNetworkFetcherFactory(
-                        callFactory = { org.koin.core.context.GlobalContext.get().get<okhttp3.OkHttpClient>() },
+                        // Клиент с перехватчиком токена установки: обложки каталога (api.vetrostudio.bid/covers) требуют токен, чужие хосты его не видят.
+                        callFactory = {
+                            org.koin.core.context.GlobalContext.get().get<okhttp3.OkHttpClient>(
+                                org.koin.core.qualifier.named(com.example.myapplication.di.CATALOG_HTTP),
+                            )
+                        },
                     ),
                 )
                 // Загруженные вручную обложки книг лежат в облаке: collection-attachment://<id>.
