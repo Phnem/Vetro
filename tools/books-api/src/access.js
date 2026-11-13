@@ -8,7 +8,6 @@
 const te = new TextEncoder();
 const KEY_CACHE_SECONDS = 60;
 const MISSING_KEY_CACHE_SECONDS = 30;
-const FLUSH_EVERY_ADMITS = 10;
 const FLUSH_ALARM_MS = 60_000;
 
 /** Тип запроса по пути: по нему считается расход и решается, доступен ли маршрут тарифу. */
@@ -253,7 +252,7 @@ function secondsToUtcMidnight(now) {
 
 /**
  * Один объект на ключ: секунда, минута и сутки (UTC) считаются в памяти, в хранилище — раз в несколько запросов и по будильнику,
- * в D1 (usage_daily) — раз в минуту при активности. Потеряться может хвост до FLUSH_EVERY_ADMITS запросов при вытеснении объекта.
+ * в D1 (usage_daily) — раз в минуту при активности. Счётчик суток сохраняется при каждом запросе, поэтому вытеснение объекта ничего не теряет.
  */
 export class KeyMeter {
   constructor(state, env) {
@@ -263,7 +262,6 @@ export class KeyMeter {
     this.day = null; // {d, n, denied, routes: {route: n}}
     this.sec = { t: 0, n: 0 };
     this.min = { t: 0, n: 0 };
-    this.sinceSave = 0;
     this.alarmSet = false;
   }
 
@@ -307,11 +305,8 @@ export class KeyMeter {
   }
 
   async touch(now) {
-    this.sinceSave++;
-    if (this.sinceSave >= FLUSH_EVERY_ADMITS) {
-      this.sinceSave = 0;
-      await this.state.storage.put("day", this.day);
-    }
+    // каждый запрос: объект вытесняется через секунды простоя, и всё, что только в памяти, пропадает вместе с ним (будильник тогда нечего сбрасывать в D1)
+    await this.state.storage.put("day", this.day);
     if (!this.alarmSet) {
       this.alarmSet = true;
       await this.state.storage.setAlarm(now + FLUSH_ALARM_MS);
