@@ -215,14 +215,19 @@ async function showUsage(tg, db, chatId, customerId, lang, now) {
 
   const byKey = new Map();
   for (const r of rows) {
-    if (!byKey.has(r.key_id)) byKey.set(r.key_id, { today: {}, todayTotal: 0, monthTotal: 0 });
-    const stat = byKey.get(r.key_id);
-    if (r.route !== "_denied") {
-      stat.monthTotal += r.requests;
-      if (r.day === todayUtc) stat.todayTotal += r.requests;
+    if (!byKey.has(r.key_id)) {
+      byKey.set(r.key_id, { today: {}, todayTotal: 0, monthTotal: 0, todayDenied: 0, monthDenied: 0 });
     }
-    if (r.day === todayUtc) {
-      stat.today[r.route] = (stat.today[r.route] ?? 0) + r.requests;
+    const stat = byKey.get(r.key_id);
+    if (r.route === "_denied") {
+      stat.monthDenied += r.requests;
+      if (r.day === todayUtc) stat.todayDenied += r.requests;
+    } else {
+      stat.monthTotal += r.requests;
+      if (r.day === todayUtc) {
+        stat.todayTotal += r.requests;
+        stat.today[r.route] = (stat.today[r.route] ?? 0) + r.requests;
+      }
     }
   }
 
@@ -237,11 +242,16 @@ async function showUsage(tg, db, chatId, customerId, lang, now) {
     const routeParts = Object.entries(stat.today)
       .map(([route, n]) => `${esc(route)}: ${fmtNum(n, lang)}`)
       .join(", ");
+    const deniedLine =
+      stat.todayDenied > 0 || stat.monthDenied > 0
+        ? `\n  ${ru ? "Отклонено" : "Denied"}: <b>${fmtNum(stat.todayDenied, lang)}</b> ${ru ? "сегодня" : "today"} · <b>${fmtNum(stat.monthDenied, lang)}</b> ${ru ? "за месяц" : "this month"}`
+        : "";
     lines.push(
       `• <code>${esc(k.key_prefix)}</code> (<b>${esc(k.label || k.tier)}</b>)\n` +
         `  ${ru ? "Сегодня" : "Today"}: <b>${fmtNum(stat.todayTotal, lang)}</b> / ${limitLabel}` +
         (routeParts ? ` (${routeParts})` : "") +
-        `\n  ${ru ? "За месяц" : "This month"}: <b>${fmtNum(stat.monthTotal, lang)}</b>`,
+        `\n  ${ru ? "За месяц" : "This month"}: <b>${fmtNum(stat.monthTotal, lang)}</b>` +
+        deniedLine,
     );
   }
   await tg.sendMessage(chatId, lines.join("\n"), { reply_markup: replyMenuKeyboard(lang) });
