@@ -53,3 +53,16 @@ CREATE TABLE IF NOT EXISTS orders (
 );
 CREATE INDEX IF NOT EXISTS orders_application ON orders(application_id);
 CREATE INDEX IF NOT EXISTS orders_status ON orders(status);
+
+-- Исходящие уведомления из панели покупателям в Telegram: панель кладёт строку, бот (cron раз в минуту) отправляет и ставит sent_at.
+-- Панель сама в Telegram не ходит: токена бота у неё нет.
+CREATE TABLE IF NOT EXISTS bot_outbox (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  chat_id     INTEGER NOT NULL,              -- customers.telegram_id
+  text        TEXT NOT NULL,                 -- готовый текст (HTML Telegram); язык выбора живёт в bot_sessions бота, поэтому панель пишет RU и EN в одном сообщении
+  created_at  INTEGER NOT NULL,
+  sent_at     INTEGER,                       -- NULL = ждёт отправки
+  error       TEXT,                          -- последняя ошибка отправки; после 5 неудач бот ставит sent_at и оставляет error
+  attempts    INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS bot_outbox_pending ON bot_outbox(sent_at) WHERE sent_at IS NULL;
