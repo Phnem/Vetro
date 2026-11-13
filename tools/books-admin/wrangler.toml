@@ -1,0 +1,27 @@
+# Панель владельца API каталога (ADR 0003, фаза 4): dash.vetrostudio.bid, вход только через Cloudflare Access.
+# Без ACCESS_TEAM_DOMAIN и ACCESS_AUD воркер отвечает 503 на всё: закрыт, пока Access не настроен.
+name = "vetro-books-admin"
+main = "src/worker.js"
+compatibility_date = "2026-11-01"
+workers_dev = false
+
+[[routes]]
+pattern = "dash.vetrostudio.bid"
+custom_domain = true
+
+# Общая база D1 с vetro-books-api и ботом.
+[[d1_databases]]
+binding = "DB"
+database_name = "vetro-books"
+database_id = "5574b392-dfb0-4ab6-9afc-336993d7947a"
+
+[vars]
+# Zero Trust -> Settings -> Custom pages: команда вида <team>.cloudflareaccess.com
+ACCESS_TEAM_DOMAIN = ""
+# Zero Trust -> Access -> Applications -> dash.vetrostudio.bid -> Overview: «Application Audience (AUD) Tag»
+ACCESS_AUD = ""
+# e-mail владельца: даже при верном токене Access пускаем только его (пусто = любой, кого пустила политика Access)
+OWNER_EMAIL = ""
+
+[observability]
+enabled = false
