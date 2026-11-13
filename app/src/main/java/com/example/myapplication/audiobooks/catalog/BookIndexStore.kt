@@ -1,6 +1,7 @@
 package com.example.myapplication.audiobooks.catalog
 
 import android.database.sqlite.SQLiteDatabase
+import android.util.Log
 import com.squareup.zstd.okio.zstdDecompress
 import java.io.File
 import kotlinx.coroutines.CancellationException
@@ -101,8 +102,9 @@ class BookIndexStore(
                             plan.steps.forEach(::applyDelta)
                         } catch (e: CancellationException) {
                             throw e
-                        } catch (_: Exception) {
+                        } catch (e: Exception) {
                             // Дельта не легла (битый файл, чужая база): надёжнее скачать базу целиком.
+                            Log.w(TAG, "delta failed, installing the full base", e)
                             installBase(m.base)
                         }
                         Outcome.UPDATED
@@ -110,7 +112,8 @@ class BookIndexStore(
                 }
             } catch (e: CancellationException) {
                 throw e
-            } catch (_: Exception) {
+            } catch (e: Exception) {
+                Log.w(TAG, "index refresh failed", e)
                 Outcome.FAILED
             }
         }
@@ -233,5 +236,6 @@ class BookIndexStore(
     companion object {
         /** Манифест спрашиваем не чаще, чем раз в трое суток. */
         const val CHECK_INTERVAL_MS = 3L * 24 * 60 * 60 * 1000
+        private const val TAG = "BookIndex"
     }
 }
