@@ -17,9 +17,9 @@ database_id = "5574b392-dfb0-4ab6-9afc-336993d7947a"
 
 [vars]
 # Zero Trust -> Settings -> Custom pages: команда вида <team>.cloudflareaccess.com
-ACCESS_TEAM_DOMAIN = ""
+ACCESS_TEAM_DOMAIN = "long-field-d35e.cloudflareaccess.com"
 # Zero Trust -> Access -> Applications -> dash.vetrostudio.bid -> Overview: «Application Audience (AUD) Tag»
-ACCESS_AUD = ""
+ACCESS_AUD = "36c4a74c2bb10f67e81a16b57fdd75312a8cc17a3e3b16970967aaff967bb5ee"
 # e-mail владельца: даже при верном токене Access пускаем только его (пусто = любой, кого пустила политика Access)
 OWNER_EMAIL = ""
 
