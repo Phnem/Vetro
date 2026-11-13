@@ -86,6 +86,19 @@ test("verifyChain rejects a foreign root, a cut chain, a swapped order and an ex
   assert.equal((await verifyChain(["not", "certs"], roots, NOW)).error, "bad_certificate");
 });
 
+test("verifyChain refuses an attested app key used as an issuer (forged leaf in front of a real chain)", async () => {
+  // Атака: на настоящем телефоне создан аттестованный ключ, им подписан «лист» с чужим пакетом и поставлен ПЕРЕД настоящей цепочкой.
+  // Подписи могли бы сойтись, поэтому проверяется структура: расширение аттестации только у листа, остальные сертификаты — центры сертификации.
+  const real = chain();
+  const forged = [real[0], real[0], real[1], real[2], real[3], real[4]]; // второй сертификат несёт расширение аттестации и не CA
+  const res = await verifyChain(forged, roots, NOW);
+  assert.deepEqual([res.ok, res.error, res.index], [false, "misplaced_attestation", 1]);
+  // настоящие промежуточные сертификаты Google — CA с правом подписывать сертификаты, а лист — нет
+  const certs = await verified();
+  assert.deepEqual(certs.slice(1).map((c) => [c.isCA, c.keyCertSign !== false]), [[true, true], [true, true], [true, true], [true, true]]);
+  assert.equal(certs[0].isCA, false);
+});
+
 test("verifyChain rejects a tampered certificate", async () => {
   const flipped = (index, offsetFromEnd) => {
     const c = chain();

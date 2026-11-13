@@ -6,6 +6,8 @@
 import { bytesOf, children, ecdsaDerToRaw, equalBytes, hex, intOf, oidOf, rawOf, readTLV, timeOf } from "./der.js";
 
 export const OID_KEY_DESCRIPTION = "1.3.6.1.4.1.11129.2.1.17";
+const OID_BASIC_CONSTRAINTS = "2.5.29.19";
+const OID_KEY_USAGE = "2.5.29.15";
 const OID_EC = "1.2.840.10045.2.1";
 const OID_RSA = "1.2.840.113549.1.1.1";
 const CURVES = { "1.2.840.10045.3.1.7": { name: "P-256", size: 32 }, "1.3.132.0.34": { name: "P-384", size: 48 } };
@@ -42,7 +44,22 @@ export function parseCertificate(der) {
     }
   }
   const [nb, na] = children(der, validity);
+  // basicConstraints (cA) и keyUsage (keyCertSign): без них нельзя отличить настоящего издателя от ключа приложения, умеющего подписывать
+  const bc = extensions.find((e) => e.oid === OID_BASIC_CONSTRAINTS);
+  const ku = extensions.find((e) => e.oid === OID_KEY_USAGE);
+  let isCA = false;
+  if (bc) {
+    const [first] = children(bc.value, readTLV(bc.value, 0));
+    isCA = !!first && first.tag === 1 && bc.value[first.start] !== 0; // BOOLEAN cA
+  }
+  let keyCertSign = null; // null: расширения нет, ограничений по ключу нет
+  if (ku) {
+    const bits = bytesOf(ku.value, readTLV(ku.value, 0)); // [число неиспользуемых бит, байты флагов…]
+    keyCertSign = bits.length > 1 && (bits[1] & 0x04) !== 0;
+  }
   return {
+    isCA,
+    keyCertSign,
     tbs: rawOf(der, tbs),
     sigAlgOid: oidOf(der, children(der, sigAlg)[0]),
     signature: bytesOf(der, sigBits).subarray(1), // первый байт BIT STRING — число неиспользуемых бит
@@ -100,6 +117,14 @@ export async function verifyChain(chain, roots, now = Date.now()) {
     certs = chain.map(parseCertificate);
   } catch {
     return { ok: false, error: "bad_certificate" };
+  }
+  // Структура до подписей. Расширение аттестации бывает ТОЛЬКО у листа: иначе злоумышленник подписал бы своим аттестованным ключом
+  // поддельный «лист» с чужим именем пакета и поставил его перед настоящей цепочкой своего телефона. Все сертификаты выше листа
+  // обязаны быть центрами сертификации (cA, keyCertSign), а ключ приложения таким не является.
+  for (let i = 0; i < certs.length; i++) {
+    if (i === 0) continue;
+    if (certs[i].extensions.some((e) => e.oid === OID_KEY_DESCRIPTION)) return { ok: false, error: "misplaced_attestation", index: i };
+    if (!certs[i].isCA || certs[i].keyCertSign === false) return { ok: false, error: "not_ca", index: i };
   }
   for (let i = 0; i < certs.length; i++) {
     const c = certs[i];
