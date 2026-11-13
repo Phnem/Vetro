@@ -1,5 +1,7 @@
 package com.example.myapplication.audiobooks.domain.enrichment
 
+import com.example.myapplication.audiobooks.catalog.BookCatalog
+import com.example.myapplication.audiobooks.catalog.CatalogDetails
 import com.example.myapplication.network.AppLanguage
 import com.example.myapplication.network.LookupResult
 import com.example.myapplication.network.enrichment.BookEdition
@@ -8,6 +10,10 @@ import com.example.myapplication.network.enrichment.GoogleBooksClient
 import com.example.myapplication.network.enrichment.OpenLibraryClient
 import java.util.Locale
 import kotlin.math.ln
+import kotlinx.coroutines.CancellationException
+
+/** Сколько записей каталога просматривается при поиске «той же» книги. */
+private const val MATCH_CANDIDATES = 10
 
 /**
  * Произведение за озвучкой: Work → Edition → Narration. Источник аудиокниги знает озвучку; Open
@@ -24,13 +30,68 @@ data class BookWorkInfo(
     val coverUrl: String?,
     /** Только когда у источника описания нет. */
     val description: String?,
+    /** Карточка книги из каталога Vetro (жанры, серия, оценка…), если книга там найдена. */
+    val catalog: CatalogDetails? = null,
+    /** Жанры каталога на языке интерфейса (канонические названия, без шума источников). */
+    val genres: List<String> = emptyList(),
+    /** «Ойкумена · 2» — серия каталога на языке интерфейса. */
+    val seriesLine: String? = null,
 )
 
 class BookWorkEnrichment(
     private val openLibrary: OpenLibraryClient,
     private val googleBooks: GoogleBooksClient,
+    /** Каталог Vetro — первый источник подробностей: свои описание, жанры, серия и оригинал раньше внешних сайтов. */
+    private val catalog: BookCatalog? = null,
 ) {
+    /**
+     * Каталог Vetro первым (описание на языке интерфейса, оригинальное название, год, жанры, серия), потом Open Library и
+     * Google Books — за тем, чего в каталоге нет (издание, обложка) и за описанием, если своего нет.
+     */
     suspend fun lookup(
+        title: String,
+        authors: List<String>,
+        sourceDescription: String?,
+        language: AppLanguage,
+    ): BookWorkInfo? {
+        val english = language != AppLanguage.RU
+        val own = catalogDetails(title, authors)
+        val ownDescription = own?.descriptionFor(english)
+        val sourceText = sourceDescription?.takeIf { it.isNotBlank() }
+        val external = lookupExternal(title, authors, sourceText ?: ownDescription, language)
+        if (own == null) return external
+        val base = external ?: BookWorkInfo(
+            workKey = "vetro:${own.vid}", originalTitle = null, firstPublishYear = null, editionCount = 0,
+            edition = null, coverUrl = null, description = null,
+        )
+        return base.copy(
+            originalTitle = own.originalTitle?.takeIf { BookWorkMatching.normalize(it) != BookWorkMatching.normalize(title) }
+                ?: base.originalTitle,
+            firstPublishYear = own.year ?: base.firstPublishYear,
+            description = if (sourceText == null) ownDescription ?: base.description else null,
+            catalog = own,
+            genres = own.genreLabels(english),
+            seriesLine = own.seriesLine(english),
+        )
+    }
+
+    /** Та же книга в каталоге: совпало название (без скобок и подзаголовка) и хотя бы одно слово автора. */
+    private suspend fun catalogDetails(title: String, authors: List<String>): CatalogDetails? {
+        val cat = catalog ?: return null
+        if (BookWorkMatching.normalize(title).isBlank()) return null
+        return try {
+            val hit = cat.search(title, MATCH_CANDIDATES).firstOrNull { b ->
+                BookWorkMatching.sameAsCatalog(title, authors, listOfNotNull(b.ru, b.en), listOfNotNull(b.ruAuthor, b.enAuthor))
+            }
+            hit?.let { cat.details(it.vid) }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    private suspend fun lookupExternal(
         title: String,
         authors: List<String>,
         sourceDescription: String?,
@@ -116,5 +177,16 @@ internal object BookWorkMatching {
         .replace(Regex("""[^\p{L}\p{N}]+"""), " ")
         .trim()
 
-    private fun words(name: String): List<String> = normalize(name).split(' ').filter { it.length > 1 }
+    fun words(name: String): List<String> = normalize(name).split(' ').filter { it.length > 1 }
+
+    /**
+     * «Та же книга» в каталоге Vetro: название (без скобок и подзаголовка) совпало с одним из названий записи и есть
+     * общее слово автора. Автор книги неизвестен — хватает названия.
+     */
+    fun sameAsCatalog(title: String, authors: List<String>, catalogTitles: List<String>, catalogAuthors: List<String>): Boolean {
+        val wanted = normalize(title)
+        if (wanted.isBlank() || catalogTitles.none { normalize(it) == wanted }) return false
+        val authorWords = authors.flatMap(::words).toSet()
+        return authorWords.isEmpty() || catalogAuthors.flatMap(::words).any { it in authorWords }
+    }
 }

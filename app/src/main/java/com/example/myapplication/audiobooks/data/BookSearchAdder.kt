@@ -144,15 +144,33 @@ class BookSearchAdder(
         if (source != null && details != null) {
             val opened = repository.saveOpened(source, details)
             repository.applyCatalogIdentity(opened.workId, book.title, authors, book.year, book.coverUrl)
+            applyCatalogDetails(opened.workId, cat.vid, english = !BookNorm.hasCyrillic(book.title))
             repository.setInLibrary(opened.workId, true)
             return true
         }
         // Озвучки пока нет ни у одного источника: книга всё равно встаёт на полку, озвучку ищем позже.
         val language = if (BookNorm.hasCyrillic(book.title)) BookLanguage.RU else BookLanguage.EN
         val workId = repository.saveCatalogWork(book.title, authors, book.year, book.coverUrl, language)
+        applyCatalogDetails(workId, cat.vid, english = language == BookLanguage.EN)
         repository.setInLibrary(workId, true)
         pending?.update { it + (workId.value to PendingCatalogAudio(cat.vid, titles, authors, triedAtMs = nowMs())) }
         return true
+    }
+
+    /**
+     * Описание, жанры, серия и оригинальное название каталога — в произведение (только в пустые поля). Не ждём дольше
+     * [DETAILS_WAIT_MS] и не падаем: без подробностей книга всё равно добавляется, их доберёт страница книги.
+     */
+    private suspend fun applyCatalogDetails(workId: WorkId, vid: String, english: Boolean) {
+        val cat = catalog ?: return
+        try {
+            val details = withTimeoutOrNull(DETAILS_WAIT_MS) { cat.details(vid) } ?: return
+            repository.applyCatalogDetails(workId, details, english)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            // подробности — приятное дополнение к добавлению, не его условие
+        }
     }
 
     /**
@@ -203,6 +221,7 @@ private const val CATALOG_LIMIT = 20
 private const val CONFIDENT = 3
 private const val AUDIO_HINT_WAIT_MS = 4_000L
 private const val FIND_AUDIO_TIMEOUT_MS = 12_000L
+private const val DETAILS_WAIT_MS = 3_000L
 private const val RETRY_AFTER_MS = 12L * 60 * 60 * 1000
 private const val MAX_PER_PASS = 3
 private const val REMEMBERED = 400

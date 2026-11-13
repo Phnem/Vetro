@@ -521,14 +521,16 @@ private fun buildFacts(
     )
     val total = details.chapterDurationsSec.takeIf { d -> d.isNotEmpty() && d.all { it != null } }?.sumOf { it!! } ?: b.durationSec
     return listOfNotNull(
-        details.rating?.let { DetailFact("rating", icons.getValue("rating"), s.rating, "%.1f / 5".format(it)) },
+        details.rating?.let { DetailFact("rating", icons.getValue("rating"), s.rating, "%.1f / 5".format(it)) }
+            // Оценки сайта нет — оценка читателей из каталога (FantLab, 10-балльная; в каталог попадает от 10 голосов).
+            ?: work?.catalog?.rating?.let { DetailFact("rating", icons.getValue("rating"), s.rating, "%.1f / 10".format(it)) },
         total?.let { DetailFact("duration", icons.getValue("duration"), s.duration, s.formatDuration(it)) },
         details.chapterDurationsSec.size.takeIf { it > 0 }?.let { DetailFact("chapters", icons.getValue("chapters"), s.chapterCount, s.chaptersN(it)) },
         b.year?.let { DetailFact("year", icons.getValue("year"), s.year, it.toString()) },
-        b.genres.firstOrNull()?.let { DetailFact("genre", icons.getValue("genre"), s.genre, it) },
+        (b.genres.firstOrNull() ?: work?.genres?.firstOrNull())?.let { DetailFact("genre", icons.getValue("genre"), s.genre, it) },
         b.narrators.takeIf { it.isNotEmpty() }?.let { DetailFact("narrator", icons.getValue("narrator"), s.narrator, it.joinToString(", ")) },
         b.authors.takeIf { it.isNotEmpty() }?.let { DetailFact("author", icons.getValue("author"), s.author, it.joinToString(", ")) },
-        details.series?.let { DetailFact("series", icons.getValue("series"), s.series, it) },
+        (details.series ?: work?.seriesLine)?.let { DetailFact("series", icons.getValue("series"), s.series, it) },
         // Произведение за озвучкой: как оно называется в оригинале и когда вышло впервые.
         work?.originalTitle?.let { DetailFact("original", icons.getValue("series"), s.original, it) },
         work?.firstPublishYear?.takeIf { it != b.year }?.let {

@@ -2,6 +2,8 @@ package com.example.myapplication.audiobooks.data
 
 import app.cash.sqldelight.coroutines.asFlow
 import app.cash.sqldelight.coroutines.mapToList
+import com.example.myapplication.audiobooks.catalog.BookNorm
+import com.example.myapplication.audiobooks.catalog.CatalogDetails
 import com.example.myapplication.audiobooks.domain.model.NarrationId
 import com.example.myapplication.audiobooks.domain.model.VariantId
 import com.example.myapplication.audiobooks.domain.model.WorkId
@@ -158,6 +160,31 @@ class AudiobookRepository(
                     cluster_fingerprint = fingerprint(authors, title, work.language),
                     title = title, authors_json = json.encodeToString(authors),
                     year = year?.toLong() ?: work.year, cover_url = coverUrl ?: work.cover_url, updated_at = nowMs(),
+                ),
+            )
+        }
+    }
+
+    /**
+     * Подробности каталога (оригинальное название, серия, описание, жанры, «сборник», год) в произведение: только в
+     * пустые поля — то, что уже записал источник или пользователь, не затирается. [english] — язык названий жанров и серии.
+     */
+    suspend fun applyCatalogDetails(workId: WorkId, details: CatalogDetails, english: Boolean) = io {
+        q.transaction {
+            val work = q.workById(workId.value).executeAsOneOrNull() ?: return@transaction
+            val genres = details.genreLabels(english)
+            // Номер в серии принадлежит той серии, у которой он записан: чужой номер к серии источника не приклеиваем.
+            val seriesFromCatalog = if (work.series_title == null) details.seriesTitle(english) else null
+            q.upsertWork(
+                work.copy(
+                    title_original = work.title_original
+                        ?: details.originalTitle?.takeIf { BookNorm.norm(it) != BookNorm.norm(work.title) },
+                    series_title = work.series_title ?: seriesFromCatalog,
+                    series_index = work.series_index ?: if (seriesFromCatalog != null) details.seriesIndex else null,
+                    description = work.description?.takeIf { it.isNotBlank() } ?: details.descriptionFor(english),
+                    genres_json = if (work.genres_json == "[]" && genres.isNotEmpty()) json.encodeToString(genres) else work.genres_json,
+                    is_collection = if (details.isCollection) 1L else work.is_collection,
+                    year = work.year ?: details.year?.toLong(),
                 ),
             )
         }

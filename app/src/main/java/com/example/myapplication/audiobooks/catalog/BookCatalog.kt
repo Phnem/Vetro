@@ -49,6 +49,21 @@ class BookCatalogApi(
         }
     }
 
+    /** Карточка одной книги (`GET /v1/books/{id}`). null — сеть, 404 или у книги нет подробностей; не исключение. */
+    suspend fun details(vid: String): CatalogDetails? = withContext(Dispatchers.IO) {
+        try {
+            val url = "$apiV1/books/$vid".toHttpUrlOrNull() ?: return@withContext null
+            http.newCall(Request.Builder().url(url).build()).execute().use { resp ->
+                if (!resp.isSuccessful) return@withContext null
+                parseCatalogDetails(vid, json.parseToJsonElement(resp.body.string()).jsonObject)
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            null
+        }
+    }
+
     internal fun parse(o: JsonObject): CatalogBook? {
         val id = o["id"]?.jsonPrimitive?.contentOrNull?.toIntOrNull() ?: return null
         fun s(k: String) = o[k]?.jsonPrimitive?.contentOrNull
@@ -91,6 +106,21 @@ class BookCatalog(
         return CatalogRanker.rank(query, merged.values.toList()).take(limit)
     }
 
+    /**
+     * Подробности книги (описание, жанры, серия, оригинал…) по id каталога. Ответ сервера кэшируется на сутки, а здесь —
+     * в памяти на время сессии: карточка открывается и из поиска, и со страницы книги. Нет ответа за [API_TIMEOUT_MS] — null.
+     */
+    suspend fun details(vid: String): CatalogDetails? {
+        synchronized(detailsCache) { detailsCache[vid] }?.let { return it }
+        val fresh = withTimeoutOrNull(API_TIMEOUT_MS) { api.details(vid) } ?: return null
+        synchronized(detailsCache) { detailsCache[vid] = fresh }
+        return fresh
+    }
+
+    private val detailsCache = object : LinkedHashMap<String, CatalogDetails>() {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, CatalogDetails>?) = size > DETAILS_REMEMBERED
+    }
+
     fun coverUrl(book: CatalogBook, large: Boolean = false): String? =
         if (book.hasCover && BookCatalogConfig.coversSupported) {
             "${BookCatalogConfig.COVERS}/${if (large) "large" else "small"}/${book.vid}.avif?v=${book.coverRev}"
@@ -112,5 +142,6 @@ class BookCatalog(
         /** Все слова запроса найдены (покрытие 200 + хотя бы слово в названии 100). */
         const val STRONG_SCORE = 300
         const val API_TIMEOUT_MS = 4_000L
+        const val DETAILS_REMEMBERED = 100
     }
 }

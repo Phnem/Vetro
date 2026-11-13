@@ -100,7 +100,11 @@ val enrichmentModule = module {
     single { TitleIdResolver(get(), get(), get(), get(), get(), get(), contributors = getAll<TitleIdContributor>()) }
     single { com.example.myapplication.domain.enrichment.TitleInfoEnricher(get(), get(), get()) }
 
-    single { com.example.myapplication.audiobooks.domain.enrichment.BookWorkEnrichment(get(), get()) }
+    single {
+        com.example.myapplication.audiobooks.domain.enrichment.BookWorkEnrichment(
+            get(), get(), getOrNull<com.example.myapplication.audiobooks.catalog.BookCatalog>(),
+        )
+    }
 
     single {
         TitleEnrichmentRepository(

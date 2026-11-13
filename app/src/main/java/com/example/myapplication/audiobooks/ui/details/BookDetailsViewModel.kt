@@ -1,6 +1,7 @@
 package com.example.myapplication.audiobooks.ui.details
 
 import com.example.myapplication.network.AppLanguage
+import kotlinx.coroutines.CancellationException
 import com.example.myapplication.audiobooks.domain.enrichment.BookCoverFinder
 import com.example.myapplication.audiobooks.domain.enrichment.BookWorkEnrichment
 import com.example.myapplication.audiobooks.domain.enrichment.BookWorkInfo
@@ -359,7 +360,18 @@ class BookDetailsViewModel(
             }
         }
         val byAuthor = async { authorBooks() }
-        _state.update { it.copy(narrations = narrations.await(), authorBooks = byAuthor.await(), work = work.await()) }
+        val info = work.await()
+        _state.update { it.copy(narrations = narrations.await(), authorBooks = byAuthor.await(), work = info) }
+        // Подробности каталога (жанры, серия, описание, оригинал) остаются в произведении: видны на полках и без сети.
+        info?.catalog?.let { catalog ->
+            try {
+                repository.applyCatalogDetails(opened.workId, catalog, english = language() != AppLanguage.RU)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                // не получилось записать — на экране подробности всё равно есть
+            }
+        }
     }
 
     /** Та же книга на другом сайте, чьи детали открываются; сначала — по приоритету источников. */
