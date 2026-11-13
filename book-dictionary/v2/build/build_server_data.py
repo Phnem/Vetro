@@ -8,6 +8,8 @@ D1 tables (see out/server/schema.sql):
   works(id, ru, en, ra, ea, alt, x, y, f, cv, d)   d = JSON detail card, fts = FTS5 over text columns
 Detail card (compact keys): orig{t,l} type alts[{t,l}] authors[{n,l,r}] series[{ru,en,pos}]
   tr[{l,t,by,y}] ed[{t,l,pub,y,isbn,fmt}] ext{source:id} cover{src,page,lic,w,h}
+  + from the details store (--details, build/details.py): desc{t,l} gen[canonical genre keys] ol coll ch dur rate{v,n}
+    and series[{ru,en,pos}] when the master DB has none
 R2 lists (wrangler r2 bulk put --filename): covers-small.json, covers-large.json.
 """
 import argparse
@@ -18,6 +20,7 @@ import time
 from collections import defaultdict
 
 import build_index as bi
+import details as dm
 from common import norm
 
 CHUNK = 15000
@@ -122,6 +125,18 @@ def load_details(conn, wids):
     return det
 
 
+def merge_extras(card, extra):
+    """Master-DB card + details-store extras. The master's structured series wins; the store only fills a gap."""
+    if not extra:
+        return card
+    card = dict(card)
+    for k, v in extra.items():
+        if k == "series" and card.get("series"):
+            continue
+        card.setdefault(k, v)
+    return card
+
+
 def detail_json(d):
     for drop in (None, "ed", "alts", "tr", "series"):
         if drop:
@@ -135,7 +150,9 @@ def detail_json(d):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--master", required=True)
-    ap.add_argument("--aihand", required=True)
+    ap.add_argument("--aihand", required=True, nargs="+", help="aihand.txt и/или блоки демонов (harvested_blocks*.json)")
+    ap.add_argument("--details", help="снимок vetro_work_details.sqlite: описание, жанры, серии и др. в карточку")
+    ap.add_argument("--suffix", default="", help="'_next': загрузить рядом с боевыми таблицами и обменять swap.sql")
     ap.add_argument("--covers", required=True, help="folder with small/ and large/ AVIF files named {work_id}.avif")
     ap.add_argument("--out", required=True)
     args = ap.parse_args()
@@ -159,11 +176,21 @@ def main():
 
     det = load_details(conn, {vid_to_wid[v] for v in selected if v in vid_to_wid})
     print(f"details loaded in {time.time() - t0:.0f}s")
+    extra_cards = dm.load_extras(args.details, set(selected)) if args.details else {}
+    if args.details:
+        keys = defaultdict(int)
+        for e in extra_cards.values():
+            for k in e:
+                keys[k] += 1
+        print(f"details store: {len(extra_cards)} cards with extras; fields: {dict(sorted(keys.items()))}")
 
     rows = bi.to_rows(selected, covers)  # same rows as the phone index, so ids/flags/covers agree
+    # Без суффикса таблицы пересоздаются «на месте» (первая выкладка). С суффиксом (`--suffix _next`) всё грузится в
+    # works_next/fts_next рядом с боевыми, а swap.sql меняет их местами за доли секунды: API не пустеет на время заливки.
+    W, F = "works" + args.suffix, "fts" + args.suffix
     with open(os.path.join(out, "schema.sql"), "w", encoding="utf-8", newline="\n") as f:
-        f.write("""DROP TABLE IF EXISTS works;
-CREATE TABLE works (
+        f.write(f"""DROP TABLE IF EXISTS {W};
+CREATE TABLE {W} (
   id INTEGER PRIMARY KEY, ru TEXT, en TEXT, ra TEXT, ea TEXT, alt TEXT, x TEXT,
   y INTEGER, f INTEGER NOT NULL DEFAULT 0, cv INTEGER NOT NULL DEFAULT 0, d TEXT
 );
@@ -176,18 +203,24 @@ CREATE TABLE IF NOT EXISTS meta (k TEXT PRIMARY KEY, v TEXT);
         files.append(name)
         with open(os.path.join(out, name), "w", encoding="utf-8", newline="\n") as f:
             for (bid, ru, en, ra, ea, alt, x, y, fl, cv) in part:
-                d = detail_json(det.get(vid_to_wid.get(f"{bid:09d}"), {}))
-                f.write(f"INSERT INTO works VALUES ({bid},{sql(ru)},{sql(en)},{sql(ra)},{sql(ea)},{sql(alt)},{sql(x)},"
+                d = detail_json(merge_extras(det.get(vid_to_wid.get(f"{bid:09d}"), {}), extra_cards.get(bid)))
+                f.write(f"INSERT OR REPLACE INTO {W} VALUES ({bid},{sql(ru)},{sql(en)},{sql(ra)},{sql(ea)},{sql(alt)},{sql(x)},"
                         f"{sql(y)},{fl},{cv},{sql(d)});\n")
     with open(os.path.join(out, "post-import.sql"), "w", encoding="utf-8", newline="\n") as f:
-        f.write("DROP TABLE IF EXISTS fts;\n")
-        f.write("CREATE VIRTUAL TABLE fts USING fts5(ru, en, ra, ea, alt, x, tokenize='unicode61 remove_diacritics 2', prefix='2 3');\n")
+        f.write(f"DROP TABLE IF EXISTS {F};\n")
+        f.write(f"CREATE VIRTUAL TABLE {F} USING fts5(ru, en, ra, ea, alt, x, tokenize='unicode61 remove_diacritics 2', prefix='2 3');\n")
         for start in range(0, len(rows), FTS_CHUNK):
             part = rows[start:start + FTS_CHUNK]
-            f.write(f"INSERT INTO fts(rowid, ru, en, ra, ea, alt, x) SELECT id, ru, en, ra, ea, alt, x FROM works "
+            # DELETE first: a retried chunk (wrangler failed half-way) must not leave doubled FTS rows.
+            f.write(f"DELETE FROM {F} WHERE rowid BETWEEN {part[0][0]} AND {part[-1][0]};\n")
+            f.write(f"INSERT INTO {F}(rowid, ru, en, ra, ea, alt, x) SELECT id, ru, en, ra, ea, alt, x FROM {W} "
                     f"WHERE id BETWEEN {part[0][0]} AND {part[-1][0]};\n")
         f.write(f"INSERT OR REPLACE INTO meta VALUES ('catalog_works', '{len(rows)}');\n")
         f.write("INSERT OR REPLACE INTO meta VALUES ('catalog_built', datetime('now'));\n")
+    if args.suffix:
+        with open(os.path.join(out, "swap.sql"), "w", encoding="utf-8", newline="\n") as f:
+            f.write("DROP TABLE IF EXISTS fts;\nDROP TABLE IF EXISTS works;\n")
+            f.write(f"ALTER TABLE {W} RENAME TO works;\nALTER TABLE {F} RENAME TO fts;\n")
 
     # R2 upload lists. Keys use the 9-digit vetro id so the client never needs the internal work id.
     missing = 0

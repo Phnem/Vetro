@@ -9,7 +9,7 @@ Cloudflare Worker для `https://api.vetrostudio.bid`: каталог книг 
 | `GET /v1/manifest` | манифест телефонного индекса (R2 `index/manifest.json`), ETag + `max-age=300` |
 | `GET /v1/index/{base\|delta}/<файл>` | версионные файлы индекса (zstd), `immutable`, поддерживается `Range` |
 | `GET /v1/search?q=&limit=` | FTS5 по всему серверному каталогу (268 840 произведений, D1): `{items:[{id,ru,en,ra,ea,y,f,cv}]}` |
-| `GET /v1/books/{id9}` | книга и карточка деталей (оригинал, переводы, серии, издания, внешние id, источник обложки) |
+| `GET /v1/books/{id9}` | книга и карточка деталей `detail`: `orig`, `type`, `alts`, `authors`, `series`, `tr`, `ed`, `ext`, `cover` и (с 2026-11-13) `desc{t,l}` описание, `gen[]` ключи жанров, `ol` язык оригинала, `coll` сборник, `ch` главы, `dur` типичная длина (мин), `rate{v,n}` оценка FantLab. Все ключи необязательны; жанры — канонические ключи (`scifi`, `fantasy`…), названия на стороне клиента. Сборка: `book-dictionary/v2/build/details.py` |
 | `GET /v1/books?ids=1,2,3` | до 40 строк без деталей |
 | `GET /covers/{small\|large}/{id9}.avif?v={cv}` | обложки из R2, `immutable` (версия `cv` лежит в индексе) |
 
@@ -34,6 +34,22 @@ Cloudflare Worker для `https://api.vetrostudio.bid`: каталог книг 
 `vetro-books-api` → Settings → Domains & Routes → Add → Custom Domain → `api.vetrostudio.bid`.
 
 Проверка: `https://api.vetrostudio.bid/v1/health`, `/v1/manifest`, `/v1/search?q=оруэлл`.
+
+### Обновление каталога (новая сборка, без простоя)
+
+`deploy-data.ps1` — первичная выкладка (создаёт бакет и базу). Для новой версии данных — `refresh-data.ps1`: живые таблицы не
+трогаются, пока всё не загружено, поэтому API отвечает на всём протяжении. Сборка входных файлов — `book-dictionary/v2/README.md`
+(«Обновление каталога»).
+
+```powershell
+.\scripts\refresh-data.ps1 -Covers      # только новые обложки (covers-new-*.json), по кускам с отметками; `wrangler r2 bulk put`, ~3 файла/с
+.\scripts\refresh-data.ps1 -Load        # D1: works_next + fts_next рядом с боевыми (~10 минут), возобновляется по файлам
+.\scripts\refresh-data.ps1 -Publish     # файлы индекса телефона → обмен works_next→works, fts_next→fts → манифест (всегда последним)
+```
+
+`-Covers` и `-Load` можно запускать одновременно, `-Publish` — только когда оба закончились (иначе в карточках будут ссылки на
+обложки, которых ещё нет в бакете). Каждый вызов wrangler повторяется при 429/5xx. Проверено 2026-11-13: переименование таблицы FTS5
+в D1 работает (`ALTER TABLE fts_next RENAME TO fts`), поэтому обмен занимает доли секунды.
 
 ### Быстрая заливка обложек (временный Worker)
 

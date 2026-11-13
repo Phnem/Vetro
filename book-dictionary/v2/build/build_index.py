@@ -72,8 +72,11 @@ def load_selection(master_path, aihand_path):
     conn = sqlite3.connect(f"file:{master_path}?mode=ro", uri=True)
     q = conn.cursor()
 
-    with open(aihand_path, "r", encoding="utf-8") as f:
-        aihand = json.load(f)
+    # Один файл или несколько в одном формате (aihand.txt + блоки, добытые демонами): блоки просто складываются.
+    aihand = []
+    for path in [aihand_path] if isinstance(aihand_path, str) else aihand_path:
+        with open(path, "r", encoding="utf-8") as f:
+            aihand += json.load(f)
     ah_ru_n = {norm(a.get("author_ru", "")) for a in aihand if a.get("author_ru")}
     ah_en_n = {norm(a.get("author_en", "")) for a in aihand if a.get("author_en")}
 
@@ -160,7 +163,7 @@ def to_rows(selected, covers):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--master", required=True)
-    ap.add_argument("--aihand", required=True)
+    ap.add_argument("--aihand", required=True, nargs="+", help="aihand.txt и/или блоки демонов (harvested_blocks*.json)")
     ap.add_argument("--out", required=True)
     ap.add_argument("--prefix", default="", help="FTS4 prefix index lengths, e.g. '2,3' (+16 MiB); off by default")
     ap.add_argument("--no-zst", action="store_true", help="skip compression (experiments)")

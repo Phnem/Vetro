@@ -51,6 +51,54 @@ python -m venv .venv; .\.venv\Scripts\python -m pip install zstandard      # о�
 Повторный запуск `build_index.py` в ту же `out/` делает **следующую версию** и дельту от предыдущей
 (`history/` хранит прошлые базы). После правок мастер-БД: свежая копия → `build_index` → `deploy-data.ps1 -IndexOnly`.
 
+## Обновление каталога (когда демоны накопили новое)
+
+Демоны (`cover_images/run_collector.py`, `run_v3/online_stores/*_daemon.py`, `run_details_daemon.py`) пишут в живые базы,
+поэтому всё берётся **снимками** (`tools/copy_master.py` работает на онлайн-копии SQLite и подходит для любой базы):
+
+```powershell
+cd book-dictionary\v2
+$py = ".venv\Scripts\python.exe"
+$d = "20261113"                                                           # метка снимка
+& $py -I tools\copy_master.py ..\vetro_books.sqlite work\vetro_books_$d.sqlite
+& $py -I tools\copy_master.py ..\vetro_work_details.sqlite work\vetro_work_details_$d.sqlite
+mkdir work\blocks; copy ..\aihand.txt, ..\harvested_blocks.json, ..\run_v3\online_stores\harvested_blocks_expansion.json work\blocks
+$blocks = "work\blocks\aihand.txt", "work\blocks\harvested_blocks.json", "work\blocks\harvested_blocks_expansion.json"
+
+& $py build\build_index.py --master work\vetro_books_$d.sqlite --aihand $blocks --out out                 # версия N+1 + дельта
+& $py build\build_server_data.py --master work\vetro_books_$d.sqlite --aihand $blocks `
+      --details work\vetro_work_details_$d.sqlite --covers ..\cover_images --suffix _next --out out         # D1 в works_next/fts_next
+& $py tools\new_covers.py --old work\<снимок прошлого релиза>.sqlite --lists out\server\covers-small.json out\server\covers-large.json --out out\server\covers-new
+& $py -I -m unittest discover -s tests
+```
+
+(скрипты из `build/` запускаются без `-I`: им нужны соседние модули; самодостаточные из `tools/` и тесты — с `-I`.)
+Дальше — `tools\books-api\scripts\refresh-data.ps1 -Covers`, `-Load`, `-Publish` (`tools/books-api/README.md`): живой API
+отвечает на всём протяжении, таблицы меняются местами в конце, манифест публикуется последним.
+
+`--aihand` принимает несколько файлов одного формата (блоки автор + списки RU/EN названий): к `aihand.txt` добавляются блоки,
+которые добывают демоны. Блок сопоставляется с произведением, которое **уже есть** в мастер-БД; пара, у которой нет произведения,
+в каталог не попадает (создавать произведения сборка не умеет).
+
+### Подробности (`--details`)
+
+`vetro_work_details.sqlite` (демон `run_details_daemon.py`): ~1,78 млн строк, но у большинства заполнены лишь язык оригинала и
+год. В карточку (`works.d`) `build/details.py` берёт только проверенное, короткими ключами, отсутствующие опускаются:
+
+| Ключ | Что | Откуда и как чистится |
+|---|---|---|
+| `desc{t,l}` | описание и язык | от 50 символов; без каталожных огрызков («216 p. ; 18 cm», «> Blockquote») и разметки `**` |
+| `gen[…]` | **канонические ключи жанров** (до 4) | 12 201 сырых тегов → 35 ключей (`scifi`, `fantasy`…); таксономия FantLab и библиотечные рубрики отбрасываются. Названия по языкам — в приложении (`BookGenres.kt`), сверка по `tests/golden_genres.json` |
+| `ol` | язык оригинала | как есть, в нижнем регистре |
+| `coll` | сборник | `is_collection = 1` |
+| `ch`, `dur` | число глав, типичная длина озвучки (мин) | `ch ≥ 1`, `dur ≥ 5` |
+| `rate{v,n}` | оценка FantLab (10-балльная) и число голосов | только от 10 голосов |
+| `series[{ru,en,pos}]` | серия | запасная: если у произведения нет серии в мастер-БД; серия на CJK у произведения без CJK-текста считается неверной привязкой и отбрасывается |
+
+**Качество и права.** Описания частью из Википедии (лицензия CC BY-SA, требует указания источника), частью из FantLab и
+Open Library; в базе подробностей источник описания не записан, поэтому в карточке его нет. Серии из мастер-БД местами
+спорные (например, «The Idiot» у «The Genial Idiot»): сборка их не переписывает.
+
 ## Выкладка
 
 См. `tools/books-api/README.md`: `npx wrangler login`, затем `scripts\deploy-data.ps1`.
