@@ -1,5 +1,21 @@
 # Vetro changelog
 
+## v3.5.1-Alpha — November 14, 2026
+
+App version: `v3.5.1-Alpha`. Android version code: `351`.
+Changes since 3.5.0-Alpha (v3.5.0 shipped without the on-device models by mistake). This is a pre-release: the in-app updater ignores Alpha tags, install it by hand.
+
+### On-device models (MicroML)
+
+- Three small model packs now ship inside the app and run on the phone: Identity (title matching across anime, films, series, manga and audiobooks), Catalog (file-name parsing for audiobook folders, person names, title language, genre aliases) and Experience (genre associations and a ranker that learns from your own ratings and picks).
+- They start in observation mode: the app compares what a model would do with what it does today and changes nothing. Settings → Developer has a switch and a rollback for each pack; the effects you can turn on are search order, exact genre aliases and recommendation ranking.
+- Nothing is sent anywhere. The optional, off-by-default contribution to model training exists only in builds that have a collector address configured, and this build has none.
+
+### Catalogue
+
+- The catalogue grew: more descriptions, genres, series and covers (about 1,000 new covers), and the on-phone search index is refreshed to version 3.
+- Install tokens are refused for devices whose attestation certificates Google has revoked.
+
 ## v3.5.0-Alpha — November 14, 2026
 
 App version: `v3.5.0-Alpha`. Android version code: `350`.
