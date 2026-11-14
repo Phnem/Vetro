@@ -57,9 +57,22 @@ class MicroMlEngine(context: Context) {
     private val controls = MutableStateFlow(0)
     val controlRevision = controls.asStateFlow()
 
-    fun isPackEnabled(pack: Pack): Boolean = prefs.getBoolean("pack.${pack.key}.enabled", true)
+    /** По умолчанию модель выключена: она включается тумблером в настройках («Умные модели»). */
+    fun isPackEnabled(pack: Pack): Boolean = prefs.getBoolean("pack.${pack.key}.enabled", false)
     fun setPackEnabled(pack: Pack, enabled: Boolean) {
         prefs.edit().putBoolean("pack.${pack.key}.enabled", enabled).apply()
+        controls.update { it + 1 }
+    }
+
+    /**
+     * Тумблер пакета в настройках: включает пакет и все его сценарии разом (порядок поиска, жанры, рекомендации) или выключает всё.
+     * Отдельные сценарии и откат остаются в разделе «Разработчик» для тонкой настройки.
+     */
+    fun isSwitchedOn(pack: Pack): Boolean = isPackEnabled(pack) && Feature.values().filter { it.pack == pack }.all(::isRequested)
+    fun setSwitchedOn(pack: Pack, on: Boolean) {
+        val editor = prefs.edit().putBoolean("pack.${pack.key}.enabled", on)
+        Feature.values().filter { it.pack == pack }.forEach { editor.putBoolean("feature.${it.key}", on) }
+        editor.apply()
         controls.update { it + 1 }
     }
 

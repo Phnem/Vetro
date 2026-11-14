@@ -60,7 +60,7 @@ test("one batch per install per day lands as a file; retries are harmless", asyn
   assert.deepEqual(await storeBatch(b, good(), new Date("2026-11-11T01:00:00Z")), { stored: true });
 });
 
-const record = () => ({ source: "knigavuhe", key: "/book/123-dune/", title: "Дюна", authors: ["Фрэнк Герберт"], narrators: ["Иван Иванов"], year: 1965, cover: "https://example.org/c.jpg", duration_sec: 61000 });
+const record = () => ({ source: "knigavuhe", key: "/book/123-dune/", title: "Дюна", authors: ["Фрэнк Герберт"], narrators: ["Иван Иванов"], genres: ["Sci-Fi"], year: 1965, cover: "https://example.org/c.jpg", duration_sec: 61000 });
 
 test("a source record batch passes only when it is public book data", () => {
   assert.equal(validateSources({ schema: 1, records: [record()] }), null);
@@ -70,6 +70,7 @@ test("a source record batch passes only when it is public book data", () => {
     (r) => { r.title = ""; },
     (r) => { r.title = "x".repeat(201); },
     (r) => { r.authors = Array(6).fill("a"); },
+    (r) => { r.genres = ["write me at user@example.com"]; },
     (r) => { r.year = 1999.5; },
     (r) => { r.cover = "javascript:alert(1)"; },
     (r) => { r.cover = "https://exa mple.org/c.jpg"; },

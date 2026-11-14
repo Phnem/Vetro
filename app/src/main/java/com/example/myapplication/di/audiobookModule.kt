@@ -120,6 +120,8 @@ val audiobookModule = module {
                 com.example.myapplication.audiobooks.data.PendingCatalogAudio.serializer(),
                 "CatalogPending",
             ),
+            // Только при включённом сборе («Умные модели» в настройках): книги чужих сайтов, которых нет в каталоге, уходят владельцу.
+            onExternalOnly = { books -> get<com.example.myapplication.microml.contribution.ContributionService>().recordSourceBooks(books) },
         )
     }
     single { NarrationChain(get(), get(named(SOURCES)), get(), get()) }

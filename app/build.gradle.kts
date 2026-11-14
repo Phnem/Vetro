@@ -59,8 +59,8 @@ android {
         buildConfigField("String", "GITHUB_OWNER", "\"Phnem\"")
         buildConfigField("String", "GITHUB_REPO", "\"Vetro\"")
         buildConfigField("boolean", "AUDIOBOOKS_ENABLED", "true")
-        // Адрес коллектора таблиц MicroML (Cloudflare Worker). Пусто — функции сбора в приложении нет вовсе.
-        buildConfigField("String", "MICROML_COLLECTOR_URL", "\"${oauthProp("MICROML_COLLECTOR_URL")}\"")
+        // Адрес коллектора (Cloudflare Worker, tools/microml-collector). Сбор доступен только в сборке с подписью автора и только после согласия пользователя.
+        buildConfigField("String", "MICROML_COLLECTOR_URL", "\"${oauthProp("MICROML_COLLECTOR_URL").ifBlank { "https://contrib.vetrostudio.bid" }}\"")
         buildConfigField(
             "String",
             "SHIKIMORI_CLIENT_ID",

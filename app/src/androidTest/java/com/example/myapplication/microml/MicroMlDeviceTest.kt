@@ -29,6 +29,7 @@ class MicroMlDeviceTest {
         assumeTrue(context.packageName.endsWith(".micromlsmoke"))
         val engine = MicroMlEngine(context)
         try {
+            Pack.entries.forEach { engine.setPackEnabled(it, true) } // по умолчанию модели выключены: их включает пользователь
             assertEquals(List(3) { PackState.READY }, engine.status().map { it.state })
             assertFalse(Feature.entries.any(engine::isActive))
 

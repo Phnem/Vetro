@@ -51,6 +51,11 @@ class BookSearchAdder(
     private val catalog: BookCatalog? = null,
     private val pending: JsonMapFileStore<PendingCatalogAudio>? = null,
     private val nowMs: () -> Long = System::currentTimeMillis,
+    /**
+     * Книги, которые нашли чужие сайты, а каталога Vetro среди совпадений нет: уходят владельцу, чтобы пополнить каталог
+     * (только если пользователь включил сбор в настройках; без него вызывающий код ничего не делает).
+     */
+    private val onExternalOnly: (List<SourceBook>) -> Unit = {},
 ) {
     /** Записи каталога из последней выдачи: «Добавить» по ключу достаёт отсюда автора, год и обложку. */
     private val catalogBooks: MutableMap<String, CatalogBook> = bounded()
@@ -90,7 +95,9 @@ class BookSearchAdder(
                     year = b.year,
                 )
             }
-            fromCatalog + audio.filter { it.ref !in matched }
+            val external = audio.filter { it.ref !in matched }
+            if (external.isNotEmpty()) runCatching { onExternalOnly(external) }
+            fromCatalog + external
         }
     }
 

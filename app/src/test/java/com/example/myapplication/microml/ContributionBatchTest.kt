@@ -82,4 +82,40 @@ class ContributionBatchTest {
         assertEquals(ContributionSchema.MAX_GENRES, batch.getValue("genres").jsonArray.size)
         assertEquals(ContributionSchema.MAX_COUNTERS, batch.getValue("counters").jsonObject.size)
     }
+
+    private fun record(
+        source: String = "knigavuhe",
+        key: String = "/book/123-dune/",
+        title: String = "Дюна",
+        cover: String? = "https://example.org/c.jpg",
+        year: Int? = 1965,
+    ) = com.example.myapplication.microml.contribution.SourceRecord(source, key, title, listOf("Фрэнк Герберт"), listOf("Иван Иванов"), listOf("Sci-Fi"), year, cover, 61000)
+
+    @Test fun `a source record keeps public book facts and drops anything the server would refuse`() {
+        val ok = ContributionSchema.sourceRecord(record(source = " KnigaVuhe "))!!
+        assertEquals("knigavuhe", ok.source)
+        assertEquals(1965, ok.year)
+        assertEquals("https://example.org/c.jpg", ok.cover)
+        assertNull(ContributionSchema.sourceRecord(record(source = "Some Site!")))
+        assertNull(ContributionSchema.sourceRecord(record(title = "  ")))
+        assertNull(ContributionSchema.sourceRecord(record(title = "x".repeat(201))))
+        assertNull(ContributionSchema.sourceRecord(record(key = "")))
+        // непригодные необязательные поля отбрасываются, сама запись остаётся
+        assertNull(ContributionSchema.sourceRecord(record(cover = "javascript:alert(1)"))!!.cover)
+        assertNull(ContributionSchema.sourceRecord(record(cover = "https://ex ample.org/c.jpg"))!!.cover)
+        assertNull(ContributionSchema.sourceRecord(record(year = 3000))!!.year)
+    }
+
+    @Test fun `the book batch has no install id, no query, no duplicates and respects the cap`() {
+        val many = (1..150).map { record(key = "/book/$it/") } + record(key = "/book/1/")
+        val batch = ContributionBatch.buildSources(many)
+        assertEquals(setOf("schema", "records"), batch.keys)
+        val records = batch["records"] as JsonArray
+        assertEquals(ContributionSchema.MAX_RECORDS, records.size)
+        assertEquals(ContributionSchema.MAX_RECORDS, records.map { it.jsonObject["key"]!!.jsonPrimitive.content }.toSet().size)
+        assertEquals("Дюна", records.first().jsonObject["title"]!!.jsonPrimitive.content)
+        assertTrue(ContributionBatch.isEmptySources(ContributionBatch.buildSources(emptyList())))
+        assertTrue(ContributionBatch.isEmptySources(ContributionBatch.buildSources(listOf(record(source = "bad site")))))
+        assertFalse(ContributionBatch.isEmptySources(batch))
+    }
 }

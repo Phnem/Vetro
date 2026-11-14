@@ -543,6 +543,11 @@ fun SettingsScreen(
                         )
                     }
 
+                    // ГРУППА: Умные модели (три тумблера моделей и добровольный сбор данных).
+                    item(key = "group_smart_models") {
+                        SmartModelsGroup(ru = strings.languageName == "RU", isDark = isDark)
+                    }
+
                     // ГРУППА: О приложении.
                     item(key = "group_about") {
                         val updateAvailable = updateState is com.example.myapplication.update.UpdateState.Available ||
@@ -893,52 +898,6 @@ private fun MicroMlStatusRow(ru: Boolean, isDark: Boolean, devIcon: Color) {
     )
 }
 
-/** Выключатель одного пакета MicroML: выключенный пакет не загружается, работает прежний алгоритм. */
-@Composable
-private fun MicroMlPackRow(pack: com.example.myapplication.microml.MicroMlEngine.Pack, ru: Boolean, isDark: Boolean, devIcon: Color) {
-    val microMl = org.koin.compose.koinInject<com.example.myapplication.microml.MicroMlEngine>()
-    val enabled = androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(microMl.isPackEnabled(pack)) }
-    IosRow(
-        title = pack.key.replaceFirstChar { it.uppercase() } + " AI",
-        subtitle = when (pack) {
-            com.example.myapplication.microml.MicroMlEngine.Pack.IDENTITY ->
-                if (ru) "Та же сущность, франшиза, порядок кандидатов поиска" else "Same entity, franchise, search candidate order"
-            com.example.myapplication.microml.MicroMlEngine.Pack.CATALOG ->
-                if (ru) "Разбор имён файлов и папок, язык названия, жанры" else "File and folder names, title language, genres"
-            com.example.myapplication.microml.MicroMlEngine.Pack.EXPERIENCE ->
-                if (ru) "Связи жанров и обучаемый порядок рекомендаций" else "Genre links and a learning recommendation order"
-        },
-        isDark = isDark,
-        icon = Icons.Filled.Code,
-        iconBackground = devIcon,
-        trailing = {
-            IosSwitch(checked = enabled.value, onCheckedChange = { on -> microMl.setPackEnabled(pack, on); enabled.value = on })
-        },
-    )
-}
-
-/** Пока выключено, модели только наблюдают. Включение разрешает им менять порядок и подставлять найденное. */
-@Composable
-private fun MicroMlApplyRow(feature: MicroMlEngine.Feature, ru: Boolean, isDark: Boolean, devIcon: Color) {
-    val microMl = org.koin.compose.koinInject<MicroMlEngine>()
-    var active by remember(feature) { mutableStateOf(microMl.isRequested(feature)) }
-    IosRow(
-        title = when (feature) {
-            MicroMlEngine.Feature.IDENTITY_SEARCH_RERANK -> if (ru) "Порядок кандидатов поиска" else "Search candidate order"
-            MicroMlEngine.Feature.CATALOG_GENRE_FALLBACK -> if (ru) "Жанры по словарю" else "Genre aliases"
-            MicroMlEngine.Feature.EXPERIENCE_GENRE_SMOOTHING -> if (ru) "Связанные жанры в профиле" else "Related genres in your profile"
-            MicroMlEngine.Feature.EXPERIENCE_TASTE_RANK -> if (ru) "Порядок рекомендаций по оценкам" else "Recommendation order from feedback"
-        },
-        subtitle = if (ru) "Эксперимент · выключено: только наблюдение" else "Experiment · off: observation only",
-        isDark = isDark,
-        icon = Icons.Filled.Code,
-        iconBackground = devIcon,
-        trailing = {
-            IosSwitch(checked = active, onCheckedChange = { on -> microMl.setActive(feature, on); active = on })
-        },
-    )
-}
-
 @Composable
 private fun MicroMlRollbackRow(pack: MicroMlEngine.Pack, ru: Boolean, isDark: Boolean, devIcon: Color) {
     val microMl = org.koin.compose.koinInject<MicroMlEngine>()
@@ -954,71 +913,6 @@ private fun MicroMlRollbackRow(pack: MicroMlEngine.Pack, ru: Boolean, isDark: Bo
             IosSwitch(checked = previous, onCheckedChange = { on -> microMl.setRolledBack(pack, on); previous = on })
         },
     )
-}
-
-/**
- * Добровольный сбор таблиц для дообучения моделей. Выключен по умолчанию; в сборке без адреса коллектора
- * (F-Droid, пересборки) строка показывает, что функции нет, и переключатель неактивен.
- */
-@Composable
-private fun MicroMlContributionRow(ru: Boolean, isDark: Boolean, devIcon: Color) {
-    val service = org.koin.compose.koinInject<com.example.myapplication.microml.contribution.ContributionService>()
-    var enabled by remember { mutableStateOf(service.isEnabled()) }
-    IosRow(
-        title = if (ru) "MicroML: помогать обучению" else "MicroML: help train the models",
-        subtitle = when {
-            !service.isAvailable -> if (ru) "Недоступно в этой сборке" else "Not available in this build"
-            enabled -> if (ru) "Раз в сутки уходят анонимные числа и счётчики. Названий нет" else "Anonymous numbers and counters go out once a day. No titles"
-            else -> if (ru) "Выключено: ничего не копится и не отправляется" else "Off: nothing is collected or sent"
-        },
-        isDark = isDark,
-        icon = Icons.Filled.Code,
-        iconBackground = devIcon,
-        trailing = {
-            IosSwitch(
-                checked = enabled,
-                onCheckedChange = if (service.isAvailable) { on -> service.setEnabled(on); enabled = service.isEnabled() } else null,
-            )
-        },
-    )
-}
-
-/** Показывает пользователю тот самый текст, который уйдёт на сервер при следующей отправке. */
-@Composable
-private fun MicroMlContributionPreviewRow(ru: Boolean, isDark: Boolean, devIcon: Color) {
-    val service = org.koin.compose.koinInject<com.example.myapplication.microml.contribution.ContributionService>()
-    var text by remember { mutableStateOf<String?>(null) }
-    val scope = androidx.compose.runtime.rememberCoroutineScope()
-    IosRow(
-        title = if (ru) "Что будет отправлено" else "What will be sent",
-        subtitle = if (ru) "Точный текст следующей пачки" else "The exact text of the next batch",
-        isDark = isDark,
-        icon = Icons.Filled.Code,
-        iconBackground = devIcon,
-        showChevron = true,
-        onClick = {
-            scope.launch {
-                text = if (!service.isAvailable) (if (ru) "Сбор таблиц недоступен в этой сборке." else "Contribution is not available in this build.")
-                else if (!service.isEnabled()) (if (ru) "Согласие не дано: ничего не отправляется." else "No consent given: nothing is sent.")
-                else service.preview().ifBlank { if (ru) "Пока нечего отправлять." else "Nothing to send yet." }
-            }
-        },
-    )
-    text?.let { shown ->
-        androidx.compose.material3.AlertDialog(
-            onDismissRequest = { text = null },
-            confirmButton = { TextButton(onClick = { text = null }) { Text(if (ru) "Закрыть" else "Close") } },
-            title = { Text(if (ru) "Следующая пачка" else "Next batch") },
-            text = {
-                Text(
-                    shown,
-                    fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
-                    fontSize = 11.sp,
-                    modifier = Modifier.verticalScroll(androidx.compose.foundation.rememberScrollState()),
-                )
-            },
-        )
-    }
 }
 
 /** Группы раздела «Разработчик» в iOS-стиле. */
@@ -1138,18 +1032,9 @@ private fun DeveloperGroups(
                     )
                 },
                 { MicroMlStatusRow(strings.languageName == "RU", isDark, devIcon) },
-                { MicroMlPackRow(com.example.myapplication.microml.MicroMlEngine.Pack.IDENTITY, strings.languageName == "RU", isDark, devIcon) },
-                { MicroMlPackRow(com.example.myapplication.microml.MicroMlEngine.Pack.CATALOG, strings.languageName == "RU", isDark, devIcon) },
-                { MicroMlPackRow(com.example.myapplication.microml.MicroMlEngine.Pack.EXPERIENCE, strings.languageName == "RU", isDark, devIcon) },
                 { MicroMlRollbackRow(MicroMlEngine.Pack.IDENTITY, strings.languageName == "RU", isDark, devIcon) },
                 { MicroMlRollbackRow(MicroMlEngine.Pack.CATALOG, strings.languageName == "RU", isDark, devIcon) },
                 { MicroMlRollbackRow(MicroMlEngine.Pack.EXPERIENCE, strings.languageName == "RU", isDark, devIcon) },
-                { MicroMlApplyRow(MicroMlEngine.Feature.IDENTITY_SEARCH_RERANK, strings.languageName == "RU", isDark, devIcon) },
-                { MicroMlApplyRow(MicroMlEngine.Feature.CATALOG_GENRE_FALLBACK, strings.languageName == "RU", isDark, devIcon) },
-                { MicroMlApplyRow(MicroMlEngine.Feature.EXPERIENCE_GENRE_SMOOTHING, strings.languageName == "RU", isDark, devIcon) },
-                { MicroMlApplyRow(MicroMlEngine.Feature.EXPERIENCE_TASTE_RANK, strings.languageName == "RU", isDark, devIcon) },
-                { MicroMlContributionRow(strings.languageName == "RU", isDark, devIcon) },
-                { MicroMlContributionPreviewRow(strings.languageName == "RU", isDark, devIcon) },
                 {
                     val ru = strings.languageName == "RU"
                     IosRow(

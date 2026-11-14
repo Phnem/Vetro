@@ -11,7 +11,11 @@ import java.security.SecureRandom
 private data class QueuedPair(val pack: String, val source: String, val label: Int, val kinds: List<Int>, val features: List<Float>)
 
 @Serializable
-private data class Queue(val pairs: List<QueuedPair> = emptyList(), val genres: List<String> = emptyList())
+private data class Queue(
+    val pairs: List<QueuedPair> = emptyList(),
+    val genres: List<String> = emptyList(),
+    val sources: List<SourceRecord> = emptyList(),
+)
 
 /**
  * Согласие, случайный идентификатор установки и очередь на отправку.
@@ -87,13 +91,32 @@ class ContributionStore(context: Context, private val now: () -> Long = System::
         }
     }
 
+    /** Записи о книгах с чужих сайтов; одна и та же книга (сайт + ключ) в очереди один раз. */
+    fun addSources(records: List<SourceRecord>) {
+        if (!isEnabled() || records.isEmpty()) return
+        synchronized(lock) {
+            val queue = read()
+            val known = queue.sources.mapTo(HashSet()) { it.source to it.key }
+            val fresh = records.mapNotNull(ContributionSchema::sourceRecord).filter { known.add(it.source to it.key) }
+            if (fresh.isEmpty()) return
+            write(queue.copy(sources = (queue.sources + fresh).takeLast(MAX_QUEUED_SOURCES)))
+        }
+    }
+
+    fun sources(): List<SourceRecord> = read().sources
+
+    fun removeSentSources(count: Int): Unit = synchronized(lock) {
+        val queue = read()
+        write(queue.copy(sources = queue.sources.drop(count)))
+    }
+
     fun pairs(): List<PairEntry> = read().pairs.map { PairEntry(it.pack, it.source, it.label, it.kinds, it.features) }
     fun genres(): List<String> = read().genres
 
     /** Убирает из очереди то, что только что ушло: если за время отправки добавилось новое, оно остаётся. */
     fun removeSent(pairs: Int, genres: Set<String>): Unit = synchronized(lock) {
         val queue = read()
-        write(Queue(queue.pairs.drop(pairs), queue.genres.filterNot { it in genres }))
+        write(queue.copy(pairs = queue.pairs.drop(pairs), genres = queue.genres.filterNot { it in genres }))
     }
 
     companion object {
@@ -105,5 +128,6 @@ class ContributionStore(context: Context, private val now: () -> Long = System::
         const val ROTATE_DAYS = 30L
         const val MAX_QUEUED_PAIRS = 200
         const val MAX_QUEUED_GENRES = 200
+        const val MAX_QUEUED_SOURCES = 500
     }
 }

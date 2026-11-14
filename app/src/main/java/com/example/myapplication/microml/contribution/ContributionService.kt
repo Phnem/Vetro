@@ -61,6 +61,20 @@ class ContributionService(
         ContributionScheduler.sync(context, isEnabled())
     }
 
+    /**
+     * Книги, которые вернули чужие сайты (не каталог Vetro): поиск нашёл их, а в каталоге их нет. Уходят отдельной пачкой
+     * в другую папку, чтобы владелец позже добавил их в каталог. Запрос пользователя и его коллекция сюда не попадают.
+     */
+    fun recordSourceBooks(books: List<com.example.myapplication.audiobooks.domain.source.SourceBook>) {
+        if (!isEnabled() || books.isEmpty()) return
+        store.addSources(books.map {
+            SourceRecord(
+                source = it.ref.source.value, key = it.ref.key, title = it.title, authors = it.authors, narrators = it.narrators,
+                genres = it.genres, year = it.year, cover = it.coverUrl, durationSec = it.durationSec?.toInt(),
+            )
+        })
+    }
+
     private fun recordGenre(raw: String) {
         if (isEnabled()) store.addGenre(raw)
     }
@@ -123,35 +137,57 @@ class ContributionService(
         return Built(ContributionBatch.build(install, packs, taste(), pairs, genres, delta), pairs.size, genres)
     }
 
-    /** Ровно тот текст, который был бы отправлен сейчас: показывается пользователю в настройках. */
+    /** Ровно тот текст, который был бы отправлен сейчас (обе пачки): показывается пользователю в настройках. */
     suspend fun preview(): String {
         if (!isEnabled()) return ""
-        return build()?.let { ContributionBatch.preview(it.batch) }.orEmpty()
+        val training = build()?.takeUnless { ContributionBatch.isEmpty(it.batch) }?.let { ContributionBatch.preview(it.batch) }
+        val books = ContributionBatch.buildSources(store.sources()).takeUnless(ContributionBatch::isEmptySources)?.let(ContributionBatch::preview)
+        return listOfNotNull(training, books).joinToString("\n\n")
     }
 
-    /** Одна пачка в сутки. 4xx — пачку отбросить (иначе она будет повторяться), 5xx и сеть — повторить позже. */
+    /**
+     * Раз в сутки две независимые пачки: числа для обучения моделей (`/v1/batch`) и записи о книгах с чужих сайтов (`/v1/sources`).
+     * 4xx — пачку отбросить (иначе она будет повторяться), 5xx и сеть — повторить позже.
+     */
     suspend fun upload(force: Boolean = false): Result = withContext(Dispatchers.IO) {
         if (!isEnabled()) return@withContext Result.SKIPPED
         if (!force && store.lastUploadDay() == System.currentTimeMillis() / ContributionStore.DAY_MS) return@withContext Result.SKIPPED
-        val built = build() ?: return@withContext Result.SKIPPED
-        if (ContributionBatch.isEmpty(built.batch)) { store.markUploaded(); return@withContext Result.SKIPPED }
+        val training = uploadTraining()
+        val books = uploadBooks()
+        if (training == Result.RETRY || books == Result.RETRY) return@withContext Result.RETRY
+        store.markUploaded()
+        if (training == Result.SENT || books == Result.SENT) Result.SENT else Result.SKIPPED
+    }
+
+    private fun post(path: String, body: String): Int? = runCatching {
         val request = Request.Builder()
-            .url(collectorUrl.trimEnd('/') + "/v1/batch")
-            .post(ContributionBatch.compact(built.batch).toRequestBody("application/json".toMediaType()))
+            .url(collectorUrl.trimEnd('/') + path)
+            .post(body.toRequestBody("application/json".toMediaType()))
             .build()
-        runCatching {
-            http.newBuilder().callTimeout(30, TimeUnit.SECONDS).build().newCall(request).execute().use { response ->
-                when {
-                    response.isSuccessful || response.code in 400..499 -> {
-                        store.removeSent(built.pairCount, built.genres.toSet())
-                        store.markUploaded()
-                        if (response.isSuccessful) engine.shadowCounts().forEach { (key, value) -> sentCounters[key] = value }
-                        Result.SENT
-                    }
-                    else -> Result.RETRY
-                }
-            }
-        }.getOrDefault(Result.RETRY)
+        http.newBuilder().callTimeout(30, TimeUnit.SECONDS).build().newCall(request).execute().use { it.code }
+    }.getOrNull()
+
+    private suspend fun uploadTraining(): Result {
+        val built = build() ?: return Result.SKIPPED
+        if (ContributionBatch.isEmpty(built.batch)) return Result.SKIPPED
+        val code = post("/v1/batch", ContributionBatch.compact(built.batch)) ?: return Result.RETRY
+        if (code !in 200..299 && code !in 400..499) return Result.RETRY
+        store.removeSent(built.pairCount, built.genres.toSet())
+        if (code in 200..299) engine.shadowCounts().forEach { (key, value) -> sentCounters[key] = value }
+        return Result.SENT
+    }
+
+    private fun uploadBooks(): Result {
+        val queued = store.sources().take(ContributionSchema.MAX_RECORDS)
+        val batch = ContributionBatch.buildSources(queued)
+        if (ContributionBatch.isEmptySources(batch)) {
+            if (queued.isNotEmpty()) store.removeSentSources(queued.size)
+            return Result.SKIPPED
+        }
+        val code = post("/v1/sources", ContributionBatch.compact(batch)) ?: return Result.RETRY
+        if (code !in 200..299 && code !in 400..499) return Result.RETRY
+        store.removeSentSources(queued.size)
+        return Result.SENT
     }
 }
 

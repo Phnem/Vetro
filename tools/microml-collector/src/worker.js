@@ -65,7 +65,7 @@ export function validate(body) {
 }
 
 const SOURCE_ID = /^[a-z0-9][a-z0-9._-]{1,39}$/;
-const RECORD_FIELDS = new Set(["source", "key", "title", "authors", "narrators", "year", "cover", "duration_sec"]);
+const RECORD_FIELDS = new Set(["source", "key", "title", "authors", "narrators", "genres", "year", "cover", "duration_sec"]);
 const text = (x, max) => typeof x === "string" && x.trim().length > 0 && x.length <= max;
 const names = (x) => Array.isArray(x) && x.length <= 5 && x.every((n) => text(n, 100));
 
@@ -82,6 +82,7 @@ export function validateSources(body) {
     if (!text(r.key, 200) || !text(r.title, 200)) return "record text";
     if (!names(r.authors ?? [])) return "record authors";
     if (!names(r.narrators ?? [])) return "record narrators";
+    if (r.genres != null && !(Array.isArray(r.genres) && r.genres.length <= 10 && r.genres.every((g) => typeof g === "string" && GENRE.test(g)))) return "record genres";
     if (r.year != null && !(Number.isInteger(r.year) && r.year >= 0 && r.year <= 2100)) return "record year";
     if (r.duration_sec != null && !(Number.isInteger(r.duration_sec) && r.duration_sec >= 0 && r.duration_sec <= 1_000_000)) return "record duration";
     if (r.cover != null && !(text(r.cover, 400) && /^https?:\/\/[^\s]+$/.test(r.cover))) return "record cover";

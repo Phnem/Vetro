@@ -25,6 +25,7 @@ object ContributionSchema {
     const val MAX_PAIRS = 50
     const val MAX_GENRES = 50
     const val MAX_COUNTERS = 60
+    const val MAX_RECORDS = 100
     val PAIR_SOURCES = setOf("picker_choice", "source_rejected", "dedupe_confirm")
     val TASTE_TYPES = setOf("ANIME", "MOVIE", "TV")
 
@@ -35,6 +36,27 @@ object ContributionSchema {
 
     /** Жанровая строка допустима, только если это короткое название жанра: не фраза, не адрес, не ник. */
     fun genre(raw: String): String? = raw.trim().takeIf { it.length in 2..40 && genre.matches(it) }
+
+    private val sourceId = Regex("^[a-z0-9][a-z0-9._-]{1,39}$")
+    private val cover = Regex("^https?://\\S+$")
+
+    /**
+     * Запись о книге, которую вернул чужой сайт, приведена к тому, что примет сервер; null — запись не отправляется.
+     * Только публичные сведения о книге; запрос пользователя и его коллекция сюда не попадают.
+     */
+    fun sourceRecord(raw: SourceRecord): SourceRecord? {
+        val source = raw.source.trim().lowercase().takeIf { sourceId.matches(it) } ?: return null
+        val key = raw.key.trim().takeIf { it.length in 1..200 } ?: return null
+        val title = raw.title.trim().takeIf { it.length in 1..200 } ?: return null
+        fun names(list: List<String>) = list.map { it.trim() }.filter { it.length in 1..100 }.distinct().take(5)
+        fun tags(list: List<String>) = list.mapNotNull(::genre).distinct().take(10)
+        return SourceRecord(
+            source, key, title, names(raw.authors), names(raw.narrators), tags(raw.genres),
+            raw.year?.takeIf { it in 0..2100 },
+            raw.cover?.trim()?.takeIf { it.length <= 400 && cover.matches(it) },
+            raw.durationSec?.takeIf { it in 0..1_000_000 },
+        )
+    }
 
     fun counterKey(raw: String): String? = raw.lowercase().takeIf { counterKey.matches(it) }
     fun version(raw: String): String? = raw.takeIf { version.matches(it) }
@@ -52,6 +74,20 @@ data class PairEntry(
         features.size == ContributionSchema.FEATURE_COUNT && features.all { it.isFinite() && it in -20f..200f } &&
         kinds.size == 2 && kinds.all { it in 0..5 } && ContributionSchema.version(pack) != null
 }
+
+/** Публичная запись о книге с чужого сайта: то, чего нет в каталоге Vetro и что владелец потом добавит в него. */
+@kotlinx.serialization.Serializable
+data class SourceRecord(
+    val source: String,
+    val key: String,
+    val title: String,
+    val authors: List<String> = emptyList(),
+    val narrators: List<String> = emptyList(),
+    val genres: List<String> = emptyList(),
+    val year: Int? = null,
+    val cover: String? = null,
+    val durationSec: Int? = null,
+)
 
 data class TasteEntry(val type: String, val version: String, val events: Int, val weights: List<Float>)
 
@@ -105,6 +141,24 @@ object ContributionBatch {
             }
         })
     }
+
+    /** Пачка записей о книгах для `/v1/sources`: отдельный запрос, отдельная папка у владельца, идентификатора установки нет. */
+    fun buildSources(records: Collection<SourceRecord>): JsonObject = buildJsonObject {
+        put("schema", ContributionSchema.SCHEMA)
+        put("records", JsonArray(records.mapNotNull(ContributionSchema::sourceRecord).distinctBy { it.source to it.key }.take(ContributionSchema.MAX_RECORDS).map { r ->
+            buildJsonObject {
+                put("source", r.source); put("key", r.key); put("title", r.title)
+                put("authors", JsonArray(r.authors.map(::JsonPrimitive)))
+                put("narrators", JsonArray(r.narrators.map(::JsonPrimitive)))
+                if (r.genres.isNotEmpty()) put("genres", JsonArray(r.genres.map(::JsonPrimitive)))
+                r.year?.let { put("year", it) }
+                r.cover?.let { put("cover", it) }
+                r.durationSec?.let { put("duration_sec", it) }
+            }
+        }))
+    }
+
+    fun isEmptySources(batch: JsonObject): Boolean = (batch["records"] as? JsonArray)?.isEmpty() != false
 
     fun compact(batch: JsonObject): String = compactJson.encodeToString(JsonObject.serializer(), batch)
 
