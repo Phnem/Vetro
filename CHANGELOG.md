@@ -1,5 +1,21 @@
 # Vetro changelog
 
+## v3.5.0-Alpha — November 14, 2026
+
+App version: `v3.5.0-Alpha`. Android version code: `350`.
+Changes since 3.4.9. This is a pre-release: the in-app updater ignores Alpha tags, install it by hand.
+
+### Audiobooks: the book catalogue
+
+- A new first source for audiobooks: a catalogue of about 176,000 books. It keeps a search index on the phone, so lookups work offline and instantly, and asks the server only when the local index is not enough.
+- The book page and the library show the catalogue details: description, genres, series, the original title and the rating. Covers come from the same catalogue.
+- If the index cannot be refreshed, the reason is written to the log instead of being swallowed.
+
+### Catalogue access
+
+- The app now proves to the catalogue server that it is the real Vetro (Android Key Attestation, no Google services needed) and gets an install token for 30 days. Phones without hardware attestation, and builds the server does not know, keep working with the sources used before; nothing is lost.
+- The token is sent only to the catalogue host, never to other sites.
+
 ## v3.4.9-Stable — November 7, 2026
 
 App version: `v3.4.9-Stable`. Android version code: `349`.
