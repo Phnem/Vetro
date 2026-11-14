@@ -265,7 +265,6 @@ internal const val AUDIOBOOK_SOURCES = "audiobook_sources"
 private const val SOURCES = AUDIOBOOK_SOURCES
 
 /** Сеть сайта-источника: общий клиент и свой вежливый лимит — 2 запроса в секунду с запасом 3. */
-private fun site(http: OkHttpClient) =
 /** Имя клиента с перехватчиком токена установки (его берёт и загрузчик изображений: обложки каталога тоже требуют токен). */
 const val CATALOG_HTTP = "catalogHttp"
 
@@ -278,4 +277,5 @@ private fun catalogApiBase(context: Context): String =
         ?.takeIf { it.startsWith("http") }
         ?: com.example.myapplication.audiobooks.catalog.BookCatalogConfig.API_V1
 
+private fun site(http: OkHttpClient) =
     SourceHttp(http, TokenBucketRateLimiter(maxTokens = 3.0, refillTokensPerSecond = 2.0))
