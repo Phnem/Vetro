@@ -1,5 +1,16 @@
 # Vetro changelog
 
+## v3.5.2-Alpha — November 15, 2026
+
+App version: `v3.5.2-Alpha`. Android version code: `352`.
+Changes since 3.5.1-Alpha. This is a pre-release: the in-app updater ignores Alpha tags, install it by hand.
+
+### Settings: Smart models
+
+- A new section in Settings (no longer inside Developer) with one switch for each on-device model: title matching, files and genres, taste recommendations. All three are off until you turn them on; each switch also turns on everything that model can change (search order, genre aliases, recommendation order).
+- "Help improve Vetro" is off by default and asks for your consent in a dialog with OK and Cancel before it turns on. When it is on, once a day the app sends anonymous numbers about how the models work, and the public facts (title, authors, narrators, cover link) of books that other book sites returned in a search but the catalogue does not have, so the catalogue can grow. What you type in a search and what is in your collection is never sent. "What will be sent" shows the exact text of the next upload.
+- The option exists only in builds signed by the developer.
+
 ## v3.5.1-Alpha — November 14, 2026
 
 App version: `v3.5.1-Alpha`. Android version code: `351`.
