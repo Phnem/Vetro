@@ -1,17 +1,25 @@
 name = "vetro-microml-collector"
 main = "src/worker.js"
 compatibility_date = "2026-11-01"
+workers_dev = false
 
-# Daily cleanup: rare genre strings, old weeks, old pair rows.
-[triggers]
-crons = ["17 3 * * *"]
+[[routes]]
+pattern = "contrib.vetrostudio.bid"
+custom_domain = true
 
-# Create the database once:  wrangler d1 create vetro-microml
-# then paste the database_id it prints here and run:  wrangler d1 execute vetro-microml --remote --file=schema.sql
-[[d1_databases]]
-binding = "DB"
-database_name = "vetro-microml"
-database_id = "REPLACE_WITH_ID_FROM_wrangler_d1_create"
+# The owner's bucket. Create once:  npx wrangler r2 bucket create vetro-contrib
+# Folders inside: microml/<day>/<install>.json (training numbers) and sources/<day>/<id>.json (book records from other sites).
+[[r2_buckets]]
+binding = "CONTRIB"
+bucket_name = "vetro-contrib"
+
+# Per-client throttle. The binding only counts; no address is kept.
+[[ratelimits]]
+name = "LIMITER"
+namespace_id = "1002"
+  [ratelimits.simple]
+  limit = 30
+  period = 60
 
 # Do not enable logs that record request metadata: the privacy promise is that no IP is kept.
 [observability]

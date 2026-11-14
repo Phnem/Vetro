@@ -1,41 +1,41 @@
 # Vetro MicroML collector
 
-A Cloudflare Worker + D1 database that receives **anonymous, schema-checked batches of numbers** from installs whose
-owners switched on *Settings → Developer → MicroML: help train the models*. It exists so the on-device models can be
-re-calibrated and retrained on real use, which the offline Wikidata corpus cannot show. The promise made to users is
-in [PRIVACY.MD](../../PRIVACY.MD) §5; this folder is what makes it checkable.
+A Cloudflare Worker that receives **anonymous, schema-checked data** from installs whose owners switched on
+*Settings → Smart models → Help improve Vetro* and writes it as plain JSON files into the owner's R2 bucket
+`vetro-contrib`. The promise made to users is in [PRIVACY.MD](../../PRIVACY.MD) §5; this folder is what makes it checkable.
 
 ## What it accepts
 
-One `POST /v1/batch` per install per day, at most 64 KB, strictly validated (`src/worker.js`, `validate`). Anything
-outside the schema is rejected with 422 and nothing is stored.
+Two routes, strictly validated (`src/worker.js`); anything outside the schema is rejected with 422 and nothing is stored.
 
-| Table | Content | Linked to an install id? |
+| Route | File written | Content |
 |---|---|---|
-| `taste` | the 11 weights of the on-device taste ranker and its rating count, per content type and ISO week | yes (random id, replaced every 30 days) |
-| `pairs` | 42 similarity numbers of two records, a yes/no label from the user's own action, source of the label | **no** |
-| `genre_strings` | genre names a catalog returned that the app could not map; visible only through the `genre_candidates` view (≥ 20 installs) | yes, to count distinct installs; purged after 30 days if rare |
-| `counters` | shadow-mode counters and pack versions, summed per day | no |
-| `uploads` | (install, day) to allow one batch per day; deleted after 3 days | yes |
+| `POST /v1/batch` (≤ 64 KB, one per install per day) | `microml/<day>/<install>.json` | the 11 weights of the on-device taste ranker and its rating count; 42 similarity numbers per record pair with a yes/no label from the user's own action; genre names a catalogue returned that the app could not map; counters of what the models did; model pack versions. The `install` id is 16 random bytes replaced every 30 days |
+| `POST /v1/sources` (≤ 128 KB, ≤ 100 records) | `sources/<day>/<uuid>.json` | public book records that **another book site** returned during a search and the Vetro catalogue did not have: source site id, the book's address on that site, title, authors, narrators, year, cover link, duration. No install id, no search text |
 
-Never accepted: titles, file names, paths, notes, catalog IDs, accounts, IP addresses, timestamps finer than a day.
-The Worker does not read or store `CF-Connecting-IP`; observability is disabled in `wrangler.toml`.
+Never accepted: what the user typed, collection titles, file names, paths, notes, accounts, IP addresses, timestamps finer
+than a day. The Worker does not store `CF-Connecting-IP`; the rate limiter only counts, and observability is off.
 
 ## Deploy (once)
 
 ```bash
 cd tools/microml-collector
 npx wrangler login
-npx wrangler d1 create vetro-microml          # copy database_id into wrangler.toml
-npx wrangler d1 execute vetro-microml --remote --file=schema.sql
-npx wrangler deploy                            # prints https://vetro-microml-collector.<account>.workers.dev
+npx wrangler r2 bucket create vetro-contrib
+npx wrangler deploy        # custom domain contrib.vetrostudio.bid, bucket binding CONTRIB
 ```
 
-Put that URL in `local.properties` as `MICROML_COLLECTOR_URL=` and rebuild. A build without the URL has no
-contribution feature at all; F-Droid and source rebuilds are excluded by the signature check regardless.
+The app build already points at `https://contrib.vetrostudio.bid` (default in `app/build.gradle.kts`, overridable with
+`MICROML_COLLECTOR_URL` in `local.properties`). F-Droid and source rebuilds are excluded by the signature check.
 
-Add a Cloudflare rate-limiting rule for `POST /v1/batch` (for example 10 requests per minute per IP) in the dashboard:
-rate limiting acts at the edge and does not require the Worker to see or keep an address.
+## Read what was collected
+
+```bash
+npx wrangler r2 object get vetro-contrib/microml/2026-11-15/<install>.json
+```
+
+or open the bucket in the Cloudflare dashboard (R2 → vetro-contrib). The `sources/` folder is the queue of books to add to
+the catalogue (deduplicate by source + key, then match against `book-dictionary`).
 
 ## Test
 
@@ -43,30 +43,14 @@ rate limiting acts at the edge and does not require the Worker to see or keep an
 node --test test/worker.test.mjs
 ```
 
-The tests run the real Worker code against an SQLite copy of `schema.sql`.
-
-## Analyse
-
-```bash
-npx wrangler d1 export vetro-microml --remote --output dump.sql
-python tools/microml/collect/analyze.py dump.sql \
-  --identity tools/microml/.cache/identity/b15d128drop-v2/model-stable \
-  --encoder  tools/microml/.cache/encoder/b15d128drop/table.npy \
-  --taste    tools/microml/.cache/releases/current/android-assets/microml/experience/taste.json
-```
-
-The report covers taste weights (trimmed mean against today's prior), the shipped Identity model on real labelled
-pairs (precision at the shipped thresholds, calibration, confident errors saved for retraining), genre proposals, and
-daily counter trends. Nothing in it changes a shipped model by itself: a proposal becomes a release only through the
-normal pack build, the held-out Wikidata evaluation and the on-device parity test.
+The tests run the real Worker code against an in-memory bucket.
 
 ## Known limits
 
-* An open-source app cannot keep a secret key, so the endpoint is public. Defences are the strict schema, one batch per
-  install per day, edge rate limiting and robust aggregation (trimmed mean, confident-error review), not authentication.
-  A determined attacker can still submit plausible fake rows; that is why no collected row ever enters training without
-  passing the offline held-out gate.
-* `pairs` carry no install id, so a withdrawn contribution cannot be removed from them; they contain only similarity
-  numbers. Switching the option off deletes the local identifier and queue and stops all uploads.
-* Genre strings are the only free text. The schema allows letters, digits, spaces and `& ' . -` up to 40 characters, and
-  the 20-install threshold keeps one person's unusual strings out of any analysis.
+* An open-source app cannot keep a secret key, so the endpoints are public. Defences are the strict schema, size limits,
+  one training batch per install per day and an edge rate limit (30 requests a minute), not authentication. A determined
+  attacker can submit plausible fake rows, so nothing collected enters a model or the catalogue without an offline check.
+* The files are raw (the earlier version aggregated in D1 and kept a genre only after 20 installs reported it): the owner
+  sees every batch. `tools/microml/collect/analyze.py` still reads a D1 dump and has to be pointed at the downloaded files.
+* Files are never deleted automatically; remove old days from the bucket by hand or add an R2 lifecycle rule
+  (the policy promises at most 400 days).

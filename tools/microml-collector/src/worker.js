@@ -1,9 +1,13 @@
-// Vetro MicroML collector: a Cloudflare Worker that accepts anonymous, schema-checked batches of
-// numbers and counters from consenting installs and writes them to D1. No titles, no free text
-// except short genre strings, no IP address, no account. See README.md for the exact data list.
+// Vetro MicroML collector: a Cloudflare Worker that accepts anonymous, schema-checked data from consenting
+// installs and writes it as plain JSON files into an R2 bucket the owner can open:
+//   microml/<day>/<install>.json   numbers and counters for training the on-device models (POST /v1/batch)
+//   sources/<day>/<id>.json        public book records that other book sites returned and the catalogue lacks (POST /v1/sources)
+// No search text, no collection titles, no IP address, no account. See README.md for the exact data list.
 
 const SCHEMA = 1;
 const MAX_BODY = 64 * 1024;
+const MAX_SOURCES_BODY = 128 * 1024;
+const MAX_RECORDS = 100;
 const MAX_PAIRS = 50;
 const MAX_GENRES = 50;
 const MAX_COUNTERS = 60;
@@ -60,82 +64,76 @@ export function validate(body) {
   return null;
 }
 
-function isoWeek(date) {
-  const d = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
-  const day = d.getUTCDay() || 7;
-  d.setUTCDate(d.getUTCDate() + 4 - day);
-  const start = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
-  return `${d.getUTCFullYear()}-W${String(Math.ceil(((d - start) / 86400000 + 1) / 7)).padStart(2, "0")}`;
+const SOURCE_ID = /^[a-z0-9][a-z0-9._-]{1,39}$/;
+const RECORD_FIELDS = new Set(["source", "key", "title", "authors", "narrators", "year", "cover", "duration_sec"]);
+const text = (x, max) => typeof x === "string" && x.trim().length > 0 && x.length <= max;
+const names = (x) => Array.isArray(x) && x.length <= 5 && x.every((n) => text(n, 100));
+
+/** Book records that another site returned for a search: public catalogue data, never the search text itself. */
+export function validateSources(body) {
+  if (!body || typeof body !== "object" || Array.isArray(body)) return "body";
+  for (const key of Object.keys(body)) if (key !== "schema" && key !== "records") return `unknown field ${key}`;
+  if (body.schema !== SCHEMA) return "schema";
+  if (!Array.isArray(body.records) || body.records.length === 0 || body.records.length > MAX_RECORDS) return "records";
+  for (const r of body.records) {
+    if (!r || typeof r !== "object" || Array.isArray(r)) return "record";
+    for (const key of Object.keys(r)) if (!RECORD_FIELDS.has(key)) return `unknown record field ${key}`;
+    if (typeof r.source !== "string" || !SOURCE_ID.test(r.source)) return "record source";
+    if (!text(r.key, 200) || !text(r.title, 200)) return "record text";
+    if (!names(r.authors ?? [])) return "record authors";
+    if (!names(r.narrators ?? [])) return "record narrators";
+    if (r.year != null && !(Number.isInteger(r.year) && r.year >= 0 && r.year <= 2100)) return "record year";
+    if (r.duration_sec != null && !(Number.isInteger(r.duration_sec) && r.duration_sec >= 0 && r.duration_sec <= 1_000_000)) return "record duration";
+    if (r.cover != null && !(text(r.cover, 400) && /^https?:\/\/[^\s]+$/.test(r.cover))) return "record cover";
+  }
+  return null;
 }
 
-export async function store(db, body, now = new Date()) {
-  const day = now.toISOString().slice(0, 10);
-  const week = isoWeek(now);
-  // One batch per install per day. A second one is acknowledged and dropped, so retries are harmless.
-  const first = await db.prepare("INSERT OR IGNORE INTO uploads(install, day) VALUES (?, ?)").bind(body.install, day).run();
-  if (!first.meta.changes) return { stored: false };
-  const statements = [];
-  for (const t of body.taste ?? []) {
-    statements.push(db.prepare(
-      "INSERT INTO taste(install, week, type, version, events, weights) VALUES (?, ?, ?, ?, ?, ?) " +
-      "ON CONFLICT(install, week, type) DO UPDATE SET version = excluded.version, events = excluded.events, weights = excluded.weights",
-    ).bind(body.install, week, t.type, t.version, t.events, JSON.stringify(t.weights.map(round))));
-  }
-  // Pairs carry no install id: a row cannot be traced back to a device.
-  for (const p of body.pairs ?? []) {
-    statements.push(db.prepare(
-      "INSERT INTO pairs(day, features_version, pack, source, label, kind_a, kind_b, features) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-    ).bind(day, p.features_version, p.pack, p.source, p.label, p.kinds[0], p.kinds[1], JSON.stringify(p.features.map(round))));
-  }
-  for (const g of new Set(body.genres ?? [])) {
-    statements.push(db.prepare("INSERT OR IGNORE INTO genre_strings(text, install, first_day) VALUES (?, ?, ?)").bind(g, body.install, day));
-  }
-  for (const [key, value] of Object.entries(body.counters ?? {})) {
-    statements.push(db.prepare(
-      "INSERT INTO counters(day, key, value) VALUES (?, ?, ?) ON CONFLICT(day, key) DO UPDATE SET value = value + excluded.value",
-    ).bind(day, key, value));
-  }
-  for (const [pack, version] of Object.entries(body.packs ?? {})) {
-    statements.push(db.prepare(
-      "INSERT INTO counters(day, key, value) VALUES (?, ?, 1) ON CONFLICT(day, key) DO UPDATE SET value = value + 1",
-    ).bind(day, `pack:${pack}_${version.replace(/[^a-z0-9]/gi, "_").toLowerCase().slice(0, 40)}`));
-  }
-  if (statements.length) await db.batch(statements);
-  return { stored: true };
+const dayOf = (now) => now.toISOString().slice(0, 10);
+
+/** One batch per install per day; a second one is acknowledged and dropped, so retries are harmless. */
+export async function storeBatch(bucket, body, now = new Date()) {
+  const key = `microml/${dayOf(now)}/${body.install}.json`;
+  const saved = await bucket.put(key, JSON.stringify({ received: dayOf(now), ...body }), {
+    onlyIf: { etagDoesNotMatch: "*" },
+    httpMetadata: { contentType: "application/json" },
+  });
+  return { stored: saved !== null };
 }
 
-export async function purge(db, now = new Date(), threshold = 20) {
-  const day = (offset) => new Date(now.getTime() - offset * 86400000).toISOString().slice(0, 10);
-  await db.batch([
-    db.prepare("DELETE FROM uploads WHERE day < ?").bind(day(3)),
-    // A genre string that did not reach the installs threshold within 30 days is not kept.
-    db.prepare(
-      "DELETE FROM genre_strings WHERE first_day < ? AND text IN (SELECT text FROM genre_strings GROUP BY text HAVING COUNT(*) < ?)",
-    ).bind(day(30), threshold),
-    db.prepare("DELETE FROM taste WHERE week < ?").bind(isoWeek(new Date(now.getTime() - 120 * 86400000))),
-    db.prepare("DELETE FROM pairs WHERE day < ?").bind(day(400)),
-  ]);
+export async function storeSources(bucket, body, now = new Date(), id = crypto.randomUUID()) {
+  await bucket.put(`sources/${dayOf(now)}/${id}.json`, JSON.stringify({ received: dayOf(now), records: body.records }), {
+    httpMetadata: { contentType: "application/json" },
+  });
+  return { stored: true, records: body.records.length };
+}
+
+async function readBody(request, limit) {
+  if (Number(request.headers.get("content-length") ?? 0) > limit) return { response: json({ error: "too large" }, 413) };
+  const raw = await request.text();
+  if (raw.length > limit) return { response: json({ error: "too large" }, 413) };
+  try { return { body: JSON.parse(raw) }; } catch { return { response: json({ error: "json" }, 400) }; }
 }
 
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
     if (request.method === "GET" && url.pathname === "/v1/health") return json({ ok: true, schema: SCHEMA });
-    if (request.method !== "POST" || url.pathname !== "/v1/batch") return json({ error: "not found" }, 404);
-    if (Number(request.headers.get("content-length") ?? 0) > MAX_BODY) return json({ error: "too large" }, 413);
-    const text = await request.text();
-    if (text.length > MAX_BODY) return json({ error: "too large" }, 413);
-    let body;
-    try { body = JSON.parse(text); } catch { return json({ error: "json" }, 400); }
-    const problem = validate(body);
+    const route = url.pathname === "/v1/batch" ? "batch" : url.pathname === "/v1/sources" ? "sources" : null;
+    if (request.method !== "POST" || !route) return json({ error: "not found" }, 404);
+    if (env.LIMITER) {
+      // The limiter looks at the address only to count; nothing is stored here.
+      const { success } = await env.LIMITER.limit({ key: request.headers.get("cf-connecting-ip") ?? "anon" });
+      if (!success) return json({ error: "rate limited" }, 429);
+    }
+    const { body, response } = await readBody(request, route === "batch" ? MAX_BODY : MAX_SOURCES_BODY);
+    if (response) return response;
+    const problem = route === "batch" ? validate(body) : validateSources(body);
     if (problem) return json({ error: problem }, 422);
     try {
-      return json(await store(env.DB, body));
+      return json(route === "batch" ? await storeBatch(env.CONTRIB, body) : await storeSources(env.CONTRIB, body));
     } catch {
       return json({ error: "storage" }, 503);
     }
-  },
-  async scheduled(_event, env) {
-    await purge(env.DB);
   },
 };

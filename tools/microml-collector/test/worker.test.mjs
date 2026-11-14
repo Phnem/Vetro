@@ -1,24 +1,18 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { DatabaseSync } from "node:sqlite";
-import { readFileSync } from "node:fs";
-import worker, { validate, store, purge } from "../src/worker.js";
+import worker, { validate, validateSources, storeBatch, storeSources } from "../src/worker.js";
 
-// A D1-shaped wrapper over node:sqlite: enough of prepare/bind/run/all/batch for the worker.
-function d1() {
-  const db = new DatabaseSync(":memory:");
-  db.exec(readFileSync(new URL("../schema.sql", import.meta.url), "utf8"));
-  const wrap = (sql) => {
-    let args = [];
-    const statement = {
-      bind: (...a) => { args = a; return statement; },
-      run: async () => { const r = db.prepare(sql).run(...args); return { meta: { changes: Number(r.changes) } }; },
-      all: async () => ({ results: db.prepare(sql).all(...args) }),
-      exec: () => db.prepare(sql).run(...args),
-    };
-    return statement;
+// An R2-shaped bucket in memory: put honours onlyIf etagDoesNotMatch "*" (returns null when the object exists).
+function bucket() {
+  const files = new Map();
+  return {
+    files,
+    put: async (key, value, options = {}) => {
+      if (options.onlyIf?.etagDoesNotMatch === "*" && files.has(key)) return null;
+      files.set(key, value);
+      return { key };
+    },
   };
-  return { prepare: wrap, batch: async (list) => { for (const s of list) s.exec(); }, raw: db };
 }
 
 const install = "0123456789abcdef0123456789abcdef";
@@ -54,46 +48,63 @@ test("free text and identifiers are rejected", () => {
   }
 });
 
-test("one batch per install per day; retries are harmless", async () => {
-  const db = d1();
+test("one batch per install per day lands as a file; retries are harmless", async () => {
+  const b = bucket();
   const when = new Date("2026-11-10T12:00:00Z");
-  assert.deepEqual(await store(db, good(), when), { stored: true });
-  assert.deepEqual(await store(db, good(), when), { stored: false });
-  assert.equal(db.raw.prepare("SELECT COUNT(*) n FROM pairs").get().n, 1);
-  assert.equal(db.raw.prepare("SELECT value FROM counters WHERE key='identity:search_same_top'").get().value, 12);
-  assert.equal(db.raw.prepare("SELECT week FROM taste").get().week, "2026-W46");
+  assert.deepEqual(await storeBatch(b, good(), when), { stored: true });
+  assert.deepEqual(await storeBatch(b, good(), when), { stored: false });
+  assert.deepEqual([...b.files.keys()], [`microml/2026-11-10/${install}.json`]);
+  const saved = JSON.parse(b.files.get(`microml/2026-11-10/${install}.json`));
+  assert.equal(saved.received, "2026-11-10");
+  assert.equal(saved.counters["identity:search_same_top"], 12);
+  assert.deepEqual(await storeBatch(b, good(), new Date("2026-11-11T01:00:00Z")), { stored: true });
 });
 
-test("pairs are stored without any install id", async () => {
-  const db = d1();
-  await store(db, good(), new Date("2026-11-10T12:00:00Z"));
-  const columns = db.raw.prepare("PRAGMA table_info(pairs)").all().map((c) => c.name);
-  assert.ok(!columns.includes("install"));
-});
+const record = () => ({ source: "knigavuhe", key: "/book/123-dune/", title: "Дюна", authors: ["Фрэнк Герберт"], narrators: ["Иван Иванов"], year: 1965, cover: "https://example.org/c.jpg", duration_sec: 61000 });
 
-test("a genre reaches the candidate view only with 20 installs, rare ones are purged", async () => {
-  const db = d1();
-  const when = new Date("2026-11-10T12:00:00Z");
-  for (let i = 0; i < 20; i++) {
-    const b = good();
-    b.install = i.toString(16).padStart(32, "0");
-    b.genres = i === 0 ? ["Slice of Life", "Rarity"] : ["Slice of Life"];
-    await store(db, b, when);
+test("a source record batch passes only when it is public book data", () => {
+  assert.equal(validateSources({ schema: 1, records: [record()] }), null);
+  for (const mutate of [
+    (r) => { r.query = "what the user typed"; },
+    (r) => { r.source = "Some Site!"; },
+    (r) => { r.title = ""; },
+    (r) => { r.title = "x".repeat(201); },
+    (r) => { r.authors = Array(6).fill("a"); },
+    (r) => { r.year = 1999.5; },
+    (r) => { r.cover = "javascript:alert(1)"; },
+    (r) => { r.cover = "https://exa mple.org/c.jpg"; },
+    (r) => { r.duration_sec = -1; },
+  ]) {
+    const r = record();
+    mutate(r);
+    assert.notEqual(validateSources({ schema: 1, records: [r] }), null, JSON.stringify(r).slice(0, 80));
   }
-  const view = db.raw.prepare("SELECT text, installs FROM genre_candidates").all();
-  assert.deepEqual(view.map((r) => r.text), ["Slice of Life"]);
-  await purge(db, new Date("2026-12-20T00:00:00Z"));
-  const left = db.raw.prepare("SELECT DISTINCT text FROM genre_strings").all().map((r) => r.text);
-  assert.deepEqual(left, ["Slice of Life"]);
+  assert.notEqual(validateSources({ schema: 1, records: [] }), null);
+  assert.notEqual(validateSources({ schema: 1, records: Array(101).fill(record()) }), null);
+  assert.notEqual(validateSources({ schema: 1, records: [record()], install }), null);
 });
 
-test("HTTP surface: health, size limit, validation errors", async () => {
-  const env = { DB: d1() };
-  const post = (body) => worker.fetch(new Request("https://x/v1/batch", { method: "POST", body: typeof body === "string" ? body : JSON.stringify(body) }), env);
+test("source records are written as one file per upload, without any install id", async () => {
+  const b = bucket();
+  assert.deepEqual(await storeSources(b, { schema: 1, records: [record(), record()] }, new Date("2026-11-10T12:00:00Z"), "abc"), { stored: true, records: 2 });
+  const saved = JSON.parse(b.files.get("sources/2026-11-10/abc.json"));
+  assert.equal(saved.records.length, 2);
+  assert.equal("install" in saved, false);
+});
+
+test("HTTP surface: health, size limits, validation errors, both routes, rate limit", async () => {
+  const env = { CONTRIB: bucket() };
+  const post = (path, body) => worker.fetch(new Request("https://x" + path, { method: "POST", body: typeof body === "string" ? body : JSON.stringify(body) }), env);
   assert.equal((await worker.fetch(new Request("https://x/v1/health"), env)).status, 200);
   assert.equal((await worker.fetch(new Request("https://x/other"), env)).status, 404);
-  assert.equal((await post("{")).status, 400);
-  assert.equal((await post({ ...good(), extra: 1 })).status, 422);
-  assert.equal((await post("x".repeat(70000))).status, 413);
-  assert.equal((await post(good())).status, 200);
+  assert.equal((await post("/v1/batch", "{")).status, 400);
+  assert.equal((await post("/v1/batch", { ...good(), extra: 1 })).status, 422);
+  assert.equal((await post("/v1/batch", "x".repeat(70000))).status, 413);
+  assert.equal((await post("/v1/batch", good())).status, 200);
+  assert.equal((await post("/v1/sources", { schema: 1, records: [{ ...record(), query: "x" }] })).status, 422);
+  assert.equal((await post("/v1/sources", { schema: 1, records: [record()] })).status, 200);
+  assert.equal((await post("/v1/sources", "x".repeat(140000))).status, 413);
+  assert.equal([...env.CONTRIB.files.keys()].filter((k) => k.startsWith("sources/")).length, 1);
+  const limited = { CONTRIB: bucket(), LIMITER: { limit: async () => ({ success: false }) } };
+  assert.equal((await worker.fetch(new Request("https://x/v1/batch", { method: "POST", body: JSON.stringify(good()) }), limited)).status, 429);
 });
