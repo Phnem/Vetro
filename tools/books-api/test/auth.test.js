@@ -4,6 +4,8 @@ import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
 import { authorize, b64url, issueAppToken } from "../src/access.js";
 import { handleAuth, newChallenge, verifyChallenge } from "../src/auth.js";
+import { loadRevocations, normalizeSerial, revokedInChain } from "../src/revocation.js";
+import { parseCertificate } from "../src/attest.js";
 import worker from "../src/worker.js";
 
 const fx = JSON.parse(readFileSync(new URL("./fixtures/attestation-xiaomi13.json", import.meta.url), "utf8"));
@@ -39,7 +41,7 @@ function env(extra = {}, { allowSignature = true } = {}) {
   const sqlite = new DatabaseSync(":memory:");
   sqlite.exec(readFileSync(new URL("../schema/access.sql", import.meta.url), "utf8"));
   if (allowSignature) sqlite.prepare("INSERT INTO app_signatures (package, sha256, label) VALUES ('com.phnem.vetro.perf', ?, 'debug-perf')").run(SIG);
-  return { DB: fakeD1(sqlite), sqlite, APP_TOKEN_SECRET: SECRET, ACCESS_MODE: "enforce", ...extra };
+  return { DB: fakeD1(sqlite), sqlite, APP_TOKEN_SECRET: SECRET, ACCESS_MODE: "enforce", ATTEST_STATUS_URL: "", ...extra };
 }
 
 const testDeps = { verifyChallenge: async () => fixtureChallenge };
@@ -172,4 +174,44 @@ test("an expired or foreign app token is refused", async () => {
   assert.equal((await (await manifestCall(e, good, NOW + 3601_000)).response.json()).error, "expired_key");
   const foreign = await issueAppToken("not-our-secret", "install-x", 3600, NOW);
   assert.equal((await (await manifestCall(e, foreign, NOW + 1000)).response.json()).error, "invalid_key");
+});
+
+test("a chain with a revoked or suspended serial gets no token; a listed-but-fine or missing list does not block", async () => {
+  const leaf = parseCertificate(Uint8Array.from(Buffer.from(fx.chain[0], "base64")));
+  const serial = normalizeSerial(leaf.serial);
+  const entries = (status) => ({ [serial]: { status, reason: "KEY_COMPROMISE" } });
+  for (const status of ["REVOKED", "SUSPENDED"]) {
+    const res = await register(env(), undefined, NOW, { ...testDeps, loadRevocations: async () => entries(status) });
+    assert.equal(res.status, 403);
+    assert.deepEqual(await res.json(), { error: "attestation_failed", reason: "attestation_revoked" });
+  }
+  const e = env();
+  assert.equal((await register(e, undefined, NOW, { ...testDeps, loadRevocations: async () => ({ "deadbeef": { status: "REVOKED" } }) })).status, 200);
+  assert.equal((await register(env(), undefined, NOW, { ...testDeps, loadRevocations: async () => null })).status, 200); // список недоступен: пропускаем
+  assert.equal(e.sqlite.prepare("SELECT COUNT(*) n FROM installs").get().n, 1);
+});
+
+test("serials are compared the way Google writes them, and the list is cached", async () => {
+  assert.equal(normalizeSerial("00C35747A0"), "c35747a0");
+  assert.equal(normalizeSerial("0"), "0");
+  assert.equal(revokedInChain([{ serial: "00AB" }], { ab: { status: "revoked" } }).serial, "ab");
+  assert.equal(revokedInChain([{ serial: "00AB" }], { ab: { status: "OK" } }), null);
+  assert.equal(revokedInChain([{ serial: "ab" }], null), null);
+
+  edgeCache.clear();
+  let fetched = 0;
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async () => { fetched++; return new Response(JSON.stringify({ entries: { ab: { status: "REVOKED" } } })); };
+  try {
+    const e = { ATTEST_STATUS_URL: "https://status.test/list" };
+    assert.equal((await loadRevocations(e)).ab.status, "REVOKED");
+    assert.equal((await loadRevocations(e)).ab.status, "REVOKED");
+    assert.equal(fetched, 1);
+    globalThis.fetch = async () => new Response("nope", { status: 500 });
+    edgeCache.clear();
+    assert.equal(await loadRevocations(e), null);
+    assert.equal(await loadRevocations({ ATTEST_STATUS_URL: "" }), null);
+  } finally {
+    globalThis.fetch = realFetch;
+  }
 });

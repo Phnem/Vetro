@@ -8,6 +8,7 @@
 // пакет и подпись APK по таблице app_signatures. Скрипту, доставшему адрес API из кода, телефон такую цепочку не выдаст.
 import { b64url, issueAppToken, macOf, unb64url } from "./access.js";
 import { attestationOf, checkAttestation, verifyChain } from "./attest.js";
+import { loadRevocations, revokedInChain } from "./revocation.js";
 import { GOOGLE_ATTESTATION_ROOTS } from "./attest-roots.js";
 import { hex } from "./der.js";
 
@@ -56,7 +57,7 @@ async function throttled(env, request, bucket) {
   return !success;
 }
 
-/** `deps.verifyChallenge` подменяется в тестах (настоящую цепочку снимали с фиксированным заданием). */
+/** `deps.verifyChallenge` и `deps.loadRevocations` подменяются в тестах (настоящую цепочку снимали с фиксированным заданием). */
 export async function handleAuth(request, env, now = Date.now(), deps = {}) {
   const url = new URL(request.url);
   const secret = env.APP_TOKEN_SECRET;
@@ -93,6 +94,8 @@ export async function handleAuth(request, env, now = Date.now(), deps = {}) {
   const fail = (reason) => json({ error: "attestation_failed", reason }, 403);
   const verified = await verifyChain(chain, trustedRoots(), now);
   if (!verified.ok) return fail(verified.error);
+  const revoked = revokedInChain(verified.certs, await (deps.loadRevocations ?? loadRevocations)(env));
+  if (revoked) return fail("attestation_revoked");
   const info = attestationOf(verified.certs);
   if (!info.ok) return fail(info.error);
 
