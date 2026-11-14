@@ -53,7 +53,10 @@ class NormalizedScorer(
                 val novelty = d.votes?.let { 1f - percentile(sortedVotes, it) }
                 // Новизна идёт только вместе с релевантностью: безвестный нерелевантный тайтл не поднимается.
                 val noveltyScore = novelty?.let { it * (d.genre ?: 0.5f) }
-                d.item.copy(score = combine(d, noveltyScore))
+                d.item.copy(
+                    score = combine(d, noveltyScore),
+                    signals = listOf(d.genre ?: -1f, d.relation ?: -1f, d.quality ?: -1f, d.feedback ?: -1f, noveltyScore ?: -1f),
+                )
             }
             .sortedByDescending { it.score }
             .take(limit)

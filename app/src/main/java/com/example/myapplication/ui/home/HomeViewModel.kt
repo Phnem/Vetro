@@ -23,6 +23,10 @@ import com.example.myapplication.updates.EpisodeUpdateCheckCoordinator
 import com.example.myapplication.network.ApiSearchResult
 import com.example.myapplication.network.AppContentType
 import com.example.myapplication.network.AppLanguage
+import com.example.myapplication.microml.MicroKind
+import com.example.myapplication.microml.MicroMlEngine
+import com.example.myapplication.microml.MicroRecord
+import com.example.myapplication.micromlintegration.MicroMlBridge
 import com.example.myapplication.data.models.LibraryFilter
 import com.example.myapplication.data.models.WatchStatus
 import com.example.myapplication.data.models.effectiveWatchStatus
@@ -87,6 +91,7 @@ class HomeViewModel(
     private val mangaTranslateSettings: com.example.myapplication.manga.translate.MangaTranslateSettings? = null,
     /** null — раздел аудиокниг выключен в сборке, вкладки «Книги» в поиске нет. */
     private val bookSearch: com.example.myapplication.audiobooks.data.BookSearchAdder? = null,
+    private val microMl: MicroMlEngine? = null,
 ) : ViewModel() {
 
     /** Найденные прямые ссылки по одобренным сайтам (animeId → запись). Реактивно для карточек. */
@@ -446,9 +451,11 @@ class HomeViewModel(
                 if (_uiState.value.searchQuery.trim() != trimmed) return@launch
                 val ru = uiLanguage.value == com.example.myapplication.network.AppLanguage.RU
                 foundBooks = books.associateBy { "${it.ref.source.value}:${it.ref.key}" }
+                val results = books.map { it.toSearchResult(ru) }.toImmutableList()
                 _uiState.update {
-                    it.copy(apiSearchResults = books.map { b -> b.toSearchResult(ru) }.toImmutableList(), apiSearchLoading = false)
+                    it.copy(apiSearchResults = results, apiSearchLoading = false)
                 }
+                rerankFinishedSearch(trimmed, MicroKind.AUDIOBOOK, results)
                 return@launch
             }
             val mediaType = _uiState.value.searchMediaTypeFilter
@@ -481,6 +488,13 @@ class HomeViewModel(
                             apiSearchResults = if (gotResults) it.apiSearchResults else persistentListOf(),
                         )
                     }
+                    val kind = when (contentType) {
+                        AppContentType.ANIME -> MicroKind.ANIME
+                        AppContentType.MANGA -> MicroKind.MANGA
+                        AppContentType.MOVIE -> MicroKind.MOVIE
+                        AppContentType.SERIES -> MicroKind.SERIES
+                    }
+                    if (gotResults) rerankFinishedSearch(trimmed, kind, _uiState.value.apiSearchResults)
                 }
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
@@ -489,6 +503,18 @@ class HomeViewModel(
                     _uiState.update { it.copy(apiSearchLoading = false, apiSearchError = e.message ?: "Search failed") }
                 }
             }
+        }
+    }
+
+    private suspend fun rerankFinishedSearch(query: String, kind: MicroKind, results: List<ApiSearchResult>) {
+        val ranked = MicroMlBridge.rerank(microMl, MicroRecord(listOf(query), kind), results, { hit ->
+            MicroRecord(listOfNotNull(hit.title, hit.titleEn, hit.titleRu, hit.altTitle, hit.originalTitle), kind, hit.seasonYear)
+        })
+        if (ranked === results) return
+        _uiState.update { current ->
+            if (current.searchQuery.trim() == query && current.apiSearchResults === results) {
+                current.copy(apiSearchResults = ranked.toImmutableList())
+            } else current
         }
     }
 

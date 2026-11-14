@@ -8,6 +8,7 @@ import com.example.myapplication.data.models.Anime
 import com.example.myapplication.data.repository.GenreRepository
 import com.example.myapplication.data.repository.ImageStorageRepository
 import com.example.myapplication.domain.search.mapApiGenresToTagIds
+import com.example.myapplication.micromlintegration.MicroMlBridge
 import com.example.myapplication.network.AppLanguage
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
@@ -52,6 +53,8 @@ class RecommendationEngine(
     /** Отсеивает аниме из франшиз, которые уже есть в коллекции (продолжения, фильмы, другие экранизации). */
     private val franchiseFilter: FranchiseOwnershipFilter? = null,
     private val titleIdentity: com.example.myapplication.domain.titleidentityintegration.TitleIdentityService? = null,
+    /** MicroML в теневом режиме: наблюдает и учится, порядок и состав рекомендаций меняет только по явному флагу. */
+    private val microMl: com.example.myapplication.microml.MicroMlEngine? = null,
 ) {
 
     private val refreshMutex = Mutex()
@@ -64,6 +67,9 @@ class RecommendationEngine(
     /** Запоминает оценку карточки; учитывается при следующем пересчёте (см. [refresh]). */
     suspend fun recordFeedback(item: RecommendationItem, verdict: FeedbackVerdict) {
         feedbackStore.record(item.toFeedbackEntry(verdict, System.currentTimeMillis()))
+        // Обучаемый ранжировщик MicroML учится на свайпе на устройстве; сбой обучения оценку не затрагивает.
+        runCatching { MicroMlBridge.learn(microMl, item, verdict == FeedbackVerdict.APPROVED) }
+            .onFailure { if (it is CancellationException) throw it }
     }
 
     /** Отмена оценки (кнопка «Отменить» после свайпа). */
@@ -132,9 +138,11 @@ class RecommendationEngine(
         }
         val mix = ContentMix.of(library)
         val judged = FeedbackIndex(feedback.entries)
-        val genreToTagId: (String) -> String? = { genre ->
+        // Действующее сопоставление жанров остаётся первым; Catalog AI спрашивают только о тех, что оно не узнало.
+        val genreToTagId: (String) -> String? = MicroMlBridge.genreMapper(microMl) { genre ->
             mapApiGenresToTagIds(listOf(genre), genreRepository).firstOrNull()
         }
+        MicroMlBridge.observeTitleLanguages(microMl, library.mapNotNull { it.titleEn })
 
         val results = supervisorScope {
             activeTypes(mix, flags).map { type ->
@@ -202,11 +210,11 @@ class RecommendationEngine(
         // Профиль: аниме отдельно, фильмы и сериалы делят один «экранный» профиль, но тип остаётся в признаках.
         val profile = library.filter { ContentType.of(it.mediaType)?.isScreen == type.isScreen }
         val profileFeedback = feedback.entries.filter { it.contentType.isScreen == type.isScreen }
-        val affinity = affinityCalculator.calculate(
+        val affinity = MicroMlBridge.affinity(microMl, affinityCalculator.calculate(
             profile,
             FeedbackSignals.genreWeights(profileFeedback, genreToTagId, now),
             nowMillis = if (flags.newScorer) now else null,
-        )
+        ))
 
         val seeds = SeedSelector.select(library, type, now)
         var pool = if (seeds.isEmpty()) emptyList() else collect(enabled) { it.getRelated(type, seeds, language) }
@@ -250,7 +258,7 @@ class RecommendationEngine(
         val items = if (flags.newScorer) {
             val ranked = NormalizedScorer(affinity, genreToTagId, preferred, seedTrust, confidence)
                 .scoreAndRank(filtered, limit = MAX_RESULTS * 2)
-            DiversityReranker.mmr(ranked, MAX_RESULTS).take(MAX_RESULTS)
+            MicroMlBridge.rank(microMl, type.name, DiversityReranker.mmr(ranked, MAX_RESULTS).take(MAX_RESULTS))
         } else {
             RecommendationScorer(affinity, genreToTagId, preferred, seedTrust)
                 .scoreAndRank(filtered, limit = MAX_RESULTS)

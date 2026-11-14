@@ -31,6 +31,11 @@ data class RecommendationItem(
     val tmdbId: Int? = null,
     /** Подтверждения источников — основа честных объяснений «Похоже на X»; максимум [MAX_EVIDENCE]. */
     val evidence: List<RecommendationEvidence> = emptyList(),
+    /**
+     * Пять сигналов скорера на момент пересчёта: жанр, связь с сидами, качество, отклик, новизна (0..1, −1 — сигнала нет).
+     * Нужны обучаемому ранжировщику MicroML; на порядок карточек сами по себе не влияют.
+     */
+    val signals: List<Float>? = null,
 ) {
     companion object {
         const val MAX_EVIDENCE = 8

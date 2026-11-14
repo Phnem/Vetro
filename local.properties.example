@@ -71,3 +71,7 @@ FANART_API_KEY=
 NYT_API_KEY=
 TASTEDIVE_API_KEY=
 GOOGLE_BOOKS_API_KEY=
+
+# --- MicroML: добровольный сбор таблиц для дообучения моделей ---
+# https-адрес Cloudflare Worker из tools/microml-collector. Пусто — сбора в приложении нет.
+MICROML_COLLECTOR_URL=

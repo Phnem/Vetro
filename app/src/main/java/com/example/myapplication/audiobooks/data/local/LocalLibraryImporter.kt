@@ -14,6 +14,7 @@ import com.example.myapplication.audiobooks.domain.source.ManifestResolver
 import com.example.myapplication.audiobooks.domain.source.SourceBook
 import com.example.myapplication.audiobooks.domain.source.SourceResult
 import com.example.myapplication.audiobooks.domain.source.WorkMatch
+import com.example.myapplication.micromlintegration.MicroMlBridge
 import kotlinx.coroutines.CancellationException
 
 /**
@@ -30,6 +31,8 @@ class LocalLibraryImporter(
     private val sources: List<AudiobookSource>,
     private val repository: AudiobookRepository,
     private val coverFinder: BookCoverFinder,
+    /** MicroML Catalog AI: разбор имени папки в теневом режиме рядом с [FolderName]. */
+    private val microMl: com.example.myapplication.microml.MicroMlEngine? = null,
 ) {
     /**
      * Книги библиотеки без обложки: у части сайтов её нет, у своих папок — тем более. Ищется в
@@ -68,6 +71,7 @@ class LocalLibraryImporter(
             val manifest = runCatching { local.refresh(book.variant) }.getOrNull()
             manifest?.let { resolver.put(it) }
             val folder = FolderName.parse(book.title)
+            MicroMlBridge.observeFolderFields(microMl, book.title, folder.title, folder.author)
             val title = folder.title
             // «Исполнитель» в тегах — чаще чтец, чем автор. Если принять его за автора, сверка автора
             // отбросит верное совпадение и обложки не будет, поэтому в поиск идёт только то, что

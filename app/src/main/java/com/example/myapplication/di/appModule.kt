@@ -257,7 +257,15 @@ val appModule = module {
             rateLimiter = get(named("remanga_rate")),
         )
     }
-    single { com.example.myapplication.domain.titleidentityintegration.TitleIdentityService(androidContext()) }
+    // MicroML Engine: три независимых пакета локальных моделей; без пакетов в сборке всё работает как раньше.
+    single { com.example.myapplication.microml.MicroMlEngine(androidContext()) }
+    // Добровольный сбор таблиц (по умолчанию выключен, только официальная сборка с заданным адресом). Создаётся сразу,
+    // чтобы подключить приёмник жанров и расписание отправки.
+    single { com.example.myapplication.microml.contribution.ContributionStore(androidContext()) }
+    single(createdAtStart = true) {
+        com.example.myapplication.microml.contribution.ContributionService(androidContext(), get(), get(), get<okhttp3.OkHttpClient>(), get())
+    }
+    single { com.example.myapplication.domain.titleidentityintegration.TitleIdentityService(androidContext(), get()) }
     single { com.example.myapplication.domain.enrichment.TitleCandidateSearch(repository = get(), identity = get()) }
     // Японская цепочка: бесплатные главы с сайтов издателей, которых ещё нет на языке пользователя.
     single { com.example.myapplication.manga.ja.JaHttp(get<okhttp3.OkHttpClient>()) }
@@ -680,6 +688,7 @@ val appModule = module {
             idBackfill = get(),
             franchiseFilter = get(),
             titleIdentity = get(),
+            microMl = get(),
         )
     }
 }

@@ -69,6 +69,8 @@ class DetailsViewModel(
     private val seriesSeasonsStore: SeriesSeasonsStore? = null,
     private val seriesEpisodeCheck: SeriesEpisodeCheckUseCase? = null,
     private val autoWatchStatus: com.example.myapplication.domain.status.AutoWatchStatusResolver? = null,
+    /** Метки для дообучения моделей по согласию: выбор и отклонение источника. Без согласия ничего не делает. */
+    private val contribution: com.example.myapplication.microml.contribution.ContributionService? = null,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow<DetailsUiState>(DetailsUiState.Idle)
@@ -485,6 +487,8 @@ class DetailsViewModel(
                 localDataSource.updateAnime(updated)
                 seasonEpisodesStore.remove(animeId)
             }.onSuccess {
+                // Метка «та же сущность» для Identity (по согласию): в очередь уходит вектор сходства, не названия.
+                launch { runCatching { contribution?.recordPickerChoice(anime, candidate, current.items) } }
                 _currentAnime.value = updated
                 _picker.value = DetailsPickerState.None
                 _enrichment.value = null
@@ -510,6 +514,8 @@ class DetailsViewModel(
         viewModelScope.launch {
             val anime = _currentAnime.value ?: return@launch
             val cleared = anime.withRejectedSource().copy(imageFileName = null)
+            // Метка «разные сущности» для Identity (по согласию); привязка читается до того, как её сняли.
+            launch { runCatching { contribution?.recordRejected(anime) } }
             runCatching {
                 localDataSource.updateAnime(cleared)
                 seasonEpisodesStore.remove(animeId)

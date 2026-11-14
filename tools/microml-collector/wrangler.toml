@@ -1,0 +1,18 @@
+name = "vetro-microml-collector"
+main = "src/worker.js"
+compatibility_date = "2026-11-01"
+
+# Daily cleanup: rare genre strings, old weeks, old pair rows.
+[triggers]
+crons = ["17 3 * * *"]
+
+# Create the database once:  wrangler d1 create vetro-microml
+# then paste the database_id it prints here and run:  wrangler d1 execute vetro-microml --remote --file=schema.sql
+[[d1_databases]]
+binding = "DB"
+database_name = "vetro-microml"
+database_id = "REPLACE_WITH_ID_FROM_wrangler_d1_create"
+
+# Do not enable logs that record request metadata: the privacy promise is that no IP is kept.
+[observability]
+enabled = false

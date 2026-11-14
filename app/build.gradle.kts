@@ -59,6 +59,8 @@ android {
         buildConfigField("String", "GITHUB_OWNER", "\"Phnem\"")
         buildConfigField("String", "GITHUB_REPO", "\"Vetro\"")
         buildConfigField("boolean", "AUDIOBOOKS_ENABLED", "true")
+        // Адрес коллектора таблиц MicroML (Cloudflare Worker). Пусто — функции сбора в приложении нет вовсе.
+        buildConfigField("String", "MICROML_COLLECTOR_URL", "\"${oauthProp("MICROML_COLLECTOR_URL")}\"")
         buildConfigField(
             "String",
             "SHIKIMORI_CLIENT_ID",
@@ -128,6 +130,10 @@ android {
     sourceSets.getByName("main").assets.srcDir(rootProject.file(
         providers.gradleProperty("titleMatchAssetsDir").getOrElse("tools/titlematch/.cache/releases/current/android-assets")
     ))
+    // MicroML packs (core encoder + identity / catalog / experience). Same rule: no folder, no models, old behaviour.
+    sourceSets.getByName("main").assets.srcDir(rootProject.file(
+        providers.gradleProperty("microMlAssetsDir").getOrElse("tools/microml/.cache/releases/current/android-assets")
+    ))
 
     buildFeatures {
         compose = true
@@ -140,6 +146,9 @@ android {
         unitTests.isReturnDefaultValues = true
         unitTests.all {
             it.systemProperty("titlematch.fixtureRoot", rootProject.file("tools/titlematch/.cache/benchmark-assets").absolutePath)
+            // Пакеты MicroML и эталонные векторы из Python: тесты паритета пропускаются, если папки нет.
+            it.systemProperty("microml.fixtureRoot", rootProject.file("tools/microml/.cache/releases/current").absolutePath)
+            it.inputs.files(rootProject.fileTree("tools/microml/.cache/releases/current") { include("android-assets/**", "golden.json") })
             it.inputs.files(rootProject.fileTree("tools/titlematch/.cache/benchmark-assets") {
                 include("feature-golden.json", "model.vtmf")
             })
@@ -154,6 +163,7 @@ android {
     buildTypes {
         debug {
             if (audiobookSmokeBuild) applicationIdSuffix = ".ab07smoke"
+            if (providers.gradleProperty("microMlSmokeBuild").orNull == "true") applicationIdSuffix = ".micromlsmoke"
         }
         release {
             if (audiobookSmokeBuild) {
@@ -280,6 +290,7 @@ dependencies {
     // их в загрузчике Vetro по имени. Версии не ниже, чем у keiyoushi (OkHttp 5, Kotlin 2.4).
     implementation(libs.okhttp.brotli)
     implementation(libs.okhttp.zstd)
+    implementation(libs.zstd.kmp.okio)
     // Не ниже keiyoushi: расширения зовут API корутин 1.11 (runBlockingK), с 1.10 - NoSuchMethodError.
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.injekt.core) {
@@ -290,7 +301,6 @@ dependencies {
     implementation(libs.androidx.preference)
     implementation(libs.kotlinx.serialization.protobuf)
     implementation(libs.kotlinx.serialization.json.okio)
-    implementation(libs.zstd.kmp.okio)
     // Торрент-источники аудиокниг: движок libtorrent (Java-обёртка + нативные библиотеки телефонов;
     // x86_64 — только для эмулятора в debug, чтобы не раздувать релиз).
     implementation(libs.libtorrent4j)

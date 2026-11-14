@@ -246,6 +246,7 @@ val audiobookModule = module {
             sources = get(named(SOURCES)),
             repository = get(),
             coverFinder = get(),
+            microMl = get(),
         )
     }
     viewModel { BooksHomeViewModel(get(), get(), get(), get(), get()) }
