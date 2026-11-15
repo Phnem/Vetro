@@ -55,6 +55,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -90,6 +91,9 @@ import com.example.myapplication.media.episode.EpisodeRange
 import com.example.myapplication.media.episode.EpisodeStreamResolver
 import com.example.myapplication.media.episode.shouldAutoAdvance
 import com.example.myapplication.media.player.StreamingPlaybackSessionFactory
+import com.example.myapplication.media.player.DubbingPendingRule
+import com.example.myapplication.ui.shared.mascot.MascotEmptyState
+import com.example.myapplication.ui.shared.mascot.MascotScene
 import com.example.myapplication.media.player.ContinuousBufferingWatchdog
 import com.example.myapplication.media.player.StreamRecoveryAction
 import com.example.myapplication.media.player.StreamRecoveryInput
@@ -164,6 +168,7 @@ class StreamPlayerActivity : ComponentActivity(), PipHostActivity {
     private val remote: com.example.myapplication.media.remote.RemotePlaybackManager by inject()
     private val sourceIntelligence: com.example.myapplication.media.intelligence.SourceIntelligence by inject()
     private val appScope: com.example.myapplication.AppScope by inject()
+    private val releaseObservations: com.example.myapplication.data.local.ReleaseObservationStore by inject()
     /** Прошлая ссылка этой серии: по ней видно, что новая сессия - переход на другой источник. */
     private var lastSessionKey: String? = null
     private var lastSessionUrl: String? = null
@@ -271,6 +276,10 @@ class StreamPlayerActivity : ComponentActivity(), PipHostActivity {
                     var recoveryOwner by remember { mutableStateOf<Player?>(null) }
                     var sameUrlRetryUsed by remember { mutableStateOf(false) }
                     var playbackError by remember { mutableStateOf<String?>(null) }
+                    // Сколько раз подряд плашка «источник не отвечает» была готова показаться, и
+                    // подменена ли вторая такая плашка маскотом «озвучки ещё нет».
+                    var sourceErrorCount by remember { mutableIntStateOf(0) }
+                    var dubbingPending by remember { mutableStateOf(false) }
                     // Плеер сам ушёл на другой источник посреди серии — коротко говорим об этом.
                     var sourceSwitchNotice by remember { mutableStateOf<String?>(null) }
                     var manualSwitchFallback by remember { mutableStateOf<VetroVideo?>(null) }
@@ -664,7 +673,27 @@ class StreamPlayerActivity : ComponentActivity(), PipHostActivity {
                                 // Смотрим на состояние потока, а не на isPlaying: поставленная
                                 // пользователем пауза — это не мёртвый источник, но и наоборот,
                                 // молчать про мёртвый источник из-за паузы тоже нельзя.
-                                playbackError = "Источник больше не отвечает. Попробуйте ещё раз."
+                                // Второй раз подряд: прежде чем повторять ту же плашку, смотрим, не вышла ли
+                                // серия только что, пока студии её не озвучили.
+                                sourceErrorCount += 1
+                                val likelyNotDubbed = sourceErrorCount >= 2 &&
+                                    playbackIdentity.mediaType == MediaType.ANIME &&
+                                    runCatching {
+                                        DubbingPendingRule.applies(
+                                            studioCount = DubbingPendingRule.studioCount(candidates),
+                                            releasedAtMs = DubbingPendingRule.releasedAtMs(
+                                                releaseObservations.get(animeId),
+                                                refreshingEpisode,
+                                            ),
+                                            nowMs = System.currentTimeMillis(),
+                                        )
+                                    }.getOrDefault(false)
+                                if (likelyNotDubbed) {
+                                    Log.i(TAG, "Source silent twice on a fresh episode: showing 'not dubbed yet'")
+                                    dubbingPending = true
+                                } else {
+                                    playbackError = "Источник больше не отвечает. Попробуйте ещё раз."
+                                }
                             }
                         }
                     }
@@ -701,6 +730,7 @@ class StreamPlayerActivity : ComponentActivity(), PipHostActivity {
                     // кнопку: после обрыва сети в них оказывались все источники серии, поиск замены исключал
                     // их же, и кнопка возвращала ту же плашку, пока плеер не закроют.
                     fun refreshStream() {
+                        dubbingPending = false
                         failedRenditionUrls = emptySet()
                         stalledRenditionUrls = emptySet()
                         sameUrlRetryUsed = false
@@ -777,6 +807,8 @@ class StreamPlayerActivity : ComponentActivity(), PipHostActivity {
                             manualSwitchFallback = null
                             sameUrlRetryUsed = false
                             playbackError = null
+                            dubbingPending = false
+                            sourceErrorCount = 0
                             resumePosition = 0L
                             episode = target
                             current = best.copy(resolvedAt = System.currentTimeMillis())
@@ -914,7 +946,11 @@ class StreamPlayerActivity : ComponentActivity(), PipHostActivity {
                                 // Поток пошёл дальше — значит он жив, что бы ни решил резолвер
                                 // замены секунду назад. Плашка снимается по факту, а не по кнопке:
                                 // раньше её приходилось смахивать перезаходом в плеер.
-                                if (playing) playbackError = null
+                                if (playing) {
+                                    playbackError = null
+                                    dubbingPending = false
+                                    sourceErrorCount = 0
+                                }
                             }
 
                             override fun onPlayerError(error: PlaybackException) {
@@ -1243,6 +1279,38 @@ class StreamPlayerActivity : ComponentActivity(), PipHostActivity {
                                     .background(Color.Black.copy(alpha = 0.66f), androidx.compose.foundation.shape.CircleShape)
                                     .padding(horizontal = 16.dp, vertical = 8.dp),
                             )
+                        }
+
+                        // Источник дважды промолчал, а серия вышла только что и озвучек мало: это не
+                        // поломка, студии просто ещё не успели. Вместо плашки — маскот и совет зайти позже.
+                        if (dubbingPending && playbackError == null && switchError == null) {
+                            val ruHint = playerSettingsState.value.language == AppLanguage.RU
+                            Box(
+                                modifier = Modifier
+                                    .align(Alignment.Center)
+                                    .background(
+                                        Color.Black.copy(alpha = 0.72f),
+                                        androidx.compose.foundation.shape.RoundedCornerShape(24.dp),
+                                    )
+                                    .padding(vertical = 20.dp),
+                            ) {
+                                MascotEmptyState(
+                                    scene = MascotScene.Think,
+                                    title = if (ruHint) {
+                                        "Похоже, студии ещё не успели озвучить эту серию"
+                                    } else {
+                                        "Looks like the studios haven't dubbed this episode yet"
+                                    },
+                                    subtitle = if (ruHint) "Заходите чуть позже" else "Please check back a little later",
+                                    illustrationSize = 150.dp,
+                                    actionLabel = if (ruHint) "Повторить" else "Retry",
+                                    onAction = { refreshStream() },
+                                    titleColor = Color.White,
+                                    subtitleColor = Color.White.copy(alpha = 0.72f),
+                                    isDark = true,
+                                    modifier = Modifier.widthIn(max = 360.dp),
+                                )
+                            }
                         }
 
                         val errorText = playbackError ?: switchError
