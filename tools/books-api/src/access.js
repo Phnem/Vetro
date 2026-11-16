@@ -13,9 +13,10 @@ const FLUSH_ALARM_MS = 60_000;
 /** Тип запроса по пути: по нему считается расход и решается, доступен ли маршрут тарифу. */
 export function routeOf(path) {
   if (path === "/v1/health") return "health";
-  if (path === "/v1/search") return "search";
+  if (path === "/v1/search" || path === "/v1/media/search") return "search";
   if (path === "/v1/books" || /^\/v1\/books\/\d{9}$/.test(path)) return "books";
-  if (/^\/covers\/(small|large)\/\d{9}\.avif$/.test(path)) return "covers";
+  if (path === "/v1/media" || /^\/v1\/media\/[A-Z]\d{8}$/.test(path)) return "books";
+  if (/^\/covers\/(small|large)\/\d{9}\.avif$/.test(path) || /^\/covers\/media\/(small|large)\/[A-Z]\d{8}\.avif$/.test(path)) return "covers";
   if (path === "/v1/manifest" || path.startsWith("/v1/index/")) return "index";
   if (path.startsWith("/v1/auth/")) return "auth";
   return "other";
@@ -228,7 +229,7 @@ export async function authorize(request, env, now = Date.now()) {
       url.searchParams.set("limit", String(key.max_limit));
       req = new Request(url, req);
     }
-  } else if (route === "books" && url.pathname === "/v1/books" && key.max_ids) {
+  } else if (route === "books" && (url.pathname === "/v1/books" || url.pathname === "/v1/media") && key.max_ids) {
     const ids = (url.searchParams.get("ids") ?? "").split(",");
     if (ids.length > key.max_ids) {
       url.searchParams.set("ids", ids.slice(0, key.max_ids).join(","));
