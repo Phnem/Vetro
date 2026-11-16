@@ -13,7 +13,7 @@ const FLUSH_ALARM_MS = 60_000;
 /** Тип запроса по пути: по нему считается расход и решается, доступен ли маршрут тарифу. */
 export function routeOf(path) {
   if (path === "/v1/health") return "health";
-  if (path === "/v1/search" || path === "/v1/media/search") return "search";
+  if (path === "/v1/search" || path === "/v1/media/search" || path === "/v1/find") return "search";
   if (path === "/v1/books" || /^\/v1\/books\/\d{9}$/.test(path)) return "books";
   if (path === "/v1/media" || /^\/v1\/media\/[A-Z]\d{8}$/.test(path)) return "books";
   if (/^\/covers\/(small|large)\/\d{9}\.avif$/.test(path) || /^\/covers\/media\/(small|large)\/[A-Z]\d{8}\.avif$/.test(path)) return "covers";

@@ -140,7 +140,7 @@ test("search: titles, authors, folded and transliterated forms", async () => {
   assert.deepEqual(await ids("Ёлка"), ["000000006"]);
   assert.deepEqual(await ids("x"), []); // too short
   const first = (await (await get(e, "/v1/search?q=оруэлл")).json()).items[0];
-  assert.deepEqual(first, { id: "000000771", ru: "Фунты лиха в Париже и Лондоне", en: "Down and Out in Paris and London",
+  assert.deepEqual(first, { kind: "book", id: "000000771", ru: "Фунты лиха в Париже и Лондоне", en: "Down and Out in Paris and London",
     ra: "Джордж Оруэлл", ea: "George Orwell", y: 1933, f: 1, cv: 4242 });
 });
 

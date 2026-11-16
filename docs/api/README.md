@@ -66,6 +66,24 @@ Full-text search over titles and authors in both languages.
 `ru`/`en` titles, `ra`/`ea` authors, `y` year, `cv` cover revision (use it as `?v=` when you request the cover),
 `f` flags: bit 1 = has a cover, bit 2 = the cover has a restricted licence (see [terms](terms.md)), bit 4 = core catalogue.
 
+### `GET /v1/find?q=<text>&kind=<all|anime|movie|tv|book>&limit=<n>`
+One search over the three databases (books, anime, films and series), or over just one of them. **Every result in every route carries `kind`**
+(`book`, `anime`, `movie`, `tv`), so a client always knows which database an item came from; ids differ too (books are nine digits, media are a letter and eight digits).
+
+- `kind=all` (default): each database is ranked on its own and the lists are interleaved (anime, series, films, books, then the second best of each…), so the best match of every database is near the top. `counts` says how many items came from each.
+- `kind=anime`, `movie`, `tv` or `book`: only that database is searched. Use it when the user has already chosen a direction, for example a search screen with "Anime", "Series" and "Books" buttons: the query "attack on titan" with `kind=anime` never returns books or series.
+- An unknown `kind` returns `400 bad_kind` with the allowed values.
+
+```json
+{ "q": "attack on titan", "kind": "all", "counts": { "anime": 1, "tv": 1, "book": 1 }, "items": [
+  { "kind": "anime", "id": "A00000050", "t": "anime", "ru": "Атака титанов", "en": "Attack on Titan", "y": 2013, "f": 3, "cv": 7597630 },
+  { "kind": "tv", "id": "S00000620", "t": "tv_series", "ru": "Атака титанов", "en": "Attack on Titan", "y": 2013, "f": 0, "cv": 0 },
+  { "kind": "book", "id": "000000900", "ru": "Атака титанов. Книга", "ra": "Автор", "y": 2020, "f": 0, "cv": 0 }
+] }
+```
+
+A request to `/v1/find` counts as a search for limits. The older routes `/v1/search` (books) and `/v1/media/search` keep working and now also carry `kind`.
+
 ### `GET /v1/books/{id}` and `GET /v1/books?ids=1,2,3`
 One book with its details card, or up to `ids` maximum books without details. The details card holds optional keys: `orig` original
 title, `type`, `alts` other titles, `authors`, `series`, `tr` translations, `ed` editions, `ext` external ids, `cover`, `desc`

@@ -17,8 +17,11 @@ const TYPES = { anime: "anime", movie: "movie", tv: "tv_series", tv_series: "tv_
 const POPULARITY_WEIGHT = 1.5;
 const ROW = "m.id, m.t, m.ru, m.en, m.ro, m.orig, m.y, m.st, m.f, m.cv";
 
+/** Which database a result came from. `kind` is what clients group and filter by; `t` is the raw type in the media table. */
+export const KIND_OF_TYPE = { anime: "anime", movie: "movie", tv_series: "tv" };
+
 export function mediaItem(r) {
-  const o = { id: r.id, t: r.t, ru: r.ru, en: r.en, ro: r.ro, orig: r.orig, y: r.y, st: r.st, f: r.f, cv: r.cv };
+  const o = { kind: KIND_OF_TYPE[r.t], id: r.id, t: r.t, ru: r.ru, en: r.en, ro: r.ro, orig: r.orig, y: r.y, st: r.st, f: r.f, cv: r.cv };
   for (const k of Object.keys(o)) if (o[k] === null || o[k] === undefined || o[k] === "") delete o[k];
   return o;
 }
@@ -53,6 +56,59 @@ export async function mediaSearch(h, env, ctx, request, url) {
     }
     rows.sort((a, b) => (a.b - POPULARITY_WEIGHT * Math.log1p(a.pop ?? 0)) - (b.b - POPULARITY_WEIGHT * Math.log1p(b.pop ?? 0)));
     return h.json({ q, items: rows.slice(0, limit).map(mediaItem) }, 200, h.SEARCH_TTL);
+  });
+}
+
+const KINDS = ["all", "anime", "movie", "tv", "book"];
+const ALL_ORDER = ["anime", "tv", "movie", "book"];
+
+/**
+ * One search across the three databases, or across one of them. Every item carries `kind` (anime | movie | tv | book).
+ *   kind=all (default) ranks inside each database and interleaves them, so the best of each shows up first; `counts` tells how many came from each
+ *   kind=anime|movie|tv|book searches only that database (the app's search directions use this)
+ */
+export async function find(h, env, ctx, request, url) {
+  const q = h.norm(url.searchParams.get("q") ?? "");
+  const kind = (url.searchParams.get("kind") ?? "all").toLowerCase();
+  if (!KINDS.includes(kind)) return h.json({ error: "bad_kind", allowed: KINDS }, 400, 60);
+  if (q.length < 2) return h.json({ q, kind, items: [] }, 200, h.SEARCH_TTL);
+  const limit = Math.min(Math.max(parseInt(url.searchParams.get("limit") ?? "20", 10) || 20, 1), h.MAX_LIMIT);
+  const tokens = q.split(" ").filter((t) => t.length <= 40).slice(0, h.MAX_TOKENS);
+  if (!tokens.length) return h.json({ q, kind, items: [] }, 200, h.SEARCH_TTL);
+
+  const key = new Request(`https://cache.invalid/v1/find?q=${encodeURIComponent(tokens.join(" "))}&kind=${kind}&limit=${limit}`);
+  return h.cached(ctx, key, async () => {
+    if (await h.throttled(env, request)) return h.json({ error: "rate_limited" }, 429, 0);
+    const wantBooks = kind === "all" || kind === "book";
+    const wantMedia = kind !== "book";
+    const type = ["anime", "movie", "tv"].includes(kind) ? TYPES[kind] : null;
+    const expand = async (run) => {
+      const rows = await run(h.matchExpr(tokens));
+      if (rows.length < Math.min(limit, 5) && tokens.length > 1) {
+        const seen = new Set(rows.map((r) => r.id));
+        for (const r of await run(h.matchExpr(tokens, " OR "))) if (!seen.has(r.id)) rows.push(r);
+      }
+      return rows;
+    };
+    const [books, media] = await Promise.all([
+      wantBooks ? expand((m) => h.bookRows(env, m, limit)) : [],
+      wantMedia ? expand((m) => ftsRows(env, m, type, Math.min(limit * (kind === "all" ? 6 : 4), 200))) : [],
+    ]);
+    const groups = { anime: [], movie: [], tv: [], book: books.slice(0, limit).map((r) => h.bookItem(r)) };
+    media.sort((a, b) => (a.b - POPULARITY_WEIGHT * Math.log1p(a.pop ?? 0)) - (b.b - POPULARITY_WEIGHT * Math.log1p(b.pop ?? 0)));
+    for (const r of media) groups[KIND_OF_TYPE[r.t]].push(mediaItem(r));
+    let items;
+    if (kind === "all") {
+      items = [];
+      for (let i = 0; items.length < limit && ALL_ORDER.some((k) => groups[k][i]); i++) {
+        for (const k of ALL_ORDER) if (groups[k][i] && items.length < limit) items.push(groups[k][i]);
+      }
+    } else {
+      items = groups[kind].slice(0, limit);
+    }
+    const counts = {};
+    for (const it of items) counts[it.kind] = (counts[it.kind] ?? 0) + 1;
+    return h.json({ q, kind, counts, items }, 200, h.SEARCH_TTL);
   });
 }
 

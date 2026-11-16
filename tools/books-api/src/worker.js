@@ -7,6 +7,7 @@
 //   GET /v1/books/{id9}                      one book with its detail card
 //   GET /v1/books?ids=1,2,3                  up to 40 books, rows only
 //   GET /covers/{small|large}/{id9}.avif     covers (R2), URL carries ?v=<cv> for cache busting
+//   GET /v1/find?q=&kind=all|anime|movie|tv|book   one search over the three databases or just one; every item carries `kind`
 //   GET /v1/media/search, /v1/media/{id}, /v1/media?ids=, /covers/media/{small|large}/{id}.avif   anime, films, series (src/media.js)
 //
 // Access: every route but /v1/health needs a key when ACCESS_MODE=enforce (src/access.js, docs/adr/0003-api-access-keys-and-tiers.md).
@@ -16,7 +17,7 @@
 import { authorize } from "./access.js";
 import { handleAuth } from "./auth.js";
 import { norm } from "./norm.js";
-import { MEDIA_COVER_PATH, MEDIA_ID_PATH, mediaBatch, mediaById, mediaSearch } from "./media.js";
+import { MEDIA_COVER_PATH, MEDIA_ID_PATH, find, mediaBatch, mediaById, mediaSearch } from "./media.js";
 
 const COVER_PATH = /^\/covers\/(small|large)\/(\d{9})\.avif$/;
 const INDEX_PATH = /^\/v1\/index\/((?:base|delta)\/[A-Za-z0-9._-]+)$/;
@@ -77,6 +78,8 @@ async function handle(request, env, ctx) {
     } else if (MEDIA_COVER_PATH.test(path)) {
       const [, size, id] = path.match(MEDIA_COVER_PATH);
       res = await cached(ctx, url.href, () => serveR2(env, request, `covers/media/${size}/${id}.avif`, IMMUTABLE, "image/avif"));
+    } else if (path === "/v1/find") {
+      res = await find(helpers, env, ctx, request, url);
     } else if (path === "/v1/media/search") {
       res = await mediaSearch(helpers, env, ctx, request, url);
     } else if (MEDIA_ID_PATH.test(path)) {
@@ -100,7 +103,7 @@ async function handle(request, env, ctx) {
 
 // What src/media.js needs from this file (it cannot import it back).
 const helpers = {
-  json, cached, throttled, norm, matchExpr,
+  json, cached, throttled, norm, matchExpr, bookRows: ftsRows, bookItem: item,
   SEARCH_TTL, BOOK_TTL, MAX_LIMIT, MAX_IDS, MAX_TOKENS,
 };
 
@@ -157,7 +160,7 @@ function pad(id) {
 }
 
 function item(r) {
-  const o = { id: pad(r.id), ru: r.ru, en: r.en, ra: r.ra, ea: r.ea, y: r.y, f: r.f, cv: r.cv };
+  const o = { kind: "book", id: pad(r.id), ru: r.ru, en: r.en, ra: r.ra, ea: r.ea, y: r.y, f: r.f, cv: r.cv };
   for (const k of Object.keys(o)) if (o[k] === null || o[k] === undefined || o[k] === "") delete o[k];
   return o;
 }
