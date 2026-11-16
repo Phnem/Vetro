@@ -26,6 +26,12 @@ export function mediaItem(r) {
   return o;
 }
 
+/** Smaller is better: bm25, minus a boost for well-known titles, minus a big one when a title is exactly what was typed. */
+function adjusted(h, r, q) {
+  const exact = [r.ru, r.en, r.ro, r.orig].some((t) => t && h.norm(t) === q);
+  return r.b - POPULARITY_WEIGHT * Math.log1p(r.pop ?? 0) - (exact ? 20 : 0);
+}
+
 async function ftsRows(env, match, type, candidates) {
   const where = type ? "AND m.t = ?3" : "";
   const sql = `SELECT ${ROW}, m.pop, bm25(media_fts, 6, 6, 5, 4, 2, 1) AS b FROM media_fts JOIN media m ON m.n = media_fts.rowid ` +
@@ -54,7 +60,7 @@ export async function mediaSearch(h, env, ctx, request, url) {
       const seen = new Set(rows.map((r) => r.id));
       for (const r of await ftsRows(env, h.matchExpr(tokens, " OR "), type, candidates)) if (!seen.has(r.id)) rows.push(r);
     }
-    rows.sort((a, b) => (a.b - POPULARITY_WEIGHT * Math.log1p(a.pop ?? 0)) - (b.b - POPULARITY_WEIGHT * Math.log1p(b.pop ?? 0)));
+    rows.sort((a, b) => adjusted(h, a, q) - adjusted(h, b, q));
     return h.json({ q, items: rows.slice(0, limit).map(mediaItem) }, 200, h.SEARCH_TTL);
   });
 }
@@ -95,7 +101,7 @@ export async function find(h, env, ctx, request, url) {
       wantMedia ? expand((m) => ftsRows(env, m, type, Math.min(limit * (kind === "all" ? 6 : 4), 200))) : [],
     ]);
     const groups = { anime: [], movie: [], tv: [], book: books.slice(0, limit).map((r) => h.bookItem(r)) };
-    media.sort((a, b) => (a.b - POPULARITY_WEIGHT * Math.log1p(a.pop ?? 0)) - (b.b - POPULARITY_WEIGHT * Math.log1p(b.pop ?? 0)));
+    media.sort((a, b) => adjusted(h, a, q) - adjusted(h, b, q));
     for (const r of media) groups[KIND_OF_TYPE[r.t]].push(mediaItem(r));
     let items;
     if (kind === "all") {
