@@ -1,5 +1,24 @@
 # Vetro changelog
 
+## v3.5.3-Alpha — November 16, 2026
+
+App version: `v3.5.3-Alpha`. Android version code: `353`.
+Changes since 3.5.2-Alpha. This is a pre-release: the in-app updater ignores Alpha tags, install it by hand.
+
+### Player: "not dubbed yet" screen
+
+- When an anime source stays silent twice in a row (the second "Source no longer responds"), the player first checks the episode. If it has fewer than 4 dubbing studios and came out no more than 2 days ago, you now see the mascot with "Looks like the studios haven't dubbed this episode yet" instead of the same error again.
+- The screen has three buttons: a grey "Exit" capsule (opens the title), an orange "Settings" capsule (opens Settings on the new Availability threshold option) and a translucent retry bubble.
+
+### Settings: Availability threshold
+
+- A new switch, off by default. When it is on, every time a tracked title gets a new episode the app runs a quick audit: how many dubbing studios offer it and how long ago it came out. With fewer than 4 studios and at most 2 days since release there is no notification (and no card in the app). As soon as either condition stops holding, the notification arrives. While an episode waits, the audit repeats every 6 hours.
+
+### Settings: explanations
+
+- Press and hold a setting to read what it does, in a bottom sheet with a grey "Back" button and an orange button that replaces the control: "Turn on" / "Turn off" for switches, "Open" for everything else. Available for the main settings; the Smart models switches and the Developer section do not have descriptions yet.
+- When you come from the player's "Settings" button, the page scrolls to the option and flashes it softly. The first time only, a pointer also shows how to hold a row, the description opens, and a hint explains the gesture.
+
 ## v3.5.2-Alpha — November 15, 2026
 
 App version: `v3.5.2-Alpha`. Android version code: `352`.
