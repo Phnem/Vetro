@@ -89,7 +89,7 @@ cards and batches count as book lookups, covers count as covers.
 
 ```json
 { "q": "attack on titan", "items": [
-  { "id": "A00000050", "t": "anime", "ru": "Атака титанов", "en": "Attack on Titan", "ro": "Shingeki no Kyojin", "orig": "進撃の巨人", "y": 2013, "st": "tv", "f": 3, "cv": 11003245 }
+  { "id": "A00000050", "t": "anime", "ru": "Атака титанов", "en": "Attack on Titan", "ro": "Shingeki no Kyojin", "orig": "Shingeki no Kyojin", "y": 2013, "st": "tv", "f": 3, "cv": 7597630 }
 ] }
 ```
 
