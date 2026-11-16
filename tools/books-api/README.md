@@ -12,6 +12,9 @@ Cloudflare Worker для `https://api.vetrostudio.bid`: каталог книг 
 | `GET /v1/books/{id9}` | книга и карточка деталей `detail`: `orig`, `type`, `alts`, `authors`, `series`, `tr`, `ed`, `ext`, `cover` и (с 2026-11-13) `desc{t,l}` описание, `gen[]` ключи жанров, `ol` язык оригинала, `coll` сборник, `ch` главы, `dur` типичная длина (мин), `rate{v,n}` оценка FantLab. Все ключи необязательны; жанры — канонические ключи (`scifi`, `fantasy`…), названия на стороне клиента. Сборка: `book-dictionary/v2/build/details.py` |
 | `GET /v1/books?ids=1,2,3` | до 40 строк без деталей |
 | `GET /covers/{small\|large}/{id9}.avif?v={cv}` | обложки из R2, `immutable` (версия `cv` лежит в индексе) |
+| `GET /v1/media/search?q=&type=&limit=` | аниме, фильмы и сериалы (`src/media.js`, таблицы D1 `media` + `media_fts`): `{items:[{id,t,ru,en,ro,orig,y,st,f,cv}]}`; `type` = `anime`/`movie`/`tv`; FTS5 + поправка на популярность (`pop`) |
+| `GET /v1/media/{id}`, `GET /v1/media?ids=` | карточка (`detail`: `desc`, `gen`, `fr`, `ol`, `seas`, `eps`, `dur`, `st`, `ext`, `cover`) и до 40 строк; id = буква `A`/`M`/`S` + 8 цифр |
+| `GET /covers/media/{small\|large}/{id}.avif?v={cv}` | обложки аниме и кино из R2 (`covers/media/...`) |
 
 `/v1/search` и `/v1/books*` ходят в D1: ответы кэшируются на краю (10 минут / сутки) и ограничены лимитером
 (120 запросов в минуту на клиента; привязка `LIMITER`, без неё лимита нет).
@@ -129,3 +132,24 @@ Worker, `[[routes]]` с `custom_domain = true` включён в `wrangler.toml`
 ```powershell
 npm test      # node --test: подставные D1 (настоящий SQLite + FTS5) и R2; нормализация сверяется с golden_norm.json
 ```
+
+### Аниме, фильмы и сериалы (media)
+
+Данные собирают демоны в `media-dictionary/` (`anime/run_anime_daemon.py`, `cinema/run_cinema_daemon.py`), в облако их превращает
+`media-dictionary/cloud/build_media_server.py`. Маршруты считаются теми же `search`/`books`/`covers`, поэтому тарифы, лимиты и проверки ключей действуют без изменений.
+Порядок такой же, как для книг (снимки, потому что демоны пишут в живые базы), только вместо `build_index`:
+
+```powershell
+cd media-dictionary
+$py = "..\book-dictionary\v2\.venv\Scripts\python.exe"; $d = "20261116"
+& $py -I ..\book-dictionary\v2\tools\copy_master.py vetro_media.sqlite cloud\work\vetro_media_$d.sqlite
+& $py -I ..\book-dictionary\v2\tools\copy_master.py vetro_media_details.sqlite cloud\work\vetro_media_details_$d.sqlite
+& $py -X utf8 cloud\build_media_server.py --master cloud\work\vetro_media_$d.sqlite --details cloud\work\vetro_media_details_$d.sqlite `
+      --covers anime=anime\cover_images --covers cinema=cinema\cover_images --out cloud\out
+cd ..\tools\books-api
+.\scripts\refresh-data.ps1 -Out ..\..\media-dictionary\cloud\out -Load       # D1: media_next + media_fts_next рядом с боевыми
+# обложки: временный Worker uploader (см. выше), списки media-dictionary\cloud\out\server\covers-{small,large}.json (ключи covers/media/...)
+npx wrangler d1 execute vetro-books --remote --yes --file ..\..\media-dictionary\cloud\out\server\swap.sql   # обмен таблиц, доли секунды
+```
+
+Не `-Publish`: у media нет телефонного индекса и манифеста. Идентификаторы стабильны (`A`/`M`/`S` + номер), числовой ключ FTS `n` = номер + 0 / 10 000 000 / 20 000 000.

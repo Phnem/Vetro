@@ -7,7 +7,7 @@ Base URL: `https://api.vetrostudio.bid`. Russian version: [README.ru.md](README.
 |---|---|
 | Format | JSON, UTF-8; covers are AVIF images |
 | Protocol | HTTPS only, CORS enabled for browsers |
-| Catalogue | about 269,000 works (Russian and English titles), about 96,000 covers, refreshed regularly |
+| Catalogue | about 269,000 books and about 190,000 anime, films and series, with covers, refreshed regularly |
 | Access | an API key per client, obtained through a Telegram bot, in three plans |
 | Availability | best effort, no uptime guarantee (see [terms](terms.md)) |
 
@@ -75,6 +75,30 @@ title, `type`, `alts` other titles, `authors`, `series`, `tr` translations, `ed`
 ### `GET /covers/{small|large}/{id}.avif?v={cv}`
 The cover image. Needs a plan with covers. AVIF is displayed by browsers and by Android 12 and later; use another source on older systems.
 Responses are immutable: cache them forever, and change `v` when the catalogue's `cv` changes.
+
+### Anime, films and series: `/v1/media/...`
+
+The same catalogue also covers about 190,000 anime, films and TV series (titles in Russian, English, romaji and the original language).
+These routes use the same key, the same plan limits and the same errors as the book routes: `/v1/media/search` counts as a search,
+cards and batches count as book lookups, covers count as covers.
+
+- `GET /v1/media/search?q=<text>&type=<anime|movie|tv>&limit=<n>`: `type` is optional. Results are ordered by relevance with a boost for well-known titles.
+- `GET /v1/media/{id}`: one title with its card. Ids are one letter and eight digits: `A` anime, `M` movie, `S` series (`A00000050`).
+- `GET /v1/media?ids=A00000050,S00000110`: up to `ids` maximum titles, rows only.
+- `GET /covers/media/{small|large}/{id}.avif?v={cv}`: covers, same rules as book covers.
+
+```json
+{ "q": "attack on titan", "items": [
+  { "id": "A00000050", "t": "anime", "ru": "Атака титанов", "en": "Attack on Titan", "ro": "Shingeki no Kyojin", "orig": "進撃の巨人", "y": 2013, "st": "tv", "f": 3, "cv": 11003245 }
+] }
+```
+
+Row keys: `t` is `anime`, `movie` or `tv_series`; `ru`, `en`, `ro` (romaji), `orig` titles; `y` year; `st` subtype (`tv`, `movie`, `ova`, `special`, …); `f` flags
+(bit 1 = has a cover, bit 2 = the cover has a restricted licence); `cv` cover revision. The card (`detail`) holds optional keys: `desc` `{t, l}`
+description and language, `gen` genres, `fr` `{t, i, n}` franchise title, position and size, `ol` original language, `seas` seasons, `eps` episodes,
+`dur` minutes per episode, `st` release status, `ext` ids in other databases (`mal`, `shikimori`, `anilist`, `kitsu`, `tmdb`, `imdb`, `tvmaze`, `tvdb`, `wikidata`)
+and `cover` `{src, lic, w, h}` the source and licence of the cover. Search matches Latin, Cyrillic and transliterated titles; Japanese characters are not searchable.
+Some titles exist both as `anime` and as `tv_series` because they come from different databases.
 
 ### `GET /v1/manifest` and `GET /v1/index/...` (Ultra)
 The offline search index used by the Vetro app: a manifest plus versioned base and delta files (zstd-compressed SQLite). `Range` requests are supported.

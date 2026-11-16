@@ -58,6 +58,7 @@ descriptions, ratings and other creative material belong to their authors and ri
 - Descriptions may be taken from Wikipedia and carry its CC BY-SA licence: if you show them, give credit and keep the same licence for the text.
 - Covers marked with flag `f & 2` come from sources whose licence does not allow redistribution; they are served at the owner's responsibility
   and may be hidden or removed at any time without notice. Show them only inside your product and be ready to hide them.
+- The anime, film and series data comes from public databases (Shikimori, AniList, Kitsu, TMDB, TVmaze and others) and is subject to their terms. TVmaze images are CC BY-SA 4.0 and need credit; if you show anything derived from TMDB you must credit TMDB as its terms require. The `cover` field of each title names the source and licence of its cover.
 - The data is not guaranteed to be right: do not use it where an error could cause harm.
 - If you are a rightsholder and want something removed, write to the owner (contact on the Vetro Studio site); the request will be checked and the material removed.
 
