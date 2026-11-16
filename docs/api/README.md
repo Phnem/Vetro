@@ -112,7 +112,7 @@ cards and batches count as book lookups, covers count as covers.
 ```
 
 Row keys: `t` is `anime`, `movie` or `tv_series`; `ru`, `en`, `ro` (romaji), `orig` titles; `y` year; `st` subtype (`tv`, `movie`, `ova`, `special`, …); `f` flags
-(bit 1 = has a cover, bit 2 = the cover has a restricted licence); `cv` cover revision. The card (`detail`) holds optional keys: `desc` `{t, l}`
+(bit 1 = has a cover, bit 2 = the cover has a restricted licence); `cv` cover revision; `ext` ids of the title in other databases (when known), so a client can open it in its own source. The card (`detail`) holds optional keys: `desc` `{t, l}`
 description and language, `gen` genres, `fr` `{t, i, n}` franchise title, position and size, `ol` original language, `seas` seasons, `eps` episodes,
 `dur` minutes per episode, `st` release status, `ext` ids in other databases (`mal`, `shikimori`, `anilist`, `kitsu`, `tmdb`, `imdb`, `tvmaze`, `tvdb`, `wikidata`)
 and `cover` `{src, lic, w, h}` the source and licence of the cover. Search matches Latin, Cyrillic and transliterated titles; Japanese characters are not searchable.

@@ -79,6 +79,8 @@ test("search: popular title first, folded and transliterated forms, type filter"
   assert.deepEqual(Object.keys(body.items[0]).sort(), ["cv", "en", "f", "id", "kind", "orig", "ro", "ru", "st", "t", "y"]);
   body = await (await get("/v1/media/search?q=breaking%20bad")).json();
   assert.equal(body.items[0].en, "Breaking Bad");
+  body = await (await get("/v1/media/search?q=naruto&type=tv")).json();
+  assert.deepEqual(body.items[0].ext, { tmdb: 46260 }); // ids in other databases ride along with the row
 });
 
 test("search: bad type is a 400, a short query is empty, limit is clamped", async () => {

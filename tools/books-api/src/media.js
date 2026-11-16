@@ -15,13 +15,17 @@ const ID = /^[A-Z]\d{8}$/;
 const TYPES = { anime: "anime", movie: "movie", tv: "tv_series", tv_series: "tv_series", series: "tv_series" };
 // bm25 is negative and smaller is better; popularity pulls well-known titles up (tuned on the real catalogue: "naruto", "breaking bad", "dune").
 const POPULARITY_WEIGHT = 1.5;
-const ROW = "m.id, m.t, m.ru, m.en, m.ro, m.orig, m.y, m.st, m.f, m.cv";
+// `ext` = ids of the title in other databases (mal, anilist, tmdb, ...), cut out of the card so a client can open the title in its own source.
+const ROW = "m.id, m.t, m.ru, m.en, m.ro, m.orig, m.y, m.st, m.f, m.cv, json_extract(m.d, '$.ext') AS ext";
 
 /** Which database a result came from. `kind` is what clients group and filter by; `t` is the raw type in the media table. */
 export const KIND_OF_TYPE = { anime: "anime", movie: "movie", tv_series: "tv" };
 
 export function mediaItem(r) {
   const o = { kind: KIND_OF_TYPE[r.t], id: r.id, t: r.t, ru: r.ru, en: r.en, ro: r.ro, orig: r.orig, y: r.y, st: r.st, f: r.f, cv: r.cv };
+  if (r.ext) {
+    try { o.ext = typeof r.ext === "string" ? JSON.parse(r.ext) : r.ext; } catch { /* no ids */ }
+  }
   for (const k of Object.keys(o)) if (o[k] === null || o[k] === undefined || o[k] === "") delete o[k];
   return o;
 }
