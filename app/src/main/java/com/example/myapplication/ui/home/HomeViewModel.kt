@@ -92,6 +92,8 @@ class HomeViewModel(
     /** null — раздел аудиокниг выключен в сборке, вкладки «Книги» в поиске нет. */
     private val bookSearch: com.example.myapplication.audiobooks.data.BookSearchAdder? = null,
     private val microMl: MicroMlEngine? = null,
+    /** Облачный каталог аниме, фильмов и сериалов: ищет только в базе выбранного направления; null — как раньше, только прежние источники. */
+    private val cloudMedia: com.example.myapplication.mediacatalog.CloudMediaSearch? = null,
 ) : ViewModel() {
 
     /** Найденные прямые ссылки по одобренным сайтам (animeId → запись). Реактивно для карточек. */
@@ -470,12 +472,20 @@ class HomeViewModel(
             // дописываются, индикатор гаснет с первой непустой выдачей.
             var gotResults = false
             try {
+                // Облако первым: оно отвечает быстро и сразу по нужной базе (направление поиска = kind). Сбой — пусто, поиск идёт как раньше.
+                val cloud = cloudMedia?.search(trimmed, contentType, language).orEmpty()
+                if (_uiState.value.searchQuery.trim() != trimmed) return@launch
+                if (cloud.isNotEmpty()) {
+                    gotResults = true
+                    _uiState.update { it.copy(apiSearchResults = cloud.toImmutableList(), apiSearchLoading = false, apiSearchError = null) }
+                }
                 repository.searchApiProgressive(trimmed, contentType, language).collect { results ->
                     if (_uiState.value.searchQuery.trim() != trimmed || results.isEmpty()) return@collect
                     gotResults = true
+                    val merged = com.example.myapplication.mediacatalog.CloudMediaSearch.mergeCloudFirst(cloud, results)
                     _uiState.update {
                         it.copy(
-                            apiSearchResults = results.toImmutableList(),
+                            apiSearchResults = merged.toImmutableList(),
                             apiSearchLoading = false,
                             apiSearchError = null,
                         )

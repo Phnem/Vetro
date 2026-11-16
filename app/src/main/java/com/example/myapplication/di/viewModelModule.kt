@@ -28,6 +28,7 @@ val viewModelModule = module {
     }
     viewModel {
         HomeViewModel(
+            cloudMedia = get(),
             repository = get(),
             localDataSource = get(),
             notifier = get(),

@@ -109,6 +109,8 @@ val audiobookModule = module {
             File(androidContext().filesDir, "audiobooks/bookindex"), get<OkHttpClient>(named(CATALOG_HTTP)), catalogApiBase(androidContext()),
         )
     }
+    // Облачный каталог аниме, фильмов и сериалов: тот же клиент с токеном установки и тот же адрес API, что у каталога книг.
+    single { com.example.myapplication.mediacatalog.CloudMediaSearch(get<OkHttpClient>(named(CATALOG_HTTP)), catalogApiBase(androidContext())) }
     single { com.example.myapplication.audiobooks.catalog.BookCatalogApi(get<OkHttpClient>(named(CATALOG_HTTP)), catalogApiBase(androidContext())) }
     single { com.example.myapplication.audiobooks.catalog.BookCatalog(get(), get(), get<com.example.myapplication.AppScope>()) }
     single {
