@@ -114,7 +114,33 @@ val appModule = module {
     single { AiLlmFallbackRouter(get(), get(), get()) }
     single { InspectImageUseCase(get(), get(), get(), get()) }
     single { AddFromApiUseCase(get(), get(), get(), get(), get()) }
-    single { BatchEpisodeCheckUseCase(repository = get(), localDataSource = get(), observations = get()) }
+    // «Порог доступности»: придерживает пуш о серии, пока у неё мало озвучек и она вышла только что.
+    single { com.example.myapplication.updates.availability.HeldUpdateStore(androidContext()) }
+    single {
+        com.example.myapplication.updates.availability.EpisodeSourceAuditor(
+            localDataSource = get(),
+            seasonEpisodesStore = get(),
+            mediaGateway = get(),
+            observations = get(),
+        )
+    }
+    single {
+        val auditor = get<com.example.myapplication.updates.availability.EpisodeSourceAuditor>()
+        val settings = get<androidx.datastore.core.DataStore<androidx.datastore.preferences.core.Preferences>>(named("settings"))
+        com.example.myapplication.updates.availability.UpdateAvailabilityGate(
+            enabled = { com.example.myapplication.data.local.AvailabilityThresholdPrefs.enabled(settings) },
+            held = get<com.example.myapplication.updates.availability.HeldUpdateStore>(),
+            audit = auditor::audit,
+        )
+    }
+    single {
+        BatchEpisodeCheckUseCase(
+            repository = get(),
+            localDataSource = get(),
+            observations = get(),
+            availabilityGate = get(),
+        )
+    }
     single { com.example.myapplication.data.local.SeriesSeasonsStore(androidContext()) }
     single { com.example.myapplication.media.prefs.ContentPlaybackPreferences(androidContext()) }
     single {

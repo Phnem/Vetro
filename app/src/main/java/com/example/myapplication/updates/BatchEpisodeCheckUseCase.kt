@@ -38,6 +38,8 @@ class BatchEpisodeCheckUseCase(
     private val localDataSource: AnimeLocalDataSource,
     /** Журнал вышедших серий для ритма выхода (см. ReleaseCadence); null — не ведётся (тесты). */
     private val observations: ReleaseObservationStore? = null,
+    /** «Порог доступности»: придерживает серии, которые ещё нельзя нормально смотреть; null — выключен. */
+    private val availabilityGate: com.example.myapplication.updates.availability.UpdateAvailabilityGate? = null,
 ) {
 
     /**
@@ -69,8 +71,16 @@ class BatchEpisodeCheckUseCase(
             .onFailure { Log.w(TAG, "setAiringProgress failed: ${it.message}") }
         recordReleaseObservations(previousAiring, detected.airing)
 
+        // Придержанные порогом доступности серии не публикуются: ни в ленту, ни в пуш. Следующая проверка
+        // найдёт их снова (их никто не подтвердил) и спросит фильтр ещё раз, не чаще раза в шесть часов.
+        val publishable = availabilityGate?.let { gate ->
+            runCatching { gate.filter(detected.updates) }
+                .onFailure { Log.w(TAG, "availability gate failed: ${it.message}") }
+                .getOrDefault(detected.updates)
+        } ?: detected.updates
+
         return publishEpisodeUpdates(
-            detected = detected.updates,
+            detected = publishable,
             getExisting = localDataSource::getUpdates,
             getAcknowledged = { runCatching { localDataSource.getIgnoredMap() }.getOrElse { emptyMap() } },
             setUpdates = localDataSource::setUpdates,

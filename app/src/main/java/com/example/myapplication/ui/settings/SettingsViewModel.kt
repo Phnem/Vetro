@@ -95,6 +95,7 @@ private fun mergeSettingsUi(
         devFpsOverlay = prefs[KEY_DEV_FPS_OVERLAY] ?: false,
         autoSkipSegments = prefs[PlayerSettingsKeys.AUTO_SKIP] ?: false,
         autoNextEpisode = prefs[PlayerSettingsKeys.AUTO_NEXT] ?: true,
+        availabilityThreshold = prefs[com.example.myapplication.data.local.AvailabilityThresholdPrefs.ENABLED] ?: false,
         devAdaptiveGlassScroll = prefs[DevPreferencesKeys.ADAPTIVE_GLASS_SCROLL] ?: false,
         devFullBleedCards = prefs[DevPreferencesKeys.FULL_BLEED_CARDS] ?: true,
         devExperimentalGrid = prefs[DevPreferencesKeys.EXPERIMENTAL_GRID] ?: true,
@@ -246,6 +247,15 @@ class SettingsViewModel(
     fun setAutoNextEpisode(enabled: Boolean) {
         viewModelScope.launch {
             settingsDataStore.edit { it[PlayerSettingsKeys.AUTO_NEXT] = enabled }
+        }
+    }
+
+    /** Единственный писатель [AvailabilityThresholdPrefs.ENABLED]; читает его фоновая проверка серий. */
+    fun setAvailabilityThreshold(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsDataStore.edit {
+                it[com.example.myapplication.data.local.AvailabilityThresholdPrefs.ENABLED] = enabled
+            }
         }
     }
 

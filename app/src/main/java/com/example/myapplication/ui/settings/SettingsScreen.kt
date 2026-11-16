@@ -129,6 +129,27 @@ import com.example.myapplication.ui.shared.components.IosRow
 import com.example.myapplication.ui.shared.components.IosSegmentedControl
 import com.example.myapplication.ui.shared.DONATION_URL
 import com.example.myapplication.ui.shared.components.IosSwitch
+import com.example.myapplication.ui.shared.components.LocalSettingHelp
+import com.example.myapplication.ui.shared.components.SettingHelpBinding
+import com.example.myapplication.ui.shared.components.SettingHelpController
+import com.example.myapplication.ui.shared.components.SettingHelpRequest
+import com.example.myapplication.ui.settings.help.SettingHelpIds
+import com.example.myapplication.ui.settings.help.SettingHelpSheet
+import com.example.myapplication.ui.settings.help.SettingsSpotlight
+import com.example.myapplication.ui.settings.help.SettingsSpotlightOverlay
+import com.example.myapplication.ui.settings.help.SpotlightUi
+import com.example.myapplication.ui.settings.help.settingHelpText
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.geometry.Offset
+import com.example.myapplication.ui.shared.theme.rememberReducedMotion
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
+import org.koin.compose.koinInject
+import org.koin.core.qualifier.named
+import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.edit
+import androidx.compose.material.icons.filled.NotificationsActive
 import com.example.myapplication.ui.shared.theme.BrandOrange
 import com.example.myapplication.ui.shared.theme.BrandOrangeBright
 import com.example.myapplication.ui.shared.theme.BrandDeepRed
@@ -165,7 +186,29 @@ private val IconUpdateReady = IosDesign.Category.Network
 private val IconDonate = IosDesign.Category.Donate
 private val IconDeveloper = IosDesign.Category.Storage
 
+/**
+ * Порядок элементов LazyColumn настроек по ключам: экран прокручивает к пункту по индексу, а у
+ * LazyListState поиска по ключу нет. Меняете порядок `item(key = …)` ниже — меняйте и здесь.
+ */
+private val SETTINGS_ITEM_ORDER = listOf(
+    "group_general",
+    "group_security",
+    "group_account",
+    "group_availability",
+    "group_smart_models",
+    "group_about",
+    "group_developer",
+    "version_footer",
+)
+
+/** Ключ элемента списка, в котором живёт пункт с пояснением [helpId]. */
+private fun spotlightItemKey(helpId: String): String? = when (helpId) {
+    SettingHelpIds.AVAILABILITY_THRESHOLD -> "group_availability"
+    else -> null
+}
+
 private sealed interface SettingsOverlaySheet {
+    data object Help : SettingsOverlaySheet
     data object Cloud : SettingsOverlaySheet
     data object AiConnect : SettingsOverlaySheet
     data object PlaybackSources : SettingsOverlaySheet
@@ -223,6 +266,14 @@ fun SettingsScreen(
     val playerSettingsStrings = getPlayerSettingsStrings(uiState.language)
 
     var activeSheet by remember { mutableStateOf<SettingsOverlaySheet?>(null) }
+    // Пояснения к пунктам (удержание на строке) и сценарий «покажи пункт» из плеера.
+    val help = remember { SettingHelpController() }
+    val spotlightUi = remember { SpotlightUi() }
+    val settingsStore: DataStore<Preferences> = koinInject(qualifier = named("settings"))
+    val reducedMotion = rememberReducedMotion()
+    val ruUi = uiState.language == AppLanguage.RU
+    LaunchedEffect(help.sheetOpen) { if (help.sheetOpen) activeSheet = SettingsOverlaySheet.Help }
+    LaunchedEffect(activeSheet) { if (activeSheet != SettingsOverlaySheet.Help && help.sheetOpen) help.close() }
     var showDeveloperSection by rememberSaveable { mutableStateOf(false) }
     // Активный picker-лист: "lang" | "theme" | "content" | null.
 
@@ -304,6 +355,8 @@ fun SettingsScreen(
     val statusBarTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
     val navigationBarBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
 
+    Box(Modifier.fillMaxSize()) {
+    CompositionLocalProvider(LocalSettingHelp provides help) {
     IosSheetScaffold(
         sheetVisible = activeSheet != null,
         onDismiss = { activeSheet = null },
@@ -354,6 +407,51 @@ fun SettingsScreen(
                     onContentScrollChange(settingsScrollInProgress)
                 }
 
+                // «Покажи пункт»: прокрутить к нему, плавно мигнуть, а в самый первый раз ещё и показать
+                // указателем, как удержанием открывается описание. Заявку ставит плеер (MainActivity).
+                val spotlightTarget by SettingsSpotlight.target.collectAsStateWithLifecycle()
+                val spotlightReady by SettingsSpotlight.pageReady.collectAsStateWithLifecycle()
+                LaunchedEffect(spotlightTarget, spotlightReady) {
+                    val id = spotlightTarget ?: return@LaunchedEffect
+                    // Страница рабочей области сообщает о готовности сама; отдельный экран (есть «назад») готов сразу.
+                    if (!spotlightReady && onBack == null) return@LaunchedEffect
+                    try {
+                        val index = spotlightItemKey(id)?.let { SETTINGS_ITEM_ORDER.indexOf(it) } ?: -1
+                        if (index >= 0) {
+                            val viewport = listState.layoutInfo.viewportSize.height
+                            listState.animateScrollToItem(index, scrollOffset = -(viewport / 3))
+                        }
+                        delay(300)
+                        help.pulse(id, times = 3, reducedMotion = reducedMotion)
+                        val seen = settingsStore.data.first()[SettingsSpotlight.TUTORIAL_SEEN] == true
+                        val bounds = help.bounds[id]
+                        if (!seen && bounds != null) {
+                            val to = Offset(bounds.left + bounds.width * 0.42f, bounds.center.y)
+                            val from = to + Offset(with(density) { 90.dp.toPx() }, with(density) { 170.dp.toPx() })
+                            spotlightUi.pressAt(to, from, reducedMotion)
+                            help.open(
+                                SettingHelpRequest(
+                                    binding = SettingHelpBinding(
+                                        id = id,
+                                        checked = uiState.availabilityThreshold,
+                                        onToggle = { viewModel.setAvailabilityThreshold(it) },
+                                    ),
+                                    onGo = null,
+                                    fromTutorial = true,
+                                ),
+                            )
+                            spotlightUi.release()
+                            delay(700)
+                            settingsStore.edit { it[SettingsSpotlight.TUTORIAL_SEEN] = true }
+                            spotlightUi.hintVisible = true
+                            delay(6_000)
+                            spotlightUi.hintVisible = false
+                        }
+                    } finally {
+                        SettingsSpotlight.finish()
+                    }
+                }
+
                 LazyColumn(
                     flingBehavior = IosScroll.flingBehavior(),
                     state = listState,
@@ -389,6 +487,7 @@ fun SettingsScreen(
                                         },
                                         isDark = isDark,
                                         icon = Icons.Filled.PlayCircle,
+                                        help = SettingHelpBinding(SettingHelpIds.PLAYBACK_SOURCES),
                                         iconWell = false,
                                         showChevron = true,
                                         onClick = { performHaptic(view, Haptic.Light); activeSheet = SettingsOverlaySheet.PlaybackSources },
@@ -399,6 +498,7 @@ fun SettingsScreen(
                                         title = strings.languageCardTitle,
                                         isDark = isDark,
                                         iconRes = R.drawable.hugeicon_language,
+                                        help = SettingHelpBinding(SettingHelpIds.LANGUAGE),
                                         iconWell = false,
                                         value = if (uiState.language == AppLanguage.RU) "Русский" else "English",
                                         showChevron = true,
@@ -410,6 +510,7 @@ fun SettingsScreen(
                                         title = strings.themeTitle,
                                         isDark = isDark,
                                         iconRes = R.drawable.hugeicon_appearance,
+                                        help = SettingHelpBinding(SettingHelpIds.THEME),
                                         iconWell = false,
                                         value = when (uiState.theme) {
                                             AppTheme.LIGHT -> strings.themeLight
@@ -447,6 +548,7 @@ fun SettingsScreen(
                                         subtitle = strings.cloudSettingsSubtitle,
                                         isDark = isDark,
                                         iconRes = R.drawable.hugeicon_account,
+                                        help = SettingHelpBinding(SettingHelpIds.CLOUD),
                                         iconWell = false,
                                         showChevron = true,
                                         onClick = { performHaptic(view, Haptic.Light); activeSheet = SettingsOverlaySheet.Cloud },
@@ -467,6 +569,7 @@ fun SettingsScreen(
                                             },
                                             isDark = isDark,
                                             icon = Icons.Filled.Sync,
+                                            help = SettingHelpBinding(SettingHelpIds.SYNC),
                                             iconWell = false,
                                             showChevron = true,
                                             onClick = { performHaptic(view, Haptic.Light); onOpenSyncPanel() },
@@ -479,6 +582,7 @@ fun SettingsScreen(
                                         subtitle = aiConnectStrings.tileSubtitle,
                                         isDark = isDark,
                                         iconRes = R.drawable.ic_ai_sparkle,
+                                        help = SettingHelpBinding(SettingHelpIds.AI_CONNECT),
                                         iconWell = false,
                                         showChevron = true,
                                         onClick = { performHaptic(view, Haptic.Light); activeSheet = SettingsOverlaySheet.AiConnect },
@@ -498,6 +602,11 @@ fun SettingsScreen(
                                         subtitle = playerSettingsStrings.autoSkipSubtitle,
                                         isDark = isDark,
                                         icon = Icons.Filled.FastForward,
+                                        help = SettingHelpBinding(
+                                            id = SettingHelpIds.AUTO_SKIP,
+                                            checked = uiState.autoSkipSegments,
+                                            onToggle = { viewModel.setAutoSkipSegments(it) },
+                                        ),
                                         iconWell = false,
                                         trailing = {
                                             IosSwitch(
@@ -516,6 +625,11 @@ fun SettingsScreen(
                                         subtitle = playerSettingsStrings.autoNextSubtitle,
                                         isDark = isDark,
                                         icon = Icons.Filled.SkipNext,
+                                        help = SettingHelpBinding(
+                                            id = SettingHelpIds.AUTO_NEXT,
+                                            checked = uiState.autoNextEpisode,
+                                            onToggle = { viewModel.setAutoNextEpisode(it) },
+                                        ),
                                         iconWell = false,
                                         trailing = {
                                             IosSwitch(
@@ -534,12 +648,43 @@ fun SettingsScreen(
                                         subtitle = strings.contactSubtitle,
                                         isDark = isDark,
                                         iconRes = R.drawable.hugeicon_contact,
+                                        help = SettingHelpBinding(SettingHelpIds.CONTACT),
                                         iconWell = false,
                                         showChevron = true,
                                         onClick = { performHaptic(view, Haptic.Light); activeSheet = SettingsOverlaySheet.Contact },
                                     )
                                 },
                             ),
+                        )
+                    }
+
+                    // ГРУППА: Порог доступности (уведомление о серии ждёт озвучек). Позиция — в SETTINGS_ITEM_ORDER.
+                    item(key = "group_availability") {
+                        IosListGroup(
+                            isDark = isDark,
+                            rows = listOf({
+                                IosRow(
+                                    title = if (ruUi) "Порог доступности" else "Availability threshold",
+                                    subtitle = if (ruUi) "Уведомление, когда серию уже озвучили" else "Notify once the episode is dubbed",
+                                    isDark = isDark,
+                                    icon = Icons.Filled.NotificationsActive,
+                                    iconWell = false,
+                                    help = SettingHelpBinding(
+                                        id = SettingHelpIds.AVAILABILITY_THRESHOLD,
+                                        checked = uiState.availabilityThreshold,
+                                        onToggle = { viewModel.setAvailabilityThreshold(it) },
+                                    ),
+                                    trailing = {
+                                        IosSwitch(
+                                            checked = uiState.availabilityThreshold,
+                                            onCheckedChange = {
+                                                performHaptic(view, Haptic.Light)
+                                                viewModel.setAvailabilityThreshold(it)
+                                            },
+                                        )
+                                    },
+                                )
+                            }),
                         )
                     }
 
@@ -570,6 +715,7 @@ fun SettingsScreen(
                                         title = updateStrings.rowTitle,
                                         isDark = isDark,
                                         iconRes = R.drawable.hugeicon_update,
+                                        help = SettingHelpBinding(SettingHelpIds.UPDATE),
                                         iconWell = false,
                                         value = updateValue,
                                         valueColor = if (updateAvailable) IconUpdateReady else null,
@@ -588,6 +734,7 @@ fun SettingsScreen(
                                         subtitle = strings.donationCardSubtitle,
                                         isDark = isDark,
                                         iconRes = R.drawable.hugeicon_donate,
+                                        help = SettingHelpBinding(SettingHelpIds.DONATION),
                                         iconWell = false,
                                         showChevron = true,
                                         onClick = {
@@ -733,6 +880,20 @@ fun SettingsScreen(
                     .padding(top = GrabberReservedTop, bottom = 8.dp),
             ) {
                 when {
+                    activeSheet == SettingsOverlaySheet.Help -> {
+                        val request = help.request
+                        val text = request?.let { settingHelpText(it.binding.id, ruUi) }
+                        if (request != null && text != null) {
+                            SettingHelpSheet(
+                                request = request,
+                                text = text,
+                                ru = ruUi,
+                                isDark = isDark,
+                                onBack = { help.close(); activeSheet = null },
+                                onGo = { help.close(); request.onGo?.invoke() },
+                            )
+                        }
+                    }
                     activeSheet == SettingsOverlaySheet.Picker("lang") -> IosSelectionSheet(
                         title = strings.languageCardTitle,
                         options = listOf(
@@ -801,6 +962,9 @@ fun SettingsScreen(
             }
         },
     )
+    }
+    SettingsSpotlightOverlay(ui = spotlightUi, ru = ruUi)
+    }
 }
 
 /** Строка-контейнер с сегментированным переключателем: icon + title, ниже — сам контрол. */

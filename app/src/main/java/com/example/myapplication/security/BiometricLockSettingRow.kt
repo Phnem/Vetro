@@ -28,6 +28,11 @@ fun BiometricLockSettingRow(ru: Boolean, isDark: Boolean) {
     IosRow(title = if (ru) "Вход по биометрии" else "Biometric app lock",
         subtitle = if (ru) "Отпечаток пальца или лицо при входе в приложение" else "Fingerprint or face when opening the app",
         isDark = isDark, icon = Icons.Rounded.Fingerprint, iconWell = false,
+        help = com.example.myapplication.ui.shared.components.SettingHelpBinding(
+            id = com.example.myapplication.ui.settings.help.SettingHelpIds.BIOMETRIC,
+            checked = enabled,
+            onToggle = change,
+        ),
         onClick = { change(!enabled) },
         trailing = { IosSwitch(checked = enabled, onCheckedChange = change) })
 }

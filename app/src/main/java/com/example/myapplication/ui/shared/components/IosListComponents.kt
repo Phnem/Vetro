@@ -12,6 +12,10 @@ import kotlinx.coroutines.launch
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.ui.platform.LocalView
+import com.example.myapplication.utils.Haptic
+import com.example.myapplication.utils.performHaptic
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
@@ -239,10 +243,29 @@ fun IosRow(
     minHeight: Dp = IosDesign.CardMinHeight,
     trailing: (@Composable () -> Unit)? = null,
     onClick: (() -> Unit)? = null,
+    /**
+     * Пояснение к пункту: удержание открывает шторку с описанием (см. [SettingHelpController]).
+     * null — у строки пояснения нет, ведёт себя как раньше.
+     */
+    help: SettingHelpBinding? = null,
 ) {
     val shape = remember { SquircleShape(0.dp) } // строка не клипается, но highlight рисует по прямоугольнику
     val interaction = remember { MutableInteractionSource() }
-    val rowModifier = if (onClick != null) {
+    val helpController = LocalSettingHelp.current
+    val view = LocalView.current
+    val rowModifier = if (help != null && helpController != null) {
+        Modifier.combinedClickable(
+            interactionSource = interaction,
+            // Подсветка нажатия только у строк, которые что-то делают по тапу: у переключателей
+            // тап по строке ничего не меняет, и вспышка читалась бы как отклик без действия.
+            indication = if (onClick != null) iosRowHighlight(isDark, shape) else null,
+            onClick = { onClick?.invoke() },
+            onLongClick = {
+                performHaptic(view, Haptic.Light)
+                helpController.open(SettingHelpRequest(binding = help, onGo = onClick))
+            },
+        )
+    } else if (onClick != null) {
         Modifier.clickable(
             interactionSource = interaction,
             indication = iosRowHighlight(isDark, shape),
@@ -253,6 +276,7 @@ fun IosRow(
     Row(
         modifier = modifier
             .fillMaxWidth()
+            .settingHelpTarget(help?.id, helpController)
             .then(rowModifier)
             .defaultMinSize(minHeight = minHeight)
             .padding(horizontal = IosDesign.CardHorizontalInset, vertical = IosDesign.CardVerticalInset),

@@ -56,6 +56,15 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.clickable
+import androidx.compose.runtime.Composable
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.padding
+import androidx.compose.ui.draw.clip
+import androidx.compose.material.icons.filled.Refresh
+import com.example.myapplication.ui.shared.theme.BrandOrange
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -1294,22 +1303,66 @@ class StreamPlayerActivity : ComponentActivity(), PipHostActivity {
                                     )
                                     .padding(vertical = 20.dp),
                             ) {
-                                MascotEmptyState(
-                                    scene = MascotScene.Think,
-                                    title = if (ruHint) {
-                                        "Похоже, студии ещё не успели озвучить эту серию"
-                                    } else {
-                                        "Looks like the studios haven't dubbed this episode yet"
-                                    },
-                                    subtitle = if (ruHint) "Заходите чуть позже" else "Please check back a little later",
-                                    illustrationSize = 150.dp,
-                                    actionLabel = if (ruHint) "Повторить" else "Retry",
-                                    onAction = { refreshStream() },
-                                    titleColor = Color.White,
-                                    subtitleColor = Color.White.copy(alpha = 0.72f),
-                                    isDark = true,
-                                    modifier = Modifier.widthIn(max = 360.dp),
-                                )
+                                Column(
+                                    modifier = Modifier.widthIn(max = 380.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                ) {
+                                    MascotEmptyState(
+                                        scene = MascotScene.Think,
+                                        title = if (ruHint) {
+                                            "Похоже, студии ещё не успели озвучить эту серию"
+                                        } else {
+                                            "Looks like the studios haven't dubbed this episode yet"
+                                        },
+                                        subtitle = if (ruHint) "Заходите чуть позже" else "Please check back a little later",
+                                        // Плеер альбомный (высота ~390dp): маскот + текст + кнопки обязаны влезть.
+                                        illustrationSize = 120.dp,
+                                        titleColor = Color.White,
+                                        subtitleColor = Color.White.copy(alpha = 0.72f),
+                                        isDark = true,
+                                    )
+                                    Spacer(Modifier.height(20.dp))
+                                    Row(
+                                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                    ) {
+                                        // Серая капсула: к тайтлу, из которого открыт плеер.
+                                        DubbingPendingCapsule(
+                                            label = if (ruHint) "Выйти" else "Exit",
+                                            container = Color(0xFF3A3A3C),
+                                            onClick = { openTitleDetails(animeId) },
+                                        )
+                                        // Оранжевая капсула: в настройки, на пункт «Порог доступности».
+                                        DubbingPendingCapsule(
+                                            label = if (ruHint) "В настройки" else "Settings",
+                                            container = BrandOrange,
+                                            onClick = {
+                                                openSettingsAt(
+                                                    com.example.myapplication.ui.settings.help.SettingHelpIds.AVAILABILITY_THRESHOLD,
+                                                )
+                                            },
+                                        )
+                                        // Полупрозрачный пузырь: просто повторить.
+                                        Box(
+                                            modifier = Modifier
+                                                .size(48.dp)
+                                                .clip(androidx.compose.foundation.shape.CircleShape)
+                                                .background(Color.White.copy(alpha = 0.16f))
+                                                .clickable(
+                                                    interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                                                    indication = null,
+                                                ) { refreshStream() },
+                                            contentAlignment = Alignment.Center,
+                                        ) {
+                                            androidx.compose.material3.Icon(
+                                                imageVector = androidx.compose.material.icons.Icons.Filled.Refresh,
+                                                contentDescription = if (ruHint) "Повторить" else "Retry",
+                                                tint = Color.White,
+                                                modifier = Modifier.size(24.dp),
+                                            )
+                                        }
+                                    }
+                                }
                             }
                         }
 
@@ -1366,6 +1419,35 @@ class StreamPlayerActivity : ComponentActivity(), PipHostActivity {
                 }
             }
         }
+    }
+
+    /**
+     * «Выйти» с экрана «озвучки ещё нет»: ведём на Details этого тайтла. Тот же интент, что у пуша о новой
+     * серии; MainActivity не пересоздаётся (SINGLE_TOP), а Details, если он уже под плеером, не дублируется.
+     */
+    private fun openTitleDetails(animeId: String) {
+        if (animeId.isNotBlank()) {
+            startActivity(
+                Intent(this, com.example.myapplication.MainActivity::class.java).apply {
+                    action = com.example.myapplication.notifications.ACTION_OPEN_ANIME
+                    putExtra(com.example.myapplication.notifications.EXTRA_OPEN_ANIME_ID, animeId)
+                    flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+                },
+            )
+        }
+        finish()
+    }
+
+    /** «В настройки»: открывает настройки и подсвечивает пункт [target] (см. SettingsSpotlight). */
+    private fun openSettingsAt(target: String) {
+        startActivity(
+            Intent(this, com.example.myapplication.MainActivity::class.java).apply {
+                action = com.example.myapplication.ui.settings.help.SettingsSpotlight.ACTION_OPEN_SETTINGS
+                putExtra(com.example.myapplication.ui.settings.help.SettingsSpotlight.EXTRA_TARGET, target)
+                flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+            },
+        )
+        finish()
     }
 
     /** Кнопки громкости во время показа на ТВ меняют громкость телевизора. */
@@ -1555,6 +1637,32 @@ private fun subtitleLoadMessage(result: SubtitleLoad, ru: Boolean): String = whe
         "OpenSubtitles daily download limit reached"
     }
     else -> if (ru) "Не удалось загрузить субтитры" else "Couldn't load subtitles"
+}
+
+/** Капсульная кнопка на экране «озвучки ещё нет»: цвет задаёт вызывающий, текст всегда белый. */
+@Composable
+private fun DubbingPendingCapsule(label: String, container: Color, onClick: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .height(48.dp)
+            .clip(androidx.compose.foundation.shape.CircleShape)
+            .background(container)
+            .clickable(
+                interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                indication = null,
+                onClick = onClick,
+            )
+            .padding(horizontal = 22.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = label,
+            color = Color.White,
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+            maxLines = 1,
+        )
+    }
 }
 
 private fun selectStudioRenditions(

@@ -45,6 +45,7 @@ import com.example.myapplication.data.models.AppTheme
 import com.example.myapplication.sync.ExternalListSyncCoordinator
 import com.example.myapplication.ui.navigation.AppNavGraph
 import com.example.myapplication.ui.navigation.isDeepLinkReady
+import androidx.navigation.toRoute
 import com.example.myapplication.ui.navigation.rememberStartupSplashState
 import com.example.myapplication.ui.navigation.navigateToDetails
 import com.example.myapplication.notifications.ACTION_OPEN_ANIME
@@ -81,6 +82,9 @@ class MainActivity : FragmentActivity() {
     /** id тайтла из тапа по пушу «вышла новая серия»; открываем Details, когда граф готов. */
     private val pendingAnimeId = MutableStateFlow<String?>(null)
 
+    /** Какой пункт настроек показать (кнопка «В настройки» в плеере); исполняет SettingsScreen. */
+    private val pendingSettingsTarget = MutableStateFlow<String?>(null)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge(
@@ -102,6 +106,7 @@ class MainActivity : FragmentActivity() {
         handleSupabaseAuthDeeplink(intent)
         handleExternalListOAuthIntent(intent)
         handleOpenAnimeIntent(intent)
+        handleOpenSettingsIntent(intent)
 
         setContent {
             val isSystemDark = isSystemInDarkTheme()
@@ -144,7 +149,28 @@ class MainActivity : FragmentActivity() {
                     pendingAnimeId.value = null
                     // Пуш открыт — прочитано и в колокольчике приложения.
                     runCatching { animeLocalData.removeUpdate(animeId) }
-                    navController.navigateToDetails(animeId)
+                    // Из плеера «Выйти» зовёт сюда же: если Details этого тайтла уже под плеером, второй не кладём.
+                    val shown = navEntry
+                    val alreadyOnTitle = shown?.destination?.hasRoute<com.example.myapplication.ui.navigation.DetailsRoute>() == true &&
+                        shown.toRoute<com.example.myapplication.ui.navigation.DetailsRoute>().animeId == animeId
+                    if (!alreadyOnTitle) navController.navigateToDetails(animeId)
+                }
+
+                // «В настройки» из плеера: настройки — страница рабочей области под Home, поэтому сначала
+                // снимаем всё, что лежит сверху (Details), а затем отдаём заявку экрану настроек.
+                val openSettingsTarget by pendingSettingsTarget.collectAsStateWithLifecycle()
+                LaunchedEffect(openSettingsTarget, destinationId, splashVisible) {
+                    val target = openSettingsTarget ?: return@LaunchedEffect
+                    val destination = navEntry?.destination
+                    if (splashVisible || !destination.isDeepLinkReady()) return@LaunchedEffect
+                    if (destination?.hasRoute<com.example.myapplication.ui.navigation.HomeRoute>() != true) {
+                        // Успех меняет destinationId, и эффект запустится заново уже на Home.
+                        if (navController.popBackStack<com.example.myapplication.ui.navigation.HomeRoute>(inclusive = false)) {
+                            return@LaunchedEffect
+                        }
+                    }
+                    pendingSettingsTarget.value = null
+                    com.example.myapplication.ui.settings.help.SettingsSpotlight.request(target)
                 }
 
                 var showStartupUpdateOverlay by remember { mutableStateOf(false) }
@@ -280,6 +306,14 @@ class MainActivity : FragmentActivity() {
         handleSupabaseAuthDeeplink(intent)
         handleExternalListOAuthIntent(intent)
         handleOpenAnimeIntent(intent)
+        handleOpenSettingsIntent(intent)
+    }
+
+    private fun handleOpenSettingsIntent(intent: Intent?) {
+        if (intent?.action != com.example.myapplication.ui.settings.help.SettingsSpotlight.ACTION_OPEN_SETTINGS) return
+        val target = intent.getStringExtra(com.example.myapplication.ui.settings.help.SettingsSpotlight.EXTRA_TARGET) ?: return
+        pendingSettingsTarget.value = target
+        intent.removeExtra(com.example.myapplication.ui.settings.help.SettingsSpotlight.EXTRA_TARGET)
     }
 
     /** Тап по пушу о новой серии: запоминаем id, навигация — когда NavHost дойдёт до Home. */

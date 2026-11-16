@@ -174,6 +174,20 @@ fun WorkspaceScreen(
         }
     }
 
+    // «В настройки» из плеера: уезжаем на страницу настроек и сообщаем ей, что она перед глазами —
+    // дальше экран сам прокрутит к нужному пункту и подсветит его (см. SettingsSpotlight).
+    val spotlightTarget by com.example.myapplication.ui.settings.help.SettingsSpotlight.target
+        .collectAsStateWithLifecycle()
+    LaunchedEffect(spotlightTarget) {
+        if (spotlightTarget == null) return@LaunchedEffect
+        menuOpen = false
+        showSyncPanel = false
+        if (pagerState.currentPage != WorkspacePage.SETTINGS.index) {
+            pagerState.animateScrollToPage(WorkspacePage.SETTINGS.index, animationSpec = MotionTokens.sheetPresent())
+        }
+        com.example.myapplication.ui.settings.help.SettingsSpotlight.pageReady.value = true
+    }
+
     // targetPage, а не currentPage: во время броска пальцем «назад» должен считаться от того,
     // куда мы едем, иначе Back посреди жеста уводит не туда.
     val backTarget = WorkspacePage.backTargetFrom(WorkspacePage.ofIndex(pagerState.targetPage))
