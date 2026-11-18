@@ -35,3 +35,19 @@ python tools/microml/export/pack.py --encoder $encoder --identity $identity --ta
 To run the head-to-head Identity comparison, use `identity/evaluate.py --model <identity> --encoder <table.npy> --split test --v2 <titlematch-cache>`. Omit `--v2` if the old benchmark artifacts are unavailable. `export/pack.py --only experience` exports only Experience and needs no Identity or Catalog checkpoint. To export just Identity or Catalog, also supply the encoder that matches the output directory's core. A partial export removes the combined parity fixture, since its expected results may no longer match. Use a full export before running the parity suite.
 
 The debug property gives the app the ID `com.phnem.vetro.micromlsmoke` for device testing in a separate app sandbox. The [validation report](../../docs/microml/VALIDATION.md) records the datasets, results, and remaining evidence gaps.
+
+## Cover placeholder detector (Catalog switch)
+
+A small LightGBM forest recognises the stock image sources serve instead of a cover (Shikimori: a girl with a raised hand and "404 not found" on her shirt). It shares the Catalog switch ("Files and genres") and its own scenario `catalog.cover_placeholder`. With it on, such an image is never saved from a URL, and covers already stored are checked once: a stock one is replaced by the Vetro catalogue cover, or removed so the usual cover search runs.
+
+The model is 10 KB and is tracked in git (`app/src/main/assets/microml/cover`), so a release built in a clean checkout still carries it. Features (`cover-features-v1`, 307 numbers from a 16x16 luma grid and a 4x4 colour grid) are computed with integer arithmetic identically in `tools/microml/cover/features.py` and `CoverFeatures.kt`; `CoverPlaceholderModelTest` compares them with `app/src/test/resources/microml/cover_golden.json`.
+
+```powershell
+python tools/microml/cover/build_dataset.py --phone-covers <folder with the collection images> --dictionary media-dictionary --out tools/microml/.cache/cover
+python tools/microml/cover/train.py --data tools/microml/.cache/cover --out tools/microml/.cache/cover/model
+python tools/microml/cover/mine_hard_negatives.py --model tools/microml/.cache/cover/model/cover_placeholder.vmlf --dictionary media-dictionary --out tools/microml/.cache/cover/hard.npz
+python tools/microml/cover/train.py --data tools/microml/.cache/cover --hard tools/microml/.cache/cover/hard.npz --out tools/microml/.cache/cover/model
+python tools/microml/cover/export.py --model tools/microml/.cache/cover/model --data tools/microml/.cache/cover --assets app/src/main/assets/microml/cover --golden app/src/test/resources/microml/cover_golden.json
+```
+
+Evidence and limits: positives are variants of ONE stock image (the real ones found in a collection, plus augmented copies: rescaled, re-encoded, cropped, stretched), so the model proves robustness to size and compression, not that it recognises other placeholders. On held-out data it found 8 of 8 real variants and 400 of 400 augmented ones; on about 28,000 real covers it never saw, none scored above the 0.97 threshold (highest 0.80). Run it again with new positives to teach it another stock image.
