@@ -1,5 +1,23 @@
 # Vetro changelog
 
+## v3.5.5-Alpha — November 18, 2026
+
+App version: `v3.5.5-Alpha`. Android version code: `355`.
+Changes since 3.5.4-Alpha. This is a pre-release: the in-app updater ignores Alpha tags, install it by hand.
+
+### Fix: the smart models are in the build again
+
+- v3.5.4-Alpha was built without the model files of Title matching, Files and genres, and Taste recommendations, so their switches in Settings did nothing. This build contains them again.
+
+### Smart models: stock images instead of covers
+
+- "Files and genres" now also recognises the stock picture some sources serve instead of a cover (Shikimori: a girl with a raised hand and "404 not found" on her shirt). Such a picture is no longer saved as a cover, and the ones already in your collection are checked once: a stock picture is replaced by the cover from the Vetro catalogue, or removed so the usual cover search takes over. If the catalogue cannot be reached, nothing is changed. It works only while the "Files and genres" switch is on.
+- The model is tiny (10 KB) and learned from this one picture; other stock pictures are not recognised yet.
+
+### Search
+
+- A film found under the TV Series tab is now labelled as a film, not as a series.
+
 ## v3.5.4-Alpha — November 18, 2026
 
 App version: `v3.5.4-Alpha`. Android version code: `354`.
