@@ -77,7 +77,9 @@ fun VetroSyncScreen(
     Box(
         modifier
             .fillMaxSize()
-            .background(Brush.verticalGradient(listOf(BrandOrange.copy(alpha = if (isDark) 0.16f else 0.10f), background, background)))
+            // Сплошная основа под тёплым градиентом: иначе верх полупрозрачен, и сквозь экран видна главная.
+            .background(background)
+            .background(Brush.verticalGradient(listOf(BrandOrange.copy(alpha = if (isDark) 0.16f else 0.10f), Color.Transparent, Color.Transparent)))
             // Экран перекрывает приложение: тапы не должны проходить под него.
             .pointerInput(Unit) { detectTapGestures { } }
             .windowInsetsPadding(WindowInsets.systemBars),
