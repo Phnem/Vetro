@@ -8,6 +8,9 @@ import com.example.myapplication.network.ExternalIds
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
@@ -33,33 +36,43 @@ class CloudMediaSearch(
 ) {
     private val json = Json { ignoreUnknownKeys = true }
 
-    /** Направление поиска → `kind` API; для манги в облаке базы нет. */
-    fun kindOf(contentType: AppContentType): String? = when (contentType) {
-        AppContentType.ANIME -> "anime"
-        AppContentType.MOVIE -> "movie"
-        AppContentType.SERIES -> "tv"
-        else -> null
+    /**
+     * Направление поиска → базы облака (`kind` API). «TV Series» в приложении — это и сериалы, и фильмы, поэтому ищет в двух базах;
+     * для манги в облаке базы нет.
+     */
+    fun kindsOf(contentType: AppContentType): List<String> = when (contentType) {
+        AppContentType.ANIME -> listOf("anime")
+        AppContentType.MOVIE -> listOf("movie")
+        AppContentType.SERIES -> listOf("tv", "movie")
+        else -> emptyList()
     }
 
     suspend fun search(query: String, contentType: AppContentType, language: AppLanguage, limit: Int = 20): List<ApiSearchResult> {
-        val kind = kindOf(contentType) ?: return emptyList()
+        val kinds = kindsOf(contentType)
+        if (kinds.isEmpty()) return emptyList()
         return withContext(Dispatchers.IO) {
-            try {
-                val url = "$apiV1/find".toHttpUrlOrNull()?.newBuilder()
-                    ?.addQueryParameter("q", query)?.addQueryParameter("kind", kind)?.addQueryParameter("limit", limit.toString())?.build()
-                    ?: return@withContext emptyList()
-                val client = http.newBuilder().callTimeout(TIMEOUT_MS, TimeUnit.MILLISECONDS).build()
-                client.newCall(Request.Builder().url(url).build()).execute().use { resp ->
-                    if (!resp.isSuccessful) return@use emptyList()
-                    parse(resp.body.string(), contentType, language)
-                }
-            } catch (e: CancellationException) {
-                throw e
-            } catch (_: Exception) {
-                emptyList()
-            }
+            val lists = coroutineScope { kinds.map { kind -> async { fetch(query, kind, contentType, language, limit) } }.awaitAll() }
+            interleave(lists).take(limit)
         }
     }
+
+    private fun fetch(query: String, kind: String, contentType: AppContentType, language: AppLanguage, limit: Int): List<ApiSearchResult> =
+        try {
+            val url = "$apiV1/find".toHttpUrlOrNull()?.newBuilder()
+                ?.addQueryParameter("q", query)?.addQueryParameter("kind", kind)?.addQueryParameter("limit", limit.toString())?.build()
+            if (url == null) {
+                emptyList()
+            } else {
+                val client = http.newBuilder().callTimeout(TIMEOUT_MS, TimeUnit.MILLISECONDS).build()
+                client.newCall(Request.Builder().url(url).build()).execute().use { resp ->
+                    if (!resp.isSuccessful) emptyList() else parse(resp.body.string(), contentType, language)
+                }
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            emptyList()
+        }
 
     internal fun parse(body: String, contentType: AppContentType, language: AppLanguage): List<ApiSearchResult> =
         json.parseToJsonElement(body).jsonObject["items"]?.jsonArray.orEmpty().mapNotNull { toResult(it.jsonObject, contentType, language) }
@@ -97,13 +110,20 @@ class CloudMediaSearch(
             AppContentType.MOVIE, AppContentType.SERIES -> ids.tmdb?.let { "TMDB" to it.toString() } ?: return null
             else -> return null
         }
+        // Вкладка «TV Series» отдаёт и фильмы: у каждой записи свой тип по базе, из которой она пришла (id TMDB фильма и сериала не совпадают по смыслу).
+        val itemType = when {
+            contentType == AppContentType.ANIME -> AppContentType.ANIME
+            s("kind") == "movie" -> AppContentType.MOVIE
+            s("kind") == "tv" -> AppContentType.SERIES
+            else -> contentType
+        }
         return ApiSearchResult(
             title = title,
             altTitle = alt,
             posterUrl = poster,
-            episodes = if (contentType == AppContentType.MOVIE) 1 else 0,
+            episodes = if (itemType == AppContentType.MOVIE) 1 else 0,
             description = "",
-            type = when (contentType) {
+            type = when (itemType) {
                 AppContentType.ANIME -> "ANIME"
                 AppContentType.MOVIE -> "Movie"
                 else -> "TV"
@@ -111,7 +131,7 @@ class CloudMediaSearch(
             genres = emptyList(),
             rating = null,
             source = source,
-            categoryType = contentType.name,
+            categoryType = itemType.name,
             externalId = externalId,
             malId = ids.mal,
             format = s("st")?.uppercase(),
@@ -126,13 +146,25 @@ class CloudMediaSearch(
     companion object {
         private const val TIMEOUT_MS = 2500L
 
+        /** Списки баз по очереди, лучший из каждой первым: порядок внутри базы сохраняется. */
+        internal fun <T> interleave(lists: List<List<T>>): List<T> {
+            val out = ArrayList<T>()
+            var i = 0
+            while (lists.any { i < it.size }) {
+                lists.forEach { if (i < it.size) out += it[i] }
+                i++
+            }
+            return out
+        }
+
         /**
          * Облачная выдача — первой (она быстрее и уже отфильтрована по базе), остальное из прежних источников следом. Если запись есть и там,
          * и там (тот же источник и id), остаётся прежняя: у неё богаче постер, описание и жанры, а место берётся облачное.
          */
         fun mergeCloudFirst(cloud: List<ApiSearchResult>, existing: List<ApiSearchResult>): List<ApiSearchResult> {
             if (cloud.isEmpty()) return existing
-            fun key(r: ApiSearchResult) = r.externalId?.let { "${r.source.lowercase()}:$it" }
+            // Тип входит в ключ: у TMDB фильм 550 и сериал 550 — разные тайтлы.
+            fun key(r: ApiSearchResult) = r.externalId?.let { "${r.source.lowercase()}:${r.categoryType}:$it" }
             val richer = existing.mapNotNull { r -> key(r)?.let { it to r } }.toMap()
             val used = HashSet<String>()
             val head = cloud.map { c ->
