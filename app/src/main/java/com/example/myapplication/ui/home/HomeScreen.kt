@@ -1730,7 +1730,10 @@ private fun LazyListScope.apiSearchResultsSection(
             addedLabel = strings.addedButton,
             mediaTypeLabel = if (result.categoryType == BOOK_CATEGORY) {
                 if (currentLanguage == AppLanguage.RU) "Аудиокнига" else "Audiobook"
-            } else when (uiState.searchMediaTypeFilter) {
+            } else when (
+                // Вкладка «TV Series» отдаёт и фильмы: значок берётся из типа самой записи, а не из выбранной вкладки.
+                com.example.myapplication.data.models.MediaType.fromCategoryType(result.categoryType) ?: uiState.searchMediaTypeFilter
+            ) {
                 com.example.myapplication.data.models.MediaType.ANIME -> strings.typeAnime
                 com.example.myapplication.data.models.MediaType.MANGA -> strings.typeManga
                 com.example.myapplication.data.models.MediaType.MOVIE -> strings.typeMovie
