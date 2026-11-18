@@ -715,6 +715,7 @@ val appModule = module {
             franchiseFilter = get(),
             titleIdentity = get(),
             microMl = get(),
+            vetroFilter = get(),
         )
     }
 }

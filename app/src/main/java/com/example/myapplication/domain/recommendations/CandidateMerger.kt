@@ -75,6 +75,8 @@ object CandidateMerger {
         r.externalIds.shikimori?.let { add("shikimori:$it") }
         r.externalIds.tmdb?.let { add("tmdb:$it") }
         r.externalIds.imdb?.let { add("imdb:$it") }
+        // Один тайтл каталога под разными id источников: записи, у которых узнан общий Vetro id, склеиваются.
+        r.externalIds.vetro?.let { add("vetro:$it") }
     }.distinct()
 
     private fun identityKeys(r: ApiSearchResult, type: ContentType): List<String> {

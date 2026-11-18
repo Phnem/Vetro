@@ -111,6 +111,35 @@ val audiobookModule = module {
     }
     // Облачный каталог аниме, фильмов и сериалов: тот же клиент с токеном установки и тот же адрес API, что у каталога книг.
     single { com.example.myapplication.mediacatalog.CloudMediaSearch(get<OkHttpClient>(named(CATALOG_HTTP)), catalogApiBase(androidContext())) }
+    // Каталог Vetro: привязка тайтлов коллекции к записям api.vetrostudio.bid (экран первой синхронизации), отсев рекомендаций по Vetro id.
+    single<com.example.myapplication.mediacatalog.VetroCatalog> {
+        com.example.myapplication.mediacatalog.HttpVetroCatalog(get<OkHttpClient>(named(CATALOG_HTTP)), catalogApiBase(androidContext()))
+    }
+    single<com.example.myapplication.data.local.VetroLinks> { com.example.myapplication.data.local.VetroLinkStore(get()) }
+    single<com.example.myapplication.mediacatalog.VetroLibrary> { com.example.myapplication.mediacatalog.AnimeVetroLibrary(get(), get()) }
+    single {
+        val cacheDir = androidContext().cacheDir
+        val images = get<com.example.myapplication.data.repository.ImageStorageRepository>()
+        com.example.myapplication.mediacatalog.VetroLinkService(
+            catalog = get(),
+            store = get(),
+            library = get(),
+            // Обложка каталога приходит байтами (AVIF): во временный файл и дальше обычным путём сохранения обложки тайтла.
+            storeCover = { bytes, animeId ->
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    val tmp = File.createTempFile("vetro_cover_", ".avif", cacheDir)
+                    try {
+                        tmp.writeBytes(bytes)
+                        images.saveImage(android.net.Uri.fromFile(tmp).toString(), animeId).getOrNull()
+                    } finally {
+                        tmp.delete()
+                    }
+                }
+            },
+        )
+    }
+    single { com.example.myapplication.domain.recommendations.VetroIdentityFilter(get(), get(), get()) }
+    single { com.example.myapplication.mediacatalog.VetroLinkGate(get(named("settings")), get(), get(), get<com.example.myapplication.AppScope>()) }
     single { com.example.myapplication.audiobooks.catalog.BookCatalogApi(get<OkHttpClient>(named(CATALOG_HTTP)), catalogApiBase(androidContext())) }
     single { com.example.myapplication.audiobooks.catalog.BookCatalog(get(), get(), get<com.example.myapplication.AppScope>()) }
     single {

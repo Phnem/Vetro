@@ -1,0 +1,20 @@
+-- Связь тайтла коллекции с записью каталога Vetro (api.vetrostudio.bid).
+-- Локальная таблица (не синхронизируется): по ней рекомендации узнают, какие тайтлы уже есть в коллекции,
+-- даже если у кандидата другие id и название.
+CREATE TABLE vetro_link (
+    anime_id TEXT PRIMARY KEY NOT NULL,
+    -- NULL: каталог проверили и такого тайтла не нашли (повторно спрашиваем не раньше чем через неделю).
+    vetro_id TEXT,
+    checked_at INTEGER NOT NULL,
+    -- Чем найден: id другого сервиса (`anilist:16498`) или `title`.
+    via TEXT
+);
+
+getAllVetroLinks:
+SELECT anime_id, vetro_id, checked_at, via FROM vetro_link;
+
+upsertVetroLink:
+INSERT OR REPLACE INTO vetro_link(anime_id, vetro_id, checked_at, via) VALUES (?, ?, ?, ?);
+
+deleteVetroLink:
+DELETE FROM vetro_link WHERE anime_id = ?;

@@ -1,0 +1,8 @@
+-- Связь тайтла коллекции с записью каталога Vetro (api.vetrostudio.bid): vetro_id вида A00000050 / M… / S….
+-- Только новая таблица: аддитивно, данные прошлых версий не трогаем; в облако не уходит.
+CREATE TABLE vetro_link (
+    anime_id TEXT PRIMARY KEY NOT NULL,
+    vetro_id TEXT,
+    checked_at INTEGER NOT NULL,
+    via TEXT
+);

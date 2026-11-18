@@ -55,6 +55,8 @@ class RecommendationEngine(
     private val titleIdentity: com.example.myapplication.domain.titleidentityintegration.TitleIdentityService? = null,
     /** MicroML в теневом режиме: наблюдает и учится, порядок и состав рекомендаций меняет только по явному флагу. */
     private val microMl: com.example.myapplication.microml.MicroMlEngine? = null,
+    /** Отсев по каталогу Vetro: узнаёт Vetro id кандидатов и убирает те, что уже есть в коллекции под другими id. */
+    private val vetroFilter: VetroIdentityFilter? = null,
 ) {
 
     private val refreshMutex = Mutex()
@@ -237,7 +239,14 @@ class RecommendationEngine(
             }
         }
         // Новый скор склеивает дубли сам: записи без постера оставляем до склейки, постер берёт другой источник.
-        val unowned = filter.filter(pool, library, judged, requirePoster = !flags.newScorer)
+        val byIds = filter.filter(pool, library, judged, requirePoster = !flags.newScorer)
+        // Каталог Vetro: у кандидата узнаётся Vetro id, и тайтл из коллекции под другими id и названием не пройдёт.
+        // Сбой каталога выдачу не прячет: остаётся то, что пропустили прежние фильтры.
+        val unowned = vetroFilter?.let { vetro ->
+            runCatching { vetro.apply(byIds, library) }
+                .onFailure { if (it is CancellationException) throw it else Log.w(TAG, "Vetro filter failed", it) }
+                .getOrDefault(byIds)
+        } ?: byIds
         // Сбой сети не должен прятать рекомендации: при ошибке фильтр франшиз пропускается.
         val franchise = franchiseFilter
         val filtered = if (type == ContentType.ANIME && franchise != null) {
@@ -382,7 +391,7 @@ class RecommendationEngine(
          */
         const val MAX_RESULTS = 40
 
-        /** 2 — добавлен отсев по франшизам и по основе названия. */
-        const val FILTER_VERSION = "F2"
+        /** 2 — добавлен отсев по франшизам и по основе названия; 3 — отсев по Vetro id каталога. */
+        const val FILTER_VERSION = "F3"
     }
 }

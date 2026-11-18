@@ -1,5 +1,23 @@
 # Vetro changelog
 
+## v3.5.4-Alpha — November 18, 2026
+
+App version: `v3.5.4-Alpha`. Android version code: `354`.
+Changes since 3.5.3-Alpha. This is a pre-release: the in-app updater ignores Alpha tags, install it by hand.
+
+### Search: films and series from the Vetro catalogue
+
+- Search by direction now asks the Vetro catalogue first: Anime looks only in the anime database, TV Series in series and films (each result keeps its own type), so an anime query no longer returns books or series. Manga and Books work as before.
+
+### First start: your collection meets the catalogue
+
+- On the first launch of this version a short screen with the mascot appears while the app links the titles of your collection to the Vetro catalogue: first by the ids they already have (AniList, MAL, Shikimori, TMDB, IMDb), then by name. Where the catalogue has a cover that a title lacks, it is downloaded. If the network is down, nothing is marked and the screen simply tries again next launch. After 30 seconds you can continue in the background.
+- Titles are linked once and stay linked; new ones are linked quietly when recommendations are refreshed.
+
+### Recommendations
+
+- The algorithm is the same, but candidates are now also checked against the catalogue: a title that is already in your collection under different ids or another name is no longer offered. Records of one title from different sources are merged by the catalogue id.
+
 ## v3.5.3-Alpha — November 16, 2026
 
 App version: `v3.5.3-Alpha`. Android version code: `353`.

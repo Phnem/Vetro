@@ -17,6 +17,8 @@ data class ExternalIds(
     val imdb: String? = null,
     /** TheTVDB id: ключ Fanart.tv (сериалы) и TVmaze. */
     val tvdb: Int? = null,
+    /** Vetro id тайтла в каталоге api.vetrostudio.bid (`A00000050`); проставляется отсевом рекомендаций по каталогу. */
+    val vetro: String? = null,
 )
 
 /**

@@ -220,6 +220,14 @@ class MainActivity : FragmentActivity() {
                 )
                 val supportScope = androidx.compose.runtime.rememberCoroutineScope()
 
+                // Первая привязка коллекции к каталогу Vetro: стартует, когда сплэш ушёл и вход выполнен; экран закрывает приложение, пока идёт.
+                val vetroGate: com.example.myapplication.mediacatalog.VetroLinkGate = org.koin.compose.koinInject()
+                val vetroState by vetroGate.state.collectAsStateWithLifecycle()
+                LaunchedEffect(splashVisible, destinationId) {
+                    if (!splashVisible && navEntry?.destination.isDeepLinkReady()) vetroGate.startIfNeeded()
+                }
+                BackHandler(enabled = vetroState.showScreen) { }
+
                 val workspaceSearch = remember { WorkspaceSearchState() }
                 val overscrollFactory = remember { iosOverscrollFactory(this@MainActivity) }
                 CompositionLocalProvider(
@@ -279,6 +287,18 @@ class MainActivity : FragmentActivity() {
                             }
                         },
                     )
+
+                    androidx.compose.animation.AnimatedVisibility(
+                        visible = vetroState.showScreen,
+                        enter = androidx.compose.animation.fadeIn(),
+                        exit = androidx.compose.animation.fadeOut(),
+                    ) {
+                        com.example.myapplication.ui.vetrolink.VetroSyncScreen(
+                            state = vetroState,
+                            russian = settingsState.language == com.example.myapplication.network.AppLanguage.RU,
+                            onSkip = vetroGate::dismiss,
+                        )
+                    }
 
                     if (settingsState.devFpsOverlay) {
                         FpsOverlay(modifier = Modifier.align(Alignment.TopStart))
