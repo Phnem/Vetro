@@ -33,7 +33,8 @@ function fakeR2(files) {
 const SCHEMA = `
 CREATE TABLE media (n INTEGER PRIMARY KEY, id TEXT NOT NULL UNIQUE, t TEXT NOT NULL, ru TEXT, en TEXT, ro TEXT, orig TEXT, alt TEXT, x TEXT,
   y INTEGER, st TEXT, pop REAL, f INTEGER NOT NULL DEFAULT 0, cv INTEGER NOT NULL DEFAULT 0, d TEXT);
-CREATE VIRTUAL TABLE media_fts USING fts5(ru, en, ro, orig, alt, x, tokenize='unicode61 remove_diacritics 2', prefix='2 3');`;
+CREATE VIRTUAL TABLE media_fts USING fts5(ru, en, ro, orig, alt, x, tokenize='unicode61 remove_diacritics 2', prefix='2 3');
+CREATE TABLE media_ext (k TEXT NOT NULL, n INTEGER NOT NULL, PRIMARY KEY (k, n)) WITHOUT ROWID;`;
 
 function env() {
   const sqlite = new DatabaseSync(":memory:");
@@ -51,6 +52,9 @@ function env() {
     ins.run(...r);
     fts.run(r[0], r[3], r[4], r[5], r[6], r[7], r[8]);
   }
+  // Ids in other databases: the Naruto film and the Naruto series share one TMDB number (films and series are numbered separately).
+  const ext = sqlite.prepare("INSERT INTO media_ext VALUES (?, ?)");
+  for (const [k, n] of [["anilist:16498", 1], ["mal:16498", 1], ["tmdb:46260", 20000001], ["tmdb:46260", 10000001], ["imdb:tt0903747", 20000002]]) ext.run(k, n);
   const files = new Map([["covers/media/small/A00000050.avif", new Uint8Array([1, 2, 3])]]);
   return { DB: fakeD1(sqlite), BOOKS: fakeR2(files) };
 }
@@ -148,4 +152,25 @@ test("find: every item says which database it came from, kind filters to one dat
   assert.equal((await get(`/v1/find?q=${q}&kind=manga`, e)).status, 400);
   assert.deepEqual((await (await get("/v1/find?q=a", e)).json()).items, []);
   assert.equal(routeOf("/v1/find"), "search");
+});
+
+test("ext: titles are found by their ids in other databases, the kind tells a film from a series with the same TMDB number", async () => {
+  assert.equal(routeOf("/v1/media/ext"), "books");
+  let body = await (await get("/v1/media/ext?ids=anilist:16498,imdb:tt0903747,mal:1")).json();
+  assert.deepEqual(body.items.map((i) => [i.via, i.id]).sort(), [["anilist:16498", "A00000050"], ["imdb:tt0903747", "S00000002"]]);
+  assert.equal(body.items.find((i) => i.id === "A00000050").kind, "anime");
+  body = await (await get("/v1/media/ext?ids=tmdb:46260")).json();
+  assert.deepEqual(body.items.map((i) => i.id).sort(), ["M00000001", "S00000001"]);
+  body = await (await get("/v1/media/ext?ids=tmdb:46260&kind=movie")).json();
+  assert.deepEqual(body.items.map((i) => i.id), ["M00000001"]);
+  body = await (await get("/v1/media/ext?ids=tmdb:46260&kind=tv")).json();
+  assert.deepEqual(body.items.map((i) => i.id), ["S00000001"]);
+});
+
+test("ext: malformed ids are ignored, a bad kind is a 400, no ids is empty", async () => {
+  let body = await (await get("/v1/media/ext?ids=nope:1,anilist:,anilist:1%20OR%201=1,;drop")).json();
+  assert.deepEqual(body.items, []);
+  assert.equal((await get("/v1/media/ext?ids=tmdb:1&kind=book")).status, 400);
+  body = await (await get("/v1/media/ext")).json();
+  assert.deepEqual(body.items, []);
 });

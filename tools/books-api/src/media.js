@@ -134,6 +134,28 @@ export async function mediaById(h, env, ctx, request, id) {
   });
 }
 
+// Ids of a title in other databases: `anilist:16498`, `mal:5114`, `shikimori:5114`, `tmdb:13916`, `imdb:tt0877057`.
+const EXT_KEY = /^(anilist|mal|shikimori|tmdb|imdb):[A-Za-z0-9]{1,16}$/;
+
+/**
+ * Which of our titles carry these ids in other databases: GET /v1/media/ext?ids=anilist:16498,tmdb:13916&kind=anime|movie|tv
+ * Every returned row has `via` (the id it was found by). One id can match a film and a series (TMDB numbers films and series
+ * separately), so a client that knows the kind passes it. Rows only, no cards; up to MAX_IDS ids.
+ */
+export async function mediaByExt(h, env, request, url) {
+  const ids = [...new Set((url.searchParams.get("ids") ?? "").split(",").map((s) => s.trim()).filter((s) => EXT_KEY.test(s)))].slice(0, h.MAX_IDS);
+  if (!ids.length) return h.json({ items: [] }, 200, 60);
+  const rawKind = url.searchParams.get("kind");
+  const type = rawKind ? TYPES[rawKind.toLowerCase()] : null;
+  if (rawKind && !type) return h.json({ error: "bad_kind", allowed: ["anime", "movie", "tv"] }, 400, 60);
+  if (await h.throttled(env, request)) return h.json({ error: "rate_limited" }, 429, 0);
+  const marks = ids.map((_, i) => `?${i + 1}`).join(",");
+  const where = type ? ` AND m.t = ?${ids.length + 1}` : "";
+  const stmt = env.DB.prepare(`SELECT e.k AS via, ${ROW} FROM media_ext e JOIN media m ON m.n = e.n WHERE e.k IN (${marks})${where} LIMIT 200`);
+  const { results } = await (type ? stmt.bind(...ids, type) : stmt.bind(...ids)).all();
+  return h.json({ items: results.map((r) => ({ via: r.via, ...mediaItem(r) })) }, 200, h.BOOK_TTL);
+}
+
 export async function mediaBatch(h, env, request, url) {
   const ids = [...new Set((url.searchParams.get("ids") ?? "").split(",").map((s) => s.trim()).filter((s) => ID.test(s)))].slice(0, h.MAX_IDS);
   if (!ids.length) return h.json({ items: [] }, 200, 60);

@@ -8,7 +8,7 @@
 //   GET /v1/books?ids=1,2,3                  up to 40 books, rows only
 //   GET /covers/{small|large}/{id9}.avif     covers (R2), URL carries ?v=<cv> for cache busting
 //   GET /v1/find?q=&kind=all|anime|movie|tv|book   one search over the three databases or just one; every item carries `kind`
-//   GET /v1/media/search, /v1/media/{id}, /v1/media?ids=, /covers/media/{small|large}/{id}.avif   anime, films, series (src/media.js)
+//   GET /v1/media/search, /v1/media/{id}, /v1/media?ids=, /v1/media/ext?ids=, /covers/media/{small|large}/{id}.avif   anime, films, series (src/media.js)
 //
 // Access: every route but /v1/health needs a key when ACCESS_MODE=enforce (src/access.js, docs/adr/0003-api-access-keys-and-tiers.md).
 // Bindings: BOOKS (R2), DB (D1), LIMITER (optional rate limit), METER (Durable Object KeyMeter: per-key limits and usage).
@@ -17,7 +17,7 @@
 import { authorize } from "./access.js";
 import { handleAuth } from "./auth.js";
 import { norm } from "./norm.js";
-import { MEDIA_COVER_PATH, MEDIA_ID_PATH, find, mediaBatch, mediaById, mediaSearch } from "./media.js";
+import { MEDIA_COVER_PATH, MEDIA_ID_PATH, find, mediaBatch, mediaByExt, mediaById, mediaSearch } from "./media.js";
 
 const COVER_PATH = /^\/covers\/(small|large)\/(\d{9})\.avif$/;
 const INDEX_PATH = /^\/v1\/index\/((?:base|delta)\/[A-Za-z0-9._-]+)$/;
@@ -84,6 +84,8 @@ async function handle(request, env, ctx) {
       res = await mediaSearch(helpers, env, ctx, request, url);
     } else if (MEDIA_ID_PATH.test(path)) {
       res = await mediaById(helpers, env, ctx, request, path.match(MEDIA_ID_PATH)[1]);
+    } else if (path === "/v1/media/ext") {
+      res = await mediaByExt(helpers, env, request, url);
     } else if (path === "/v1/media") {
       res = await mediaBatch(helpers, env, request, url);
     } else if (path === "/v1/search") {

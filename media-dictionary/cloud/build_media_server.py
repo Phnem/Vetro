@@ -28,6 +28,10 @@ MAX_ALT_CHARS = 1500
 MAX_DETAIL_BYTES = 30000
 BASE = {"anime": 0, "movie": 10_000_000, "tv_series": 20_000_000}
 ID_RE = re.compile(r"^[A-Z]\d{8}$")
+# Ids that apps hold for a title (GET /v1/media/ext): the client looks a title up by the id it already has in these databases.
+LOOKUP_KEYS = ("anilist", "mal", "shikimori", "tmdb", "imdb")
+LOOKUP_VALUE = re.compile(r"^[A-Za-z0-9]{1,16}$")
+EXT_ROWS_PER_STATEMENT = 500
 EXT_COLUMNS = {"mal": "mal_id", "shikimori": "shikimori_id", "anilist": "anilist_id", "anidb": "anidb_id", "kitsu": "kitsu_id",
                "tmdb": "tmdb_id", "imdb": "imdb_id", "tvmaze": "tvmaze_id", "tvdb": "tvdb_id", "wikidata": "wikidata_qid"}
 
@@ -114,7 +118,12 @@ def main():
     ap.add_argument("--covers", action="append", required=True, help="name=folder with small/ large/ low_resolution/ (repeat)")
     ap.add_argument("--suffix", default="_next")
     ap.add_argument("--out", required=True)
+    ap.add_argument("--uploaded", help="file with keys already in R2 (covers-uploaded.txt): other covers are not flagged")
     args = ap.parse_args()
+    uploaded = None
+    if args.uploaded:
+        with open(args.uploaded, encoding="utf-8") as fh:
+            uploaded = set(fh.read().split())
     t0 = time.time()
     out = os.path.join(os.path.abspath(args.out), "server")
     os.makedirs(out, exist_ok=True)
@@ -136,6 +145,7 @@ def main():
     print(f"snapshots read in {time.time() - t0:.0f}s: {len(details)} detail cards, {len(covers)} cover records, {len(alts)} titles with alternatives")
 
     rows = []
+    ext_rows = []
     cover_small, cover_large = [], []
     for r in conn.execute("SELECT * FROM media_master ORDER BY media_type, vetro_id"):
         vid, mt = r["vetro_id"], r["media_type"]
@@ -152,6 +162,9 @@ def main():
         cover = None
         have = files.get(vid)
         c = covers.get(vid)
+        # With --uploaded only covers already in the bucket get the "has a cover" flag: the daemons add files faster than they are uploaded.
+        if uploaded is not None and f"covers/media/small/{vid}.avif" not in uploaded:
+            have = None
         if have and have.get("small") and have.get("large"):
             fl |= 1
             cv = int(hashlib.sha256((c["sha256"] if c and c["sha256"] else vid).encode()).hexdigest()[:7], 16)
@@ -163,17 +176,24 @@ def main():
             cover_large.append({"key": f"covers/media/large/{vid}.avif", "file": os.path.abspath(have["large"])})
         ext = {k: r[col] for k, col in EXT_COLUMNS.items() if r[col] not in (None, "")}
         card = detail_card(details.get(vid), cover, ext)
-        rows.append((numeric_key(mt, vid), vid, mt, r["ru_title"], r["en_title"], r["romaji_title"], r["original_title"], alt, x,
+        key = numeric_key(mt, vid)
+        rows.append((key, vid, mt, r["ru_title"], r["en_title"], r["romaji_title"], r["original_title"], alt, x,
                      r["year"], r["media_subtype"], round(r["popularity_score"] or 0, 2), fl, cv, card))
+        for name in LOOKUP_KEYS:
+            value = str(ext.get(name, "")).strip()
+            if value and LOOKUP_VALUE.match(value):
+                ext_rows.append((f"{name}:{value}", key))
     print(f"catalogue rows: {len(rows)}; covers: {len(cover_small)}; built in {time.time() - t0:.0f}s")
 
-    M, F = "media" + args.suffix, "media_fts" + args.suffix
+    M, F, E = "media" + args.suffix, "media_fts" + args.suffix, "media_ext" + args.suffix
     with open(os.path.join(out, "schema.sql"), "w", encoding="utf-8", newline="\n") as f:
         f.write(f"""DROP TABLE IF EXISTS {M};
 CREATE TABLE {M} (
   n INTEGER PRIMARY KEY, id TEXT NOT NULL UNIQUE, t TEXT NOT NULL, ru TEXT, en TEXT, ro TEXT, orig TEXT, alt TEXT, x TEXT,
   y INTEGER, st TEXT, pop REAL, f INTEGER NOT NULL DEFAULT 0, cv INTEGER NOT NULL DEFAULT 0, d TEXT
 );
+DROP TABLE IF EXISTS {E};
+CREATE TABLE {E} (k TEXT NOT NULL, n INTEGER NOT NULL, PRIMARY KEY (k, n)) WITHOUT ROWID;
 CREATE TABLE IF NOT EXISTS meta (k TEXT PRIMARY KEY, v TEXT);
 """)
     names = []
@@ -183,6 +203,17 @@ CREATE TABLE IF NOT EXISTS meta (k TEXT PRIMARY KEY, v TEXT);
         with open(os.path.join(out, name), "w", encoding="utf-8", newline="\n") as f:
             for row in rows[start:start + CHUNK]:
                 f.write(f"INSERT OR REPLACE INTO {M} VALUES ({','.join(sql(v) for v in row)});\n")
+    # Lookup ids go after the main data files (refresh-data.ps1 loads data-*.sql in name order: "data-0*" < "data-ext-*").
+    chunk_rows = CHUNK
+    for n, start in enumerate(range(0, len(ext_rows), chunk_rows), 1):
+        name = f"data-ext-{n:03d}.sql"
+        names.append(name)
+        with open(os.path.join(out, name), "w", encoding="utf-8", newline="\n") as f:
+            part = ext_rows[start:start + chunk_rows]
+            for i in range(0, len(part), EXT_ROWS_PER_STATEMENT):
+                values = ",".join(f"({sql(k)},{n_})" for k, n_ in part[i:i + EXT_ROWS_PER_STATEMENT])
+                f.write(f"INSERT OR IGNORE INTO {E} VALUES {values};\n")
+    print(f"lookup ids: {len(ext_rows)} rows")
     with open(os.path.join(out, "post-import.sql"), "w", encoding="utf-8", newline="\n") as f:
         f.write(f"DROP TABLE IF EXISTS {F};\n")
         f.write(f"CREATE VIRTUAL TABLE {F} USING fts5(ru, en, ro, orig, alt, x, tokenize='unicode61 remove_diacritics 2', prefix='2 3');\n")
@@ -194,8 +225,8 @@ CREATE TABLE IF NOT EXISTS meta (k TEXT PRIMARY KEY, v TEXT);
         f.write(f"INSERT OR REPLACE INTO meta VALUES ('media_titles', '{len(rows)}');\n")
         f.write("INSERT OR REPLACE INTO meta VALUES ('media_built', datetime('now'));\n")
     with open(os.path.join(out, "swap.sql"), "w", encoding="utf-8", newline="\n") as f:
-        f.write("DROP TABLE IF EXISTS media_fts;\nDROP TABLE IF EXISTS media;\n")
-        f.write(f"ALTER TABLE {M} RENAME TO media;\nALTER TABLE {F} RENAME TO media_fts;\n")
+        f.write("DROP TABLE IF EXISTS media_fts;\nDROP TABLE IF EXISTS media;\nDROP TABLE IF EXISTS media_ext;\n")
+        f.write(f"ALTER TABLE {M} RENAME TO media;\nALTER TABLE {F} RENAME TO media_fts;\nALTER TABLE {E} RENAME TO media_ext;\n")
     for size, items in (("small", cover_small), ("large", cover_large)):
         with open(os.path.join(out, f"covers-{size}.json"), "w", encoding="utf-8") as f:
             json.dump(items, f)
