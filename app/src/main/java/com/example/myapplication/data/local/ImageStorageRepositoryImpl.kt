@@ -18,6 +18,8 @@ class ImageStorageRepositoryImpl(
     private val context: Context,
     private val storagePaths: VetroStoragePaths,
     private val httpClient: HttpClient,
+    /** Если сценарий включён, картинка-заглушка (Shikimori «404 not found») по ссылке не сохраняется. */
+    private val stockCover: com.example.myapplication.micromlintegration.StockCoverDetector? = null,
 ) : ImageStorageRepository {
 
     private fun getImgDir(): File = storagePaths.collectionDir
@@ -73,7 +75,13 @@ class ImageStorageRepositoryImpl(
             
             val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
                 ?: error("Failed to decode image from URL: $url")
-                
+
+            // Источники отдают «картинку-заглушку» вместо обложки: её нельзя сохранять как обложку, пусть вызывающий возьмёт другой источник.
+            if (stockCover?.isStock(bitmap) == true) {
+                bitmap.recycle()
+                throw com.example.myapplication.micromlintegration.StockCoverException()
+            }
+
             val compressed = compressAndDownscale(bitmap)
             
             File(getImgDir(), name).writeBytes(compressed)

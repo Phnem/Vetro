@@ -65,7 +65,7 @@ private fun PackSwitchRow(pack: MicroMlEngine.Pack, engine: MicroMlEngine, ru: B
             MicroMlEngine.Pack.IDENTITY ->
                 if (ru) "Тот же тайтл или нет, порядок вариантов в поиске" else "Same title or not, the order of search candidates"
             MicroMlEngine.Pack.CATALOG ->
-                if (ru) "Имена файлов и папок аудиокниг, язык названия, жанры" else "Audiobook file and folder names, title language, genres"
+                if (ru) "Имена файлов и папок аудиокниг, язык названия, жанры и заглушки вместо обложек" else "Audiobook file and folder names, title language, genres and stock images in place of covers"
             MicroMlEngine.Pack.EXPERIENCE ->
                 if (ru) "Связи жанров и порядок рекомендаций, который учится на ваших оценках" else "Genre links and a recommendation order that learns from your ratings"
         },

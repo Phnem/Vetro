@@ -191,4 +191,21 @@ object MicroMlBridge {
         }
         engine.saveTaste(ranker)
     }
+
+    /**
+     * Стоковая картинка вместо обложки (у Shikimori — девочка с поднятой рукой и «404 not found»)? true только если сценарий
+     * включён и модель уверена; в остальном (выключено, нет модели, картинка мала, любой сбой) — false, и обложка остаётся как есть.
+     * В теневом режиме результат попадает только в счётчики.
+     */
+    suspend fun isStockCover(engine: MicroMlEngine?, argb: IntArray, width: Int, height: Int): Boolean {
+        if (engine == null) return false
+        val model = engine.coverPlaceholder() ?: return false
+        return engine.guarded(MicroMlEngine.Pack.CATALOG) {
+            val score = model.score(argb, width, height) ?: return@guarded false
+            val flagged = model.isPlaceholder(score)
+            engine.observe("catalog:cover_checked")
+            if (flagged) engine.observe("catalog:cover_placeholder_seen")
+            flagged && engine.isActive(MicroMlEngine.Feature.CATALOG_COVER_PLACEHOLDER)
+        } ?: false
+    }
 }

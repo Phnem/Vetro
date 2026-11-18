@@ -47,8 +47,10 @@ val databaseModule = module {
             context = androidContext(),
             storagePaths = get(),
             httpClient = get(),
+            stockCover = get(),
         )
     }
+    single { com.example.myapplication.micromlintegration.StockCoverDetector(get<com.example.myapplication.microml.MicroMlEngine>()) }
     single<IdGenerator> { RealIdGenerator() }
     single { GetAnimeForEditUseCase(get()) }
     single { SaveAnimeUseCase(get(), get(), get(), get()) }

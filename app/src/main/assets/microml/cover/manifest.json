@@ -1,0 +1,21 @@
+{
+ "schema": 1,
+ "spec": "cover-features-v1",
+ "version": "cover-2026-11-18",
+ "file": "cover_placeholder.vmlf",
+ "bytes": 10466,
+ "sha256": "fe57e942588d94ce7418f8445b729fee0260a96f87fd6b2f440b48026552ce6b",
+ "threshold": 0.97,
+ "features": 307,
+ "metrics": {
+  "real_variants": 8,
+  "real_variants_found": 8,
+  "augmented_variants": 400,
+  "augmented_found": 400,
+  "real_covers": 3482,
+  "real_covers_flagged": 0,
+  "max_probability_on_real_covers": 0.02530638743191299,
+  "min_probability_on_placeholders": 0.9996657456170794
+ },
+ "status": "SHADOW"
+}

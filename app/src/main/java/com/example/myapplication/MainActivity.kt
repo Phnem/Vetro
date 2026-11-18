@@ -223,8 +223,13 @@ class MainActivity : FragmentActivity() {
                 // Первая привязка коллекции к каталогу Vetro: стартует, когда сплэш ушёл и вход выполнен; экран закрывает приложение, пока идёт.
                 val vetroGate: com.example.myapplication.mediacatalog.VetroLinkGate = org.koin.compose.koinInject()
                 val vetroState by vetroGate.state.collectAsStateWithLifecycle()
+                val stockCoverRunner: com.example.myapplication.mediacatalog.StockCoverRepairRunner = org.koin.compose.koinInject()
                 LaunchedEffect(splashVisible, destinationId) {
-                    if (!splashVisible && navEntry?.destination.isDeepLinkReady()) vetroGate.startIfNeeded()
+                    if (!splashVisible && navEntry?.destination.isDeepLinkReady()) {
+                        vetroGate.startIfNeeded()
+                        // Заглушки вместо обложек: ждёт конца первой привязки и включённого сценария «умных моделей».
+                        stockCoverRunner.start()
+                    }
                 }
                 BackHandler(enabled = vetroState.showScreen) { }
 

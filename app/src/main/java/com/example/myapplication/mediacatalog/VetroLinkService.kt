@@ -28,6 +28,15 @@ interface VetroLibrary {
 
     /** Проставляет обложку, только если у тайтла её всё ещё нет (за время загрузки его могли отредактировать). */
     suspend fun setCover(animeId: String, fileName: String): Boolean
+
+    /** Путь к файлу обложки на устройстве; null, если обложки нет или файл не найден. */
+    fun coverFile(anime: Anime): String? = null
+
+    /** Подменяет обложку новой, только если у тайтла всё ещё старая [oldName]; старый файл удаляется. */
+    suspend fun replaceCover(animeId: String, oldName: String, newName: String): Boolean = false
+
+    /** Убирает обложку, которая оказалась заглушкой, только если она всё ещё [oldName]: тайтл без обложки попадает в обычный поиск обложки. */
+    suspend fun dropCover(animeId: String, oldName: String): Boolean = false
 }
 
 class AnimeVetroLibrary(
@@ -42,6 +51,24 @@ class AnimeVetroLibrary(
         val current = animeData.getAnimeById(animeId) ?: return false
         if (hasCover(current)) return false
         animeData.updateAnime(current.copy(imageFileName = fileName))
+        return true
+    }
+
+    override fun coverFile(anime: Anime): String? = anime.imageFileName?.let { images.getImageFilePath(it) }
+
+    override suspend fun replaceCover(animeId: String, oldName: String, newName: String): Boolean {
+        val current = animeData.getAnimeById(animeId) ?: return false
+        if (current.imageFileName != oldName) return false
+        animeData.updateAnime(current.copy(imageFileName = newName))
+        images.deleteImage(oldName)
+        return true
+    }
+
+    override suspend fun dropCover(animeId: String, oldName: String): Boolean {
+        val current = animeData.getAnimeById(animeId) ?: return false
+        if (current.imageFileName != oldName) return false
+        animeData.updateAnime(current.copy(imageFileName = null))
+        images.deleteImage(oldName)
         return true
     }
 }
@@ -175,6 +202,28 @@ class VetroLinkService(
             }
         }
         store.putAll(links)
+    }
+
+    /**
+     * Запись каталога для одного тайтла: по id других сервисов, затем по названию. Находку запоминает.
+     * success(null) — каталог ответил, что такого тайтла в нём нет; failure — каталог недоступен (отвечать «нет» нельзя).
+     */
+    suspend fun resolve(anime: Anime): Result<VetroHit?> = coroutineScope {
+        if (kindOf(anime) == null) return@coroutineScope Result.success(null)
+        val byIds = matchByIds(listOf(anime))
+        byIds.found[anime.id]?.let { match ->
+            store.putAll(listOf(VetroLink(anime.id, match.hit.id, now(), match.key)))
+            return@coroutineScope Result.success(match.hit)
+        }
+        if (byIds.unavailable) return@coroutineScope Result.failure(IllegalStateException("catalogue unavailable"))
+        when (val outcome = matchByTitle(anime, now() + TITLE_BUDGET_MS)) {
+            is TitleOutcome.Found -> {
+                store.putAll(listOf(VetroLink(anime.id, outcome.hit.id, now(), "title")))
+                Result.success(outcome.hit)
+            }
+            TitleOutcome.NotFound -> Result.success(null)
+            TitleOutcome.Failed -> Result.failure(IllegalStateException("catalogue unavailable"))
+        }
     }
 
     // ---- По id других сервисов ------------------------------------------------------------------------------------

@@ -117,25 +117,35 @@ val audiobookModule = module {
     }
     single<com.example.myapplication.data.local.VetroLinks> { com.example.myapplication.data.local.VetroLinkStore(get()) }
     single<com.example.myapplication.mediacatalog.VetroLibrary> { com.example.myapplication.mediacatalog.AnimeVetroLibrary(get(), get()) }
+    // Обложка каталога приходит байтами (AVIF): во временный файл и дальше обычным путём сохранения обложки тайтла.
+    single { com.example.myapplication.mediacatalog.CoverBytesStore(androidContext().cacheDir, get()) }
     single {
-        val cacheDir = androidContext().cacheDir
-        val images = get<com.example.myapplication.data.repository.ImageStorageRepository>()
+        val covers = get<com.example.myapplication.mediacatalog.CoverBytesStore>()
         com.example.myapplication.mediacatalog.VetroLinkService(
             catalog = get(),
             store = get(),
             library = get(),
-            // Обложка каталога приходит байтами (AVIF): во временный файл и дальше обычным путём сохранения обложки тайтла.
-            storeCover = { bytes, animeId ->
-                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                    val tmp = File.createTempFile("vetro_cover_", ".avif", cacheDir)
-                    try {
-                        tmp.writeBytes(bytes)
-                        images.saveImage(android.net.Uri.fromFile(tmp).toString(), animeId).getOrNull()
-                    } finally {
-                        tmp.delete()
-                    }
-                }
-            },
+            storeCover = { bytes, animeId -> covers.save(bytes, animeId) },
+        )
+    }
+    // Заглушки вместо обложек (Shikimori «404 not found») в уже сохранённой коллекции: заменяются обложкой каталога или убираются.
+    single<com.example.myapplication.mediacatalog.CheckedCovers> { com.example.myapplication.mediacatalog.PrefsCheckedCovers(androidContext()) }
+    single {
+        val covers = get<com.example.myapplication.mediacatalog.CoverBytesStore>()
+        val detector = get<com.example.myapplication.micromlintegration.StockCoverDetector>()
+        com.example.myapplication.mediacatalog.StockCoverRepair(
+            library = get(),
+            links = get(),
+            catalog = get(),
+            linker = get(),
+            isStockFile = { path -> detector.isStockFile(path) },
+            storeCover = { bytes, animeId -> covers.save(bytes, animeId) },
+            checked = get(),
+        )
+    }
+    single {
+        com.example.myapplication.mediacatalog.StockCoverRepairRunner(
+            repair = get(), detector = get(), engine = get(), gate = get(), scope = get<com.example.myapplication.AppScope>(),
         )
     }
     single { com.example.myapplication.domain.recommendations.VetroIdentityFilter(get(), get(), get()) }

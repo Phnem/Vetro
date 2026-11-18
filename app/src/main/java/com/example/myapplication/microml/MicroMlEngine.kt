@@ -30,9 +30,11 @@ class MicroMlEngine(context: Context) {
     enum class Pack(val key: String) { IDENTITY("identity"), CATALOG("catalog"), EXPERIENCE("experience") }
 
     /** Сценарии, в которых модели разрешено влиять на результат. Пока флаг выключен — только наблюдение. */
-    enum class Feature(val pack: Pack, val key: String) {
+    enum class Feature(val pack: Pack, val key: String, val followsPack: Boolean = false) {
         IDENTITY_SEARCH_RERANK(Pack.IDENTITY, "identity.search_rerank"),
         CATALOG_GENRE_FALLBACK(Pack.CATALOG, "catalog.genre_fallback"),
+        /** Заглушка вместо обложки (Shikimori) признаётся отсутствующей обложкой. Новый сценарий: у кого пакет уже включён, он включён сразу. */
+        CATALOG_COVER_PLACEHOLDER(Pack.CATALOG, "catalog.cover_placeholder", followsPack = true),
         EXPERIENCE_GENRE_SMOOTHING(Pack.EXPERIENCE, "experience.genre_smoothing"),
         EXPERIENCE_TASTE_RANK(Pack.EXPERIENCE, "experience.taste_rank"),
     }
@@ -84,7 +86,8 @@ class MicroMlEngine(context: Context) {
     }
 
     fun isActive(feature: Feature): Boolean = isUsable(feature.pack) && isRequested(feature)
-    fun isRequested(feature: Feature): Boolean = prefs.getBoolean("feature.${feature.key}", false)
+    fun isRequested(feature: Feature): Boolean =
+        prefs.getBoolean("feature.${feature.key}", feature.followsPack && isPackEnabled(feature.pack))
     fun setActive(feature: Feature, active: Boolean) { prefs.edit().putBoolean("feature.${feature.key}", active).apply() }
 
     private fun isUsable(pack: Pack): Boolean = isPackEnabled(pack) && (failures[root(pack)]?.get() ?: 0) < MAX_FAILURES
@@ -123,6 +126,25 @@ class MicroMlEngine(context: Context) {
         coreFor(root)?.let { MicroPacks.loadCatalog(source, it, root) }
     }
     suspend fun experience(): ExperienceModels? = load(Pack.EXPERIENCE) { root -> ExperienceModels.load(source, root) }
+
+    /**
+     * Детектор заглушек вместо обложек. Часть пакета Catalog (тот же выключатель и те же правила), но лежит в отслеживаемых
+     * ассетах приложения (`microml/cover`), а не в наборе `.cache`, и не зависит от энкодера названий.
+     */
+    suspend fun coverPlaceholder(): CoverPlaceholderModel? {
+        if (!isUsable(Pack.CATALOG)) return null
+        return withContext(Dispatchers.IO) {
+            mutex.withLock {
+                if (!isUsable(Pack.CATALOG)) return@withLock null
+                val cached = loaded[COVER_ROOT]
+                if (cached === MISSING) return@withLock null
+                if (cached is CoverPlaceholderModel) return@withLock cached
+                val model = attempt { CoverPlaceholderModel.load(source, COVER_ROOT) }
+                loaded[COVER_ROOT] = model ?: MISSING
+                model
+            }
+        }
+    }
 
     private fun <T> attempt(block: () -> T): T? = try {
         block()
@@ -216,6 +238,7 @@ class MicroMlEngine(context: Context) {
 
     companion object {
         const val MAX_FAILURES = 3
+        private const val COVER_ROOT = "microml/cover"
         private val MISSING = Any()
     }
 }
