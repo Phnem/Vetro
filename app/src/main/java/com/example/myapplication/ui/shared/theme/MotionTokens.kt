@@ -205,6 +205,20 @@ object MotionTokens {
     /** Максимальный радиус углов плашки, dp (--island-radius 32). */
     val IslandRadius = 32.dp
 
+    // ---- Springy input (designbookmark «Springy input», shared/tokens.css и input.js) ------
+
+    /** Каретка едет к новой позиции и вытягивается по скорости (--input-caret 700/32, ζ≈0.60). */
+    fun <T> inputCaret(reduced: Boolean = false): SpringSpec<T> = referenceSpring(700f, 32f, reduced)
+
+    /** Морфинг рамки поля при фокусе (--input-morph 300/20, ζ≈0.58). */
+    fun <T> inputMorph(reduced: Boolean = false): SpringSpec<T> = referenceSpring(300f, 20f, reduced)
+
+    /** Всплытие подписи над текстом (input.js: S(0, 420, 26), ζ≈0.63). */
+    fun <T> inputLabel(reduced: Boolean = false): SpringSpec<T> = referenceSpring(420f, 26f, reduced)
+
+    /** Встряска поля при ошибке (input.js: S(0, 700, 10), ζ≈0.19): несколько быстрых качаний. */
+    fun <T> inputShake(reduced: Boolean = false): SpringSpec<T> = referenceSpring(700f, 10f, reduced)
+
     private fun <T> referenceSpring(stiffness: Float, damping: Float, reduced: Boolean): SpringSpec<T> =
         spring(dampingRatio = if (reduced) 1f else damping / (2f * sqrt(stiffness)), stiffness = stiffness)
 
