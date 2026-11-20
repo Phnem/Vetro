@@ -130,9 +130,11 @@ data class MiniNotifItem(
 
 object MiniNotif {
 
-    /** Dev-флаг: false — [show] отдаёт системный Toast. Выставляется из MainActivity по настройке. */
-    @Volatile
-    var enabled: Boolean = false
+    /**
+     * Dev-флаг: false — [show] отдаёт системный Toast. Выставляется из MainActivity по настройке.
+     * Состояние Compose, чтобы экраны (например, главная с пилюлей синхронизации) реагировали на смену.
+     */
+    var enabled: Boolean by mutableStateOf(false)
 
     private val items = Channel<MiniNotifItem>(capacity = 24, onBufferOverflow = BufferOverflow.DROP_OLDEST)
     private val dismisses = Channel<Unit>(Channel.CONFLATED)
@@ -261,12 +263,13 @@ private object IslandShape : Shape {
  * Хост плашек: один на приложение, кладётся поверх всего содержимого (последним в корневом Box).
  * Касания мимо плашки не перехватывает.
  *
- * @param bottomClearance расстояние от нижнего края (над жестовой панелью): плашка стоит над доком.
+ * @param bottomClearance расстояние от жестовой панели вверх: 84 dp выше плавающего дока и нижних
+ *   кнопок (галочка сохранения, мини-док Details), чтобы плашка не наезжала на них.
  */
 @Composable
 fun MiniNotifHost(
     modifier: Modifier = Modifier,
-    bottomClearance: Dp = 28.dp,
+    bottomClearance: Dp = 84.dp,
 ) {
     val reduced by rememberUpdatedState(rememberReducedMotion())
     val density = LocalDensity.current

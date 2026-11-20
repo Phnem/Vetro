@@ -382,10 +382,11 @@ fun PillTextFieldWithCopy(
                             val cm =
                                 ctx.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                             cm.setPrimaryClip(ClipData.newPlainText("", value))
-                            @Suppress("DEPRECATION")
-                            android.widget.Toast
-                                .makeText(ctx, "Copied!", android.widget.Toast.LENGTH_SHORT)
-                                .show()
+                            com.example.myapplication.ui.shared.mininotif.MiniNotif.show(
+                                ctx,
+                                "Copied!",
+                                com.example.myapplication.ui.shared.mininotif.MiniNotifKind.Success,
+                            )
                         }
                 )
             }

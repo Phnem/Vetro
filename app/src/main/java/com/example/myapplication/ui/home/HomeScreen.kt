@@ -278,6 +278,31 @@ fun HomeScreen(
             !cloudSyncPillDismissed &&
             (isSupabaseSyncing || isCloudImageRestoring)
     val dismissCloudSyncPill = { cloudSyncPillDismissed = true }
+
+    // «Мини-уведомления»: ход синхронизации идёт плашкой снизу вместо верхней пилюли «Sync».
+    val miniNotifOn = com.example.myapplication.ui.shared.mininotif.MiniNotif.enabled
+    val syncNotifStrings = remember(currentLanguage) {
+        com.example.myapplication.ui.shared.mininotif.SyncMiniNotifStrings(currentLanguage == AppLanguage.RU)
+    }
+    val syncActive = isSupabaseSyncing || isCloudImageRestoring
+    var wasSyncActive by remember { mutableStateOf(false) }
+    LaunchedEffect(syncActive, miniNotifOn) {
+        if (miniNotifOn && uiState.isListLoaded) {
+            if (syncActive) {
+                com.example.myapplication.ui.shared.mininotif.MiniNotif.status(
+                    syncNotifStrings.syncing,
+                    com.example.myapplication.ui.shared.mininotif.MiniNotifKind.Progress,
+                    holdMillis = 8000L,
+                )
+            } else if (wasSyncActive) {
+                com.example.myapplication.ui.shared.mininotif.MiniNotif.status(
+                    syncNotifStrings.done,
+                    com.example.myapplication.ui.shared.mininotif.MiniNotifKind.Success,
+                )
+            }
+        }
+        wasSyncActive = syncActive
+    }
     val kbd = LocalSoftwareKeyboardController.current
     val focusManager = LocalFocusManager.current
     val view = LocalView.current
@@ -1062,7 +1087,7 @@ fun HomeScreen(
                         }
                     }
                     CloudSyncPill(
-                        visible = showCloudSyncPill,
+                        visible = showCloudSyncPill && !miniNotifOn,
                         label = cloudSyncPillStrings.label,
                         modifier = Modifier
                             .align(Alignment.TopCenter)

@@ -191,27 +191,6 @@ fun NotificationSyncOverlay(
     val view = LocalView.current
     val scope = rememberCoroutineScope()
 
-    // «Мини-уведомления»: ход синхронизации плашкой. Панель открывает сам пользователь, поэтому
-    // автосинхронизации в фоне плашек не дают; при выключенном флаге ничего не происходит.
-    val syncNotifStrings = remember(currentLanguage) {
-        com.example.myapplication.ui.shared.mininotif.SyncMiniNotifStrings(currentLanguage == AppLanguage.RU)
-    }
-    var wasSyncing by remember { mutableStateOf(isSyncing) }
-    LaunchedEffect(isSyncing) {
-        if (isSyncing) {
-            com.example.myapplication.ui.shared.mininotif.MiniNotif.status(
-                syncNotifStrings.syncing,
-                com.example.myapplication.ui.shared.mininotif.MiniNotifKind.Progress,
-                holdMillis = 8000L,
-            )
-        } else if (wasSyncing) {
-            com.example.myapplication.ui.shared.mininotif.MiniNotif.status(
-                syncNotifStrings.done,
-                com.example.myapplication.ui.shared.mininotif.MiniNotifKind.Success,
-            )
-        }
-        wasSyncing = isSyncing
-    }
     var showLogoutDialog by remember { mutableStateOf(false) }
     var showMalPlaceholderDialog by remember { mutableStateOf(false) }
     val hostActivity = LocalActivity.current ?: context.findActivity()
