@@ -173,6 +173,23 @@ object MotionTokens {
     /** Когда содержимое начинает проявляться относительно старта оболочки (§5.3, кадр 50–100 мс). */
     const val ContentRevealDelayMillis: Int = 60
 
+    // ---- Поле с пределом длины (designbookmark «Letter Limit», shared/tokens.css) -------
+    // Референс задаёт пружину парой «жёсткость k, затухание c» при массе 1 и считает её методом
+    // Эйлера; у Compose та же пружина задаётся как stiffness = k, dampingRatio = c / (2·√k).
+    // При «Отключить анимации» референс делает затухание критическим — [reduced] делает то же.
+
+    /** Толчок счётчика и кнопки (--spring-pop 520/16, ζ≈0.35): заметный перелёт. */
+    fun <T> limitPop(reduced: Boolean = false): SpringSpec<T> = referenceSpring(520f, 16f, reduced)
+
+    /** Заполнение кольца (--spring-settle 280/22, ζ≈0.66): один небольшой перелёт. */
+    fun <T> limitSettle(reduced: Boolean = false): SpringSpec<T> = referenceSpring(280f, 22f, reduced)
+
+    /** «Мотание головой» на отклонённой букве (700/12, ζ≈0.23): несколько быстрых качаний. */
+    fun <T> limitShake(reduced: Boolean = false): SpringSpec<T> = referenceSpring(700f, 12f, reduced)
+
+    private fun <T> referenceSpring(stiffness: Float, damping: Float, reduced: Boolean): SpringSpec<T> =
+        spring(dampingRatio = if (reduced) 1f else damping / (2f * sqrt(stiffness)), stiffness = stiffness)
+
     /** Жёсткость пружины по периоду спеки: `k = (2π / T)²` при массе 1. */
     fun stiffnessForPeriod(periodMillis: Int): Float {
         val omega = (2.0 * Math.PI / (periodMillis / 1000.0))
