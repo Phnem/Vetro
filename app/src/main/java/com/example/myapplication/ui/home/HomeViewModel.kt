@@ -303,6 +303,9 @@ class HomeViewModel(
     /** Тайтлы секретной папки: из ленты, статистики и стопки новых серий их не видно. */
     private val secretIds = SecretFolderStore(settingsDataStore).ids
 
+    /** Тайтлы с выключенными уведомлениями: их новые серии не попадают в стопку и центр. */
+    private val mutedTitles = com.example.myapplication.data.local.MutedTitlesStore(settingsDataStore)
+
     val animeListFlow: StateFlow<kotlinx.collections.immutable.ImmutableList<Anime>> = repository.observeAnimeList(
         searchQuery = _uiState.map { it.searchQuery },
         sortOption = _uiState.map { it.sortOption },
@@ -372,8 +375,10 @@ class HomeViewModel(
 
     init {
         viewModelScope.launch {
-            combine(localDataSource.observeUpdates(), secretIds) { list, hidden ->
-                list.filterNot { it.animeId in hidden }
+            // Стопка, центр и счётчик колокольчика берут записи отсюда: у тайтлов с выключенными
+            // уведомлениями (колокольчик на Details) они не показываются, даже если запись уже лежала в ленте.
+            combine(localDataSource.observeUpdates(), secretIds, mutedTitles.ids) { list, hidden, muted ->
+                list.filterNot { it.animeId in hidden || it.animeId in muted }
             }.collect { list ->
                 _uiState.update { it.copy(updates = list.toImmutableList()) }
             }

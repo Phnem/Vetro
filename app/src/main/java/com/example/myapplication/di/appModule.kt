@@ -139,8 +139,10 @@ val appModule = module {
             localDataSource = get(),
             observations = get(),
             availabilityGate = get(),
+            mutedTitles = { get<com.example.myapplication.data.local.MutedTitlesStore>().current() },
         )
     }
+    single { com.example.myapplication.data.local.MutedTitlesStore(get(named("settings"))) }
     single { com.example.myapplication.data.local.SeriesSeasonsStore(androidContext()) }
     single { com.example.myapplication.media.prefs.ContentPlaybackPreferences(androidContext()) }
     single {
@@ -150,7 +152,15 @@ val appModule = module {
             localDataSource = get(),
         )
     }
-    single { SeriesEpisodeCheckUseCase(repository = get(), localDataSource = get(), seasonsStore = get(), tvMaze = get()) }
+    single {
+        SeriesEpisodeCheckUseCase(
+            repository = get(),
+            localDataSource = get(),
+            seasonsStore = get(),
+            tvMaze = get(),
+            mutedTitles = { get<com.example.myapplication.data.local.MutedTitlesStore>().current() },
+        )
+    }
     single {
         EpisodeUpdateCheckCoordinator(
             animeCheck = get(),

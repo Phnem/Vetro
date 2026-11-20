@@ -56,7 +56,9 @@ class AnimeUpdateWorker(
             // открыто — обновления уже показываются in-app стопкой, дублировать шторкой
             // не нужно (иначе уведомление «мигает» при каждом взаимодействии).
             // Тайтлы секретной папки пушей не шлют: уведомление выдало бы название на экране блокировки.
-            val hidden = SecretFolderStore(settingsDataStore).ids.first()
+            // Тайтлы с выключенным колокольчиком пуша тоже не получают (страховка: проверка серий их уже отсеяла).
+            val muted = com.example.myapplication.data.local.MutedTitlesStore(settingsDataStore).current()
+            val hidden = SecretFolderStore(settingsDataStore).ids.first() + muted
             val visibleUpdates = newlyDetected.filterNot { it.animeId in hidden }
             if (visibleUpdates.isNotEmpty() && !isAppInForeground()) {
                 // Подписи «S3 E5» — после догона расклада выше, чтобы сезон был актуальным.

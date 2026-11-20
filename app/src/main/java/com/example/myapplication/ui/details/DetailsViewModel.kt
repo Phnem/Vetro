@@ -88,6 +88,25 @@ class DetailsViewModel(
         .distinctUntilChanged()
         .stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
+    private val mutedStore = com.example.myapplication.data.local.MutedTitlesStore(settingsDataStore)
+
+    /** Включены ли уведомления этого тайтла (колокольчик на Details); выключенные ни пушей, ни плашек не дают. */
+    val notificationsOn: StateFlow<Boolean> = mutedStore.ids
+        .map { animeId !in it }
+        .distinctUntilChanged()
+        .stateIn(viewModelScope, SharingStarted.Eagerly, true)
+
+    /** Нажатие колокольчика: выключить уведомления тайтла или включить их обратно. */
+    fun setNotificationsOn(on: Boolean) {
+        viewModelScope.launch {
+            runCatching { mutedStore.setMuted(animeId, !on) }
+                .onFailure {
+                    if (it is kotlinx.coroutines.CancellationException) throw it
+                    say("Не удалось сохранить", "Couldn't save")
+                }
+        }
+    }
+
     /** Пункт меню «⋯»: положить тайтл в секретную папку или вернуть его в ленту. */
     fun toggleSecret() {
         val toSecret = !isSecret.value

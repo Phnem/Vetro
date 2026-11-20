@@ -16,6 +16,7 @@ internal suspend fun publishEpisodeUpdates(
     getExisting: () -> List<AnimeUpdate>,
     applyEpisodes: (suspend (AnimeUpdate) -> Unit)? = null,
     getAcknowledged: () -> Map<String, Int> = { emptyMap() },
+    silenced: Set<String> = emptySet(),
     setUpdates: suspend (List<AnimeUpdate>) -> Unit,
 ): List<AnimeUpdate> {
     val existing = getExisting()
@@ -32,10 +33,13 @@ internal suspend fun publishEpisodeUpdates(
                 .onFailure { Log.w(TAG, "Auto-apply failed for ${update.animeId}: ${it.message}") }
         }
     }
-    val freshIds = fresh.mapTo(HashSet()) { it.animeId }
+    // Тайтлы с выключенными уведомлениями: счётчик выше уже обновлён (чтобы после включения не пришла
+    // лавина за пропущенное), а в ленту, пуши и центр они не попадают.
+    val audible = if (silenced.isEmpty()) fresh else fresh.filterNot { it.animeId in silenced }
+    val freshIds = audible.mapTo(HashSet()) { it.animeId }
     val kept = existing.filter { it.animeId !in freshIds }
-    setUpdates((fresh + kept).take(MAX_UPDATE_ROWS))
-    return fresh
+    setUpdates((audible + kept).take(MAX_UPDATE_ROWS))
+    return audible
 }
 
 private const val TAG = "EpisodeUpdateFeed"

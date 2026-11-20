@@ -40,6 +40,8 @@ class BatchEpisodeCheckUseCase(
     private val observations: ReleaseObservationStore? = null,
     /** «Порог доступности»: придерживает серии, которые ещё нельзя нормально смотреть; null — выключен. */
     private val availabilityGate: com.example.myapplication.updates.availability.UpdateAvailabilityGate? = null,
+    /** Тайтлы с выключенными уведомлениями (см. MutedTitlesStore): до порога доступности и ленты не доходят. */
+    private val mutedTitles: suspend () -> Set<String> = { emptySet() },
 ) {
 
     /**
@@ -73,11 +75,14 @@ class BatchEpisodeCheckUseCase(
 
         // Придержанные порогом доступности серии не публикуются: ни в ленту, ни в пуш. Следующая проверка
         // найдёт их снова (их никто не подтвердил) и спросит фильтр ещё раз, не чаще раза в шесть часов.
+        // Выключенные колокольчиком тайтлы отсеиваются раньше порога: ни пуша, ни аудита озвучек ради них.
+        val muted = runCatching { mutedTitles() }.getOrDefault(emptySet())
+        val audible = if (muted.isEmpty()) detected.updates else detected.updates.filterNot { it.animeId in muted }
         val publishable = availabilityGate?.let { gate ->
-            runCatching { gate.filter(detected.updates) }
+            runCatching { gate.filter(audible) }
                 .onFailure { Log.w(TAG, "availability gate failed: ${it.message}") }
-                .getOrDefault(detected.updates)
-        } ?: detected.updates
+                .getOrDefault(audible)
+        } ?: audible
 
         return publishEpisodeUpdates(
             detected = publishable,

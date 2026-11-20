@@ -23,6 +23,8 @@ class SeriesEpisodeCheckUseCase internal constructor(
     private val store: SeriesEpisodeStore,
     private val source: SeriesEpisodeSource,
     private val clock: Clock,
+    /** Тайтлы с выключенными уведомлениями (см. MutedTitlesStore): счётчик идёт, ленты и пуша нет. */
+    private val mutedTitles: suspend () -> Set<String> = { emptySet() },
 ) {
     constructor(
         repository: MovieSeriesRepository,
@@ -30,10 +32,12 @@ class SeriesEpisodeCheckUseCase internal constructor(
         seasonsStore: SeriesSeasonsStore,
         tvMaze: TvMazeClient? = null,
         clock: Clock = Clock.systemUTC(),
+        mutedTitles: suspend () -> Set<String> = { emptySet() },
     ) : this(
         store = LocalSeriesEpisodeStore(localDataSource, seasonsStore),
         source = MovieSeriesEpisodeSource(repository, tvMaze),
         clock = clock,
+        mutedTitles = mutedTitles,
     )
 
     /**
@@ -122,6 +126,7 @@ class SeriesEpisodeCheckUseCase internal constructor(
             detected = detected,
             getExisting = store::getUpdates,
             applyEpisodes = { update -> store.applyEpisodes(update.animeId, update.newEpisodes) },
+            silenced = runCatching { mutedTitles() }.getOrDefault(emptySet()),
             setUpdates = store::setUpdates,
         )
     }
