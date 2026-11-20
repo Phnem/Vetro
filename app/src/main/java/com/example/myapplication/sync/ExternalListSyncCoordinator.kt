@@ -1135,9 +1135,8 @@ class ExternalListSyncCoordinator(
         runCatching { this?.jsonPrimitive?.content }.getOrNull()
 
     private fun toastMain(text: String) {
-        android.os.Handler(android.os.Looper.getMainLooper()).post {
-            Toast.makeText(appContext, text, Toast.LENGTH_LONG).show()
-        }
+        // Пока включены «Мини-уведомления» и приложение на экране, это плашка; иначе (и в фоне) обычный Toast.
+        com.example.myapplication.ui.shared.mininotif.MiniNotif.show(appContext, text, long = true)
     }
 
     private fun newPkceVerifier(): String {

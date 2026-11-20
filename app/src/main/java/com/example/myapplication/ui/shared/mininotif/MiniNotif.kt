@@ -69,6 +69,9 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.example.myapplication.ui.shared.theme.BrandDeepRed
 import com.example.myapplication.ui.shared.theme.BrandGreen
 import com.example.myapplication.ui.shared.theme.BrandOrange
@@ -136,6 +139,10 @@ object MiniNotif {
     private val hosts = AtomicInteger(0)
     private val ids = AtomicLong(0)
 
+    /** Окно приложения на экране (STARTED). В фоне плашку никто не увидит, поэтому там остаётся Toast. */
+    @Volatile
+    private var hostVisible: Boolean = false
+
     /** Сколько держать плашку: короткая (как Toast.LENGTH_SHORT) и длинная. */
     const val HoldShortMillis: Long = 2400L
     const val HoldLongMillis: Long = 3800L
@@ -151,7 +158,7 @@ object MiniNotif {
         holdMillis: Long? = null,
     ) {
         if (text.isBlank()) return
-        if (!enabled || hosts.get() == 0) {
+        if (!enabled || hosts.get() == 0 || !hostVisible) {
             val app = context.applicationContext
             Handler(Looper.getMainLooper()).post {
                 Toast.makeText(app, text, if (long) Toast.LENGTH_LONG else Toast.LENGTH_SHORT).show()
@@ -168,9 +175,22 @@ object MiniNotif {
         )
     }
 
+    /**
+     * Статус процесса (синхронизация и т.п.): показывается только плашкой и только пока приложение
+     * на экране; при выключенном флаге или в фоне не делает ничего, а не падает в Toast.
+     */
+    fun status(text: String, kind: MiniNotifKind, holdMillis: Long = HoldShortMillis) {
+        if (text.isBlank() || !enabled || hosts.get() == 0 || !hostVisible) return
+        items.trySend(MiniNotifItem(ids.incrementAndGet(), text, kind, holdMillis))
+    }
+
     /** Убрать текущую плашку (по тапу делает сам хост). */
     fun dismiss() {
         dismisses.trySend(Unit)
+    }
+
+    internal fun setHostVisible(visible: Boolean) {
+        hostVisible = visible
     }
 
     internal fun attachHost() {
@@ -277,9 +297,23 @@ fun MiniNotifHost(
     }
     val textMaxDp = with(density) { textMaxPx.toDp() }
 
-    DisposableEffect(Unit) {
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
         MiniNotif.attachHost()
-        onDispose { MiniNotif.detachHost() }
+        MiniNotif.setHostVisible(lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED))
+        val observer = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_START -> MiniNotif.setHostVisible(true)
+                Lifecycle.Event.ON_STOP -> MiniNotif.setHostVisible(false)
+                else -> Unit
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+            MiniNotif.setHostVisible(false)
+            MiniNotif.detachHost()
+        }
     }
 
     LaunchedEffect(Unit) {
