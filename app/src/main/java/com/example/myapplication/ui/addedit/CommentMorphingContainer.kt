@@ -1,5 +1,6 @@
 package com.example.myapplication.ui.addedit
 
+import com.example.myapplication.ui.shared.components.SpringyBasicTextField
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.ExperimentalSharedTransitionApi
@@ -117,7 +118,7 @@ fun SharedTransitionScope.CommentMorphingContainer(
                         .border(0.5.dp, Color.Black.copy(alpha = 0.12f), RoundedCornerShape(24.dp))
                         .padding(8.dp)
                 ) {
-                    BasicTextField(
+                    SpringyBasicTextField(
                         value = inputText,
                         onValueChange = { inputText = it },
                         modifier = Modifier

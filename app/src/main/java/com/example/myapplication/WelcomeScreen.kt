@@ -1,5 +1,6 @@
 package com.example.myapplication
 
+import com.example.myapplication.ui.shared.components.SpringyOutlinedField
 import com.example.myapplication.ui.shared.mininotif.MiniNotif
 import com.example.myapplication.ui.shared.theme.BrandOrangeBright
 import com.example.myapplication.ui.shared.theme.BrandLightGray
@@ -39,7 +40,6 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -258,14 +258,16 @@ fun WelcomeScreen(
             }
             Spacer(modifier = Modifier.height(20.dp))
 
-            OutlinedTextField(
+            SpringyOutlinedField(
                 value = email,
                 onValueChange = { email = it },
                 label = { Text(strings.emailLabel, color = subtitleColor) },
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
                 leadingIcon = { Icon(Icons.Default.Email, contentDescription = null, tint = subtitleColor) },
-                colors = outlinedFieldColors(inputBgColor, textColor, subtitleColor),
+                containerColor = inputBgColor,
+                contentColor = textColor,
+                mutedColor = subtitleColor,
                 modifier = Modifier
                     .fillMaxWidth()
                     .bringIntoViewRequester(emailBringIntoView)
@@ -279,7 +281,7 @@ fun WelcomeScreen(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            OutlinedTextField(
+            SpringyOutlinedField(
                 value = password,
                 onValueChange = { password = it },
                 label = { Text(strings.passwordLabel, color = subtitleColor) },
@@ -287,7 +289,9 @@ fun WelcomeScreen(
                 visualTransformation = PasswordVisualTransformation(),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                 leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null, tint = subtitleColor) },
-                colors = outlinedFieldColors(inputBgColor, textColor, subtitleColor),
+                containerColor = inputBgColor,
+                contentColor = textColor,
+                mutedColor = subtitleColor,
                 modifier = Modifier
                     .fillMaxWidth()
                     .bringIntoViewRequester(passwordBringIntoView)
@@ -382,14 +386,3 @@ fun WelcomeScreen(
         }
     }
 }
-
-@Composable
-private fun outlinedFieldColors(inputBgColor: Color, textColor: Color, subtitleColor: Color) =
-    OutlinedTextFieldDefaults.colors(
-        focusedBorderColor = BrandOrange,
-        unfocusedBorderColor = BrandDarkGray,
-        focusedContainerColor = inputBgColor,
-        unfocusedContainerColor = inputBgColor,
-        focusedTextColor = textColor,
-        unfocusedTextColor = textColor
-    )

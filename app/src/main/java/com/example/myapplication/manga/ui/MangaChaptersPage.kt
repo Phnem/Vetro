@@ -1,5 +1,6 @@
 package com.example.myapplication.manga.ui
 
+import com.example.myapplication.ui.shared.components.SpringyOutlinedField
 import com.example.myapplication.ui.shared.mascot.MascotScene
 import com.example.myapplication.ui.shared.mascot.MascotEmptyState
 import com.example.myapplication.ui.shared.theme.IosScroll
@@ -238,7 +239,7 @@ private fun SourcePickerContent(
     var query by remember(state.query) { mutableStateOf(state.query) }
 
     Column(modifier = Modifier.fillMaxSize()) {
-        OutlinedTextField(
+        SpringyOutlinedField(
             value = query,
             onValueChange = { query = it },
             singleLine = true,

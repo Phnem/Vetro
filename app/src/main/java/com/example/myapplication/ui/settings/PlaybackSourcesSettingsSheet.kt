@@ -1,5 +1,6 @@
 package com.example.myapplication.ui.settings
 
+import com.example.myapplication.ui.shared.components.SpringyOutlinedField
 import com.example.myapplication.media.subtitles.whisper.ModelState
 import com.example.myapplication.media.subtitles.whisper.WhisperModel
 import com.example.myapplication.media.subtitles.whisper.WhisperModelStore
@@ -307,7 +308,7 @@ private fun SourceEditor(
         )
     }
     if (account == null || account.needsServer) {
-        OutlinedTextField(
+        SpringyOutlinedField(
             value = editor.baseUrl,
             onValueChange = { value -> onUpdate { it.copy(baseUrl = value) } },
             label = { Text("Server URL") },
@@ -316,7 +317,7 @@ private fun SourceEditor(
         )
     }
     if (account != null) {
-        OutlinedTextField(
+        SpringyOutlinedField(
             value = editor.username,
             onValueChange = { value -> onUpdate { it.copy(username = value) } },
             label = { Text(if (ru) "Логин" else "Username") },
@@ -324,14 +325,14 @@ private fun SourceEditor(
             modifier = Modifier.fillMaxWidth(),
         )
     } else if (editor.kind == PlaybackSourceKind.WEBDAV) {
-        OutlinedTextField(
+        SpringyOutlinedField(
             value = editor.rootPath,
             onValueChange = { value -> onUpdate { it.copy(rootPath = value) } },
             label = { Text(if (ru) "Папка медиатеки" else "Library folder") },
             singleLine = true,
             modifier = Modifier.fillMaxWidth(),
         )
-        OutlinedTextField(
+        SpringyOutlinedField(
             value = editor.username,
             onValueChange = { value -> onUpdate { it.copy(username = value) } },
             label = { Text(if (ru) "Имя пользователя" else "Username") },
@@ -339,7 +340,7 @@ private fun SourceEditor(
             modifier = Modifier.fillMaxWidth(),
         )
     } else {
-        OutlinedTextField(
+        SpringyOutlinedField(
             value = editor.userId,
             onValueChange = { value -> onUpdate { it.copy(userId = value) } },
             label = { Text("User ID") },
@@ -347,7 +348,7 @@ private fun SourceEditor(
             modifier = Modifier.fillMaxWidth(),
         )
     }
-    OutlinedTextField(
+    SpringyOutlinedField(
         value = editor.secret,
         onValueChange = { value -> onUpdate { it.copy(secret = value) } },
         label = {
@@ -367,7 +368,7 @@ private fun SourceEditor(
         modifier = Modifier.fillMaxWidth(),
     )
     if (account?.needsApiKey == true) {
-        OutlinedTextField(
+        SpringyOutlinedField(
             value = editor.apiKey,
             onValueChange = { value -> onUpdate { it.copy(apiKey = value) } },
             label = { Text(if (ru) "Ключ API" else "API key") },

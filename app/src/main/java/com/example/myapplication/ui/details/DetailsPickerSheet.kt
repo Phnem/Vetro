@@ -1,5 +1,6 @@
 package com.example.myapplication.ui.details
 
+import com.example.myapplication.ui.shared.components.SpringyOutlinedField
 import com.example.myapplication.ui.shared.mascot.MascotEmptyState
 import com.example.myapplication.ui.shared.mascot.MascotScene
 import androidx.compose.foundation.background
@@ -382,7 +383,7 @@ private fun androidx.compose.foundation.layout.ColumnScope.SourcesContent(
         },
     )
     var query by remember { mutableStateOf(state.query) }
-    OutlinedTextField(
+    SpringyOutlinedField(
         value = query,
         onValueChange = { query = it },
         singleLine = true,

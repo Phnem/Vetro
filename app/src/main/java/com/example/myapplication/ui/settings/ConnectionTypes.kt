@@ -1,5 +1,6 @@
 package com.example.myapplication.ui.settings
 
+import com.example.myapplication.ui.shared.components.SpringyOutlinedField
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
@@ -245,7 +246,7 @@ private fun StremioPage(host: ConnectionHost) {
                 "torrent addons and addons that need setup on their own site are refused."
         },
     )
-    OutlinedTextField(
+    SpringyOutlinedField(
         value = link,
         onValueChange = { link = it },
         singleLine = true,
@@ -363,7 +364,7 @@ private fun VetroPackagePage(host: ConnectionHost) {
     }
 
     SectionLabel(if (ru) "Добавить по ссылке" else "Add by link")
-    OutlinedTextField(
+    SpringyOutlinedField(
         value = input,
         onValueChange = { input = it },
         singleLine = false,

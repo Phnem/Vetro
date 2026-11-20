@@ -1,5 +1,6 @@
 package com.example.myapplication.media.source.vftmodule.ui
 
+import com.example.myapplication.ui.shared.components.SpringyOutlinedField
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -151,7 +152,7 @@ fun VftTorrentsPage(ru: Boolean) {
         )
 
         if (torrServerEnabled) {
-            OutlinedTextField(
+            SpringyOutlinedField(
                 value = torrServerUrl,
                 onValueChange = {
                     torrServerUrl = it
@@ -217,7 +218,7 @@ fun VftTorrentsPage(ru: Boolean) {
         )
 
         if (jackettEnabled) {
-            OutlinedTextField(
+            SpringyOutlinedField(
                 value = jackettUrl,
                 onValueChange = {
                     jackettUrl = it
@@ -229,7 +230,7 @@ fun VftTorrentsPage(ru: Boolean) {
                 singleLine = true,
             )
 
-            OutlinedTextField(
+            SpringyOutlinedField(
                 value = jackettKey,
                 onValueChange = {
                     jackettKey = it

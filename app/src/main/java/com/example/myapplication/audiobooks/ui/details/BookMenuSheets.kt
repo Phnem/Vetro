@@ -1,5 +1,6 @@
 package com.example.myapplication.audiobooks.ui.details
 
+import com.example.myapplication.ui.shared.components.SpringyOutlinedField
 import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -126,7 +127,7 @@ internal fun BookPeopleSheet(
 
 @Composable
 private fun PeopleField(value: String, label: String, onChange: (String) -> Unit) {
-    OutlinedTextField(
+    SpringyOutlinedField(
         value = value,
         onValueChange = onChange,
         label = { Text(label) },
@@ -157,7 +158,7 @@ internal fun BookCoverSheet(
         Column(Modifier.padding(top = 28.dp).navigationBarsPadding().imePadding()) {
             Column(Modifier.padding(horizontal = 20.dp)) { SheetHeader(strings.coverTitle, strings.coverHint) }
             Spacer(Modifier.height(10.dp))
-            OutlinedTextField(
+            SpringyOutlinedField(
                 value = query,
                 onValueChange = { query = it },
                 singleLine = true,

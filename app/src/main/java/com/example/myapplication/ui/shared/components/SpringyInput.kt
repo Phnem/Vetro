@@ -548,6 +548,7 @@ private fun DrawScope.drawPosed(layout: TextLayoutResult, box: Rect, p: Pose, co
  * над ним на пружине, рамка при фокусе набирает толщину на пружине, ошибка встряхивает всё поле.
  *
  * @param shape форма контейнера; по умолчанию скругление карточек IosDesign (как у [LetterLimitField]).
+ * @param contentColor цвет текста и каретки, [mutedColor] — подписи и подсказки (для тёмных экранов вроде входа).
  */
 @Composable
 fun SpringyOutlinedField(
@@ -572,13 +573,15 @@ fun SpringyOutlinedField(
     interactionSource: MutableInteractionSource? = null,
     shape: Shape = SquircleShape(IosDesign.RadiusMd),
     containerColor: Color = IosDesign.elevatedCard(isAppInDarkTheme()),
+    contentColor: Color = MaterialTheme.colorScheme.onSurface,
+    mutedColor: Color = contentColor.copy(alpha = 0.55f),
 ) {
     val reduced = rememberReducedMotion()
     val density = LocalDensity.current.density
     val interaction = interactionSource ?: remember { MutableInteractionSource() }
     val focused by interaction.collectIsFocusedAsState()
-    val onSurface = MaterialTheme.colorScheme.onSurface
-    val muted = onSurface.copy(alpha = 0.55f)
+    val onSurface = contentColor
+    val muted = mutedColor
 
     val floatLabel = focused || value.isNotEmpty()
     val labelFloat = remember { Animatable(if (floatLabel) 1f else 0f) }

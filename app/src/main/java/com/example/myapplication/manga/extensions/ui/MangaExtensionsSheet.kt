@@ -1,5 +1,6 @@
 package com.example.myapplication.manga.extensions.ui
 
+import com.example.myapplication.ui.shared.components.SpringyBasicTextField
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -404,7 +405,7 @@ private fun SearchField(ru: Boolean, value: String, isDark: Boolean, onValueChan
                     fontSize = 15.sp,
                 )
             }
-            BasicTextField(
+            SpringyBasicTextField(
                 value = value,
                 onValueChange = onValueChange,
                 singleLine = true,

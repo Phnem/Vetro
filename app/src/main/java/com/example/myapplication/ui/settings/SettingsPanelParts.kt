@@ -1,5 +1,6 @@
 package com.example.myapplication.ui.settings
 
+import com.example.myapplication.ui.shared.components.SpringyBasicTextField
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.text.BasicTextField
@@ -344,7 +345,7 @@ internal fun PanelPillField(
                     maxLines = 1,
                 )
             }
-            BasicTextField(
+            SpringyBasicTextField(
                 value = value,
                 onValueChange = onValueChange,
                 enabled = enabled,

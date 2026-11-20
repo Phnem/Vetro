@@ -1,5 +1,6 @@
 package com.example.myapplication.ui.addedit
 
+import com.example.myapplication.ui.shared.components.SpringyBasicTextField
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
@@ -299,7 +300,7 @@ fun PillTextField(
         label = "pillBorder"
     )
 
-    BasicTextField(
+    SpringyBasicTextField(
         value = value,
         onValueChange = onValueChange,
         modifier = modifier

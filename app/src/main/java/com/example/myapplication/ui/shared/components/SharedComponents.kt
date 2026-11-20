@@ -1,5 +1,6 @@
 package com.example.myapplication.ui.shared.components
 
+import com.example.myapplication.ui.shared.components.SpringyBasicTextField
 import com.example.myapplication.ui.shared.mininotif.MiniNotif
 import com.example.myapplication.ui.shared.mininotif.MiniNotifKind
 import com.example.myapplication.ui.shared.theme.BrandOrange
@@ -64,7 +65,7 @@ fun AnimatedOneUiTextField(
         label = "border"
     )
 
-    BasicTextField(
+    SpringyBasicTextField(
         value = value,
         onValueChange = onValueChange,
         modifier = Modifier

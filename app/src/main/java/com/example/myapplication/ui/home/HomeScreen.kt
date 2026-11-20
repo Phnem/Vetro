@@ -1,5 +1,6 @@
 package com.example.myapplication.ui.home
 
+import com.example.myapplication.ui.shared.components.SpringyBasicTextField
 import com.example.myapplication.ui.shared.mininotif.MiniNotif
 import com.example.myapplication.ui.shared.theme.BrandOrange
 import androidx.activity.compose.ReportDrawnWhen
@@ -1188,7 +1189,7 @@ fun HomeScreen(
                         }
                     }
                     SimpGlassCard(backdrop = backdrop, shape = RoundedCornerShape(28.dp), modifier = Modifier.fillMaxWidth().height(56.dp)) {
-                        BasicTextField(
+                        SpringyBasicTextField(
                             value = uiState.searchQuery,
                             onValueChange = {
                                 viewModel.updateSearchQuery(it)
