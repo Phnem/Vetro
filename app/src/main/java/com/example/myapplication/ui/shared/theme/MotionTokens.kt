@@ -187,6 +187,24 @@ object MotionTokens {
     /** «Мотание головой» на отклонённой букве (700/12, ζ≈0.23): несколько быстрых качаний. */
     fun <T> limitShake(reduced: Boolean = false): SpringSpec<T> = referenceSpring(700f, 12f, reduced)
 
+    // ---- mininotif (designbookmark «Morph island», shared/tokens.css) -----------------
+    // Ширина жёстче высоты: каждое изменение сначала уходит вбок и только потом оседает по вертикали.
+
+    /** Морфинг ширины плашки (--island-w 380/24, ζ≈0.62). */
+    fun <T> islandWidth(reduced: Boolean = false): SpringSpec<T> = referenceSpring(380f, 24f, reduced)
+
+    /** Морфинг высоты при росте (--island-h 300/22, ζ≈0.64): ложится чуть позже ширины. */
+    fun <T> islandHeight(reduced: Boolean = false): SpringSpec<T> = referenceSpring(300f, 22f, reduced)
+
+    /** Высота при сжатии: референс делает пружину в 1.3 раза жёстче (300·1.3, то же затухание 22). */
+    fun <T> islandHeightShrink(reduced: Boolean = false): SpringSpec<T> = referenceSpring(390f, 22f, reduced)
+
+    /** Нажатие на плашку (island.js: S(1, 520, 18)). */
+    fun <T> islandPress(reduced: Boolean = false): SpringSpec<T> = referenceSpring(520f, 18f, reduced)
+
+    /** Максимальный радиус углов плашки, dp (--island-radius 32). */
+    val IslandRadius = 32.dp
+
     private fun <T> referenceSpring(stiffness: Float, damping: Float, reduced: Boolean): SpringSpec<T> =
         spring(dampingRatio = if (reduced) 1f else damping / (2f * sqrt(stiffness)), stiffness = stiffness)
 
