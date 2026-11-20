@@ -53,6 +53,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import com.example.myapplication.audiobooks.ui.MiniPlayerClearance
 import androidx.activity.compose.BackHandler
+import com.example.myapplication.ui.shared.components.BellButton
 import com.example.myapplication.ui.shared.components.IosSheetScaffold
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -138,6 +139,7 @@ fun DetailsScreen(
     val enrichment by viewModel.enrichment.collectAsStateWithLifecycle()
     val watchStatus by viewModel.effectiveWatchStatus.collectAsStateWithLifecycle()
     val tracking by viewModel.tracking.collectAsStateWithLifecycle()
+    val notificationsOn by viewModel.notificationsOn.collectAsStateWithLifecycle()
     val isDark = isAppInDarkTheme()
 
     val current = anime
@@ -274,6 +276,8 @@ fun DetailsScreen(
                                 tracking = tracking,
                                 onOpenRatingMode = viewModel::openRatingModePicker,
                                 onOpenDateMode = viewModel::openDateModePicker,
+                                notificationsOn = notificationsOn,
+                                onNotificationsChange = viewModel::setNotificationsOn,
                                 onHeroUnderStatusBar = { heroUnderStatusBar = it },
                             )
 
@@ -515,6 +519,8 @@ private fun DetailsInfoPage(
     tracking: TitleTracking,
     onOpenRatingMode: () -> Unit,
     onOpenDateMode: () -> Unit,
+    notificationsOn: Boolean,
+    onNotificationsChange: (Boolean) -> Unit,
     onHeroUnderStatusBar: (Boolean) -> Unit,
 ) {
     val context = LocalContext.current
@@ -711,10 +717,22 @@ private fun DetailsInfoPage(
                 )
             }
 
-            // ——— Трейлер (слой обогащения) — рядом с действиями ———
-            enrichment?.trailer?.let { trailer ->
-                Spacer(Modifier.height(14.dp))
-                TrailerPill(trailer = trailer, ru = ru, isDark = isDark)
+            // ——— Трейлер (слой обогащения) и колокольчик уведомлений тайтла — рядом с действиями ———
+            Spacer(Modifier.height(14.dp))
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                enrichment?.trailer?.let { trailer ->
+                    TrailerPill(trailer = trailer, ru = ru, isDark = isDark)
+                }
+                // Выключатель живёт на устройстве; выключенный тайтл не даёт пушей, плашек и записей в центре.
+                BellButton(
+                    subscribed = notificationsOn,
+                    onSubscribedChange = onNotificationsChange,
+                    label = if (ru) "Уведомления выкл" else "Notifications off",
+                    subscribedLabel = if (ru) "Уведомления вкл" else "Notifications on",
+                )
             }
 
             // ——— Где смотреть: стопка иконок найденных сайтов ———
