@@ -51,6 +51,8 @@ fun SettingHelpSheet(
     onBack: () -> Unit,
     onGo: () -> Unit,
     modifier: Modifier = Modifier,
+    /** Дополнительный блок под пунктами (например, «Что будет отправлено» у сбора данных). */
+    extra: (@Composable () -> Unit)? = null,
 ) {
     val view = LocalView.current
     val binding = request.binding
@@ -120,6 +122,11 @@ fun SettingHelpSheet(
                     )
                 }
             }
+            Spacer(Modifier.height(16.dp))
+        }
+
+        if (extra != null) {
+            extra()
             Spacer(Modifier.height(16.dp))
         }
 

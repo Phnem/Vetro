@@ -15,6 +15,21 @@ object SettingHelpIds {
     const val CONTACT = "contact"
     const val UPDATE = "update"
     const val DONATION = "donation"
+    const val LOCAL_AI = "local_ai"
+    const val CONTRIBUTION = "contribution"
+    const val DEV_SECTION = "dev_section"
+    const val DEV_AI = "dev_ai"
+    const val DEV_MIRROR_DB = "dev_mirror_db"
+    const val DEV_HIDE_SHARE = "dev_hide_share"
+    const val DEV_ADAPTIVE_GLASS = "dev_adaptive_glass"
+    const val DEV_FULL_COVER = "dev_full_cover"
+    const val DEV_MINI_NOTIF = "dev_mini_notif"
+    const val DEV_EXPERIMENTAL_GRID = "dev_experimental_grid"
+    const val DEV_LEGACY_SPLASH = "dev_legacy_splash"
+    const val DEV_FPS = "dev_fps"
+    const val DEV_EXPORT_LOGS = "dev_export_logs"
+    const val DEV_EXPORT_PDF = "dev_export_pdf"
+    const val DEV_IMPORT_DB = "dev_import_db"
 }
 
 /** Один абзац пояснения: короткий заголовок и текст под ним. */
@@ -251,6 +266,290 @@ fun settingHelpText(id: String, ru: Boolean): SettingHelpText? = when (id) {
             title = "Support the project",
             lead = "A link to support the development.",
             points = listOf(HelpPoint("Optional", "Every feature of the app works without it.")),
+        )
+    }
+
+    SettingHelpIds.LOCAL_AI -> if (ru) {
+        SettingHelpText(
+            title = "Локальный ИИ",
+            lead = "Три небольшие модели прямо на телефоне помогают поиску, каталогу и рекомендациям.",
+            points = listOf(
+                HelpPoint("Распознавание названий", "Решает, тот же ли это тайтл, и расставляет варианты в поиске по вероятности."),
+                HelpPoint("Разбор файлов и жанров", "Читает имена файлов и папок аудиокниг, определяет язык названия и жанры, узнаёт заглушки вместо обложек."),
+                HelpPoint("Рекомендации по вкусу", "Связи жанров и порядок рекомендаций; учится на ваших оценках."),
+            ),
+            footnote = "Модели работают на телефоне, названия из вашей коллекции никуда не отправляются. Один выключатель включает или выключает все три сразу; без моделей работают обычные правила Vetro.",
+        )
+    } else {
+        SettingHelpText(
+            title = "Local AI",
+            lead = "Three small models on your phone help search, the catalogue and recommendations.",
+            points = listOf(
+                HelpPoint("Title matching", "Decides whether it is the same title and orders search candidates by likelihood."),
+                HelpPoint("Files and genres", "Reads audiobook file and folder names, detects the title language and genres, and recognises stock images in place of covers."),
+                HelpPoint("Taste recommendations", "Genre links and a recommendation order that learns from your ratings."),
+            ),
+            footnote = "The models run on your phone and titles from your collection are never sent anywhere. One switch turns all three on or off; without the models Vetro uses its standard rules.",
+        )
+    }
+
+    SettingHelpIds.CONTRIBUTION -> if (ru) {
+        SettingHelpText(
+            title = "Помогать улучшать Vetro",
+            lead = "Раз в сутки уходят анонимные данные о работе моделей и найденные книги, но только если вы сами согласились.",
+            points = listOf(
+                HelpPoint("Что отправляется", "Числа о работе моделей и записи о книгах, найденных на сторонних сайтах."),
+                HelpPoint("Что не отправляется", "Ваши запросы и названия из коллекции."),
+                HelpPoint("Как включить", "Переключатель выключен, пока вы не нажмёте «ОК» в окне согласия. Выключить можно в любой момент."),
+            ),
+        )
+    } else {
+        SettingHelpText(
+            title = "Help improve Vetro",
+            lead = "Once a day, anonymous data about how the models work and the books found are sent, but only if you agreed.",
+            points = listOf(
+                HelpPoint("What is sent", "Numbers about how the models work and records of books found on third-party sites."),
+                HelpPoint("What is not sent", "Your queries and the titles from your collection."),
+                HelpPoint("How to turn on", "The switch stays off until you tap OK in the consent window. You can turn it off at any time."),
+            ),
+        )
+    }
+
+    SettingHelpIds.DEV_SECTION -> if (ru) {
+        SettingHelpText(
+            title = "Для разработчиков",
+            lead = "Экспериментальные переключатели и инструменты диагностики.",
+            points = listOf(
+                HelpPoint("Для кого", "Раздел для автора и тестировщиков: часть переключателей меняет вид приложения, часть пишет файлы или выгружает данные."),
+                HelpPoint("Безопасно ли", "Ничего из этого не нужно для обычной работы; всё можно вернуть обратно тем же переключателем."),
+            ),
+        )
+    } else {
+        SettingHelpText(
+            title = "For developers",
+            lead = "Experimental switches and diagnostic tools.",
+            points = listOf(
+                HelpPoint("Who it is for", "A section for the author and testers: some switches change how the app looks, some write files or export data."),
+                HelpPoint("Is it safe", "None of it is needed for normal use, and each change can be reverted with the same switch."),
+            ),
+        )
+    }
+
+    SettingHelpIds.DEV_AI -> if (ru) {
+        SettingHelpText(
+            title = "Локальный ИИ",
+            lead = "Состояние трёх моделей и возврат к предыдущей версии каждой.",
+            points = listOf(
+                HelpPoint("Что показано", "Готова ли модель, выключена ли, нет ли пакета, и счётчики теневых наблюдений. Названия из коллекции не хранятся."),
+                HelpPoint("Предыдущая версия", "Если новая версия модели ведёт себя странно, можно вернуть прежнюю. Если её нет, работают обычные правила Vetro."),
+            ),
+        )
+    } else {
+        SettingHelpText(
+            title = "Local AI",
+            lead = "The state of the three models and a switch back to the previous version of each.",
+            points = listOf(
+                HelpPoint("What is shown", "Whether a model is ready, off or missing a pack, and the shadow observation counters. Titles from your collection are not stored."),
+                HelpPoint("Previous version", "If a new model version misbehaves, the earlier one can be restored. Without one, the standard rules of Vetro are used."),
+            ),
+        )
+    }
+
+    SettingHelpIds.DEV_MIRROR_DB -> if (ru) {
+        SettingHelpText(
+            title = "Зеркалировать внутреннюю БД",
+            lead = "После каждого изменения базы её копия кладётся в папку приложения.",
+            points = listOf(
+                HelpPoint("Зачем", "Копию удобно забрать с телефона и посмотреть на компьютере. Для обычной работы не нужно."),
+            ),
+        )
+    } else {
+        SettingHelpText(
+            title = "Mirror internal database",
+            lead = "After each change the database is copied to the app folder.",
+            points = listOf(
+                HelpPoint("Why", "The copy is easy to pull from the phone and inspect on a computer. Not needed for normal use."),
+            ),
+        )
+    }
+
+    SettingHelpIds.DEV_HIDE_SHARE -> if (ru) {
+        SettingHelpText(
+            title = "Скрыть кнопку Share",
+            lead = "Убирает кнопку экспорта из угла экрана настроек.",
+            points = listOf(
+                HelpPoint("Когда нужно", "Если кнопка мешает на скриншотах или записи экрана."),
+            ),
+        )
+    } else {
+        SettingHelpText(
+            title = "Hide Share button",
+            lead = "Removes the share action from the corner of the settings screen.",
+            points = listOf(
+                HelpPoint("When to use", "When the button gets in the way of screenshots or screen recordings."),
+            ),
+        )
+    }
+
+    SettingHelpIds.DEV_ADAPTIVE_GLASS -> if (ru) {
+        SettingHelpText(
+            title = "Adaptive glass при скролле",
+            lead = "Во время прокрутки списка снижает размытие и линзу, чтобы разгрузить видеочип.",
+            points = listOf(
+                HelpPoint("Для сравнения", "Выключите, чтобы увидеть полное стекло на прокрутке и сравнить плавность."),
+            ),
+        )
+    } else {
+        SettingHelpText(
+            title = "Adaptive glass on scroll",
+            lead = "Reduces blur and lens while a list scrolls, to ease the GPU.",
+            points = listOf(
+                HelpPoint("For comparison", "Turn it off to see the full glass while scrolling and compare smoothness."),
+            ),
+        )
+    }
+
+    SettingHelpIds.DEV_FULL_COVER -> if (ru) {
+        SettingHelpText(
+            title = "Карточки с обложкой",
+            lead = "Обложка занимает всю карточку, текст лежит поверх затемнения.",
+            points = listOf(
+                HelpPoint("Если выключить", "Вернётся классическая карточка с постером сбоку."),
+            ),
+        )
+    } else {
+        SettingHelpText(
+            title = "Full-cover cards",
+            lead = "The cover fills the whole card and the text sits on top of a dark overlay.",
+            points = listOf(
+                HelpPoint("If you turn it off", "The classic card with the poster on the side comes back."),
+            ),
+        )
+    }
+
+    SettingHelpIds.DEV_MINI_NOTIF -> if (ru) {
+        SettingHelpText(
+            title = "Мини-уведомления",
+            lead = "Короткие сообщения и ход синхронизации показываются плашкой снизу, как в Dynamic Island.",
+            points = listOf(
+                HelpPoint("Если выключить", "Сообщения снова идут системными тостами, как раньше."),
+            ),
+        )
+    } else {
+        SettingHelpText(
+            title = "Mini notifications",
+            lead = "Short messages and sync progress appear as a bottom pill that morphs like Dynamic Island.",
+            points = listOf(
+                HelpPoint("If you turn it off", "Messages go back to system toasts as before."),
+            ),
+        )
+    }
+
+    SettingHelpIds.DEV_EXPERIMENTAL_GRID -> if (ru) {
+        SettingHelpText(
+            title = "Экспериментальная сетка",
+            lead = "Избранное показывается горизонтальной лентой над коллекцией.",
+            points = listOf(
+                HelpPoint("Если выключить", "Избранное лежит в общем списке, поднятое наверх."),
+            ),
+        )
+    } else {
+        SettingHelpText(
+            title = "Experimental grid",
+            lead = "Favorites appear as a horizontal strip above the collection.",
+            points = listOf(
+                HelpPoint("If you turn it off", "Favorites stay in the main list, raised to the top."),
+            ),
+        )
+    }
+
+    SettingHelpIds.DEV_LEGACY_SPLASH -> if (ru) {
+        SettingHelpText(
+            title = "Старая заставка старта",
+            lead = "Вместо анимации логотипа показывается прежнее «переливание».",
+            points = listOf(
+                HelpPoint("Когда сработает", "Применяется при следующем запуске приложения."),
+            ),
+        )
+    } else {
+        SettingHelpText(
+            title = "Legacy startup splash",
+            lead = "Shows the earlier wave instead of the logo animation.",
+            points = listOf(
+                HelpPoint("When it applies", "On the next launch of the app."),
+            ),
+        )
+    }
+
+    SettingHelpIds.DEV_FPS -> if (ru) {
+        SettingHelpText(
+            title = "Диагностика производительности (FPS)",
+            lead = "Поверх всех экранов показывается плашка с частотой кадров.",
+            points = listOf(
+                HelpPoint("Зачем", "Помогает заметить подтормаживания при разработке. Для обычной работы не нужна."),
+            ),
+        )
+    } else {
+        SettingHelpText(
+            title = "Performance diagnostics (FPS)",
+            lead = "Shows an FPS badge above every screen.",
+            points = listOf(
+                HelpPoint("Why", "Helps spot stutter during development. Not needed for normal use."),
+            ),
+        )
+    }
+
+    SettingHelpIds.DEV_EXPORT_LOGS -> if (ru) {
+        SettingHelpText(
+            title = "Логи",
+            lead = "Собирает журнал приложения и открывает системное меню «Поделиться».",
+            points = listOf(
+                HelpPoint("Что внутри", "Технический журнал работы приложения. Прикладывайте его, когда пишете автору об ошибке."),
+            ),
+        )
+    } else {
+        SettingHelpText(
+            title = "Logs",
+            lead = "Collects the app log and opens the system share sheet.",
+            points = listOf(
+                HelpPoint("What is inside", "The technical log of the app. Attach it when you write to the author about a bug."),
+            ),
+        )
+    }
+
+    SettingHelpIds.DEV_EXPORT_PDF -> if (ru) {
+        SettingHelpText(
+            title = "Экспорт в PDF",
+            lead = "Собирает таблицу коллекции в PDF-файл.",
+            points = listOf(
+                HelpPoint("Что в таблице", "Название, число серий и рейтинг каждого тайтла."),
+            ),
+        )
+    } else {
+        SettingHelpText(
+            title = "Export to PDF",
+            lead = "Builds a table of the collection as a PDF file.",
+            points = listOf(
+                HelpPoint("What is in the table", "The title, episode count and rating of each entry."),
+            ),
+        )
+    }
+
+    SettingHelpIds.DEV_IMPORT_DB -> if (ru) {
+        SettingHelpText(
+            title = "Импорт базы",
+            lead = "Выбранный файл .db добавляет в коллекцию недостающие записи.",
+            points = listOf(
+                HelpPoint("Что не пропадёт", "Существующие записи не меняются: добавляются только те, которых ещё нет."),
+            ),
+        )
+    } else {
+        SettingHelpText(
+            title = "Import database",
+            lead = "Adds the missing entries from a chosen .db file to the collection.",
+            points = listOf(
+                HelpPoint("What stays safe", "Existing entries are not changed: only the ones that are not there yet are added."),
+            ),
         )
     }
 

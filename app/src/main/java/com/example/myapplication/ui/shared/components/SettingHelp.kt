@@ -28,7 +28,16 @@ class SettingHelpBinding(
     /** Для переключателей: текущее значение. null — пункт не on/off, вместо «Включить» будет «Перейти». */
     val checked: Boolean? = null,
     val onToggle: ((Boolean) -> Unit)? = null,
+    /** Запасной текст для пункта без своего описания: заголовок и подпись самой строки. */
+    val autoTitle: String? = null,
+    val autoLead: String? = null,
 )
+
+/**
+ * Включено на экране настроек: строка без своего [SettingHelpBinding] всё равно открывает описание
+ * по удержанию, собранное из её заголовка и подписи. В шторках поверх настроек не включено.
+ */
+val LocalSettingHelpAuto = staticCompositionLocalOf { false }
 
 class SettingHelpRequest(
     val binding: SettingHelpBinding,

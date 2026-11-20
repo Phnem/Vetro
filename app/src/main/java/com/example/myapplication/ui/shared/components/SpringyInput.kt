@@ -138,6 +138,9 @@ private val DropEase: Easing = CubicBezierEasing(0.2f, 0.8f, 0.2f, 1f)
 private val NopeEase: Easing = CubicBezierEasing(0.25f, 0.1f, 0.25f, 1f)
 private val OutEase: Easing = CubicBezierEasing(0.5f, 0f, 0.75f, 0f)
 
+/** Доля амплитуды референса: 0.75 = на четверть мягче (по просьбе владельца, v3.5.7). */
+private const val AMPLITUDE = 0.75f
+
 private const val DROP_MS = 500
 private const val NOPE_MS = 460
 private const val OUT_MS = 340
@@ -159,10 +162,11 @@ private fun pose(keys: Array<Key>, ease: Easing, u: Float, out: Pose) {
     val a = keys[i]
     val b = keys[i + 1]
     val local = ease.transform(((t - a.at) / (b.at - a.at)).coerceIn(0f, 1f))
-    out.dy = a.dy + (b.dy - a.dy) * local
-    out.dx = a.dx + (b.dx - a.dx) * local
-    out.rot = a.rot + (b.rot - a.rot) * local
-    out.s = a.s + (b.s - a.s) * local
+    // Амплитуда референса смягчена на четверть: смещение, поворот и «пухлость» масштаба умножены на AMPLITUDE.
+    out.dy = (a.dy + (b.dy - a.dy) * local) * AMPLITUDE
+    out.dx = (a.dx + (b.dx - a.dx) * local) * AMPLITUDE
+    out.rot = (a.rot + (b.rot - a.rot) * local) * AMPLITUDE
+    out.s = 1f + ((a.s + (b.s - a.s) * local) - 1f) * AMPLITUDE
     out.a = a.a + (b.a - a.a) * local
 }
 

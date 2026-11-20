@@ -730,8 +730,10 @@ private fun DetailsInfoPage(
                 BellButton(
                     subscribed = notificationsOn,
                     onSubscribedChange = onNotificationsChange,
-                    label = if (ru) "Уведомления выкл" else "Notifications off",
-                    subscribedLabel = if (ru) "Уведомления вкл" else "Notifications on",
+                    // Без надписи: состояние читается по цвету и значку; текст нужен только для TalkBack.
+                    label = if (ru) "Уведомления выключены" else "Notifications off",
+                    subscribedLabel = if (ru) "Уведомления включены" else "Notifications on",
+                    variant = com.example.myapplication.ui.shared.components.BellButtonVariant.Icon,
                 )
             }
 

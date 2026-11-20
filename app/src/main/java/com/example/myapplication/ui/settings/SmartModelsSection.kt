@@ -1,10 +1,19 @@
 package com.example.myapplication.ui.settings
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoFixHigh
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -14,18 +23,26 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.example.myapplication.microml.MicroMlEngine
 import com.example.myapplication.microml.contribution.ContributionService
+import com.example.myapplication.ui.settings.help.SettingHelpIds
 import com.example.myapplication.ui.shared.components.IosListGroup
 import com.example.myapplication.ui.shared.components.IosRow
 import com.example.myapplication.ui.shared.components.IosSwitch
+import com.example.myapplication.ui.shared.components.SettingHelpBinding
 import com.example.myapplication.ui.shared.theme.BrandOrange
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 
 /**
- * Раздел настроек «Умные модели»: три модели на телефоне (каждая своим тумблером) и добровольный сбор данных.
- * Сбор выключен, пока пользователь не нажмёт «ОК» в окне согласия; в сборках без подписи автора (F-Droid, пересборки) строки сбора нет.
+ * Раздел настроек «Умные модели»: локальный ИИ одним пунктом (один тумблер на все три модели на телефоне)
+ * и добровольный сбор данных. Сбор выключен, пока пользователь не нажмёт «ОК» в окне согласия; в сборках
+ * без подписи автора (F-Droid, пересборки) строки сбора нет. Что именно уйдёт при следующей отправке,
+ * смотрится в описании сбора по удержанию строки ([ContributionPreviewBlock]).
  */
 @Composable
 internal fun SmartModelsGroup(ru: Boolean, isDark: Boolean) {
@@ -33,12 +50,9 @@ internal fun SmartModelsGroup(ru: Boolean, isDark: Boolean) {
     val service = koinInject<ContributionService>()
     val rows = mutableListOf<@Composable () -> Unit>()
 
-    MicroMlEngine.Pack.values().forEach { pack ->
-        rows += { PackSwitchRow(pack, engine, ru, isDark) }
-    }
+    rows += { LocalAiRow(engine, ru, isDark) }
     if (service.isAvailable) {
         rows += { ContributionSwitchRow(service, ru, isDark) }
-        rows += { ContributionPreviewRow(service, ru, isDark) }
     }
     IosListGroup(
         isDark = isDark,
@@ -52,29 +66,26 @@ internal fun SmartModelsGroup(ru: Boolean, isDark: Boolean) {
     )
 }
 
+/** Один пункт на все три модели: включён, если включена хотя бы одна; переключение меняет все сразу. */
 @Composable
-private fun PackSwitchRow(pack: MicroMlEngine.Pack, engine: MicroMlEngine, ru: Boolean, isDark: Boolean) {
-    var on by remember(pack) { mutableStateOf(engine.isSwitchedOn(pack)) }
+private fun LocalAiRow(engine: MicroMlEngine, ru: Boolean, isDark: Boolean) {
+    var on by remember { mutableStateOf(MicroMlEngine.Pack.values().any { engine.isSwitchedOn(it) }) }
+    val apply: (Boolean) -> Unit = { value ->
+        MicroMlEngine.Pack.values().forEach { engine.setSwitchedOn(it, value) }
+        on = value
+    }
     IosRow(
-        title = when (pack) {
-            MicroMlEngine.Pack.IDENTITY -> if (ru) "Распознавание названий" else "Title matching"
-            MicroMlEngine.Pack.CATALOG -> if (ru) "Разбор файлов и жанров" else "Files and genres"
-            MicroMlEngine.Pack.EXPERIENCE -> if (ru) "Рекомендации по вкусу" else "Taste recommendations"
-        },
-        subtitle = when (pack) {
-            MicroMlEngine.Pack.IDENTITY ->
-                if (ru) "Тот же тайтл или нет, порядок вариантов в поиске" else "Same title or not, the order of search candidates"
-            MicroMlEngine.Pack.CATALOG ->
-                if (ru) "Имена файлов и папок аудиокниг, язык названия, жанры и заглушки вместо обложек" else "Audiobook file and folder names, title language, genres and stock images in place of covers"
-            MicroMlEngine.Pack.EXPERIENCE ->
-                if (ru) "Связи жанров и порядок рекомендаций, который учится на ваших оценках" else "Genre links and a recommendation order that learns from your ratings"
+        title = if (ru) "Локальный ИИ" else "Local AI",
+        subtitle = if (ru) {
+            "Распознавание названий, разбор файлов и жанров, рекомендации по вкусу"
+        } else {
+            "Title matching, files and genres, taste recommendations"
         },
         isDark = isDark,
         icon = Icons.Filled.AutoFixHigh,
         iconBackground = BrandOrange,
-        trailing = {
-            IosSwitch(checked = on, onCheckedChange = { value -> engine.setSwitchedOn(pack, value); on = value })
-        },
+        trailing = { IosSwitch(checked = on, onCheckedChange = apply) },
+        help = SettingHelpBinding(SettingHelpIds.LOCAL_AI, checked = on, onToggle = apply),
     )
 }
 
@@ -105,6 +116,8 @@ private fun ContributionSwitchRow(service: ContributionService, ru: Boolean, isD
                 },
             )
         },
+        // Описание по удержанию; сам выключатель в нём не дублируется: включение идёт через окно согласия.
+        help = SettingHelpBinding(SettingHelpIds.CONTRIBUTION),
     )
     if (asking) {
         AlertDialog(
@@ -135,34 +148,56 @@ private fun ContributionSwitchRow(service: ContributionService, ru: Boolean, isD
     }
 }
 
-/** Показывает точный текст следующей отправки: и числа для моделей, и записи о книгах. */
+/**
+ * «Что будет отправлено»: точный текст следующей отправки (числа для моделей и записи о книгах). Живёт
+ * внутри описания «Помогать улучшать Vetro», а не отдельной строкой настроек.
+ */
 @Composable
-private fun ContributionPreviewRow(service: ContributionService, ru: Boolean, isDark: Boolean) {
+internal fun ContributionPreviewBlock(ru: Boolean) {
+    val service = koinInject<ContributionService>()
     var text by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
-    IosRow(
-        title = if (ru) "Что будет отправлено" else "What will be sent",
-        subtitle = if (ru) "Точный текст следующей отправки" else "The exact text of the next upload",
-        isDark = isDark,
-        icon = Icons.Filled.AutoFixHigh,
-        iconBackground = BrandOrange,
-        showChevron = true,
-        onClick = {
-            scope.launch {
-                text = if (!service.isEnabled()) {
-                    if (ru) "Сбор выключен: ничего не отправляется." else "Collection is off: nothing is sent."
-                } else {
-                    service.preview().ifBlank { if (ru) "Пока нечего отправлять." else "Nothing to send yet." }
-                }
-            }
-        },
-    )
-    text?.let { shown ->
-        AlertDialog(
-            onDismissRequest = { text = null },
-            confirmButton = { TextButton(onClick = { text = null }) { Text(if (ru) "Закрыть" else "Close") } },
-            title = { Text(if (ru) "Следующая отправка" else "Next upload") },
-            text = { Text(shown, modifier = Modifier.verticalScroll(rememberScrollState())) },
+    val onSurface = MaterialTheme.colorScheme.onSurface
+    Column(Modifier.fillMaxWidth()) {
+        Text(
+            text = if (ru) "Что будет отправлено" else "What will be sent",
+            color = onSurface,
+            fontSize = 15.sp,
+            fontWeight = FontWeight.Bold,
         )
+        Spacer(Modifier.height(6.dp))
+        val shown = text
+        if (shown == null) {
+            Text(
+                text = if (ru) "Показать точный текст следующей отправки" else "Show the exact text of the next upload",
+                color = BrandOrange,
+                fontSize = 14.5.sp,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(10.dp))
+                    .clickable {
+                        scope.launch {
+                            text = if (!service.isEnabled()) {
+                                if (ru) "Сбор выключен: ничего не отправляется." else "Collection is off: nothing is sent."
+                            } else {
+                                service.preview().ifBlank { if (ru) "Пока нечего отправлять." else "Nothing to send yet." }
+                            }
+                        }
+                    }
+                    .padding(vertical = 4.dp),
+            )
+        } else {
+            Text(
+                text = shown,
+                color = onSurface.copy(alpha = 0.7f),
+                fontSize = 13.sp,
+                lineHeight = 18.sp,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(onSurface.copy(alpha = 0.06f))
+                    .padding(12.dp)
+                    .verticalScroll(rememberScrollState()),
+            )
+        }
     }
 }

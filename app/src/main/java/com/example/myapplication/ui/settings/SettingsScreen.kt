@@ -134,6 +134,8 @@ import com.example.myapplication.ui.shared.components.SettingHelpBinding
 import com.example.myapplication.ui.shared.components.SettingHelpController
 import com.example.myapplication.ui.shared.components.SettingHelpRequest
 import com.example.myapplication.ui.settings.help.SettingHelpIds
+import com.example.myapplication.ui.settings.help.SettingHelpText
+import androidx.compose.material3.AlertDialog
 import com.example.myapplication.ui.settings.help.SettingHelpSheet
 import com.example.myapplication.ui.settings.help.SettingsSpotlight
 import com.example.myapplication.ui.settings.help.SettingsSpotlightOverlay
@@ -205,6 +207,12 @@ private val SETTINGS_ITEM_ORDER = listOf(
 private fun spotlightItemKey(helpId: String): String? = when (helpId) {
     SettingHelpIds.AVAILABILITY_THRESHOLD -> "group_availability"
     else -> null
+}
+
+/** Описание пункта без своего текста: его же заголовок и подпись. */
+private fun autoHelpText(binding: SettingHelpBinding): SettingHelpText? {
+    val title = binding.autoTitle ?: return null
+    return SettingHelpText(title = title, lead = binding.autoLead.orEmpty())
 }
 
 private sealed interface SettingsOverlaySheet {
@@ -368,6 +376,7 @@ fun SettingsScreen(
         // Режим extera: поля вокруг вдавленного экрана настроек — тот же градиент, что у списка.
         backdropBrush = settingsBackground,
         content = {
+      CompositionLocalProvider(com.example.myapplication.ui.shared.components.LocalSettingHelpAuto provides true) {
       Box(modifier = Modifier.fillMaxSize()) {
         // Единый backdrop: список настроек пишет в него свой контент через layerBackdrop,
         // а плавающие стеклянные элементы (шапка, Share-FAB) сэмплируют его → настоящее
@@ -750,6 +759,7 @@ fun SettingsScreen(
                                         iconRes = R.drawable.hugeicon_developer,
                                         iconWell = false,
                                         chevronExpanded = showDeveloperSection,
+                                        help = SettingHelpBinding(SettingHelpIds.DEV_SECTION),
                                         onClick = {
                                             performHaptic(view, Haptic.Light)
                                             showDeveloperSection = !showDeveloperSection
@@ -872,6 +882,7 @@ fun SettingsScreen(
         }
 
       }
+      }
         },
         sheetContent = {
             Column(
@@ -883,7 +894,7 @@ fun SettingsScreen(
                 when {
                     activeSheet == SettingsOverlaySheet.Help -> {
                         val request = help.request
-                        val text = request?.let { settingHelpText(it.binding.id, ruUi) }
+                        val text = request?.let { settingHelpText(it.binding.id, ruUi) ?: autoHelpText(it.binding) }
                         if (request != null && text != null) {
                             SettingHelpSheet(
                                 request = request,
@@ -892,6 +903,11 @@ fun SettingsScreen(
                                 isDark = isDark,
                                 onBack = { help.close(); activeSheet = null },
                                 onGo = { help.close(); request.onGo?.invoke() },
+                                extra = if (request.binding.id == SettingHelpIds.CONTRIBUTION) {
+                                    { ContributionPreviewBlock(ruUi) }
+                                } else {
+                                    null
+                                },
                             )
                         }
                     }
@@ -1037,47 +1053,78 @@ private fun SegIcon(icon: ImageVector, selected: Boolean, isDark: Boolean) {
     )
 }
 
-/** MicroML Engine: состояние трёх пакетов моделей и теневые счётчики. Названия из коллекции не хранятся и не уходят. */
+/**
+ * Локальный ИИ в разделе разработчика одним пунктом: состояние трёх пакетов моделей в подписи, по нажатию
+ * окно с возвратом к предыдущей версии каждого пакета и теневыми счётчиками. Названия из коллекции не
+ * хранятся и никуда не уходят.
+ */
 @Composable
-private fun MicroMlStatusRow(ru: Boolean, isDark: Boolean, devIcon: Color) {
-    val microMl = org.koin.compose.koinInject<com.example.myapplication.microml.MicroMlEngine>()
+private fun DevAiRow(ru: Boolean, isDark: Boolean, devIcon: Color) {
+    val microMl = org.koin.compose.koinInject<MicroMlEngine>()
+    val titleMatch = org.koin.compose.koinInject<com.example.myapplication.domain.titleidentityintegration.TitleIdentityService>()
     val controls by microMl.controlRevision.collectAsStateWithLifecycle()
     val status = androidx.compose.runtime.produceState(initialValue = "…", microMl, controls, ru) {
-        value = microMl.status().joinToString(" · ") { s ->
-            val name = s.pack.key.replaceFirstChar { it.uppercase() }
-            when (s.state) {
-                com.example.myapplication.microml.MicroMlEngine.PackState.READY -> "$name ✓" + if (s.rolledBack) " (prev)" else ""
-                com.example.myapplication.microml.MicroMlEngine.PackState.DISABLED -> "$name ${if (ru) "выкл" else "off"}"
-                com.example.myapplication.microml.MicroMlEngine.PackState.SUSPENDED -> "$name ${if (ru) "сбой" else "failed"}"
-                com.example.myapplication.microml.MicroMlEngine.PackState.MISSING -> "$name ${if (ru) "нет пакета" else "no pack"}"
+        value = microMl.status().joinToString(" · ") { st ->
+            val name = st.pack.key.replaceFirstChar { it.uppercase() }
+            when (st.state) {
+                MicroMlEngine.PackState.READY -> "$name ✓" + if (st.rolledBack) " (prev)" else ""
+                MicroMlEngine.PackState.DISABLED -> "$name ${if (ru) "выкл" else "off"}"
+                MicroMlEngine.PackState.SUSPENDED -> "$name ${if (ru) "сбой" else "failed"}"
+                MicroMlEngine.PackState.MISSING -> "$name ${if (ru) "нет пакета" else "no pack"}"
             }
         }
     }
-    val observed = microMl.shadowCounts().entries.sortedByDescending { it.value }.take(6)
+    var open by remember { mutableStateOf(false) }
     IosRow(
-        title = if (ru) "MicroML: пакеты и наблюдения" else "MicroML: packs and observations",
-        subtitle = status.value + if (observed.isEmpty()) "" else " — " + observed.joinToString(" · ") { "${it.key.substringAfter(':')} ${it.value}" },
+        title = if (ru) "Локальный ИИ" else "Local AI",
+        subtitle = status.value,
         isDark = isDark,
         icon = Icons.Filled.Code,
         iconBackground = devIcon,
+        showChevron = true,
+        onClick = { open = true },
+        help = SettingHelpBinding(SettingHelpIds.DEV_AI),
     )
-}
-
-@Composable
-private fun MicroMlRollbackRow(pack: MicroMlEngine.Pack, ru: Boolean, isDark: Boolean, devIcon: Color) {
-    val microMl = org.koin.compose.koinInject<MicroMlEngine>()
-    var previous by remember(pack) { mutableStateOf(microMl.isRolledBack(pack)) }
-    val name = pack.key.replaceFirstChar { it.uppercase() } + " AI"
-    IosRow(
-        title = if (ru) "$name — предыдущая версия" else "$name — previous version",
-        subtitle = if (ru) "Если версии нет, используются обычные правила Vetro" else "Uses Vetro's standard rules if unavailable",
-        isDark = isDark,
-        icon = Icons.Filled.Code,
-        iconBackground = devIcon,
-        trailing = {
-            IosSwitch(checked = previous, onCheckedChange = { on -> microMl.setRolledBack(pack, on); previous = on })
-        },
-    )
+    if (open) {
+        val observed = microMl.shadowCounts().entries.sortedByDescending { it.value }.take(6)
+        val matchObserved = titleMatch.shadowCounts().entries
+            .groupBy({ it.key.split(':').getOrNull(1).orEmpty() }, { it.value })
+            .mapValues { (_, counts) -> counts.sum() }
+            .entries.sortedByDescending { it.value }.take(5)
+        AlertDialog(
+            onDismissRequest = { open = false },
+            confirmButton = { TextButton(onClick = { open = false }) { Text(if (ru) "Закрыть" else "Close") } },
+            title = { Text(if (ru) "Локальный ИИ" else "Local AI") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    MicroMlEngine.Pack.values().forEach { pack ->
+                        var previous by remember(pack) { mutableStateOf(microMl.isRolledBack(pack)) }
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = pack.key.replaceFirstChar { it.uppercase() } +
+                                    if (ru) " — предыдущая версия" else " — previous version",
+                                modifier = Modifier.weight(1f),
+                            )
+                            IosSwitch(checked = previous, onCheckedChange = { on -> microMl.setRolledBack(pack, on); previous = on })
+                        }
+                    }
+                    Text(
+                        text = if (ru) "Если версии нет, используются обычные правила Vetro." else "Vetro's standard rules are used if a version is unavailable.",
+                        fontSize = 12.sp,
+                    )
+                    val lines = buildList {
+                        if (matchObserved.isNotEmpty()) add("TitleMatch: " + matchObserved.joinToString(" · ") { "${it.key} ${it.value}" })
+                        if (observed.isNotEmpty()) add("MicroML: " + observed.joinToString(" · ") { "${it.key.substringAfter(':')} ${it.value}" })
+                    }
+                    if (lines.isEmpty()) {
+                        Text(if (ru) "Наблюдений пока нет." else "No observations yet.", fontSize = 12.sp)
+                    } else {
+                        lines.forEach { Text(it, fontSize = 12.sp) }
+                    }
+                }
+            },
+        )
+    }
 }
 
 /** Группы раздела «Разработчик» в iOS-стиле. */
@@ -1111,6 +1158,7 @@ private fun DeveloperGroups(
                         isDark = isDark,
                         icon = Icons.Filled.FileOpen,
                         iconBackground = devIcon,
+                        help = SettingHelpBinding(SettingHelpIds.DEV_MIRROR_DB, checked = uiState.devMirrorDbToDocuments, onToggle = onMirrorDbToggle),
                         trailing = { IosSwitch(checked = uiState.devMirrorDbToDocuments, onCheckedChange = onMirrorDbToggle) },
                     )
                 },
@@ -1121,6 +1169,7 @@ private fun DeveloperGroups(
                         isDark = isDark,
                         icon = Icons.Filled.Share,
                         iconBackground = devIcon,
+                        help = SettingHelpBinding(SettingHelpIds.DEV_HIDE_SHARE, checked = uiState.devHideShareButton, onToggle = onHideShareToggle),
                         trailing = { IosSwitch(checked = uiState.devHideShareButton, onCheckedChange = onHideShareToggle) },
                     )
                 },
@@ -1131,6 +1180,7 @@ private fun DeveloperGroups(
                         isDark = isDark,
                         icon = Icons.Filled.Code,
                         iconBackground = devIcon,
+                        help = SettingHelpBinding(SettingHelpIds.DEV_ADAPTIVE_GLASS, checked = uiState.devAdaptiveGlassScroll, onToggle = onAdaptiveGlassToggle),
                         trailing = { IosSwitch(checked = uiState.devAdaptiveGlassScroll, onCheckedChange = onAdaptiveGlassToggle) },
                     )
                 },
@@ -1148,6 +1198,7 @@ private fun DeveloperGroups(
                         isDark = isDark,
                         icon = Icons.Filled.Image,
                         iconBackground = devIcon,
+                        help = SettingHelpBinding(SettingHelpIds.DEV_FULL_COVER, checked = uiState.devFullBleedCards, onToggle = onFullBleedCardsToggle),
                         trailing = {
                             IosSwitch(
                                 checked = uiState.devFullBleedCards,
@@ -1168,6 +1219,7 @@ private fun DeveloperGroups(
                         isDark = isDark,
                         icon = Icons.Filled.NotificationsActive,
                         iconBackground = devIcon,
+                        help = SettingHelpBinding(SettingHelpIds.DEV_MINI_NOTIF, checked = uiState.devMiniNotif, onToggle = onMiniNotifToggle),
                         trailing = {
                             IosSwitch(
                                 checked = uiState.devMiniNotif,
@@ -1188,6 +1240,7 @@ private fun DeveloperGroups(
                         isDark = isDark,
                         icon = Icons.Filled.ViewCarousel,
                         iconBackground = devIcon,
+                        help = SettingHelpBinding(SettingHelpIds.DEV_EXPERIMENTAL_GRID, checked = uiState.devExperimentalGrid, onToggle = onExperimentalGridToggle),
                         trailing = {
                             IosSwitch(
                                 checked = uiState.devExperimentalGrid,
@@ -1196,31 +1249,7 @@ private fun DeveloperGroups(
                         },
                     )
                 },
-                {
-                    // Теневые наблюдения TitleMatch: что модель сказала бы о рекомендациях рядом с вашей
-                    // коллекцией. Только счётчики в памяти, названия не хранятся и не уходят.
-                    val ru = strings.languageName == "RU"
-                    val titleMatch = org.koin.compose.koinInject<com.example.myapplication.domain.titleidentityintegration.TitleIdentityService>()
-                    val observed = titleMatch.shadowCounts().entries
-                        .groupBy({ it.key.split(':').getOrNull(1).orEmpty() }, { it.value })
-                        .mapValues { (_, counts) -> counts.sum() }
-                        .entries.sortedByDescending { it.value }.take(5)
-                    IosRow(
-                        title = if (ru) "TitleMatch: наблюдения" else "TitleMatch: observations",
-                        subtitle = if (observed.isEmpty()) {
-                            if (ru) "Пока пусто: рекомендации ещё не считались или пакета модели нет" else "Empty so far: no recommendations yet or no model pack"
-                        } else {
-                            observed.joinToString(" · ") { "${it.key} ${it.value}" }
-                        },
-                        isDark = isDark,
-                        icon = Icons.Filled.Code,
-                        iconBackground = devIcon,
-                    )
-                },
-                { MicroMlStatusRow(strings.languageName == "RU", isDark, devIcon) },
-                { MicroMlRollbackRow(MicroMlEngine.Pack.IDENTITY, strings.languageName == "RU", isDark, devIcon) },
-                { MicroMlRollbackRow(MicroMlEngine.Pack.CATALOG, strings.languageName == "RU", isDark, devIcon) },
-                { MicroMlRollbackRow(MicroMlEngine.Pack.EXPERIENCE, strings.languageName == "RU", isDark, devIcon) },
+                { DevAiRow(strings.languageName == "RU", isDark, devIcon) },
                 {
                     val ru = strings.languageName == "RU"
                     IosRow(
@@ -1233,6 +1262,7 @@ private fun DeveloperGroups(
                         isDark = isDark,
                         icon = Icons.Filled.Code,
                         iconBackground = devIcon,
+                        help = SettingHelpBinding(SettingHelpIds.DEV_LEGACY_SPLASH, checked = uiState.devLegacySplash, onToggle = onLegacySplashToggle),
                         trailing = {
                             IosSwitch(
                                 checked = uiState.devLegacySplash,
@@ -1248,6 +1278,7 @@ private fun DeveloperGroups(
                         isDark = isDark,
                         icon = Icons.Filled.BugReport,
                         iconBackground = devIcon,
+                        help = SettingHelpBinding(SettingHelpIds.DEV_FPS, checked = uiState.devFpsOverlay, onToggle = onFpsOverlayToggle),
                         trailing = { IosSwitch(checked = uiState.devFpsOverlay, onCheckedChange = onFpsOverlayToggle) },
                     )
                 },
@@ -1260,21 +1291,21 @@ private fun DeveloperGroups(
                     DevActionRow(
                         title = strings.devExportLogsTitle, subtitle = strings.devExportLogsSubtitle,
                         icon = Icons.Filled.BugReport, iconBg = devIcon, isLoading = uiState.isExportingLogs,
-                        isDark = isDark, onClick = onExportLogs,
+                        isDark = isDark, helpId = SettingHelpIds.DEV_EXPORT_LOGS, onClick = onExportLogs,
                     )
                 },
                 {
                     DevActionRow(
                         title = strings.devExportPdfTitle, subtitle = strings.devExportPdfSubtitle,
                         icon = Icons.Filled.PictureAsPdf, iconBg = devIcon, isLoading = uiState.isExportingPdf,
-                        isDark = isDark, onClick = onExportPdf,
+                        isDark = isDark, helpId = SettingHelpIds.DEV_EXPORT_PDF, onClick = onExportPdf,
                     )
                 },
                 {
                     DevActionRow(
                         title = strings.devImportDbTitle, subtitle = strings.devImportDbSubtitle,
                         icon = Icons.Filled.FileOpen, iconBg = devIcon, isLoading = uiState.isImportingDb,
-                        isDark = isDark, onClick = onImportDb,
+                        isDark = isDark, helpId = SettingHelpIds.DEV_IMPORT_DB, onClick = onImportDb,
                     )
                 },
             ),
@@ -1290,11 +1321,13 @@ private fun DevActionRow(
     iconBg: Color,
     isLoading: Boolean,
     isDark: Boolean,
+    helpId: String,
     onClick: () -> Unit,
 ) {
     IosRow(
         title = title,
         subtitle = subtitle,
+        help = SettingHelpBinding(helpId),
         isDark = isDark,
         icon = icon,
         iconBackground = iconBg,

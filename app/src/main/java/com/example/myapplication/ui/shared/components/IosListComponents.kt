@@ -252,6 +252,13 @@ fun IosRow(
     val shape = remember { SquircleShape(0.dp) } // строка не клипается, но highlight рисует по прямоугольнику
     val interaction = remember { MutableInteractionSource() }
     val helpController = LocalSettingHelp.current
+    val autoHelp = LocalSettingHelpAuto.current
+    @Suppress("NAME_SHADOWING")
+    val help = help ?: if (autoHelp && helpController != null) {
+        SettingHelpBinding(id = "auto:$title", autoTitle = title, autoLead = subtitle ?: value)
+    } else {
+        null
+    }
     val view = LocalView.current
     val rowModifier = if (help != null && helpController != null) {
         Modifier.combinedClickable(
