@@ -55,6 +55,24 @@ class EpisodeUpdateFeedTest {
     }
 
     @Test
+    fun `a title with notifications off still counts the episode but is not announced`() = runBlocking {
+        val applied = mutableListOf<AnimeUpdate>()
+        var stored: List<AnimeUpdate>? = null
+
+        val fresh = publishEpisodeUpdates(
+            detected = listOf(update(from = 2, to = 3)),
+            getExisting = { emptyList() },
+            applyEpisodes = { applied += it },
+            silenced = setOf("a"),
+            setUpdates = { stored = it },
+        )
+
+        assertEquals(listOf(update(from = 2, to = 3)), applied)
+        assertTrue(fresh.isEmpty())
+        assertEquals(emptyList<AnimeUpdate>(), stored)
+    }
+
+    @Test
     fun `an episode newer than the acknowledged one is announced again`() = runBlocking {
         val fresh = publishEpisodeUpdates(
             detected = listOf(update(from = 2, to = 4)),
