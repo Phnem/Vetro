@@ -1,5 +1,23 @@
 # Vetro changelog
 
+## v3.5.6-Alpha — November 20, 2026
+
+App version: `v3.5.6-Alpha`. Android version code: `356`.
+Changes since 3.5.5-Alpha. This is a pre-release: the in-app updater ignores Alpha tags, install it by hand.
+
+### Notifications can be turned off per title
+
+- A new bell button on the title screen, next to the trailer, switches notifications of that title off and on. The bell swings when you switch it on and goes quiet, crossed out, when you switch it off.
+- A title with notifications off gives no push about new episodes or chapters, no card on the Home stack, no entry in the notification centre, and does not wait for dubbing. The release calendar still shows it. The setting stays on your phone and does not touch cloud sync. For series the episode counter keeps counting, so nothing floods in when you turn notifications back on.
+
+### Text fields
+
+- Every text field in the app got a new feel: each letter drops in with a bounce, deleted letters float away, the caret glides and stretches with its speed, the label rises above the text, and the frame thickens on focus. With the system "Remove animations" setting on, the letters simply appear.
+
+### Mini notifications (experimental)
+
+- New switch in Settings, For developers: "Mini notifications" (off by default). When on, short messages and the sync progress appear as a compact pill at the bottom of the screen that grows and shrinks like Dynamic Island, instead of system toasts.
+
 ## v3.5.5-Alpha — November 18, 2026
 
 App version: `v3.5.5-Alpha`. Android version code: `355`.
