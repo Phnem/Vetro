@@ -27,6 +27,8 @@ data class SettingsUiState(
     /** Карточки с обложкой на всю площадь, см. `DevPreferencesKeys.FULL_BLEED_CARDS`. */
     val devFullBleedCards: Boolean = true,
     val devExperimentalGrid: Boolean = true,
+    /** Мини-уведомления вместо тостов, см. `DevPreferencesKeys.MINI_NOTIF`. */
+    val devMiniNotif: Boolean = false,
     /** Старая заставка («переливание») вместо новой анимации логотипа, см. `DevPreferencesKeys.LEGACY_SPLASH`. */
     val devLegacySplash: Boolean = false,
     val isExportingLogs: Boolean = false,

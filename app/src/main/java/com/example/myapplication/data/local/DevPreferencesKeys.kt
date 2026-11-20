@@ -28,6 +28,13 @@ object DevPreferencesKeys {
      */
     val FULL_BLEED_CARDS = booleanPreferencesKey("dev_full_bleed_cards")
 
+    /**
+     * «Мини-уведомления»: короткие сообщения (тосты, статус синхронизации) идут плашкой снизу,
+     * которая морфится как Dynamic Island, см. `ui/shared/mininotif`. Отсутствие ключа = ВЫКЛ,
+     * то есть всё остаётся как раньше (системные Toast).
+     */
+    val MINI_NOTIF = booleanPreferencesKey("dev_mini_notif")
+
     /** Избранные в горизонтальной ленте над коллекцией. Отсутствие ключа = ВЫКЛ. */
     val EXPERIMENTAL_GRID = booleanPreferencesKey("dev_experimental_grid")
 

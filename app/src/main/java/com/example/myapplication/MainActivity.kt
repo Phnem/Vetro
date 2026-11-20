@@ -61,6 +61,8 @@ import com.example.myapplication.ui.debug.FpsOverlay
 import com.example.myapplication.ui.shared.LocalAdaptiveGlassEnabled
 import com.example.myapplication.ui.shared.LocalModernUi
 import com.example.myapplication.ui.shared.LocalFullBleedCards
+import com.example.myapplication.ui.shared.mininotif.MiniNotif
+import com.example.myapplication.ui.shared.mininotif.MiniNotifHost
 import com.example.myapplication.ui.shared.back.LocalExteraBackEnabled
 import com.example.myapplication.ui.shared.back.ProvideExteraBack
 import com.example.myapplication.ui.shared.LocalWorkspaceSearch
@@ -308,6 +310,11 @@ class MainActivity : FragmentActivity() {
                     if (settingsState.devFpsOverlay) {
                         FpsOverlay(modifier = Modifier.align(Alignment.TopStart))
                     }
+
+                    // mininotif: хост плашек поверх всего приложения; пока dev-флаг выключен, MiniNotif.show
+                    // отдаёт обычный Toast, и хост просто стоит без дела.
+                    androidx.compose.runtime.SideEffect { MiniNotif.enabled = settingsState.devMiniNotif }
+                    MiniNotifHost()
                 }
                 }
             }

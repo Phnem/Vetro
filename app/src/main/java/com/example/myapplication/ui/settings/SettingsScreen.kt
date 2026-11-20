@@ -776,6 +776,7 @@ fun SettingsScreen(
                                 onFpsOverlayToggle = { performHaptic(view, Haptic.Light); viewModel.setDevFpsOverlay(it) },
                                 onAdaptiveGlassToggle = { performHaptic(view, Haptic.Light); viewModel.setDevAdaptiveGlassScroll(it) },
                                 onFullBleedCardsToggle = { performHaptic(view, Haptic.Light); viewModel.setDevFullBleedCards(it) },
+                                onMiniNotifToggle = { performHaptic(view, Haptic.Light); viewModel.setDevMiniNotif(it) },
                                 onExperimentalGridToggle = { performHaptic(view, Haptic.Light); viewModel.setDevExperimentalGrid(it) },
                                 onLegacySplashToggle = { performHaptic(view, Haptic.Light); viewModel.setDevLegacySplash(it) },
                                 onExportLogs = { performHaptic(view, Haptic.Light); viewModel.exportLogs(context) },
@@ -1090,6 +1091,7 @@ private fun DeveloperGroups(
     onFpsOverlayToggle: (Boolean) -> Unit,
     onAdaptiveGlassToggle: (Boolean) -> Unit,
     onFullBleedCardsToggle: (Boolean) -> Unit,
+    onMiniNotifToggle: (Boolean) -> Unit,
     onExperimentalGridToggle: (Boolean) -> Unit,
     onLegacySplashToggle: (Boolean) -> Unit,
     onExportLogs: () -> Unit,
@@ -1150,6 +1152,26 @@ private fun DeveloperGroups(
                             IosSwitch(
                                 checked = uiState.devFullBleedCards,
                                 onCheckedChange = onFullBleedCardsToggle,
+                            )
+                        },
+                    )
+                },
+                {
+                    val ru = strings.languageName == "RU"
+                    IosRow(
+                        title = if (ru) "Мини-уведомления" else "Mini notifications",
+                        subtitle = if (ru) {
+                            "Короткие сообщения плашкой снизу, как Dynamic Island, вместо тостов"
+                        } else {
+                            "Short messages as a bottom pill that morphs like Dynamic Island, instead of toasts"
+                        },
+                        isDark = isDark,
+                        icon = Icons.Filled.NotificationsActive,
+                        iconBackground = devIcon,
+                        trailing = {
+                            IosSwitch(
+                                checked = uiState.devMiniNotif,
+                                onCheckedChange = onMiniNotifToggle,
                             )
                         },
                     )

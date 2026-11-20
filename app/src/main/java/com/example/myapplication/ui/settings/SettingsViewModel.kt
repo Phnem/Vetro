@@ -99,6 +99,7 @@ private fun mergeSettingsUi(
         devAdaptiveGlassScroll = prefs[DevPreferencesKeys.ADAPTIVE_GLASS_SCROLL] ?: false,
         devFullBleedCards = prefs[DevPreferencesKeys.FULL_BLEED_CARDS] ?: true,
         devExperimentalGrid = prefs[DevPreferencesKeys.EXPERIMENTAL_GRID] ?: true,
+        devMiniNotif = prefs[DevPreferencesKeys.MINI_NOTIF] ?: false,
         devLegacySplash = prefs[DevPreferencesKeys.LEGACY_SPLASH] ?: false,
         isExportingLogs = t.isExportingLogs,
         isExportingPdf = t.isExportingPdf,
@@ -274,6 +275,12 @@ class SettingsViewModel(
     fun setDevFullBleedCards(enabled: Boolean) {
         viewModelScope.launch {
             settingsDataStore.edit { it[DevPreferencesKeys.FULL_BLEED_CARDS] = enabled }
+        }
+    }
+
+    fun setDevMiniNotif(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsDataStore.edit { it[DevPreferencesKeys.MINI_NOTIF] = enabled }
         }
     }
 
