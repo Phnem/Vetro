@@ -1,5 +1,7 @@
 package com.example.myapplication.ui.addedit
 
+import com.example.myapplication.ui.shared.mininotif.MiniNotif
+import com.example.myapplication.ui.shared.mininotif.MiniNotifKind
 import com.example.myapplication.ui.shared.theme.IosScroll
 import com.example.myapplication.ui.shared.glassControl
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -112,9 +114,7 @@ fun AddEditScreen(
         viewModel.effect.collect { effect ->
             when (effect) {
                 is AddEditEffect.NavigateBack -> onSaved?.invoke() ?: run { navController.popBackStack() }
-                is AddEditEffect.ShowError -> android.widget.Toast.makeText(
-                    ctx, effect.message, android.widget.Toast.LENGTH_SHORT
-                ).show()
+                is AddEditEffect.ShowError -> MiniNotif.show(ctx, effect.message, MiniNotifKind.Error)
             }
         }
     }
@@ -545,11 +545,7 @@ fun AddEditScreen(
                                 if (uiState.isValid) {
                                     viewModel.onEvent(AddEditEvent.OnSave)
                                 } else {
-                                    android.widget.Toast.makeText(
-                                        ctx,
-                                        strings.enterTitleToast,
-                                        android.widget.Toast.LENGTH_SHORT
-                                    ).show()
+                                    MiniNotif.show(ctx, strings.enterTitleToast, MiniNotifKind.Warning)
                                 }
                             },
                         contentAlignment = Alignment.Center

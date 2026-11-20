@@ -1,5 +1,6 @@
 package com.example.myapplication.ui.details
 
+import com.example.myapplication.ui.shared.mininotif.MiniNotif
 import com.example.myapplication.ui.shared.theme.IosScroll
 import com.example.myapplication.ui.shared.theme.iosOverscrollFactory
 import androidx.compose.foundation.LocalOverscrollFactory
@@ -149,7 +150,7 @@ fun DetailsScreen(
     val appContext = LocalContext.current.applicationContext
     LaunchedEffect(viewModel) {
         viewModel.messages.collect { text ->
-            android.widget.Toast.makeText(appContext, text, android.widget.Toast.LENGTH_SHORT).show()
+            MiniNotif.show(appContext, text)
         }
     }
 

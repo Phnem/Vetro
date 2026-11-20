@@ -1,5 +1,7 @@
 package com.example.myapplication.ui.navigation
 
+import com.example.myapplication.ui.shared.mininotif.MiniNotif
+import com.example.myapplication.ui.shared.mininotif.MiniNotifKind
 import com.example.myapplication.ui.details.SwipeBackGesture
 import androidx.compose.animation.EnterExitState
 import androidx.compose.animation.EnterTransition
@@ -171,11 +173,7 @@ fun AppNavGraph(
                             val result = authRepository.signInWithGoogle(context)
                             if (result.isFailure) {
                                 val msg = result.exceptionOrNull()?.message ?: "?"
-                                android.widget.Toast.makeText(
-                                    context,
-                                    welcomeStrings.loginFailedFormat.format(msg),
-                                    android.widget.Toast.LENGTH_LONG
-                                ).show()
+                                MiniNotif.show(context, welcomeStrings.loginFailedFormat.format(msg), MiniNotifKind.Error, long = true)
                             }
                         }
                     },
@@ -184,11 +182,7 @@ fun AppNavGraph(
                             val result = authRepository.signInWithGithub()
                             if (result.isFailure) {
                                 val msg = result.exceptionOrNull()?.message ?: "?"
-                                android.widget.Toast.makeText(
-                                    context,
-                                    welcomeStrings.loginFailedFormat.format(msg),
-                                    android.widget.Toast.LENGTH_LONG
-                                ).show()
+                                MiniNotif.show(context, welcomeStrings.loginFailedFormat.format(msg), MiniNotifKind.Error, long = true)
                             }
                         }
                     },
@@ -196,18 +190,10 @@ fun AppNavGraph(
                         scope.launch {
                             val result = authRepository.resetPasswordForEmail(email)
                             if (result.isSuccess) {
-                                android.widget.Toast.makeText(
-                                    context,
-                                    welcomeStrings.resetPasswordSuccessFormat.format(email),
-                                    android.widget.Toast.LENGTH_LONG
-                                ).show()
+                                MiniNotif.show(context, welcomeStrings.resetPasswordSuccessFormat.format(email), MiniNotifKind.Success, long = true)
                             } else {
                                 val msg = result.exceptionOrNull()?.message ?: "?"
-                                android.widget.Toast.makeText(
-                                    context,
-                                    welcomeStrings.resetPasswordErrorFormat.format(msg),
-                                    android.widget.Toast.LENGTH_LONG
-                                ).show()
+                                MiniNotif.show(context, welcomeStrings.resetPasswordErrorFormat.format(msg), MiniNotifKind.Error, long = true)
                             }
                         }
                     },
@@ -216,11 +202,7 @@ fun AppNavGraph(
                             val result = authRepository.signInWithEmail(email, password)
                             if (result.isFailure) {
                                 val msg = result.exceptionOrNull()?.message ?: "?"
-                                android.widget.Toast.makeText(
-                                    context,
-                                    welcomeStrings.loginFailedFormat.format(msg),
-                                    android.widget.Toast.LENGTH_LONG
-                                ).show()
+                                MiniNotif.show(context, welcomeStrings.loginFailedFormat.format(msg), MiniNotifKind.Error, long = true)
                             }
                         }
                     },

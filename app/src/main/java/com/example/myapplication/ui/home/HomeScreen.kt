@@ -1,5 +1,6 @@
 package com.example.myapplication.ui.home
 
+import com.example.myapplication.ui.shared.mininotif.MiniNotif
 import com.example.myapplication.ui.shared.theme.BrandOrange
 import androidx.activity.compose.ReportDrawnWhen
 import com.example.myapplication.ui.shared.theme.IosScroll
@@ -352,10 +353,8 @@ fun HomeScreen(
         performHaptic(view, Haptic.Light)
         scope.launch {
             if (viewModel.usesEpisodeRating(anime.id)) {
-                android.widget.Toast.makeText(ctx,
-                    if (currentLanguage == AppLanguage.RU) "Рейтинг считается по эпизодам. Измените их оценки или выберите Auto в деталях"
-                    else "Rating follows your episode scores. Edit them or choose Auto in Details",
-                    android.widget.Toast.LENGTH_LONG).show()
+                MiniNotif.show(ctx, if (currentLanguage == AppLanguage.RU) "Рейтинг считается по эпизодам. Измените их оценки или выберите Auto в деталях"
+                    else "Rating follows your episode scores. Edit them or choose Auto in Details", long = true)
             } else {
                 ratingPickerSlider.anchorBoundsInRoot = chipBounds
                 ratingPickerId = anime.id

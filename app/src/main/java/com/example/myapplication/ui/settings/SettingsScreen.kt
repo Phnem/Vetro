@@ -1,10 +1,10 @@
 package com.example.myapplication.ui.settings
 
+import com.example.myapplication.ui.shared.mininotif.MiniNotif
 import com.example.myapplication.ui.shared.theme.IosScroll
 import com.example.myapplication.ui.shared.glassControl
 import com.example.myapplication.ui.shared.rememberPinnableBackdrop
 import android.content.Intent
-import android.widget.Toast
 import androidx.core.net.toUri
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -316,17 +316,17 @@ fun SettingsScreen(
 
     LaunchedEffect(uiState.importDbMessage) {
         val msg = uiState.importDbMessage ?: return@LaunchedEffect
-        Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+        MiniNotif.show(context, msg)
         viewModel.clearImportDbMessage()
     }
     LaunchedEffect(uiState.repairDbMessage) {
         val msg = uiState.repairDbMessage ?: return@LaunchedEffect
-        Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
+        MiniNotif.show(context, msg, long = true)
         viewModel.clearRepairDbMessage()
     }
     LaunchedEffect(uiState.titleDubbingMessage) {
         val msg = uiState.titleDubbingMessage ?: return@LaunchedEffect
-        Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
+        MiniNotif.show(context, msg, long = true)
         viewModel.clearTitleDubbingMessage()
     }
 

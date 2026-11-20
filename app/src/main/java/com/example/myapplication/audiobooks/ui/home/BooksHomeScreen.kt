@@ -1,7 +1,7 @@
 package com.example.myapplication.audiobooks.ui.home
 
+import com.example.myapplication.ui.shared.mininotif.MiniNotif
 import androidx.compose.ui.unit.toSize
-import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.annotation.DrawableRes
 import androidx.compose.material3.Icon
@@ -142,7 +142,7 @@ fun BooksHomeScreen(
             BooksHomeViewModel.LaunchState.Unavailable -> strings.unavailable
             else -> null
         }
-        if (text != null) Toast.makeText(context, text, Toast.LENGTH_SHORT).show()
+        if (text != null) MiniNotif.show(context, text)
         vm.consumeLaunch()
     }
 

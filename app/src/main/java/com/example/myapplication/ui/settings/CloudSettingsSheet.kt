@@ -1,6 +1,6 @@
 package com.example.myapplication.ui.settings
 
-import android.widget.Toast
+import com.example.myapplication.ui.shared.mininotif.MiniNotif
 import androidx.annotation.DrawableRes
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
@@ -75,7 +75,7 @@ fun CloudSettingsSheet(
     val lastSyncMessage by supabaseSyncCoordinator.lastSyncMessage.collectAsStateWithLifecycle(initialValue = null)
     val maxSheetHeight = (LocalConfiguration.current.screenHeightDp * 0.78f).dp
 
-    fun toast(text: String) = Toast.makeText(context, text, Toast.LENGTH_LONG).show()
+    fun toast(text: String) = MiniNotif.show(context, text, long = true)
 
     SettingsPanelColumn(
         modifier = sharedModifier

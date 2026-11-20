@@ -1,5 +1,6 @@
 package com.example.myapplication.audiobooks.ui.details
 
+import com.example.myapplication.ui.shared.mininotif.MiniNotif
 import com.example.myapplication.audiobooks.domain.enrichment.BookWorkInfo
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -72,7 +73,6 @@ import androidx.compose.ui.zIndex
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.media3.common.util.UnstableApi
 import coil3.compose.AsyncImage
-import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material.icons.Icons
@@ -162,7 +162,7 @@ fun BookDetailsScreen(
     }
     LaunchedEffect(state.notice?.seq) {
         state.notice?.let { notice ->
-            Toast.makeText(context, noticeText(notice, menu), Toast.LENGTH_LONG).show()
+            MiniNotif.show(context, noticeText(notice, menu), long = true)
             viewModel.consumeNotice()
         }
     }

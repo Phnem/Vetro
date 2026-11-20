@@ -1,5 +1,6 @@
 package com.example.myapplication
 
+import com.example.myapplication.ui.shared.mininotif.MiniNotif
 import com.example.myapplication.ui.shared.theme.BrandOrangeBright
 import com.example.myapplication.ui.shared.theme.BrandLightGray
 import com.example.myapplication.ui.shared.theme.BrandDarkGray
@@ -307,11 +308,7 @@ fun WelcomeScreen(
                     .padding(top = 8.dp)
                     .clickable {
                         if (email.isBlank()) {
-                            android.widget.Toast.makeText(
-                                context,
-                                strings.enterEmailFirst,
-                                android.widget.Toast.LENGTH_SHORT
-                            ).show()
+                            MiniNotif.show(context, strings.enterEmailFirst)
                         } else {
                             onForgotPasswordClick(email)
                         }

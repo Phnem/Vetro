@@ -1,8 +1,9 @@
 package com.example.myapplication.audiobooks.ui
 
+import com.example.myapplication.ui.shared.mininotif.MiniNotif
+import com.example.myapplication.ui.shared.mininotif.MiniNotifKind
 import com.example.myapplication.di.AUDIOBOOK_SOURCES
 import org.koin.core.qualifier.named
-import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import com.example.myapplication.audiobooks.data.BookCoverManager
@@ -259,7 +260,7 @@ fun AudiobookPlayerHost(language: AppLanguage = AppLanguage.RU, modifier: Modifi
         if (seq != shownNotice) {
             shownNotice = seq
             if (seq > 0) {
-                Toast.makeText(context, if (name.isEmpty()) strings.noSourcesLeft else strings.switchedSource(name), Toast.LENGTH_LONG).show()
+                MiniNotif.show(context, if (name.isEmpty()) strings.noSourcesLeft else strings.switchedSource(name), MiniNotifKind.Warning, long = true)
             }
         }
     }
@@ -299,7 +300,7 @@ fun AudiobookPlayerHost(language: AppLanguage = AppLanguage.RU, modifier: Modifi
             BookCoverManager.Result.NothingNew -> strings.coverNoOthers
             BookCoverManager.Result.Failed -> strings.coverFailed
         }
-        Toast.makeText(context, message, Toast.LENGTH_LONG).show()
+        MiniNotif.show(context, message, long = true)
     }
     val importCoverPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { picked ->
         val workId = book?.workId
@@ -597,7 +598,7 @@ fun AudiobookPlayerHost(language: AppLanguage = AppLanguage.RU, modifier: Modifi
                                 val workId = book.workId
                                 if (workId != null) {
                                     coverBusy = true
-                                    Toast.makeText(context, strings.coverSearching, Toast.LENGTH_SHORT).show()
+                                    MiniNotif.show(context, strings.coverSearching)
                                     scope.launch {
                                         val result = covers.reload(workId)
                                         coverBusy = false

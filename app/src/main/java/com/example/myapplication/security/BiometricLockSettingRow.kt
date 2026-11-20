@@ -1,6 +1,7 @@
 package com.example.myapplication.security
 
-import android.widget.Toast
+import com.example.myapplication.ui.shared.mininotif.MiniNotif
+import com.example.myapplication.ui.shared.mininotif.MiniNotifKind
 import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricManager.Authenticators.BIOMETRIC_WEAK
 import androidx.compose.material.icons.Icons
@@ -22,7 +23,7 @@ fun BiometricLockSettingRow(ru: Boolean, isDark: Boolean) {
         if (BiometricManager.from(context).canAuthenticate(BIOMETRIC_WEAK) == BiometricManager.BIOMETRIC_SUCCESS) {
             AppLockActivity.changeSetting(context, checked)
         } else {
-            Toast.makeText(context, AppLockActivity.unavailableMessage(ru), Toast.LENGTH_LONG).show()
+            MiniNotif.show(context, AppLockActivity.unavailableMessage(ru), MiniNotifKind.Error, long = true)
         }
     }
     IosRow(title = if (ru) "Вход по биометрии" else "Biometric app lock",

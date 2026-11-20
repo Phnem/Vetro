@@ -1,8 +1,8 @@
 package com.example.myapplication.ui.details
 
+import com.example.myapplication.ui.shared.mininotif.MiniNotif
 import com.example.myapplication.ui.shared.theme.StatusSuccess
 import com.example.myapplication.ui.shared.theme.IosScroll
-import android.widget.Toast
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.SizeTransform
@@ -210,7 +210,7 @@ fun ModernDetailsEpisodesPage(
                 }
 
                 is EpisodeMenuEvent.Message -> {
-                    Toast.makeText(context, event.text, Toast.LENGTH_SHORT).show()
+                    MiniNotif.show(context, event.text)
                 }
             }
         }

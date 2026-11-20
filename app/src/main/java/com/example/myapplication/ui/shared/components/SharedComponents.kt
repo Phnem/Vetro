@@ -1,10 +1,11 @@
 package com.example.myapplication.ui.shared.components
 
+import com.example.myapplication.ui.shared.mininotif.MiniNotif
+import com.example.myapplication.ui.shared.mininotif.MiniNotifKind
 import com.example.myapplication.ui.shared.theme.BrandOrange
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
-import android.widget.Toast
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.*
@@ -103,7 +104,7 @@ fun AnimatedCopyButton(textToCopy: String) {
     IconButton(onClick = {
         val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
         cm.setPrimaryClip(ClipData.newPlainText("", textToCopy))
-        Toast.makeText(context, "Copied!", Toast.LENGTH_SHORT).show()
+        MiniNotif.show(context, "Copied!", MiniNotifKind.Success)
     }) {
         Icon(
             Icons.Default.ContentCopy,

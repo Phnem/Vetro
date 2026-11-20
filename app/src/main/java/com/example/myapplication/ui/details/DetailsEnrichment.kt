@@ -1,5 +1,7 @@
 package com.example.myapplication.ui.details
 
+import com.example.myapplication.ui.shared.mininotif.MiniNotif
+import com.example.myapplication.ui.shared.mininotif.MiniNotifKind
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.animation.core.animateFloatAsState
@@ -84,7 +86,7 @@ internal fun DetailsTitle(
                 clipboard?.setPrimaryClip(android.content.ClipData.newPlainText(displayTitle, displayTitle))
                 com.example.myapplication.utils.performHaptic(view, com.example.myapplication.utils.Haptic.Light)
                 if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.TIRAMISU) {
-                    android.widget.Toast.makeText(context, copiedLabel, android.widget.Toast.LENGTH_SHORT).show()
+                    MiniNotif.show(context, copiedLabel, MiniNotifKind.Success)
                 }
             })
         },
