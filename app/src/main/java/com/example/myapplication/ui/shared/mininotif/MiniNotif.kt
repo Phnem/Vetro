@@ -471,6 +471,8 @@ fun MiniNotifHost(
                         )
                     }
                     .semantics(mergeDescendants = true) { liveRegion = LiveRegionMode.Polite },
+                // Содержимое по центру плашки и по вертикали, и по горизонтали (раньше липло к верхнему краю).
+                contentAlignment = Alignment.Center,
             ) {
                 Box(
                     modifier = Modifier
