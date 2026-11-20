@@ -1,5 +1,25 @@
 # Vetro changelog
 
+## v3.5.7-Alpha — November 20, 2026
+
+App version: `v3.5.7-Alpha`. Android version code: `357`.
+Changes since 3.5.6-Alpha. This is a pre-release: the in-app updater ignores Alpha tags, install it by hand.
+
+### Settings: hold for details works everywhere
+
+- Holding a row in Settings now opens its details on every item, including the developer section and the smart models. Rows that had no written description get one built from their title and subtitle; the main ones (local AI, data collection, each developer switch) have full explanations with a Turn on / Open button.
+- "What will be sent" is no longer a separate row. The exact text of the next upload now sits inside the details of "Help improve Vetro" (hold the row, then "Show the exact text of the next upload").
+
+### Local AI is one item
+
+- The three local models (title matching, files and genres, taste recommendations) are now a single "Local AI" row with one switch that turns all three on or off. The details explain what each of the three does.
+- In the developer section the five separate AI rows (TitleMatch observations, MicroML packs and three "previous version" switches) are replaced by one "Local AI" row: its subtitle shows the state of the models, and tapping it opens a window with the "previous version" switches and the observation counters.
+
+### Small fixes
+
+- The bell on the title screen no longer shows "Notifications on / off": the colour and the icon are enough. The words stay only for screen readers.
+- The letters in the new text fields drop in about a quarter more gently: smaller offset, tilt and bounce.
+
 ## v3.5.6-Alpha — November 20, 2026
 
 App version: `v3.5.6-Alpha`. Android version code: `356`.
