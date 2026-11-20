@@ -1,5 +1,17 @@
 # Vetro changelog
 
+## v3.5.8-Alpha — November 21, 2026
+
+App version: `v3.5.8-Alpha`. Android version code: `358`.
+Changes since 3.5.7-Alpha. This is a pre-release: the in-app updater ignores Alpha tags, install it by hand.
+
+### Mini notifications (experimental) fixed
+
+- The pill is now centred: the icon and the text used to stick to its top edge and poke out of it.
+- It sits higher, above the floating dock and the bottom buttons, instead of overlapping them.
+- Copying a title in the edit screen now shows the pill ("Copied!") instead of the system toast.
+- Sync progress now appears as the pill ("Syncing…", then "Synced") on the Home screen and replaces the old "Sync" pill at the top, while the "Mini notifications" switch in Settings, For developers is on.
+
 ## v3.5.7-Alpha — November 20, 2026
 
 App version: `v3.5.7-Alpha`. Android version code: `357`.
