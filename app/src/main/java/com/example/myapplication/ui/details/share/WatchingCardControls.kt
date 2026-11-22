@@ -1,6 +1,5 @@
 package com.example.myapplication.ui.details.share
 
-import android.graphics.Bitmap
 import android.view.HapticFeedbackConstants
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
@@ -41,14 +40,15 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.graphicsLayer
@@ -60,15 +60,13 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.IntOffset
-import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.myapplication.ui.shared.theme.BrandOrange
 import com.example.myapplication.ui.shared.theme.MotionTokens
 import com.example.myapplication.ui.shared.theme.SnProFamily
 import com.example.myapplication.ui.shared.theme.rememberReducedMotion
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
@@ -238,82 +236,59 @@ internal fun NickPill(
 }
 
 /**
- * Предпросмотр карточки с пружинной высотой. Карточка по высоте садится на содержимое, поэтому «минимум
- * данных» или появившийся комментарий меняют её размер: высота плавно идёт к новому значению на пружине
- * (с лёгким перелётом, и вверх, и вниз), а картинки перетекают одна в другую. Ширина не меняется:
- * обе картинки привязаны к верху и растянуты на одну ширину, так что шапка и обложка стоят на месте, а
- * движется только то, что под ними.
+ * Живой предпросмотр карточки. Картинки здесь нет: карточка рисуется заново каждый кадр по двум значениям,
+ * которые идут на пружинах. [full] ведёт «объём данных» (1 — всё, 0 — минимум): блоки под обложкой растут и
+ * сжимаются, текст всплывает и гаснет, подвал едет следом, а фон тянется вместе с холстом, потому что
+ * его пятна привязаны к долям высоты. [showBubble] ведёт пузырь-комментарий: он вырастает облачком из
+ * «хвоста» у логотипа, а холст сверху растягивается под него. Высота читается в фазе раскладки и рисуется в
+ * фазе отрисовки, так что кадр не пересобирает композицию. Итоговый PNG рисуется тем же кодом.
  */
 @Composable
 internal fun CardPreview(
-    bitmap: Bitmap?,
+    data: ShareCardData?,
+    full: Boolean,
+    showBubble: Boolean,
     description: String,
     modifier: Modifier = Modifier,
     width: Dp = PREVIEW_WIDTH,
 ) {
     val reduced = rememberReducedMotion()
-    var from by remember { mutableStateOf<Bitmap?>(null) }
-    var to by remember { mutableStateOf<Bitmap?>(null) }
-    val mix = remember { Animatable(1f) }
-    val aspect = remember { Animatable(PLACEHOLDER_ASPECT) }
-
-    LaunchedEffect(bitmap) {
-        val next = bitmap ?: return@LaunchedEffect
-        val ratio = next.height.toFloat() / next.width
-        val previous = to
-        if (previous == null || previous === next || reduced) {
-            to = next
-            from = null
-            aspect.snapTo(ratio)
-            mix.snapTo(1f)
-            return@LaunchedEffect
-        }
-        from = previous
-        to = next
-        mix.snapTo(0f)
-        coroutineScope {
-            launch { mix.animateTo(1f, tween(MIX_MILLIS)) }
-            launch { aspect.animateTo(ratio, MotionTokens.standard()) }
-        }
-        from = null
+    val detail = remember { Animatable(if (full) 1f else 0f) }
+    val bubble = remember { Animatable(if (showBubble) 1f else 0f) }
+    LaunchedEffect(full) {
+        val target = if (full) 1f else 0f
+        if (reduced) detail.snapTo(target) else detail.animateTo(target, MotionTokens.standard())
     }
+    LaunchedEffect(showBubble) {
+        val target = if (showBubble) 1f else 0f
+        if (reduced) bubble.snapTo(target) else bubble.animateTo(target, MotionTokens.menuPop())
+    }
+    // Раскладки текста и палитра считаются один раз на набор данных; кадры только рисуют.
+    val scene = remember(data) { data?.let { WatchingCardRenderer.Scene(it) } }
 
     Box(modifier.fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
-        val shown = to
-        if (shown == null) {
+        if (scene == null) {
             Box(Modifier.width(width).height(width * PLACEHOLDER_ASPECT), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator(color = BrandOrange, modifier = Modifier.size(32.dp), strokeWidth = 3.dp)
             }
         } else {
-            val fromImage = remember(from) { from?.asImageBitmap() }
-            val toImage = remember(shown) { shown.asImageBitmap() }
             Canvas(
                 Modifier
                     .width(width)
-                    .height(width * aspect.value)
+                    .layout { measurable, constraints ->
+                        val w = constraints.maxWidth
+                        val pose = WatchingCardRenderer.Pose(detail.value, bubble.value)
+                        val h = (w * scene.heightUnits(pose) / WatchingCardRenderer.CANVAS_UNITS).roundToInt()
+                        val placeable = measurable.measure(Constraints.fixed(w, h))
+                        layout(w, h) { placeable.place(0, 0) }
+                    }
                     .clip(RoundedCornerShape(20.dp))
                     .semantics { contentDescription = description },
             ) {
-                val scaleToWidth = size.width / toImage.width
-                // Старая картинка гаснет, новая проявляется поверх: нижний край старой не остаётся призраком.
-                fromImage?.let { image ->
-                    drawImage(
-                        image,
-                        srcSize = IntSize(image.width, image.height),
-                        dstOffset = IntOffset.Zero,
-                        dstSize = IntSize(size.width.roundToInt(), (image.height * scaleToWidth).roundToInt()),
-                        alpha = 1f - mix.value.coerceIn(0f, 1f),
-                        filterQuality = FilterQuality.High,
-                    )
+                val pose = WatchingCardRenderer.Pose(detail.value, bubble.value)
+                drawIntoCanvas { canvas ->
+                    scene.draw(canvas.nativeCanvas, size.width / WatchingCardRenderer.CANVAS_UNITS, pose)
                 }
-                drawImage(
-                    toImage,
-                    srcSize = IntSize(toImage.width, toImage.height),
-                    dstOffset = IntOffset.Zero,
-                    dstSize = IntSize(size.width.roundToInt(), (toImage.height * scaleToWidth).roundToInt()),
-                    alpha = if (fromImage == null) 1f else mix.value.coerceIn(0f, 1f),
-                    filterQuality = FilterQuality.High,
-                )
             }
         }
     }
@@ -324,5 +299,4 @@ private val PREVIEW_WIDTH = 264.dp
 
 /** Пока картинки нет, под неё резервируется место средней карточки. */
 private const val PLACEHOLDER_ASPECT = 1.3f
-private const val MIX_MILLIS = 240
 private const val COLOR_MILLIS = 200

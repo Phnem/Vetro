@@ -90,22 +90,31 @@ fun WatchingCardSheet(
     // Режим данных и показ комментария живут, пока открыта шторка: карточку собирают под конкретную отправку.
     var minimal by remember { mutableStateOf(false) }
     var showComment by remember { mutableStateOf(true) }
-    var bitmap by remember { mutableStateOf<Bitmap?>(null) }
+    var base by remember { mutableStateOf<ShareCardData?>(null) }
     var busy by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         nick = settings.data.first()[NickKey].orEmpty()
         nickLoaded = true
     }
-    val shownComment = if (showComment) comment else ""
-    // Перерисовка при смене ника, режима и комментария; предпросмотр сам плавно перетекает в новую картинку.
-    LaunchedEffect(nickLoaded, nick, minimal, shownComment) {
-        if (!nickLoaded) return@LaunchedEffect
-        bitmap = builder.render(
-            anime, title, ru, isDark, posterPath, status, description,
-            WatchingCardOptions(minimal = minimal, nick = nick, comment = shownComment),
+    // Данные собираются один раз: режим данных и показ комментария карточка переживает сама, на пружинах,
+    // а ник и текст комментария подставляются поверх без повторного чтения постера.
+    LaunchedEffect(anime, title, ru, isDark, posterPath, status, description) {
+        base = builder.prepare(anime, title, ru, isDark, posterPath, status, description)
+    }
+    val previewData = remember(base, nickLoaded, nick, comment) {
+        base?.takeIf { nickLoaded }?.copy(
+            nick = nick.trim(),
+            comment = comment.trim().take(WatchingCardOptions.MAX_COMMENT_LENGTH).ifEmpty { null },
         )
     }
+    val bubbleShown = showComment && comment.isNotBlank()
+
+    // Итоговая картинка для PNG и отправки рисуется тем же кодом, что и предпросмотр, в устоявшейся позе.
+    suspend fun finalCard(): android.graphics.Bitmap = builder.render(
+        anime, title, ru, isDark, posterPath, status, description,
+        WatchingCardOptions(minimal = minimal, nick = nick, comment = if (showComment) comment else ""),
+    )
 
     MotionBottomSheet(visibleState = state, onDismiss = onDismiss, isDark = isDark, panelModifier = Modifier.fillMaxWidth()) {
         Column(
@@ -131,7 +140,12 @@ fun WatchingCardSheet(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Spacer(Modifier.height(14.dp))
-            CardPreview(bitmap, description = if (ru) "Предпросмотр карточки" else "Card preview")
+            CardPreview(
+                data = previewData,
+                full = !minimal,
+                showBubble = bubbleShown,
+                description = if (ru) "Предпросмотр карточки" else "Card preview",
+            )
             Spacer(Modifier.height(14.dp))
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 NickPill(
@@ -177,12 +191,11 @@ fun WatchingCardSheet(
                 OrangeButton(
                     text = if (ru) "Скачать PNG" else "Save PNG",
                     modifier = Modifier.weight(1f),
-                    enabled = bitmap != null && !busy,
+                    enabled = previewData != null && !busy,
                 ) {
-                    val card = bitmap ?: return@OrangeButton
                     scope.launch {
                         busy = true
-                        val ok = WatchingCardActions.saveToGallery(context, card)
+                        val ok = WatchingCardActions.saveToGallery(context, finalCard())
                         MiniNotif.show(
                             context,
                             when {
@@ -206,17 +219,18 @@ fun WatchingCardSheet(
                     modifier = Modifier
                         .weight(1f)
                         .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.onSurface.copy(alpha = if (bitmap != null) 0.08f else 0.04f))
-                        .clickable(enabled = bitmap != null && !busy) {
-                            val card = bitmap ?: return@clickable
+                        .background(MaterialTheme.colorScheme.onSurface.copy(alpha = if (previewData != null) 0.08f else 0.04f))
+                        .clickable(enabled = previewData != null && !busy) {
                             scope.launch {
-                                if (!WatchingCardActions.share(context, card, ru)) {
+                                busy = true
+                                if (!WatchingCardActions.share(context, finalCard(), ru)) {
                                     MiniNotif.show(
                                         context,
                                         if (ru) "Не удалось подготовить файл" else "Couldn't prepare the file",
                                         MiniNotifKind.Error,
                                     )
                                 }
+                                busy = false
                             }
                         }
                         .padding(vertical = 10.dp),

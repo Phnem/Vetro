@@ -34,27 +34,35 @@ internal data class ShareCardData(
     val year: String,
     val statusLabel: String,
     val title: String,
-    /** Плашка прогресса на обложке: «19 / 28 эп. • 68%»; null — прогресса нет. */
+    /** Плашка прогресса на обложке: «19 / 28 эп.»; null — прогресса нет. */
     val progressText: String?,
+    /** Хвост плашки в режиме полных данных: « • 68%»; null — нет. */
+    val progressSuffix: String?,
     /** Доля для 10-сегментной полоски; null — полоски нет. */
     val fraction: Float?,
-    /** Оранжевая плашка оценки на обложке: «9/10»; null — не показывать. */
+    /** Оранжевая плашка оценки на обложке: «9/10»; null — не показывать. Видна только при полных данных. */
     val ratingText: String?,
-    /** Оранжевая строка под названием: «Эп. 19», «S3 E5», «Глава 82»; null — нет. */
+    /** Оранжевая строка под названием: «Эп. 19», «S3 E5», «Глава 82»; null — нет. Видна только при полных данных. */
     val currentUnit: String?,
-    /** Текст под оранжевой строкой (с оранжевой чертой слева): заметка пользователя или описание тайтла; null — нет. */
+    /** Текст под оранжевой строкой (с оранжевой чертой слева): заметка пользователя или описание тайтла; null — нет. Только при полных данных. */
     val note: String?,
     /** Заметка пользователя берётся в «ёлочки», описание тайтла идёт как есть. */
     val noteQuoted: Boolean,
     /** Комментарий пользователя: пузырь-мысль над карточкой, холст растёт под него; null — нет. */
     val comment: String?,
-    /** Жанры вместо цитаты в режиме «минимум данных»; null — нет. */
+    /** Жанры на месте заметки в режиме «минимум данных»; null — нет. */
     val genres: String?,
+    /** Подвал в режиме полных данных. */
     val footerLeft: String,
     val footerRight: String,
+    /** Подвал в режиме «минимум данных». */
+    val footerLeftMin: String,
+    val footerRightMin: String,
     /** Тема приложения: карточка рисуется тёмным или светлым стеклом. */
     val dark: Boolean,
     val poster: Bitmap?,
+    /** Цвета фона из обложки; null — посчитать по [poster] при построении. */
+    val ambient: WatchingCardRenderer.Ambient? = null,
     val brandName: String = "Vetro Collection",
 )
 
@@ -90,7 +98,7 @@ internal object WatchingCardRenderer {
     private const val SAND = 0xFFD6B89E.toInt()
     private const val LOGO_BODY = 0xFF121212.toInt()
 
-    private class Tokens(
+    internal class Tokens(
         val primary: Int,
         val secondary: Int,
         val catPillBg: Int,
@@ -161,42 +169,32 @@ internal object WatchingCardRenderer {
         shadowBlur = 64f,
     )
 
-    fun render(data: ShareCardData): Bitmap {
-        val t = if (data.dark) dark else light
-        val bubble = data.comment?.trim()?.takeIf { it.isNotEmpty() }?.let { measureBubble(it, data.dark) }
-        // Пузырь стоит над карточкой, и холст растёт ровно на его высоту (с хвостом и зазором).
-        val extraTop = bubble?.let { max(0f, BUBBLE_TOP + it.totalHeight + BUBBLE_GAP - PAD) } ?: 0f
-        val plan = plan(data, t)
-        val height = ((plan.cardH + PAD * 2f + extraTop) * UNIT).roundToInt()
+    /**
+     * Положение анимации карточки. [detail]: 1 — все данные, 0 — минимум; между ними блоки под обложкой
+     * растут и сжимаются, текст проявляется и гаснет. [bubble]: 1 — пузырь-комментарий на месте, 0 — убран;
+     * значение выше 1 — перелёт пружины. Предпросмотр гоняет оба значения на пружинах, PNG берёт [settled].
+     */
+    class Pose(val detail: Float, val bubble: Float) {
+        companion object {
+            /** Устоявшийся вид: полные данные или минимум, пузырь на месте (если он есть). */
+            fun settled(full: Boolean) = Pose(if (full) 1f else 0f, 1f)
+        }
+    }
+
+    /** Итоговая картинка для сохранения и отправки: та же отрисовка, что и в предпросмотре, в устоявшейся позе. */
+    fun render(data: ShareCardData, full: Boolean): Bitmap {
+        val scene = Scene(data)
+        val pose = Pose.settled(full)
+        val height = (scene.heightUnits(pose) * UNIT).roundToInt()
         val bitmap = Bitmap.createBitmap(WIDTH, height, Bitmap.Config.ARGB_8888)
-        val c = Canvas(bitmap)
-        drawBackdrop(c, paletteFor(data.poster), data.dark, height)
-        c.scale(UNIT, UNIT)
-        bubble?.let { drawBubble(c, it, PAD + BUBBLE_INSET, BUBBLE_TOP) }
-        c.translate(PAD, PAD + extraTop)
-        drawCard(c, data, t, plan)
+        scene.draw(Canvas(bitmap), UNIT, pose)
         return bitmap
     }
 
-    // ---------------------------------------------------------------- раскладка
+    /** Ширина холста в условных единицах: карточка и поля по бокам. */
+    const val CANVAS_UNITS = CARD_W + PAD * 2f
 
-    /**
-     * Что и где стоит под обложкой. Карточка не держит фиксированную высоту: подвал идёт сразу за
-     * последним блоком, поэтому в режиме «минимум данных» пустого места внизу нет, а высота карточки
-     * (и холста) просто короче.
-     */
-    private class Plan(
-        val titleLayout: StaticLayout,
-        val titleTop: Float,
-        val unit: String?,
-        val unitTop: Float,
-        val noteLayout: StaticLayout?,
-        val noteTop: Float,
-        val genres: String?,
-        val genresTop: Float,
-        val footerLine: Float,
-        val cardH: Float,
-    )
+    // ---------------------------------------------------------------- раскладка
 
     private const val LEFT = 20f
     private const val CONTENT_W = CARD_W - LEFT * 2f
@@ -206,68 +204,90 @@ internal object WatchingCardRenderer {
     private const val NOTE_BAR_W = 2.5f
     private const val NOTE_GAP = 11f
 
-    private fun plan(d: ShareCardData, t: Tokens): Plan {
-        val coverBottom = HEAD_TOP + LOGO_SIZE + 14f + COVER_H
-        // Полоска прогресса (6) и отступы вокруг неё: место остаётся и без полоски, чтобы шапка не прыгала.
-        var y = coverBottom + 13f + 6f + 12f
+    /**
+     * Всё измеренное для одной карточки: раскладки текста, пузырь, палитра. Строится один раз на набор
+     * данных, а кадр для любой [Pose] рисует [draw]. Высота карточки не фиксирована: блоки под обложкой
+     * (строка серии, заметка, жанры) растут и сжимаются вместе с [Pose.detail], подвал идёт сразу за ними,
+     * поэтому в минимуме пустого места внизу нет.
+     */
+    internal class Scene(val data: ShareCardData) {
+        val t: Tokens = if (data.dark) dark else light
+        val ambient: Ambient = data.ambient ?: paletteFor(data.poster)
+        val bubble: Bubble? = data.comment?.trim()?.takeIf { it.isNotEmpty() }?.let { measureBubble(it, data.dark) }
 
-        val titlePaint = paint(18.5f, 800, t.primary).apply { letterSpacing = -0.02f }
-        val titleLayout = StaticLayout.Builder
-            .obtain(d.title, 0, d.title.length, titlePaint, CONTENT_W.toInt())
+        /** Пузырь стоит над карточкой, и холст растёт ровно на его высоту (с хвостом и зазором). */
+        private val extraTopFull = bubble?.let { max(0f, BUBBLE_TOP + it.totalHeight + BUBBLE_GAP - PAD) } ?: 0f
+
+        val titleLayout: StaticLayout = StaticLayout.Builder
+            .obtain(data.title, 0, data.title.length, paint(18.5f, 800, t.primary).apply { letterSpacing = -0.02f }, CONTENT_W.toInt())
             .setMaxLines(2)
             .setEllipsize(TextUtils.TruncateAt.END)
             .setAlignment(Layout.Alignment.ALIGN_NORMAL)
             .setLineSpacing(0f, 1.04f)
             .build()
-        val titleTop = y
-        y += titleLayout.height
 
-        var unitTop = 0f
-        val unit = d.currentUnit?.let {
-            y += 5f
-            unitTop = y
-            y += 16.9f
+        /** Верх названия: под обложкой и полоской прогресса (место остаётся и без неё, чтобы шапка не прыгала). */
+        val titleTop: Float = HEAD_TOP + LOGO_SIZE + 14f + COVER_H + 13f + 6f + 12f
+
+        /** Низ названия: отсюда начинаются блоки, зависящие от объёма данных. */
+        val unitTop: Float = titleTop + titleLayout.height
+
+        val unit: String? = data.currentUnit?.let {
             TextUtils.ellipsize(it, paint(13f, 600, t.accent), CONTENT_W, TextUtils.TruncateAt.END).toString()
         }
 
-        var noteTop = 0f
-        val noteLayout = d.note?.let { note ->
-            y += 10f
-            noteTop = y
-            val notePaint = paint(12.5f, 400, t.note, italic = true)
-            val text = if (d.noteQuoted) "«$note»" else note
-            val layout = StaticLayout.Builder
-                .obtain(text, 0, text.length, notePaint, (CARD_W - LEFT - (LEFT + NOTE_BAR_W + NOTE_GAP)).toInt())
+        val noteLayout: StaticLayout? = data.note?.let { note ->
+            val text = if (data.noteQuoted) "«$note»" else note
+            StaticLayout.Builder
+                .obtain(text, 0, text.length, paint(12.5f, 400, t.note, italic = true), (CARD_W - LEFT - (LEFT + NOTE_BAR_W + NOTE_GAP)).toInt())
                 .setMaxLines(4)
                 .setEllipsize(TextUtils.TruncateAt.END)
                 .setAlignment(Layout.Alignment.ALIGN_NORMAL)
                 .setLineSpacing(0f, 1.18f)
                 .build()
-            y += layout.height
-            layout
         }
 
-        var genresTop = 0f
-        val genres = if (noteLayout == null) {
-            d.genres?.let {
-                y += 6f
-                genresTop = y
-                y += 16.9f
-                TextUtils.ellipsize(it, paint(12.5f, 500, t.secondary), CONTENT_W, TextUtils.TruncateAt.END).toString()
-            }
-        } else null
+        val genres: String? = data.genres?.let {
+            TextUtils.ellipsize(it, paint(12.5f, 500, t.secondary), CONTENT_W, TextUtils.TruncateAt.END).toString()
+        }
 
-        val footerLine = y + FOOTER_GAP
-        val cardH = footerLine + 1f + FOOTER_TEXT_TOP + FOOTER_TEXT_H + CARD_BOTTOM_PAD
-        return Plan(titleLayout, titleTop, unit, unitTop, noteLayout, noteTop, genres, genresTop, footerLine, cardH)
+        private val unitFullH = if (unit != null) 5f + 16.9f else 0f
+        private val noteFullH = noteLayout?.let { 10f + it.height } ?: 0f
+        private val genresFullH = if (genres != null) 6f + 16.9f else 0f
+
+        // k — [Pose.detail] в 0..1: строка серии и заметка растут с ним, жанры занимают освободившееся место.
+        fun unitHeight(k: Float) = unitFullH * k
+        fun noteTop(k: Float) = unitTop + unitHeight(k)
+        fun noteHeight(k: Float) = noteFullH * k
+        fun genresTop(k: Float) = noteTop(k) + noteHeight(k)
+        fun genresHeight(k: Float) = genresFullH * (1f - k)
+        fun footerLine(k: Float) = genresTop(k) + genresHeight(k) + FOOTER_GAP
+        fun cardHeight(k: Float) = footerLine(k) + 1f + FOOTER_TEXT_TOP + FOOTER_TEXT_H + CARD_BOTTOM_PAD
+
+        /** Сколько холст отдан под пузырь сверху; пока пузырь всплывает, растёт вместе с ним. */
+        fun extraTop(p: Pose) = extraTopFull * p.bubble.coerceAtLeast(0f)
+
+        /** Высота всего холста в условных единицах: растёт плавно, вместе с ней тянется и фон. */
+        fun heightUnits(p: Pose) = cardHeight(p.detail.coerceIn(0f, 1f)) + PAD * 2f + extraTop(p)
+
+        /** Рисует кадр в [c], где одна условная единица занимает [unitPx] пикселей. */
+        fun draw(c: Canvas, unitPx: Float, p: Pose) {
+            drawBackdrop(c, ambient, data.dark, CANVAS_UNITS * unitPx, heightUnits(p) * unitPx)
+            c.save()
+            c.scale(unitPx, unitPx)
+            bubble?.let { drawBubble(c, it, PAD + BUBBLE_INSET, BUBBLE_TOP, p.bubble) }
+            c.translate(PAD, PAD + extraTop(p))
+            drawCard(c, this, p)
+            c.restore()
+        }
     }
 
     // ---------------------------------------------------------------- фон
 
-    private class Ambient(val c1: Int, val c3: Int, val lightBase: Int, val darkBase: Int)
+    internal class Ambient(val c1: Int, val c3: Int, val lightBase: Int, val darkBase: Int)
 
     /** Цвета фона из обложки; без обложки — тёплая гамма бренда. */
-    private fun paletteFor(poster: Bitmap?): Ambient {
+    internal fun paletteFor(poster: Bitmap?): Ambient {
         var c1 = 0xFF7C2D12.toInt()
         var c3 = 0xFF374151.toInt()
         if (poster != null) {
@@ -285,9 +305,11 @@ internal object WatchingCardRenderer {
         )
     }
 
-    private fun drawBackdrop(c: Canvas, a: Ambient, isDark: Boolean, height: Int) {
-        val w = WIDTH.toFloat()
-        val h = height.toFloat()
+    /**
+     * Пятна расставлены в долях холста, поэтому при росте высоты они плавно съезжают вместе с краями:
+     * фон тянется, а не перескакивает. [w] и [h] — размер холста в пикселях.
+     */
+    private fun drawBackdrop(c: Canvas, a: Ambient, isDark: Boolean, w: Float, h: Float) {
         c.drawColor(if (isDark) a.darkBase else a.lightBase)
         // Три цветных пятна: радиальный градиент вместо размытия, чтобы не тянуть RenderScript.
         val alphas = if (isDark) floatArrayOf(0.72f, 0.58f, 0.52f) else floatArrayOf(0.48f, 0.42f, 0.36f)
@@ -311,7 +333,7 @@ internal object WatchingCardRenderer {
     // ---------------------------------------------------------------- пузырь-комментарий
 
     /** Размеры пузыря-мысли: капсула с текстом, под ней эллипс и кружок «хвоста», как на референсе. */
-    private class Bubble(
+    internal class Bubble(
         val layout: StaticLayout,
         val layoutWidth: Float,
         val fill: Int,
@@ -326,7 +348,7 @@ internal object WatchingCardRenderer {
             get() = capsuleH + max(tailRy, 0.26f * capsuleH + dotR)
     }
 
-    private fun measureBubble(text: String, isDark: Boolean): Bubble {
+    internal fun measureBubble(text: String, isDark: Boolean): Bubble {
         val paint = paint(14f, 600, if (isDark) 0xFF141414.toInt() else Color.WHITE)
         val padH = 22f
         val padV = 13f
@@ -356,16 +378,30 @@ internal object WatchingCardRenderer {
         )
     }
 
-    /** Рисует пузырь одним контуром (капсула + эллипс + кружок), чтобы тень легла один раз. */
-    private fun drawBubble(c: Canvas, b: Bubble, left: Float, top: Float) {
+    /**
+     * Рисует пузырь одним контуром (капсула + эллипс + кружок), чтобы тень легла один раз. [pop] — всплытие:
+     * 0 — нет, 1 — на месте, выше 1 — перелёт. Пузырь вырастает из «хвоста» (кружка у логотипа), как облачко
+     * мысли: чуть поднимается снизу, масштабируется и проявляется.
+     */
+    private fun drawBubble(c: Canvas, b: Bubble, left: Float, top: Float, pop: Float) {
+        if (pop <= 0.01f) return
         val h = b.capsuleH
         // Хвост всегда целится в логотип под пузырём: его центр примерно в 33 единицах правее края пузыря.
         val ellipseX = left + 47f.coerceIn(30f, b.width - 30f)
         val ellipseY = top + h - 1f
+        val dotX = ellipseX - 0.32f * h
+        val dotY = top + h + 0.26f * h
+        val layer = c.saveLayerAlpha(
+            left - 24f, top - 24f, left + b.width + 24f, top + b.totalHeight + 24f,
+            (pop.coerceIn(0f, 1f) * 255f).roundToInt(),
+        )
+        val scale = 0.45f + 0.55f * pop
+        c.translate(0f, (1f - pop.coerceIn(0f, 1f)) * 10f)
+        c.scale(scale, scale, dotX, dotY)
         val shape = Path().apply {
             addRoundRect(RectF(left, top, left + b.width, top + h), h / 2f, h / 2f, Path.Direction.CW)
             addOval(RectF(ellipseX - b.tailRx, ellipseY - b.tailRy, ellipseX + b.tailRx, ellipseY + b.tailRy), Path.Direction.CW)
-            addCircle(ellipseX - 0.32f * h, top + h + 0.26f * h, b.dotR, Path.Direction.CW)
+            addCircle(dotX, dotY, b.dotR, Path.Direction.CW)
         }
         c.drawPath(
             shape,
@@ -378,12 +414,32 @@ internal object WatchingCardRenderer {
         c.translate(left + (b.width - b.layoutWidth) / 2f, top + 13f)
         b.layout.draw(c)
         c.restore()
+        c.restoreToCount(layer)
     }
 
     // ---------------------------------------------------------------- карточка
 
-    private fun drawCard(c: Canvas, d: ShareCardData, t: Tokens, plan: Plan) {
-        val cardH = plan.cardH
+    /**
+     * Блок, чьи высота и видимость идут за позой: слой по высоте блока режет всё лишнее, прозрачность даёт
+     * проявление, а [rise] подсаживает текст вниз, так что при появлении он «всплывает» на место, а при
+     * исчезновении слегка оседает.
+     */
+    private inline fun fadeBlock(c: Canvas, top: Float, height: Float, alpha: Float, rise: Float, draw: () -> Unit) {
+        if (height < 0.5f || alpha < 0.02f) return
+        val layer = c.saveLayer(
+            0f, top, CARD_W, top + height,
+            Paint().apply { this.alpha = (alpha.coerceIn(0f, 1f) * 255f).roundToInt() },
+        )
+        c.translate(0f, rise)
+        draw()
+        c.restoreToCount(layer)
+    }
+
+    private fun drawCard(c: Canvas, s: Scene, p: Pose) {
+        val d = s.data
+        val t = s.t
+        val k = p.detail.coerceIn(0f, 1f)
+        val cardH = s.cardHeight(k)
         val card = RectF(0f, 0f, CARD_W, cardH)
         val radius = 32f
 
@@ -422,13 +478,13 @@ internal object WatchingCardRenderer {
             },
         )
 
-        val left = 20f
-        val right = CARD_W - 20f
+        val left = LEFT
+        val right = CARD_W - LEFT
         val contentW = right - left
 
         // 1. Шапка: логотип, ник с плашкой типа, «Vetro Collection • год», статус справа.
-        val headTop = 20f
-        val logoSize = 38f
+        val headTop = HEAD_TOP
+        val logoSize = LOGO_SIZE
         drawLogo(c, left, headTop, logoSize, d.dark)
 
         val statusPaint = paint(12.5f, 700, t.statusText)
@@ -462,8 +518,8 @@ internal object WatchingCardRenderer {
         if (sub.isNotEmpty()) c.drawText(sub, textX, baselineIn(blockTop + 18f + 2f, 15f, subPaint), subPaint)
 
         // 2. Обложка 340 × 215, радиус 20.
-        val cover = RectF(left, headTop + logoSize + 14f, right, headTop + logoSize + 14f + 215f)
-        drawCover(c, cover, d, t)
+        val cover = RectF(left, headTop + logoSize + 14f, right, headTop + logoSize + 14f + COVER_H)
+        drawCover(c, cover, d, t, k)
 
         // 3. 10-сегментная полоска прогресса.
         val y = cover.bottom + 13f
@@ -480,41 +536,65 @@ internal object WatchingCardRenderer {
             }
         }
 
-        // 4. Название, оранжевая строка, цитата или жанры: позиции даёт plan().
+        // 4. Название — на месте всегда; строка серии, заметка и жанры идут за позой.
         c.save()
-        c.translate(left, plan.titleTop)
-        plan.titleLayout.draw(c)
+        c.translate(left, s.titleTop)
+        s.titleLayout.draw(c)
         c.restore()
 
-        if (plan.unit != null) {
+        val textAlpha = k * k
+        val rise = (1f - k) * 6f
+        s.unit?.let { text ->
             val unitPaint = paint(13f, 600, t.accent)
-            c.drawText(plan.unit, left, baselineIn(plan.unitTop, 16.9f, unitPaint), unitPaint)
+            fadeBlock(c, s.unitTop, s.unitHeight(k), textAlpha, rise) {
+                c.drawText(text, left, baselineIn(s.unitTop + 5f, 16.9f, unitPaint), unitPaint)
+            }
         }
-        if (plan.noteLayout != null) {
-            val noteX = left + NOTE_BAR_W + NOTE_GAP
-            c.drawRect(left, plan.noteTop, left + NOTE_BAR_W, plan.noteTop + plan.noteLayout.height, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = ORANGE })
-            c.save()
-            c.translate(noteX, plan.noteTop)
-            plan.noteLayout.draw(c)
-            c.restore()
-        } else if (plan.genres != null) {
+        s.noteLayout?.let { layout ->
+            val top = s.noteTop(k)
+            fadeBlock(c, top, s.noteHeight(k), textAlpha, rise) {
+                val textTop = top + 10f
+                c.drawRect(left, textTop, left + NOTE_BAR_W, textTop + layout.height, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = ORANGE })
+                c.save()
+                c.translate(left + NOTE_BAR_W + NOTE_GAP, textTop)
+                layout.draw(c)
+                c.restore()
+            }
+        }
+        s.genres?.let { text ->
+            val top = s.genresTop(k)
             val genrePaint = paint(12.5f, 500, t.secondary)
-            c.drawText(plan.genres, left, baselineIn(plan.genresTop, 16.9f, genrePaint), genrePaint)
+            val g = 1f - k
+            fadeBlock(c, top, s.genresHeight(k), g * g, k * 6f) {
+                c.drawText(text, left, baselineIn(top + 6f, 16.9f, genrePaint), genrePaint)
+            }
         }
 
-        // 5. Подвал.
-        val footerLine = plan.footerLine
+        // 5. Подвал. Тексты полного вида и минимума перетекают друг в друга; совпадающие не мигают.
+        val footerLine = s.footerLine(k)
         c.drawRect(left, footerLine, right, footerLine + 1f, Paint().apply { color = t.footerBorder })
         val footPaint = paint(12f, 500, t.footerText)
         val footBase = baselineIn(footerLine + 1f + FOOTER_TEXT_TOP, FOOTER_TEXT_H, footPaint)
-        val rightText = d.footerRight
-        val rightW = footPaint.measureText(rightText)
-        val leftShown = TextUtils.ellipsize(d.footerLeft, footPaint, contentW - rightW - 12f, TextUtils.TruncateAt.END).toString()
-        c.drawText(leftShown, left, footBase, footPaint)
-        c.drawText(rightText, right - rightW, footBase, footPaint)
+        val rightW = max(footPaint.measureText(d.footerRight), footPaint.measureText(d.footerRightMin))
+        val leftMax = contentW - rightW - 12f
+        fun foot(text: String, alpha: Float, atRight: Boolean) {
+            if (text.isEmpty() || alpha < 0.02f) return
+            val paint = paint(12f, 500, rgba(t.footerText, alpha))
+            if (atRight) {
+                c.drawText(text, right - paint.measureText(text), footBase, paint)
+            } else {
+                c.drawText(TextUtils.ellipsize(text, paint, leftMax, TextUtils.TruncateAt.END).toString(), left, footBase, paint)
+            }
+        }
+        val sameLeft = d.footerLeft == d.footerLeftMin
+        foot(d.footerLeft, if (sameLeft) 1f else k, atRight = false)
+        if (!sameLeft) foot(d.footerLeftMin, 1f - k, atRight = false)
+        val sameRight = d.footerRight == d.footerRightMin
+        foot(d.footerRight, if (sameRight) 1f else k, atRight = true)
+        if (!sameRight) foot(d.footerRightMin, 1f - k, atRight = true)
     }
 
-    private fun drawCover(c: Canvas, cover: RectF, d: ShareCardData, t: Tokens) {
+    private fun drawCover(c: Canvas, cover: RectF, d: ShareCardData, t: Tokens, k: Float) {
         val r = 20f
         val clip = Path().apply { addRoundRect(cover, r, r, Path.Direction.CW) }
         c.save()
@@ -549,9 +629,13 @@ internal object WatchingCardRenderer {
             },
         )
 
+        // Плашка прогресса: «19 / 28 эп.» стоит всегда, « • 68%» вытягивается и проявляется с полными данными.
         val pillPaint = paint(12.5f, 700, t.progressPillText)
-        d.progressText?.let { text ->
-            val w = pillPaint.measureText(text) + 26f
+        d.progressText?.let { base ->
+            val suffix = d.progressSuffix.orEmpty()
+            val baseW = pillPaint.measureText(base)
+            val suffixW = if (suffix.isEmpty()) 0f else pillPaint.measureText(suffix)
+            val w = baseW + suffixW * k + 26f
             val h = 12.5f + 12f
             val rect = RectF(cover.left + 12f, cover.bottom - 12f - h, cover.left + 12f + w, cover.bottom - 12f)
             c.drawRoundRect(
@@ -561,14 +645,29 @@ internal object WatchingCardRenderer {
                     setShadowLayer(6f, 0f, 3f, Color.argb(51, 0, 0, 0))
                 },
             )
-            c.drawText(text, rect.left + 13f, baselineIn(rect.top, h, pillPaint), pillPaint)
+            c.drawText(base, rect.left + 13f, baselineIn(rect.top, h, pillPaint), pillPaint)
+            if (suffix.isNotEmpty() && k > 0.02f) {
+                val fadedPaint = paint(12.5f, 700, ColorUtils.setAlphaComponent(t.progressPillText, (Color.alpha(t.progressPillText) * k).roundToInt()))
+                c.save()
+                c.clipRect(rect)
+                c.drawText(suffix, rect.left + 13f + baseW, baselineIn(rect.top, h, fadedPaint), fadedPaint)
+                c.restore()
+            }
         }
+        // Оценка видна только с полными данными: проявляется и чуть вырастает из правого нижнего угла.
         d.ratingText?.let { text ->
+            if (k < 0.02f) return@let
             val ratingPaint = paint(12.5f, 700, Color.WHITE)
             val starSize = 13f
             val w = starSize + 5f + ratingPaint.measureText(text) + 26f
             val h = 12.5f + 12f
             val rect = RectF(cover.right - 12f - w, cover.bottom - 12f - h, cover.right - 12f, cover.bottom - 12f)
+            val layer = c.saveLayer(
+                rect.left - 14f, rect.top - 14f, rect.right + 14f, rect.bottom + 14f,
+                Paint().apply { alpha = (k * 255f).roundToInt() },
+            )
+            val grow = 0.88f + 0.12f * k
+            c.scale(grow, grow, rect.right, rect.bottom)
             c.drawRoundRect(
                 rect, h / 2f, h / 2f,
                 Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -578,6 +677,7 @@ internal object WatchingCardRenderer {
             )
             drawStar(c, rect.left + 13f + starSize / 2f, rect.centerY(), starSize / 2f, Color.WHITE)
             c.drawText(text, rect.left + 13f + starSize + 5f, baselineIn(rect.top, h, ratingPaint), ratingPaint)
+            c.restoreToCount(layer)
         }
     }
 

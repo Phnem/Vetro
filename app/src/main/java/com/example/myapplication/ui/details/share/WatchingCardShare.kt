@@ -67,9 +67,26 @@ class WatchingCardBuilder(
         options: WatchingCardOptions,
     ): Bitmap = withContext(Dispatchers.Default) {
         val data = build(anime, title, ru, dark, posterPath, status, description, options)
-        val bitmap = WatchingCardRenderer.render(data)
+        val bitmap = WatchingCardRenderer.render(data, full = !options.minimal)
         data.poster?.recycle()
         bitmap
+    }
+
+    /**
+     * Данные для живого предпросмотра: ник и комментарий подставляет вызывающий через `copy`, а режим данных
+     * сюда не входит вовсе: карточка держит оба вида сразу, и предпросмотр плавно переходит между ними.
+     * Постер остаётся у данных, пока ими пользуется предпросмотр.
+     */
+    internal suspend fun prepare(
+        anime: Anime,
+        title: String,
+        ru: Boolean,
+        dark: Boolean,
+        posterPath: String?,
+        status: WatchStatus?,
+        description: String?,
+    ): ShareCardData = withContext(Dispatchers.Default) {
+        build(anime, title, ru, dark, posterPath, status, description, WatchingCardOptions())
     }
 
     internal suspend fun build(
@@ -83,7 +100,6 @@ class WatchingCardBuilder(
         options: WatchingCardOptions,
     ): ShareCardData {
         val isManga = anime.mediaType == MediaType.MANGA
-        val minimal = options.minimal
         var progressBase: String? = null
         var fraction: Float? = null
         var currentUnit: String? = null
@@ -118,10 +134,8 @@ class WatchingCardBuilder(
                 }
             }
         }
-        val progressText = progressBase?.let { base ->
-            val percent = fraction
-            if (!minimal && percent != null) "$base • ${(percent * 100f).roundToInt()}%" else base
-        }
+        // «• 68%» стоит отдельно: в минимуме плашка короче, и предпросмотр вытягивает её плавно.
+        val progressSuffix = fraction?.let { " • ${(it * 100f).roundToInt()}%" }
         val typeLabel = when (anime.mediaType) {
             MediaType.ANIME -> if (ru) "Аниме" else "Anime"
             MediaType.MANGA -> if (ru) "Манга" else "Manga"
@@ -137,24 +151,29 @@ class WatchingCardBuilder(
             val shown = if (it % 1f == 0f) it.toInt().toString() else RatingScale.format(it)
             "$shown/10"
         }
+        val poster = posterPath?.let { decodePoster(it) }
         return ShareCardData(
             nick = options.nick.trim(),
             typeLabel = typeLabel,
             year = year,
             statusLabel = statusLabel(status, isManga, ru),
             title = title,
-            progressText = progressText,
+            progressText = progressBase,
+            progressSuffix = progressSuffix,
             fraction = fraction,
-            ratingText = if (minimal) null else rating,
-            currentUnit = if (minimal) null else currentUnit,
-            note = if (minimal) null else note,
+            ratingText = rating,
+            currentUnit = currentUnit,
+            note = note,
             noteQuoted = ownNote != null,
             comment = options.comment.trim().take(WatchingCardOptions.MAX_COMMENT_LENGTH).ifEmpty { null },
-            genres = if (minimal) tags.take(3).joinToString(" • ").ifEmpty { null } else null,
-            footerLeft = if (minimal) "Vetro Collection" else tags.take(2).joinToString(" • ").ifEmpty { "Vetro Collection" },
-            footerRight = if (minimal) year else addedSince(anime.dateAdded, ru),
+            genres = tags.take(3).joinToString(" • ").ifEmpty { null },
+            footerLeft = tags.take(2).joinToString(" • ").ifEmpty { "Vetro Collection" },
+            footerRight = addedSince(anime.dateAdded, ru),
+            footerLeftMin = "Vetro Collection",
+            footerRightMin = year,
             dark = dark,
-            poster = posterPath?.let { decodePoster(it) },
+            poster = poster,
+            ambient = WatchingCardRenderer.paletteFor(poster),
         )
     }
 
