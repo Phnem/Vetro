@@ -13,6 +13,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 import java.util.concurrent.TimeUnit
 import io.github.jan.supabase.realtime.channel
@@ -45,7 +46,10 @@ class SupabaseSyncCoordinator(
 
     init {
         scope.launch {
-            authRepository.isUserSignedIn.collect { signedIn ->
+            // sessionStatus присылает Authenticated заново при каждом обновлении токена, в том числе
+            // при возврате из недавних; без distinctUntilChanged каждый такой возврат запускал полный
+            // синк (плашка «Sync»). Реагируем только на настоящую смену «вошёл / не вошёл».
+            authRepository.isUserSignedIn.distinctUntilChanged().collect { signedIn ->
                 if (signedIn && !authRepository.isGuest) {
                     schedulePeriodicSync()
                     syncNow(includeCloudImageRestore = true)
