@@ -284,6 +284,9 @@ fun HomeScreen(
     val syncNotifStrings = remember(currentLanguage) {
         com.example.myapplication.ui.shared.mininotif.SyncMiniNotifStrings(currentLanguage == AppLanguage.RU)
     }
+    val syncCardStrings = remember(currentLanguage) {
+        com.example.myapplication.ui.shared.mininotif.MiniNotifCardStrings(currentLanguage == AppLanguage.RU)
+    }
     val syncActive = isSupabaseSyncing || isCloudImageRestoring
     var wasSyncActive by remember { mutableStateOf(false) }
     LaunchedEffect(syncActive, miniNotifOn) {
@@ -298,6 +301,7 @@ fun HomeScreen(
                 com.example.myapplication.ui.shared.mininotif.MiniNotif.status(
                     syncNotifStrings.done,
                     com.example.myapplication.ui.shared.mininotif.MiniNotifKind.Success,
+                    card = syncCardStrings.syncDone(list.size),
                 )
             }
         }

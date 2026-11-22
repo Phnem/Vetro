@@ -2,6 +2,7 @@ package com.example.myapplication.ui.navigation
 
 import com.example.myapplication.ui.shared.mininotif.MiniNotif
 import com.example.myapplication.ui.shared.mininotif.MiniNotifKind
+import com.example.myapplication.ui.shared.mininotif.MiniNotifCardStrings
 import com.example.myapplication.ui.details.SwipeBackGesture
 import androidx.compose.animation.EnterExitState
 import androidx.compose.animation.EnterTransition
@@ -160,6 +161,7 @@ fun AppNavGraph(
                 val scope = rememberCoroutineScope()
                 val isUserSignedIn by authRepository.isUserSignedIn.collectAsStateWithLifecycle(initialValue = false)
                 val welcomeStrings = getWelcomeStrings(systemAppLanguage())
+                val cardStrings = MiniNotifCardStrings(systemAppLanguage() == com.example.myapplication.network.AppLanguage.RU)
 
                 LaunchedEffect(isUserSignedIn) {
                     if (isUserSignedIn) {
@@ -173,7 +175,7 @@ fun AppNavGraph(
                             val result = authRepository.signInWithGoogle(context)
                             if (result.isFailure) {
                                 val msg = result.exceptionOrNull()?.message ?: "?"
-                                MiniNotif.show(context, welcomeStrings.loginFailedFormat.format(msg), MiniNotifKind.Error, long = true)
+                                MiniNotif.show(context, welcomeStrings.loginFailedFormat.format(msg), MiniNotifKind.Error, long = true, card = cardStrings.loginFailed(msg))
                             }
                         }
                     },
@@ -182,7 +184,7 @@ fun AppNavGraph(
                             val result = authRepository.signInWithGithub()
                             if (result.isFailure) {
                                 val msg = result.exceptionOrNull()?.message ?: "?"
-                                MiniNotif.show(context, welcomeStrings.loginFailedFormat.format(msg), MiniNotifKind.Error, long = true)
+                                MiniNotif.show(context, welcomeStrings.loginFailedFormat.format(msg), MiniNotifKind.Error, long = true, card = cardStrings.loginFailed(msg))
                             }
                         }
                     },
@@ -190,10 +192,10 @@ fun AppNavGraph(
                         scope.launch {
                             val result = authRepository.resetPasswordForEmail(email)
                             if (result.isSuccess) {
-                                MiniNotif.show(context, welcomeStrings.resetPasswordSuccessFormat.format(email), MiniNotifKind.Success, long = true)
+                                MiniNotif.show(context, welcomeStrings.resetPasswordSuccessFormat.format(email), MiniNotifKind.Success, long = true, card = cardStrings.resetSent(email))
                             } else {
                                 val msg = result.exceptionOrNull()?.message ?: "?"
-                                MiniNotif.show(context, welcomeStrings.resetPasswordErrorFormat.format(msg), MiniNotifKind.Error, long = true)
+                                MiniNotif.show(context, welcomeStrings.resetPasswordErrorFormat.format(msg), MiniNotifKind.Error, long = true, card = cardStrings.resetFailed(msg))
                             }
                         }
                     },
@@ -202,7 +204,7 @@ fun AppNavGraph(
                             val result = authRepository.signInWithEmail(email, password)
                             if (result.isFailure) {
                                 val msg = result.exceptionOrNull()?.message ?: "?"
-                                MiniNotif.show(context, welcomeStrings.loginFailedFormat.format(msg), MiniNotifKind.Error, long = true)
+                                MiniNotif.show(context, welcomeStrings.loginFailedFormat.format(msg), MiniNotifKind.Error, long = true, card = cardStrings.loginFailed(msg))
                             }
                         }
                     },

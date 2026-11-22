@@ -2,6 +2,7 @@ package com.example.myapplication.audiobooks.ui
 
 import com.example.myapplication.ui.shared.mininotif.MiniNotif
 import com.example.myapplication.ui.shared.mininotif.MiniNotifKind
+import com.example.myapplication.ui.shared.mininotif.MiniNotifCardStrings
 import com.example.myapplication.di.AUDIOBOOK_SOURCES
 import org.koin.core.qualifier.named
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -260,7 +261,16 @@ fun AudiobookPlayerHost(language: AppLanguage = AppLanguage.RU, modifier: Modifi
         if (seq != shownNotice) {
             shownNotice = seq
             if (seq > 0) {
-                MiniNotif.show(context, if (name.isEmpty()) strings.noSourcesLeft else strings.switchedSource(name), MiniNotifKind.Warning, long = true)
+                val cards = MiniNotifCardStrings(strings.russian)
+                MiniNotif.showMorph(
+                    context = context,
+                    text = if (name.isEmpty()) strings.noSourcesLeft else strings.switchedSource(name),
+                    compactText = cards.sourceSearching,
+                    compactKind = MiniNotifKind.Info,
+                    card = if (name.isEmpty()) cards.noSources else cards.sourceSwitched(name),
+                    kind = MiniNotifKind.Warning,
+                    long = true,
+                )
             }
         }
     }

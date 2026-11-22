@@ -13,9 +13,11 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
@@ -113,19 +115,39 @@ import kotlin.math.roundToInt
  * Включается dev-флагом («Мини-уведомления», по умолчанию выкл): пока выключен или хоста нет,
  * [MiniNotif.show] показывает обычный системный Toast, то есть всё как раньше.
  *
+ * Два вида. Компактная пилюля: значок смысла и одна строка текста (высота от 48 dp). Раскрытая карточка
+ * ([MiniNotifCard]): значок 38 dp, заголовок, необязательный тег справа и подзаголовок в две строки; ширина
+ * экрана минус 2·24 dp, углы те же `min(h/2, 32 dp)`, так что при высоте от 64 dp это уже не капсула, а
+ * скруглённый прямоугольник. [MiniNotif.showMorph] показывает сначала пилюлю, через [MiniNotif.MorphAfterMillis]
+ * она перетекает в карточку; [MiniNotif.show] с `card` растит карточку сразу из «зародыша».
+ *
  * При системном «Отключить анимации» форма не растёт и не качается: размер выставляется сразу,
  * остаётся короткий кроссфейд (UNIVERSAL_MOTION_SPEC §7).
  */
 enum class MiniNotifKind { Info, Success, Warning, Error, Progress }
 
+/** Содержимое раскрытой карточки: заголовок, тег справа от него и подзаголовок (до двух строк). */
+@Immutable
+data class MiniNotifCard(
+    val title: String,
+    val subtitle: String = "",
+    val tag: String? = null,
+)
+
 @Immutable
 data class MiniNotifItem(
     val id: Long,
+    /** Полный текст сообщения: он же уходит в системный Toast, когда плашка недоступна. */
     val text: String,
     val kind: MiniNotifKind,
     val holdMillis: Long,
+    /** Если задано, плашка рисуется раскрытой карточкой, а не пилюлей. */
+    val card: MiniNotifCard? = null,
+    /** Вторая стадия: через [morphAfterMillis] эта пилюля перетекает в неё. */
+    val morphTo: MiniNotifItem? = null,
+    val morphAfterMillis: Long = MiniNotif.MorphAfterMillis,
 ) {
-    internal fun sameMessageAs(other: MiniNotifItem) = text == other.text && kind == other.kind
+    internal fun sameMessageAs(other: MiniNotifItem) = text == other.text && kind == other.kind && card == other.card
 }
 
 object MiniNotif {
@@ -149,30 +171,87 @@ object MiniNotif {
     const val HoldShortMillis: Long = 2400L
     const val HoldLongMillis: Long = 3800L
 
+    /** Сколько держать раскрытую карточку (в прототипе 2400–2530 мс после раскрытия). */
+    const val HoldCardMillis: Long = 2500L
+
+    /** Через сколько пилюля раскрывается в карточку (в прототипе 1400–1450 мс). */
+    const val MorphAfterMillis: Long = 1450L
+
     /** Раньше этого срока уступать место следующей плашке нельзя: текст должен успеть прочитаться. */
     internal const val MinHoldMillis: Long = 1300L
 
+    private fun canShow(): Boolean = enabled && hosts.get() != 0 && hostVisible
+
+    private fun fallbackToast(context: Context, text: String, long: Boolean) {
+        val app = context.applicationContext
+        Handler(Looper.getMainLooper()).post {
+            Toast.makeText(app, text, if (long) Toast.LENGTH_LONG else Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    /**
+     * @param card если задана, плашка растёт сразу в раскрытую карточку; [text] при этом остаётся
+     *   полным сообщением для системного Toast, когда плашка недоступна.
+     */
     fun show(
         context: Context,
         text: String,
         kind: MiniNotifKind = MiniNotifKind.Info,
         long: Boolean = false,
         holdMillis: Long? = null,
+        card: MiniNotifCard? = null,
     ) {
         if (text.isBlank()) return
-        if (!enabled || hosts.get() == 0 || !hostVisible) {
-            val app = context.applicationContext
-            Handler(Looper.getMainLooper()).post {
-                Toast.makeText(app, text, if (long) Toast.LENGTH_LONG else Toast.LENGTH_SHORT).show()
-            }
+        if (!canShow()) {
+            fallbackToast(context, text, long)
             return
         }
+        val short = if (card != null) HoldCardMillis else HoldShortMillis
         items.trySend(
             MiniNotifItem(
                 id = ids.incrementAndGet(),
                 text = text,
                 kind = kind,
-                holdMillis = holdMillis ?: if (long) HoldLongMillis else HoldShortMillis,
+                holdMillis = holdMillis ?: if (long) HoldLongMillis else short,
+                card = card,
+            ),
+        )
+    }
+
+    /**
+     * Две стадии, как в прототипе: сначала компактная пилюля ([compactText]), через [morphAfterMillis]
+     * она пружинно раскрывается в карточку [card]. [text] — полное сообщение для системного Toast.
+     */
+    fun showMorph(
+        context: Context,
+        text: String,
+        compactText: String,
+        compactKind: MiniNotifKind,
+        card: MiniNotifCard,
+        kind: MiniNotifKind,
+        long: Boolean = false,
+        morphAfterMillis: Long = MorphAfterMillis,
+    ) {
+        if (text.isBlank()) return
+        if (!canShow()) {
+            fallbackToast(context, text, long)
+            return
+        }
+        val expanded = MiniNotifItem(
+            id = ids.incrementAndGet(),
+            text = text,
+            kind = kind,
+            holdMillis = if (long) HoldLongMillis else HoldCardMillis,
+            card = card,
+        )
+        items.trySend(
+            MiniNotifItem(
+                id = ids.incrementAndGet(),
+                text = compactText,
+                kind = compactKind,
+                holdMillis = morphAfterMillis,
+                morphTo = expanded,
+                morphAfterMillis = morphAfterMillis,
             ),
         )
     }
@@ -181,9 +260,9 @@ object MiniNotif {
      * Статус процесса (синхронизация и т.п.): показывается только плашкой и только пока приложение
      * на экране; при выключенном флаге или в фоне не делает ничего, а не падает в Toast.
      */
-    fun status(text: String, kind: MiniNotifKind, holdMillis: Long = HoldShortMillis) {
-        if (text.isBlank() || !enabled || hosts.get() == 0 || !hostVisible) return
-        items.trySend(MiniNotifItem(ids.incrementAndGet(), text, kind, holdMillis))
+    fun status(text: String, kind: MiniNotifKind, holdMillis: Long = HoldShortMillis, card: MiniNotifCard? = null) {
+        if (text.isBlank() || !canShow()) return
+        items.trySend(MiniNotifItem(ids.incrementAndGet(), text, kind, holdMillis, card))
     }
 
     /** Убрать текущую плашку (по тапу делает сам хост). */
@@ -206,9 +285,9 @@ object MiniNotif {
     internal suspend fun receive(): MiniNotifItem = items.receive()
 
     /** Держит плашку [MiniNotifItem.holdMillis]; раньше выходит, если пришла следующая или тап. */
-    internal suspend fun holdFor(item: MiniNotifItem): HoldResult {
+    internal suspend fun holdFor(item: MiniNotifItem, millis: Long = item.holdMillis): HoldResult {
         val shownAt = SystemClock.uptimeMillis()
-        val result = withTimeoutOrNull(item.holdMillis) {
+        val result = withTimeoutOrNull(millis) {
             select<HoldResult> {
                 items.onReceive { HoldResult.Next(it) }
                 dismisses.onReceive { HoldResult.Dismissed }
@@ -237,6 +316,17 @@ private val IconGap = 10.dp
 private val MinHeight = 48.dp
 private val MinWidth = 96.dp
 
+/** Раскрытая карточка (прототип Dynamic Island Morph, «размер 2»). */
+private val CardSideMargin = 24.dp
+private val CardPadStart = 14.dp
+private val CardPadEnd = 18.dp
+private val CardPadVertical = 14.dp
+private val CardBadgeSize = 38.dp
+private val CardGlyphSize = 20.dp
+private val CardGap = 12.dp
+private val CardTextGap = 2.dp
+private val CardTagGap = 8.dp
+
 /** Размер «зародыша»: из него плашка вырастает и в него сжимается (аналог idle-пилюли референса, 126×36). */
 private val SeedWidth = 52.dp
 private val SeedHeight = 24.dp
@@ -258,6 +348,9 @@ private object IslandShape : Shape {
         return Outline.Rounded(RoundRect(0f, 0f, size.width, size.height, CornerRadius(radius)))
     }
 }
+
+/** Три начертания текста карточки: заголовок, тег и подзаголовок. */
+private class CardTextStyles(val title: TextStyle, val tag: TextStyle, val subtitle: TextStyle)
 
 /**
  * Хост плашек: один на приложение, кладётся поверх всего содержимого (последним в корневом Box).
@@ -285,6 +378,22 @@ fun MiniNotifHost(
         letterSpacing = (-0.01f * 15).sp,
         color = onSurface,
     )
+    val base = MaterialTheme.typography.bodyMedium
+    val cardStyles = CardTextStyles(
+        title = base.copy(
+            fontSize = 15.sp, lineHeight = 20.sp, fontWeight = FontWeight.SemiBold,
+            letterSpacing = (-0.01f * 15).sp, color = onSurface,
+        ),
+        tag = base.copy(
+            fontSize = 11.sp, lineHeight = 14.sp, fontWeight = FontWeight.Medium,
+            letterSpacing = 0.sp, color = onSurface.copy(alpha = 0.45f),
+        ),
+        subtitle = base.copy(
+            fontSize = 13.sp, lineHeight = 17.sp, fontWeight = FontWeight.Normal,
+            letterSpacing = (-0.005f * 13).sp, color = onSurface.copy(alpha = 0.65f),
+        ),
+    )
+    val cardWidth = (screenWidthDp.dp - CardSideMargin * 2).coerceAtLeast(240.dp)
 
     val width = remember { Animatable(0f) }
     val height = remember { Animatable(0f) }
@@ -326,6 +435,32 @@ fun MiniNotifHost(
         val liftPx = with(density) { 10.dp.toPx() }
 
         fun sizeOf(item: MiniNotifItem): Pair<Float, Float> {
+            val card = item.card
+            if (card != null) {
+                // Ширина фиксированная (экран − 48 dp), высота по тексту: 14 + max(значок 38, текст) + 14.
+                val textW = with(density) {
+                    (cardWidth - CardPadStart - CardPadEnd - CardBadgeSize - CardGap).coerceAtLeast(96.dp).toPx()
+                }.toInt()
+                val titleH = measurer.measure(
+                    text = AnnotatedString(card.title),
+                    style = cardStyles.title,
+                    overflow = TextOverflow.Ellipsis,
+                    maxLines = 1,
+                    constraints = Constraints(maxWidth = textW),
+                ).size.height
+                val subH = if (card.subtitle.isBlank()) 0 else measurer.measure(
+                    text = AnnotatedString(card.subtitle),
+                    style = cardStyles.subtitle,
+                    overflow = TextOverflow.Ellipsis,
+                    maxLines = 2,
+                    constraints = Constraints(maxWidth = textW),
+                ).size.height
+                val gap = if (subH > 0) with(density) { CardTextGap.toPx() } else 0f
+                val column = titleH + gap + subH
+                val h = with(density) { (CardPadVertical * 2).toPx() } +
+                    max(with(density) { CardBadgeSize.toPx() }, column)
+                return with(density) { cardWidth.toPx() } to h
+            }
             val layout = measurer.measure(
                 text = AnnotatedString(item.text),
                 style = textStyle,
@@ -396,9 +531,26 @@ fun MiniNotifHost(
             shown = null
         }
 
+        var active: MiniNotifItem? = null
+
+        // Сообщение с раскрытием: сначала пилюля, через morphAfterMillis она перетекает в карточку.
+        suspend fun hold(item: MiniNotifItem): MiniNotif.HoldResult {
+            val morph = item.morphTo ?: return MiniNotif.holdFor(item)
+            val early = MiniNotif.holdFor(item, item.morphAfterMillis)
+            if (early is MiniNotif.HoldResult.Dismissed) return early
+            present(morph, first = false)
+            active = morph
+            if (early is MiniNotif.HoldResult.Next) {
+                // Следующее уже ждёт, но раскрытие не пропускаем: карточке дают минимальный срок.
+                delay(MiniNotif.MinHoldMillis)
+                return early
+            }
+            return MiniNotif.holdFor(morph)
+        }
+
         while (true) {
             var next: MiniNotifItem? = MiniNotif.receive()
-            var active: MiniNotifItem? = null
+            active = null
             while (next != null) {
                 val item: MiniNotifItem = next
                 val current = active
@@ -411,7 +563,7 @@ fun MiniNotifHost(
                     present(item, first = current == null)
                 }
                 active = item
-                next = when (val result = MiniNotif.holdFor(item)) {
+                next = when (val result = hold(item)) {
                     is MiniNotif.HoldResult.Next -> result.item
                     MiniNotif.HoldResult.Expired, MiniNotif.HoldResult.Dismissed -> null
                 }
@@ -488,7 +640,10 @@ fun MiniNotifHost(
                             }
                         },
                 ) {
-                    MiniNotifContent(item = item, textStyle = textStyle, textMaxWidth = textMaxDp, isDark = isDark)
+                    MiniNotifContent(
+                        item = item, textStyle = textStyle, textMaxWidth = textMaxDp, isDark = isDark,
+                        cardStyles = cardStyles, cardWidth = cardWidth,
+                    )
                 }
             }
         }
@@ -501,7 +656,14 @@ private fun MiniNotifContent(
     textStyle: TextStyle,
     textMaxWidth: Dp,
     isDark: Boolean,
+    cardStyles: CardTextStyles,
+    cardWidth: Dp,
 ) {
+    val card = item.card
+    if (card != null) {
+        MiniNotifCardContent(card = card, kind = item.kind, styles = cardStyles, width = cardWidth, isDark = isDark)
+        return
+    }
     Row(
         modifier = Modifier.padding(start = PadStart, end = PadEnd),
         verticalAlignment = Alignment.CenterVertically,
@@ -518,9 +680,60 @@ private fun MiniNotifContent(
     }
 }
 
+/**
+ * Раскрытая карточка: значок 38 dp, справа колонка «заголовок + тег у правого края» и подзаголовок.
+ * Вертикальные 14 dp отступа заложены в высоту плашки ([MiniNotifHost], sizeOf), содержимое по центру.
+ */
+@Composable
+private fun MiniNotifCardContent(
+    card: MiniNotifCard,
+    kind: MiniNotifKind,
+    styles: CardTextStyles,
+    width: Dp,
+    isDark: Boolean,
+) {
+    val tagBackground = if (isDark) Color.White.copy(alpha = 0.07f) else Color.Black.copy(alpha = 0.06f)
+    Row(
+        modifier = Modifier.width(width).padding(start = CardPadStart, end = CardPadEnd),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        KindBadge(kind = kind, isDark = isDark, size = CardBadgeSize, glyphSize = CardGlyphSize)
+        Spacer(Modifier.width(CardGap))
+        Column(modifier = Modifier.weight(1f)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = card.title,
+                    style = styles.title,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f),
+                )
+                card.tag?.let { tag ->
+                    Spacer(Modifier.width(CardTagGap))
+                    Box(
+                        modifier = Modifier.clip(CircleShape).background(tagBackground)
+                            .padding(horizontal = 7.dp, vertical = 2.dp),
+                    ) {
+                        Text(text = tag, style = styles.tag, maxLines = 1)
+                    }
+                }
+            }
+            if (card.subtitle.isNotBlank()) {
+                Spacer(Modifier.height(CardTextGap))
+                Text(
+                    text = card.subtitle,
+                    style = styles.subtitle,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+    }
+}
+
 /** Значок смысла: круг цвета бренда с белой пиктограммой Phosphor; у «Info» и «Progress» — нейтральный круг. */
 @Composable
-private fun KindBadge(kind: MiniNotifKind, isDark: Boolean) {
+private fun KindBadge(kind: MiniNotifKind, isDark: Boolean, size: Dp = IconSize, glyphSize: Dp = 16.dp) {
     val neutral = if (isDark) Color.White.copy(alpha = 0.16f) else Color.Black.copy(alpha = 0.08f)
     val glyphNeutral = MaterialTheme.colorScheme.onSurface
     val bg: Color
@@ -534,12 +747,12 @@ private fun KindBadge(kind: MiniNotifKind, isDark: Boolean) {
         MiniNotifKind.Progress -> { bg = neutral; glyph = glyphNeutral; icon = 0 }
     }
     Box(
-        modifier = Modifier.size(IconSize).clip(CircleShape).background(bg),
+        modifier = Modifier.size(size).clip(CircleShape).background(bg),
         contentAlignment = Alignment.Center,
     ) {
         if (kind == MiniNotifKind.Progress) {
             CircularProgressIndicator(
-                modifier = Modifier.size(16.dp),
+                modifier = Modifier.size(glyphSize),
                 strokeWidth = 2.2.dp,
                 color = BrandOrange,
                 trackColor = Color.Transparent,
@@ -549,7 +762,7 @@ private fun KindBadge(kind: MiniNotifKind, isDark: Boolean) {
                 painter = painterResource(icon),
                 contentDescription = null,
                 tint = glyph,
-                modifier = Modifier.size(16.dp),
+                modifier = Modifier.size(glyphSize),
             )
         }
     }

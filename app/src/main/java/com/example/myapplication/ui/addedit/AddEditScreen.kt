@@ -2,6 +2,7 @@ package com.example.myapplication.ui.addedit
 
 import com.example.myapplication.ui.shared.mininotif.MiniNotif
 import com.example.myapplication.ui.shared.mininotif.MiniNotifKind
+import com.example.myapplication.ui.shared.mininotif.MiniNotifCardStrings
 import com.example.myapplication.ui.shared.theme.IosScroll
 import com.example.myapplication.ui.shared.glassControl
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -114,7 +115,10 @@ fun AddEditScreen(
         viewModel.effect.collect { effect ->
             when (effect) {
                 is AddEditEffect.NavigateBack -> onSaved?.invoke() ?: run { navController.popBackStack() }
-                is AddEditEffect.ShowError -> MiniNotif.show(ctx, effect.message, MiniNotifKind.Error)
+                is AddEditEffect.ShowError -> MiniNotif.show(
+                    ctx, effect.message, MiniNotifKind.Error, long = true,
+                    card = MiniNotifCardStrings(ratingRu).saveFailed(effect.message),
+                )
             }
         }
     }

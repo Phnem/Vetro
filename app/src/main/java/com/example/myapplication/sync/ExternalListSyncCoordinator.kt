@@ -395,9 +395,11 @@ class ExternalListSyncCoordinator(
             _syncUiState.value = ExternalListSyncUiState()
         }
 
-        toastMain(
+        toastSummary(
+            service,
+            summary,
             "Успешно. Добавлено: ${summary.added}, Обновлено: ${summary.updated}, " +
-                "Отправлено: ${summary.pushed}, Пропущено: ${summary.skipped}, Ошибки: ${summary.errors}"
+                "Отправлено: ${summary.pushed}, Пропущено: ${summary.skipped}, Ошибки: ${summary.errors}",
         )
     }
 
@@ -1137,6 +1139,34 @@ class ExternalListSyncCoordinator(
     private fun toastMain(text: String) {
         // Пока включены «Мини-уведомления» и приложение на экране, это плашка; иначе (и в фоне) обычный Toast.
         com.example.myapplication.ui.shared.mininotif.MiniNotif.show(appContext, text, long = true)
+    }
+
+    /** Итог синхронизации списка раскрытой карточкой: сервис тегом, счётчики подзаголовком. */
+    private fun toastSummary(service: ExternalListService, summary: SyncResultSummary, fullText: String) {
+        val counters = buildList {
+            add("Добавлено: ${summary.added}")
+            add("Обновлено: ${summary.updated}")
+            if (summary.pushed > 0) add("Отправлено: ${summary.pushed}")
+            if (summary.skipped > 0) add("Пропущено: ${summary.skipped}")
+            if (summary.errors > 0) add("Ошибки: ${summary.errors}")
+        }.joinToString(", ")
+        val failed = summary.errors > 0
+        com.example.myapplication.ui.shared.mininotif.MiniNotif.show(
+            appContext,
+            fullText,
+            if (failed) com.example.myapplication.ui.shared.mininotif.MiniNotifKind.Warning
+            else com.example.myapplication.ui.shared.mininotif.MiniNotifKind.Success,
+            long = true,
+            card = com.example.myapplication.ui.shared.mininotif.MiniNotifCard(
+                title = if (failed) "Завершено с ошибками" else "Синхронизация завершена",
+                subtitle = counters,
+                tag = when (service) {
+                    ExternalListService.SHIKIMORI -> "Shikimori"
+                    ExternalListService.ANILIST -> "AniList"
+                    else -> service.name
+                },
+            ),
+        )
     }
 
     private fun newPkceVerifier(): String {
