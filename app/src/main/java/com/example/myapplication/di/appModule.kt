@@ -642,6 +642,20 @@ val appModule = module {
     }
     single { CollectionPdfGenerator(androidContext()) }
     single<AnimeNotifier> { AnimeNotifierImpl(context = androidContext()) }
+    single { com.example.myapplication.reminders.AbandonedReminderStore(get(named("settings"))) }
+    single { com.example.myapplication.reminders.AbandonedTitleNotifier(androidContext()) }
+    single {
+        com.example.myapplication.reminders.AbandonedTitleReminder(
+            localDataSource = get(),
+            playback = get(),
+            reading = get(),
+            seasonEpisodes = get(),
+            seriesSeasons = get(),
+            autoStatus = get(),
+            store = get(),
+            notifier = get(),
+        )
+    }
     single<MangaNotifier> { MangaNotifierImpl(context = androidContext()) }
     single { RecommendationCacheStore(androidContext()) }
     single { RecommendationFeedbackStore(androidContext()) }

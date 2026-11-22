@@ -546,6 +546,18 @@ fun SettingsScreen(
                         )
                     }
 
+                    item(key = "group_reminders") {
+                        IosListGroup(
+                            isDark = isDark,
+                            rows = listOf({
+                                com.example.myapplication.reminders.AbandonedRemindersSettingRow(
+                                    ru = uiState.language == AppLanguage.RU,
+                                    isDark = isDark,
+                                )
+                            }),
+                        )
+                    }
+
                     // ГРУППА: Аккаунт / связь.
                     item(key = "group_account") {
                         IosListGroup(

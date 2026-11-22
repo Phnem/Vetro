@@ -24,6 +24,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
@@ -107,6 +108,9 @@ class AutoWatchStatusResolver(
             ).autoWatchStatus(added)
         }.distinctUntilChanged()
     }
+
+    /** Разовый снимок чтения манги по всем привязанным тайтлам: для фоновых проверок, где подписка не нужна. */
+    suspend fun mangaReadingSnapshot(): Map<String, MangaReadingSummary> = mangaReading().first()
 
     /** Прогресс чтения манги — те же условия, что у карточки (только привязанные к источнику тайтлы). */
     private fun mangaReading(onlyId: String? = null): Flow<Map<String, MangaReadingSummary>> =

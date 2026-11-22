@@ -32,6 +32,7 @@ class AnimeUpdateWorker(
     private val seasonEpisodeLocator: com.example.myapplication.domain.seasons.SeasonEpisodeLocator by inject()
     private val mangaNotifier: MangaNotifier by inject()
     private val mangaUpdateCheck: MangaUpdateCheckUseCase by inject()
+    private val abandonedReminder: com.example.myapplication.reminders.AbandonedTitleReminder by inject()
     private val settingsDataStore: DataStore<Preferences> by inject(named("settings"))
 
 
@@ -83,6 +84,13 @@ class AnimeUpdateWorker(
             // Ошибки не роняют воркер — проверка новых серий важнее.
             if (!watchlistOnly) {
                 runCatching { seasonEpisodesResolver.refreshStale() }
+                    .onFailure { it.printStackTrace() }
+            }
+            // Напоминание о брошенном тайтле: строго после проверок выше, чтобы счётчики вышедшего были
+            // свежими и тайтл, который уже вышел до конца, не считался продолжаемым. Не больше одного
+            // тихого уведомления за прогон, только когда приложение в фоне.
+            if (!watchlistOnly && !isAppInForeground()) {
+                runCatching { abandonedReminder.remindIfDue(language, hidden) }
                     .onFailure { it.printStackTrace() }
             }
             Result.success()
