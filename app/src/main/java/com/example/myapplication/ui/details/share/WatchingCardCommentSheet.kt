@@ -41,6 +41,63 @@ fun WatchingCardCommentSheet(
     onSubmit: (String) -> Unit,
     onDismiss: () -> Unit,
 ) {
+    WatchingCardTextSheet(
+        visible = visible,
+        initial = initial,
+        title = if (ru) "Комментарий к карточке" else "Card comment",
+        hint = if (ru) "До ${WatchingCardOptions.MAX_COMMENT_LENGTH} символов — появится пузырём над карточкой"
+        else "Up to ${WatchingCardOptions.MAX_COMMENT_LENGTH} characters — shown as a bubble above the card",
+        placeholder = if (ru) "Что вы думаете об этом тайтле?" else "What do you think about it?",
+        limit = WatchingCardOptions.MAX_COMMENT_LENGTH,
+        ru = ru,
+        isDark = isDark,
+        onSubmit = onSubmit,
+        onDismiss = onDismiss,
+    )
+}
+
+/**
+ * Шторка «Ник на карточке»: то же поле с пределом, что у комментария, чтобы ввод в «Карточке для друзей»
+ * вёл себя одинаково. Отдельная шторка, а не поле внутри предпросмотра: клавиатура не перекрывает поле,
+ * а картинка не сжимается под неё.
+ */
+@Composable
+fun WatchingCardNickSheet(
+    visible: Boolean,
+    initial: String,
+    ru: Boolean,
+    isDark: Boolean,
+    onSubmit: (String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    WatchingCardTextSheet(
+        visible = visible,
+        initial = initial,
+        title = if (ru) "Ник на карточке" else "Nickname on the card",
+        hint = if (ru) "Стоит рядом с логотипом. Пусто — подпишется «Vetro Collection»"
+        else "Shown next to the logo. Empty — it says “Vetro Collection”",
+        placeholder = if (ru) "Как вас подписать?" else "What should it say?",
+        limit = WatchingCardOptions.MAX_NICK_LENGTH,
+        ru = ru,
+        isDark = isDark,
+        onSubmit = onSubmit,
+        onDismiss = onDismiss,
+    )
+}
+
+@Composable
+private fun WatchingCardTextSheet(
+    visible: Boolean,
+    initial: String,
+    title: String,
+    hint: String,
+    placeholder: String,
+    limit: Int,
+    ru: Boolean,
+    isDark: Boolean,
+    onSubmit: (String) -> Unit,
+    onDismiss: () -> Unit,
+) {
     val state = remember { MutableTransitionState(false) }
     LaunchedEffect(visible) { state.targetState = visible }
     if (!state.currentState && !state.targetState) return
@@ -56,7 +113,7 @@ fun WatchingCardCommentSheet(
                 .padding(bottom = 12.dp),
         ) {
             Text(
-                if (ru) "Комментарий к карточке" else "Card comment",
+                title,
                 modifier = Modifier.padding(horizontal = 4.dp),
                 fontFamily = SnProFamily,
                 fontSize = 20.sp,
@@ -65,8 +122,7 @@ fun WatchingCardCommentSheet(
             )
             Spacer(Modifier.height(4.dp))
             Text(
-                if (ru) "До ${WatchingCardOptions.MAX_COMMENT_LENGTH} символов — появится пузырём над карточкой"
-                else "Up to ${WatchingCardOptions.MAX_COMMENT_LENGTH} characters — shown as a bubble above the card",
+                hint,
                 modifier = Modifier.padding(horizontal = 4.dp),
                 fontFamily = SnProFamily,
                 fontSize = 13.sp,
@@ -76,10 +132,10 @@ fun WatchingCardCommentSheet(
             Spacer(Modifier.height(14.dp))
             LetterLimitField(
                 value = text,
-                // Enter в этом поле — «Готово»: перенос строки в пузыре не нужен.
+                // Enter в этом поле — «Готово»: перенос строки ни в пузыре, ни в нике не нужен.
                 onValueChange = { next -> if (next.contains('\n')) onSubmit(text.trim()) else text = next },
-                limit = WatchingCardOptions.MAX_COMMENT_LENGTH,
-                placeholder = if (ru) "Что вы думаете об этом тайтле?" else "What do you think about it?",
+                limit = limit,
+                placeholder = placeholder,
                 actionLabel = if (ru) "Готово" else "Done",
                 onAction = { onSubmit(text.trim()) },
                 remainingDescription = { left -> if (ru) "осталось $left символов" else "$left characters left" },

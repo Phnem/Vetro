@@ -144,6 +144,7 @@ fun DetailsScreen(
     val watchStatus by viewModel.effectiveWatchStatus.collectAsStateWithLifecycle()
     val tracking by viewModel.tracking.collectAsStateWithLifecycle()
     val notificationsOn by viewModel.notificationsOn.collectAsStateWithLifecycle()
+    val cardComment by viewModel.cardComment.collectAsStateWithLifecycle()
     val isDark = isAppInDarkTheme()
 
     val current = anime
@@ -171,6 +172,15 @@ fun DetailsScreen(
     // смотрел). Отдельный признак видимости — оверлей обязан доиграть уход, см. ActionMenuOverlay.
     var episodeMenu by remember { mutableStateOf<EpisodeMenuRequest?>(null) }
     var episodeMenuVisible by remember { mutableStateOf(false) }
+    // Карточка «Что я смотрю» и комментарий к ней. Комментарий лежит в хранилище (viewModel.cardComment):
+    // его показывают и пузырь на карточке, и отдельная секция на странице «Детали».
+    var showCardSheet by remember { mutableStateOf(false) }
+    var showCommentSheet by remember { mutableStateOf(false) }
+    // Комментарий открыт из пузыря в шапке — после ввода показываем карточку; из секции — просто правим.
+    var commentReturnsToCard by remember { mutableStateOf(false) }
+    var showDeleteComment by remember { mutableStateOf(false) }
+    // Удаление подтверждено: секция наливается красным и улетает, потом комментарий стирается.
+    var commentLeaving by remember { mutableStateOf(false) }
     // Бабл оценки по звёздочке меню. Живой: палец ставит значение, отпускание сохраняет; тап мимо
     // и «назад» закрывают без сохранения. Рисуется ниже, последним ребёнком корня — поверх дока.
     val episodeRatingSlider = remember { RatingSliderState(0f) }
@@ -282,6 +292,21 @@ fun DetailsScreen(
                                 onOpenDateMode = viewModel::openDateModePicker,
                                 notificationsOn = notificationsOn,
                                 onNotificationsChange = viewModel::setNotificationsOn,
+                                cardComment = cardComment,
+                                cardCommentLeaving = commentLeaving,
+                                onEditCardComment = {
+                                    performHaptic(view, Haptic.Light)
+                                    commentReturnsToCard = false
+                                    showCommentSheet = true
+                                },
+                                onAskDeleteCardComment = {
+                                    performHaptic(view, Haptic.Light)
+                                    showDeleteComment = true
+                                },
+                                onCardCommentLeft = {
+                                    viewModel.deleteCardComment()
+                                    commentLeaving = false
+                                },
                                 onHeroUnderStatusBar = { heroUnderStatusBar = it },
                             )
 
@@ -343,10 +368,6 @@ fun DetailsScreen(
                 )
 
                 // Отдельный пузырь левее «⋯»: карточка «Что я сейчас смотрю» картинкой для друзей и соцсетей.
-                var showCardSheet by remember { mutableStateOf(false) }
-                var showCommentSheet by remember { mutableStateOf(false) }
-                // Комментарий для пузыря над карточкой: живёт, пока открыт экран, и уходит в PNG вместе с карточкой.
-                var cardComment by rememberSaveable { mutableStateOf("") }
                 DetailsGlassBackButton(
                     backdrop = backdrop,
                     isDark = isDark,
@@ -369,6 +390,7 @@ fun DetailsScreen(
                     isDark = isDark,
                     onClick = {
                         performHaptic(view, Haptic.Light)
+                        commentReturnsToCard = true
                         showCommentSheet = true
                     },
                     icon = if (cardComment.isEmpty()) Icons.Rounded.AddComment else Icons.Rounded.Comment,
@@ -399,12 +421,23 @@ fun DetailsScreen(
                         ru = language == AppLanguage.RU,
                         isDark = isDark,
                         onSubmit = { text ->
-                            cardComment = text.take(com.example.myapplication.ui.details.share.WatchingCardOptions.MAX_COMMENT_LENGTH)
+                            viewModel.setCardComment(text.take(com.example.myapplication.ui.details.share.WatchingCardOptions.MAX_COMMENT_LENGTH))
                             showCommentSheet = false
-                            // Сразу показываем карточку с пузырём: ради неё комментарий и пишется.
-                            showCardSheet = true
+                            // Из пузыря в шапке сразу показываем карточку: ради неё комментарий и пишется.
+                            if (commentReturnsToCard) showCardSheet = true
                         },
                         onDismiss = { showCommentSheet = false },
+                    )
+                    DeleteCardCommentSheet(
+                        visible = showDeleteComment,
+                        comment = cardComment,
+                        ru = language == AppLanguage.RU,
+                        isDark = isDark,
+                        onConfirm = {
+                            showDeleteComment = false
+                            commentLeaving = true
+                        },
+                        onDismiss = { showDeleteComment = false },
                     )
                 }
 
@@ -591,6 +624,11 @@ private fun DetailsInfoPage(
     onOpenDateMode: () -> Unit,
     notificationsOn: Boolean,
     onNotificationsChange: (Boolean) -> Unit,
+    cardComment: String,
+    cardCommentLeaving: Boolean,
+    onEditCardComment: () -> Unit,
+    onAskDeleteCardComment: () -> Unit,
+    onCardCommentLeft: () -> Unit,
     onHeroUnderStatusBar: (Boolean) -> Unit,
 ) {
     val context = LocalContext.current
@@ -824,6 +862,16 @@ private fun DetailsInfoPage(
                 Spacer(Modifier.height(20.dp))
                 NextReleaseSection(release = release, ru = ru, onElapsed = onReleaseElapsed)
             }
+
+            // ——— Мой комментарий: тот же, что пузырём на карточке «Что я смотрю»; без комментария секции нет ———
+            CardCommentSection(
+                comment = cardComment,
+                ru = ru,
+                leaving = cardCommentLeaving,
+                onEdit = onEditCardComment,
+                onAskDelete = onAskDeleteCardComment,
+                onLeft = onCardCommentLeft,
+            )
 
             Spacer(Modifier.height(24.dp))
 

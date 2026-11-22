@@ -38,6 +38,9 @@ data class WatchingCardOptions(
 ) {
     companion object {
         const val MAX_COMMENT_LENGTH = 52
+
+        /** Ник влезает в шапку карточки рядом с плашкой типа. */
+        const val MAX_NICK_LENGTH = 22
     }
 }
 

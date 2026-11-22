@@ -59,7 +59,7 @@ internal data class ShareCardData(
 )
 
 /**
- * Рисует карточку по макету «Рамка поста» (380 × 530 условных единиц, радиус 32, внутренние поля 20)
+ * Рисует карточку по макету «Рамка поста» (380 условных единиц в ширину, высота по содержимому, радиус 32, внутренние поля 20)
  * средствами android.graphics: без Compose-слоя и внешних сервисов. Условная единица = [UNIT] px,
  * вокруг карточки поля [PAD] единиц с размытым цветным фоном из обложки: сквозь матовое стекло он
  * и придаёт карточке глубину.
@@ -69,14 +69,16 @@ internal data class ShareCardData(
 internal object WatchingCardRenderer {
     private const val UNIT = 3f
     private const val CARD_W = 380f
-    private const val CARD_H = 530f
     private const val PAD = 28f
 
-    /** (380 + 2 × 28) × 3 */
+    /** (380 + 2 × 28) × 3. Высота у холста своя: карточка по высоте садится на содержимое. */
     const val WIDTH = 1308
 
-    /** (530 + 2 × 28) × 3; с пузырём-комментарием над карточкой холст выше. */
-    const val BASE_HEIGHT = 1758
+    /** Подвал: зазор над чертой, высота строки и нижнее поле карточки. */
+    private const val FOOTER_GAP = 16f
+    private const val FOOTER_TEXT_H = 14.4f
+    private const val FOOTER_TEXT_TOP = 12f
+    private const val CARD_BOTTOM_PAD = 20f
 
     /** Пузырь-комментарий: отступ от верха холста, зазор до карточки, сдвиг от левого края карточки. */
     private const val BUBBLE_TOP = 16f
@@ -164,15 +166,100 @@ internal object WatchingCardRenderer {
         val bubble = data.comment?.trim()?.takeIf { it.isNotEmpty() }?.let { measureBubble(it, data.dark) }
         // Пузырь стоит над карточкой, и холст растёт ровно на его высоту (с хвостом и зазором).
         val extraTop = bubble?.let { max(0f, BUBBLE_TOP + it.totalHeight + BUBBLE_GAP - PAD) } ?: 0f
-        val height = ((CARD_H + PAD * 2f + extraTop) * UNIT).roundToInt()
+        val plan = plan(data, t)
+        val height = ((plan.cardH + PAD * 2f + extraTop) * UNIT).roundToInt()
         val bitmap = Bitmap.createBitmap(WIDTH, height, Bitmap.Config.ARGB_8888)
         val c = Canvas(bitmap)
         drawBackdrop(c, paletteFor(data.poster), data.dark, height)
         c.scale(UNIT, UNIT)
         bubble?.let { drawBubble(c, it, PAD + BUBBLE_INSET, BUBBLE_TOP) }
         c.translate(PAD, PAD + extraTop)
-        drawCard(c, data, t)
+        drawCard(c, data, t, plan)
         return bitmap
+    }
+
+    // ---------------------------------------------------------------- раскладка
+
+    /**
+     * Что и где стоит под обложкой. Карточка не держит фиксированную высоту: подвал идёт сразу за
+     * последним блоком, поэтому в режиме «минимум данных» пустого места внизу нет, а высота карточки
+     * (и холста) просто короче.
+     */
+    private class Plan(
+        val titleLayout: StaticLayout,
+        val titleTop: Float,
+        val unit: String?,
+        val unitTop: Float,
+        val noteLayout: StaticLayout?,
+        val noteTop: Float,
+        val genres: String?,
+        val genresTop: Float,
+        val footerLine: Float,
+        val cardH: Float,
+    )
+
+    private const val LEFT = 20f
+    private const val CONTENT_W = CARD_W - LEFT * 2f
+    private const val HEAD_TOP = 20f
+    private const val LOGO_SIZE = 38f
+    private const val COVER_H = 215f
+    private const val NOTE_BAR_W = 2.5f
+    private const val NOTE_GAP = 11f
+
+    private fun plan(d: ShareCardData, t: Tokens): Plan {
+        val coverBottom = HEAD_TOP + LOGO_SIZE + 14f + COVER_H
+        // Полоска прогресса (6) и отступы вокруг неё: место остаётся и без полоски, чтобы шапка не прыгала.
+        var y = coverBottom + 13f + 6f + 12f
+
+        val titlePaint = paint(18.5f, 800, t.primary).apply { letterSpacing = -0.02f }
+        val titleLayout = StaticLayout.Builder
+            .obtain(d.title, 0, d.title.length, titlePaint, CONTENT_W.toInt())
+            .setMaxLines(2)
+            .setEllipsize(TextUtils.TruncateAt.END)
+            .setAlignment(Layout.Alignment.ALIGN_NORMAL)
+            .setLineSpacing(0f, 1.04f)
+            .build()
+        val titleTop = y
+        y += titleLayout.height
+
+        var unitTop = 0f
+        val unit = d.currentUnit?.let {
+            y += 5f
+            unitTop = y
+            y += 16.9f
+            TextUtils.ellipsize(it, paint(13f, 600, t.accent), CONTENT_W, TextUtils.TruncateAt.END).toString()
+        }
+
+        var noteTop = 0f
+        val noteLayout = d.note?.let { note ->
+            y += 10f
+            noteTop = y
+            val notePaint = paint(12.5f, 400, t.note, italic = true)
+            val text = if (d.noteQuoted) "«$note»" else note
+            val layout = StaticLayout.Builder
+                .obtain(text, 0, text.length, notePaint, (CARD_W - LEFT - (LEFT + NOTE_BAR_W + NOTE_GAP)).toInt())
+                .setMaxLines(4)
+                .setEllipsize(TextUtils.TruncateAt.END)
+                .setAlignment(Layout.Alignment.ALIGN_NORMAL)
+                .setLineSpacing(0f, 1.18f)
+                .build()
+            y += layout.height
+            layout
+        }
+
+        var genresTop = 0f
+        val genres = if (noteLayout == null) {
+            d.genres?.let {
+                y += 6f
+                genresTop = y
+                y += 16.9f
+                TextUtils.ellipsize(it, paint(12.5f, 500, t.secondary), CONTENT_W, TextUtils.TruncateAt.END).toString()
+            }
+        } else null
+
+        val footerLine = y + FOOTER_GAP
+        val cardH = footerLine + 1f + FOOTER_TEXT_TOP + FOOTER_TEXT_H + CARD_BOTTOM_PAD
+        return Plan(titleLayout, titleTop, unit, unitTop, noteLayout, noteTop, genres, genresTop, footerLine, cardH)
     }
 
     // ---------------------------------------------------------------- фон
@@ -295,12 +382,13 @@ internal object WatchingCardRenderer {
 
     // ---------------------------------------------------------------- карточка
 
-    private fun drawCard(c: Canvas, d: ShareCardData, t: Tokens) {
-        val card = RectF(0f, 0f, CARD_W, CARD_H)
+    private fun drawCard(c: Canvas, d: ShareCardData, t: Tokens, plan: Plan) {
+        val cardH = plan.cardH
+        val card = RectF(0f, 0f, CARD_W, cardH)
         val radius = 32f
 
         // Тень на отдельном слое с вырезанной серединой: иначе она просвечивала бы сквозь полупрозрачное стекло.
-        val layer = c.saveLayer(-PAD, -PAD, CARD_W + PAD, CARD_H + PAD, null)
+        val layer = c.saveLayer(-PAD, -PAD, CARD_W + PAD, cardH + PAD, null)
         c.drawRoundRect(
             card, radius, radius,
             Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -316,7 +404,7 @@ internal object WatchingCardRenderer {
 
         c.drawRoundRect(card, radius, radius, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = t.cardFill })
         // Кромка стекла и верхний блик, угасающий вниз (inset 0 1px 0 в макете).
-        val rim = RectF(0.5f, 0.5f, CARD_W - 0.5f, CARD_H - 0.5f)
+        val rim = RectF(0.5f, 0.5f, CARD_W - 0.5f, cardH - 0.5f)
         c.drawRoundRect(
             rim, radius, radius,
             Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -378,7 +466,7 @@ internal object WatchingCardRenderer {
         drawCover(c, cover, d, t)
 
         // 3. 10-сегментная полоска прогресса.
-        var y = cover.bottom + 13f
+        val y = cover.bottom + 13f
         d.fraction?.let { fraction ->
             val filled = (fraction * 10f).roundToInt().coerceIn(1, 10)
             val gap = 5f
@@ -391,64 +479,34 @@ internal object WatchingCardRenderer {
                 )
             }
         }
-        y += 6f + 12f
 
-        // От верхней границы подвала зависит, сколько строк влезет в заметку.
-        val footerLine = CARD_H - 20f - 14.4f - 12f
-        // 4. Название, оранжевая строка, цитата или жанры.
-        val titlePaint = paint(18.5f, 800, t.primary).apply { letterSpacing = -0.02f }
-        val titleLayout = StaticLayout.Builder
-            .obtain(d.title, 0, d.title.length, titlePaint, contentW.toInt())
-            .setMaxLines(2)
-            .setEllipsize(TextUtils.TruncateAt.END)
-            .setAlignment(Layout.Alignment.ALIGN_NORMAL)
-            .setLineSpacing(0f, 1.04f)
-            .build()
+        // 4. Название, оранжевая строка, цитата или жанры: позиции даёт plan().
         c.save()
-        c.translate(left, y)
-        titleLayout.draw(c)
+        c.translate(left, plan.titleTop)
+        plan.titleLayout.draw(c)
         c.restore()
-        y += titleLayout.height
 
-        if (d.currentUnit != null) {
-            y += 5f
+        if (plan.unit != null) {
             val unitPaint = paint(13f, 600, t.accent)
-            val unit = TextUtils.ellipsize(d.currentUnit, unitPaint, contentW, TextUtils.TruncateAt.END).toString()
-            c.drawText(unit, left, baselineIn(y, 16.9f, unitPaint), unitPaint)
-            y += 16.9f
+            c.drawText(plan.unit, left, baselineIn(plan.unitTop, 16.9f, unitPaint), unitPaint)
         }
-        if (d.note != null) {
-            y += 10f
-            val notePaint = paint(12.5f, 400, t.note, italic = true)
-            val noteX = left + 2.5f + 11f
-            val lineH = 12.5f * 1.42f
-            val room = ((footerLine - 8f - y) / lineH).toInt().coerceAtMost(4)
-            if (room >= 1) {
-                val text = if (d.noteQuoted) "«${d.note}»" else d.note
-                val layout = StaticLayout.Builder
-                    .obtain(text, 0, text.length, notePaint, (right - noteX).toInt())
-                    .setMaxLines(room)
-                    .setEllipsize(TextUtils.TruncateAt.END)
-                    .setAlignment(Layout.Alignment.ALIGN_NORMAL)
-                    .setLineSpacing(0f, 1.18f)
-                    .build()
-                c.drawRect(left, y, left + 2.5f, y + layout.height, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = ORANGE })
-                c.save()
-                c.translate(noteX, y)
-                layout.draw(c)
-                c.restore()
-            }
-        } else if (d.genres != null) {
-            y += 6f
+        if (plan.noteLayout != null) {
+            val noteX = left + NOTE_BAR_W + NOTE_GAP
+            c.drawRect(left, plan.noteTop, left + NOTE_BAR_W, plan.noteTop + plan.noteLayout.height, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = ORANGE })
+            c.save()
+            c.translate(noteX, plan.noteTop)
+            plan.noteLayout.draw(c)
+            c.restore()
+        } else if (plan.genres != null) {
             val genrePaint = paint(12.5f, 500, t.secondary)
-            val genres = TextUtils.ellipsize(d.genres, genrePaint, contentW, TextUtils.TruncateAt.END).toString()
-            c.drawText(genres, left, baselineIn(y, 16.9f, genrePaint), genrePaint)
+            c.drawText(plan.genres, left, baselineIn(plan.genresTop, 16.9f, genrePaint), genrePaint)
         }
 
         // 5. Подвал.
+        val footerLine = plan.footerLine
         c.drawRect(left, footerLine, right, footerLine + 1f, Paint().apply { color = t.footerBorder })
         val footPaint = paint(12f, 500, t.footerText)
-        val footBase = baselineIn(footerLine + 1f + 12f, 14.4f, footPaint)
+        val footBase = baselineIn(footerLine + 1f + FOOTER_TEXT_TOP, FOOTER_TEXT_H, footPaint)
         val rightText = d.footerRight
         val rightW = footPaint.measureText(rightText)
         val leftShown = TextUtils.ellipsize(d.footerLeft, footPaint, contentW - rightW - 12f, TextUtils.TruncateAt.END).toString()

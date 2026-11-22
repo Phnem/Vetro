@@ -107,6 +107,24 @@ class DetailsViewModel(
         }
     }
 
+    private val commentStore = com.example.myapplication.data.local.CardCommentStore(settingsDataStore)
+
+    /** Комментарий пользователя к тайтлу (пузырь на карточке «Что я смотрю» и секция в Details); пусто — нет. */
+    val cardComment: StateFlow<String> = commentStore.observe(animeId)
+        .stateIn(viewModelScope, SharingStarted.Eagerly, "")
+
+    fun setCardComment(text: String) {
+        viewModelScope.launch {
+            runCatching { commentStore.set(animeId, text) }
+                .onFailure {
+                    if (it is kotlinx.coroutines.CancellationException) throw it
+                    say("Не удалось сохранить", "Couldn't save")
+                }
+        }
+    }
+
+    fun deleteCardComment() = setCardComment("")
+
     /** Пункт меню «⋯»: положить тайтл в секретную папку или вернуть его в ленту. */
     fun toggleSecret() {
         val toSecret = !isSecret.value

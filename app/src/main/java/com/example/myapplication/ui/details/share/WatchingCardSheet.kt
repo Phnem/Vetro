@@ -1,26 +1,23 @@
 package com.example.myapplication.ui.details.share
 
 import android.graphics.Bitmap
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.MutableTransitionState
-import androidx.compose.foundation.Image
+import androidx.compose.animation.expandHorizontally
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -33,11 +30,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -52,9 +45,8 @@ import com.example.myapplication.data.models.WatchStatus
 import com.example.myapplication.ui.shared.components.MotionBottomSheet
 import com.example.myapplication.ui.shared.mininotif.MiniNotif
 import com.example.myapplication.ui.shared.mininotif.MiniNotifKind
-import com.example.myapplication.ui.shared.theme.BrandOrange
+import com.example.myapplication.ui.shared.theme.MotionTokens
 import com.example.myapplication.ui.shared.theme.SnProFamily
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
@@ -64,7 +56,9 @@ private val NickKey = stringPreferencesKey("share_card_nick")
 
 /**
  * Шторка предпросмотра карточки «Что я сейчас смотрю»: показывает готовую картинку (тема и язык из
- * настроек приложения), даёт поменять ник и режим данных, сохранить PNG в галерею или поделиться.
+ * настроек приложения), даёт сменить ник, объём данных и показ комментария, сохранить PNG в галерею или
+ * поделиться. Ник вводится в отдельной шторке с полем из референса «Letter limit» ([WatchingCardNickSheet]):
+ * поле внутри предпросмотра перекрывала бы клавиатура.
  */
 @Composable
 fun WatchingCardSheet(
@@ -77,7 +71,7 @@ fun WatchingCardSheet(
     status: WatchStatus?,
     /** Описание тайтла из Details: идёт на карточку, если у тайтла нет своей заметки. */
     description: String?,
-    /** Комментарий пользователя для пузыря над карточкой; пустой — без пузыря. */
+    /** Комментарий пользователя для пузыря над карточкой; пустой — без пузыря и без кнопки показа. */
     comment: String,
     onDismiss: () -> Unit,
 ) {
@@ -90,34 +84,35 @@ fun WatchingCardSheet(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
+    var nick by remember { mutableStateOf("") }
+    var nickLoaded by remember { mutableStateOf(false) }
+    var showNickSheet by remember { mutableStateOf(false) }
+    // Режим данных и показ комментария живут, пока открыта шторка: карточку собирают под конкретную отправку.
+    var minimal by remember { mutableStateOf(false) }
+    var showComment by remember { mutableStateOf(true) }
+    var bitmap by remember { mutableStateOf<Bitmap?>(null) }
+    var busy by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        nick = settings.data.first()[NickKey].orEmpty()
+        nickLoaded = true
+    }
+    val shownComment = if (showComment) comment else ""
+    // Перерисовка при смене ника, режима и комментария; предпросмотр сам плавно перетекает в новую картинку.
+    LaunchedEffect(nickLoaded, nick, minimal, shownComment) {
+        if (!nickLoaded) return@LaunchedEffect
+        bitmap = builder.render(
+            anime, title, ru, isDark, posterPath, status, description,
+            WatchingCardOptions(minimal = minimal, nick = nick, comment = shownComment),
+        )
+    }
+
     MotionBottomSheet(visibleState = state, onDismiss = onDismiss, isDark = isDark, panelModifier = Modifier.fillMaxWidth()) {
-        var nick by remember { mutableStateOf("") }
-        var nickLoaded by remember { mutableStateOf(false) }
-        var minimal by remember { mutableStateOf(false) }
-        var bitmap by remember { mutableStateOf<Bitmap?>(null) }
-        var busy by remember { mutableStateOf(false) }
-
-        LaunchedEffect(Unit) {
-            nick = settings.data.first()[NickKey].orEmpty()
-            nickLoaded = true
-        }
-        // Перерисовка при смене ника и режима; набор ника сглаживаем паузой, первый кадр без задержки.
-        LaunchedEffect(nickLoaded, nick, minimal, comment) {
-            if (!nickLoaded) return@LaunchedEffect
-            if (bitmap != null) delay(250)
-            bitmap = builder.render(
-                anime, title, ru, isDark, posterPath, status, description,
-                WatchingCardOptions(minimal = minimal, nick = nick, comment = comment),
-            )
-            settings.edit { it[NickKey] = nick.trim() }
-        }
-
         Column(
             Modifier
                 .padding(horizontal = 20.dp)
                 .padding(top = 28.dp)
                 .navigationBarsPadding()
-                .imePadding()
                 .padding(bottom = 20.dp),
         ) {
             Text(
@@ -136,66 +131,46 @@ fun WatchingCardSheet(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Spacer(Modifier.height(14.dp))
-            Box(Modifier.fillMaxWidth().height(380.dp), contentAlignment = Alignment.Center) {
-                val shown = bitmap
-                if (shown != null) {
-                    Image(
-                        bitmap = shown.asImageBitmap(),
-                        contentDescription = if (ru) "Предпросмотр карточки" else "Card preview",
-                        contentScale = ContentScale.Fit,
-                        modifier = Modifier.fillMaxHeight().clip(RoundedCornerShape(20.dp)),
-                    )
-                } else {
-                    CircularProgressIndicator(color = BrandOrange, modifier = Modifier.size(32.dp), strokeWidth = 3.dp)
-                }
-            }
+            CardPreview(bitmap, description = if (ru) "Предпросмотр карточки" else "Card preview")
             Spacer(Modifier.height(14.dp))
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-                val fieldBg = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.07f)
-                BasicTextField(
-                    value = nick,
-                    onValueChange = { nick = it.take(22) },
-                    singleLine = true,
-                    textStyle = TextStyle(
-                        fontFamily = SnProFamily,
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onSurface,
-                    ),
-                    cursorBrush = SolidColor(BrandOrange),
-                    decorationBox = { inner ->
-                        Box(
-                            Modifier
-                                .clip(CircleShape)
-                                .background(fieldBg)
-                                .padding(horizontal = 16.dp, vertical = 11.dp),
-                        ) {
-                            if (nick.isEmpty()) {
-                                Text(
-                                    if (ru) "Ник на карточке" else "Nickname on the card",
-                                    fontFamily = SnProFamily,
-                                    fontSize = 14.sp,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            }
-                            inner()
-                        }
-                    },
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                NickPill(
+                    nick = nick,
+                    placeholder = if (ru) "Ник на карточке" else "Nickname on the card",
+                    description = if (ru) "Изменить ник" else "Edit nickname",
+                    onClick = { showNickSheet = true },
                     modifier = Modifier.weight(1f),
                 )
-                Text(
-                    if (minimal) (if (ru) "Минимум данных" else "Minimal") else (if (ru) "Полные данные" else "Full data"),
-                    fontFamily = SnProFamily,
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = if (minimal) BrandOrange else MaterialTheme.colorScheme.onSurface,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier
-                        .clip(CircleShape)
-                        .background(if (minimal) BrandOrange.copy(alpha = 0.16f) else fieldBg)
-                        .clickable { minimal = !minimal }
-                        .padding(horizontal = 14.dp, vertical = 11.dp),
+                // Включено — полные данные (оранжевая кнопка), выключено — минимум.
+                RoundIconToggle(
+                    on = !minimal,
+                    onChange = { full -> minimal = !full },
+                    description = if (minimal) {
+                        if (ru) "Минимум данных. Нажмите, чтобы показать все" else "Minimal data. Tap to show everything"
+                    } else {
+                        if (ru) "Полные данные. Нажмите, чтобы оставить минимум" else "Full data. Tap to keep the minimum"
+                    },
+                    modifier = Modifier.padding(start = 10.dp),
+                    draw = { progress, tint -> drawDetailLevelIcon(progress, tint) },
                 )
+                // Кнопки показа комментария нет, пока комментария нет: включать нечего.
+                AnimatedVisibility(
+                    visible = comment.isNotBlank(),
+                    enter = expandHorizontally(MotionTokens.springObject()) + fadeIn(MotionTokens.springObject()),
+                    exit = shrinkHorizontally(MotionTokens.springExit()) + fadeOut(MotionTokens.springExit()),
+                ) {
+                    RoundIconToggle(
+                        on = showComment,
+                        onChange = { showComment = it },
+                        description = if (showComment) {
+                            if (ru) "Комментарий на карточке. Нажмите, чтобы убрать" else "Comment on the card. Tap to hide"
+                        } else {
+                            if (ru) "Комментарий скрыт. Нажмите, чтобы показать" else "Comment hidden. Tap to show"
+                        },
+                        modifier = Modifier.padding(start = 10.dp),
+                        draw = { progress, tint -> drawCommentIcon(progress, tint) },
+                    )
+                }
             }
             Spacer(Modifier.height(16.dp))
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -249,4 +224,18 @@ fun WatchingCardSheet(
             }
         }
     }
+
+    // Лежит поверх шторки предпросмотра: объявлена позже, значит и рисуется выше.
+    WatchingCardNickSheet(
+        visible = showNickSheet,
+        initial = nick,
+        ru = ru,
+        isDark = isDark,
+        onSubmit = { text ->
+            nick = text.take(WatchingCardOptions.MAX_NICK_LENGTH)
+            showNickSheet = false
+            scope.launch { settings.edit { it[NickKey] = nick.trim() } }
+        },
+        onDismiss = { showNickSheet = false },
+    )
 }
