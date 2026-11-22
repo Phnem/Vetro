@@ -6,6 +6,7 @@ import android.content.Intent
 import android.net.Uri
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -19,6 +20,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material3.Icon
@@ -35,6 +37,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.input.pointer.pointerInput
@@ -53,7 +56,10 @@ import com.example.myapplication.domain.enrichment.title.NextRelease
 import com.example.myapplication.network.enrichment.EnrichmentSource
 import com.example.myapplication.domain.enrichment.title.countdownText
 import com.example.myapplication.domain.enrichment.title.runCountdown
+import com.example.myapplication.domain.enrichment.weblinks.ResolvedWebLink
+import com.example.myapplication.network.AppLanguage
 import com.example.myapplication.network.enrichment.ArtworkImage
+import com.example.myapplication.ui.shared.components.WebLinkChipStack
 import com.example.myapplication.network.enrichment.VideoClip
 import com.example.myapplication.ui.shared.theme.BrandOrange
 import com.example.myapplication.ui.shared.theme.MotionTokens
@@ -111,47 +117,124 @@ internal fun DetailsTitle(
     }
 }
 
+/** Подложка блока Details (описание, «где смотреть»): мягкая плашка с тонкой рамкой, как в референсе. */
+@Composable
+internal fun Modifier.detailsCard(): Modifier {
+    val onBg = MaterialTheme.colorScheme.onBackground
+    val shape = RoundedCornerShape(28.dp)
+    return this
+        .clip(shape)
+        .background(onBg.copy(alpha = CARD_FILL_ALPHA))
+        .border(1.dp, onBg.copy(alpha = 0.09f), shape)
+}
+
+private const val CARD_FILL_ALPHA = 0.06f
+
 /**
- * «Следующий эпизод через:» — обычная секция Details, без карточки и подложки. Тикает раз в секунду
- * по часам устройства; время вышло — секция исчезает, отрицательных значений нет, а [onElapsed]
- * просит перечитать расписание.
+ * Один блок «Следующий эпизод через:» + стопка сайтов, где смотреть. Слева таймер (если есть расписание),
+ * справа иконки источников с подписью. Тикает раз в секунду по часам устройства; время вышло — таймер
+ * уходит, а источники остаются; нет ни того, ни другого — блока нет. Отрицательных значений нет,
+ * [onElapsed] просит перечитать расписание ровно один раз.
  */
 @Composable
-internal fun NextReleaseSection(release: NextRelease, ru: Boolean, onElapsed: () -> Unit) {
-    var remaining by remember(release.at) {
-        mutableStateOf<Duration?>(Duration.ofMillis(release.at.toEpochMilli() - System.currentTimeMillis()))
+internal fun WatchPanel(
+    release: NextRelease?,
+    links: List<ResolvedWebLink>,
+    language: AppLanguage,
+    ru: Boolean,
+    onElapsed: () -> Unit,
+) {
+    var remaining by remember(release?.at) {
+        mutableStateOf(release?.let { Duration.ofMillis(it.at.toEpochMilli() - System.currentTimeMillis()) })
     }
     val elapsed by rememberUpdatedState(onElapsed)
-    LaunchedEffect(release.at) {
-        runCountdown(release.at, System::currentTimeMillis, { delay(it) }) { remaining = it }
+    LaunchedEffect(release?.at) {
+        val at = release?.at ?: return@LaunchedEffect
+        runCountdown(at, System::currentTimeMillis, { delay(it) }) { remaining = it }
         remaining = null
         elapsed()
     }
-    val value = remaining?.let { countdownText(it, ru) } ?: return
-    // Эфир оригинала вместо трека языка — подписываем, чтобы «через 2 дня» не приняли за озвучку.
-    val label = when {
-        !release.original -> if (ru) "Следующий эпизод через:" else "Next episode in:"
-        release.source == EnrichmentSource.ANILIST -> if (ru) "Следующий эпизод в Японии через:" else "Next episode airs in Japan in:"
-        else -> if (ru) "Следующий эпизод в оригинале через:" else "Next episode (original airing) in:"
-    }
-    Column(Modifier.fillMaxWidth().semantics(mergeDescendants = true) { contentDescription = "$label $value" }) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.bodyMedium.copy(fontFamily = SnProFamily),
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Spacer(Modifier.height(2.dp))
-        Text(
-            text = value,
-            // Цифры одной ширины — строка не дрожит каждую секунду.
-            style = MaterialTheme.typography.titleLarge.copy(
-                fontFamily = SnProFamily,
-                fontWeight = FontWeight.Bold,
-                fontFeatureSettings = "tnum",
-            ),
-            color = MaterialTheme.colorScheme.onBackground,
-            maxLines = 1,
-        )
+    val value = remaining?.let { countdownText(it, ru) }
+    val hasLinks = links.isNotEmpty()
+    if (value == null && !hasLinks) return
+
+    val onBg = MaterialTheme.colorScheme.onBackground
+    val muted = MaterialTheme.colorScheme.onSurfaceVariant
+    // Кольцо вокруг иконок сливается с плашкой: её цвет — полупрозрачный поверх фона экрана.
+    val ring = onBg.copy(alpha = CARD_FILL_ALPHA).compositeOver(MaterialTheme.colorScheme.background)
+    val sitesLabel = if (ru) "Где смотреть" else "Where to watch"
+
+    Row(
+        modifier = Modifier
+            .padding(top = 16.dp)
+            .fillMaxWidth()
+            .detailsCard()
+            .padding(horizontal = 20.dp, vertical = 18.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (value != null && release != null) {
+            // Эфир оригинала вместо трека языка — подписываем, чтобы «через 2 дня» не приняли за озвучку.
+            val label = when {
+                !release.original -> if (ru) "Следующий эпизод через:" else "Next episode in:"
+                release.source == EnrichmentSource.ANILIST -> if (ru) "Следующий эпизод в Японии через:" else "Next episode airs in Japan in:"
+                else -> if (ru) "Следующий эпизод в оригинале через:" else "Next episode (original airing) in:"
+            }
+            Column(
+                Modifier
+                    .weight(1f)
+                    .padding(end = if (hasLinks) 12.dp else 0.dp)
+                    .semantics(mergeDescendants = true) { contentDescription = "$label $value" },
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.size(8.dp).clip(CircleShape).background(BrandOrange))
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        text = label,
+                        style = MaterialTheme.typography.bodyMedium.copy(fontFamily = SnProFamily),
+                        color = muted,
+                    )
+                }
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    text = value,
+                    // Цифры одной ширины — строка не дрожит каждую секунду.
+                    style = MaterialTheme.typography.titleLarge.copy(
+                        fontFamily = SnProFamily,
+                        fontWeight = FontWeight.Bold,
+                        fontFeatureSettings = "tnum",
+                    ),
+                    color = onBg,
+                    maxLines = 2,
+                )
+            }
+        } else {
+            // Расписания нет — слева просто название блока, иконки справа.
+            Text(
+                text = sitesLabel,
+                modifier = Modifier.weight(1f).padding(end = 12.dp),
+                style = MaterialTheme.typography.titleMedium.copy(fontFamily = SnProFamily, fontWeight = FontWeight.Bold),
+                color = onBg,
+            )
+        }
+        if (hasLinks) {
+            Column(horizontalAlignment = Alignment.End) {
+                WebLinkChipStack(
+                    links = links,
+                    language = language,
+                    chipSize = 34.dp,
+                    maxVisible = 4,
+                    ringColor = ring,
+                )
+                if (value != null) {
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        text = sitesLabel,
+                        style = MaterialTheme.typography.bodySmall.copy(fontFamily = SnProFamily),
+                        color = muted.copy(alpha = 0.8f),
+                    )
+                }
+            }
+        }
     }
 }
 

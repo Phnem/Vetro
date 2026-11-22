@@ -48,7 +48,13 @@ class NextReleaseSectionDeviceTest {
             MaterialTheme {
                 Column(Modifier.background(MaterialTheme.colorScheme.background).padding(20.dp).fillMaxWidth()) {
                     Text("[плашки источников]")
-                    NextReleaseSection(release = release, ru = true, onElapsed = { elapsed.incrementAndGet() })
+                    WatchPanel(
+                        release = release,
+                        links = emptyList(),
+                        language = com.example.myapplication.network.AppLanguage.RU,
+                        ru = true,
+                        onElapsed = { elapsed.incrementAndGet() },
+                    )
                     Text("Информация")
                 }
             }

@@ -845,23 +845,15 @@ private fun DetailsInfoPage(
                 )
             }
 
-            // ——— Где смотреть: стопка иконок найденных сайтов ———
-            if (webLinks.isNotEmpty()) {
-                Spacer(Modifier.height(16.dp))
-                com.example.myapplication.ui.shared.components.WebLinkChipStack(
-                    links = webLinks,
-                    language = language,
-                    chipSize = 34.dp,
-                    maxVisible = 6,
-                    ringColor = screenBg,
-                )
-            }
-
-            // ——— Следующий эпизод через: трек языка интерфейса; время вышло — перечитать расписание ———
-            enrichment?.nextRelease?.let { release ->
-                Spacer(Modifier.height(20.dp))
-                NextReleaseSection(release = release, ru = ru, onElapsed = onReleaseElapsed)
-            }
+            // ——— Один блок: «Следующий эпизод через:» (если есть расписание) + иконки сайтов, где смотреть.
+            // Время вышло — таймер уходит и перечитывается расписание, источники остаются. ———
+            WatchPanel(
+                release = enrichment?.nextRelease,
+                links = webLinks,
+                language = language,
+                ru = ru,
+                onElapsed = onReleaseElapsed,
+            )
 
             // ——— Мой комментарий: тот же, что пузырём на карточке «Что я смотрю»; без комментария секции нет ———
             CardCommentSection(
@@ -1001,60 +993,69 @@ private fun DetailsInfoPage(
                     val descText = details?.description?.takeIf { it.isNotBlank() && it != "null" }
                     if (descText != null) {
                         SectionHeader(text = if (ru) "Описание" else "Description", color = onBg)
-                        Spacer(Modifier.height(10.dp))
-                        Text(
-                            text = descText,
-                            style = MaterialTheme.typography.bodyMedium.copy(
-                                fontFamily = SnProFamily,
-                                lineHeight = 22.sp,
-                                lineBreak = LineBreak.Paragraph,
-                                hyphens = Hyphens.Auto,
-                            ),
-                            color = muted,
-                            maxLines = if (descriptionExpanded) Int.MAX_VALUE else 5,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.animateContentSize(animationSpec = MotionTokens.standard()),
-                        )
-                        Spacer(Modifier.height(14.dp))
-
-                        val pillBg = if (isDark) Color.White.copy(alpha = 0.10f) else Color.Black.copy(alpha = 0.06f)
-                        val chevronRotation by animateFloatAsState(
-                            targetValue = if (descriptionExpanded) 180f else 0f,
-                            animationSpec = MotionTokens.standard(),
-                            label = "descExpandChevron",
-                        )
-                        Row(
-                            modifier = Modifier
-                                .clip(CircleShape)
-                                .background(pillBg)
-                                .clickable(
-                                    interactionSource = remember { MutableInteractionSource() },
-                                    indication = null,
-                                ) { descriptionExpanded = !descriptionExpanded }
-                                .padding(horizontal = 18.dp, vertical = 10.dp),
-                            verticalAlignment = Alignment.CenterVertically,
+                        Spacer(Modifier.height(12.dp))
+                        // Описание лежит в плашке; рост плашки при «Подробнее» идёт той же пружиной, что и текст.
+                        Column(
+                            Modifier
+                                .fillMaxWidth()
+                                .animateContentSize(animationSpec = MotionTokens.standard())
+                                .detailsCard()
+                                .padding(horizontal = 22.dp, vertical = 20.dp),
                         ) {
                             Text(
-                                text = if (descriptionExpanded) {
-                                    if (ru) "Свернуть" else "Show less"
-                                } else {
-                                    if (ru) "Подробнее" else "Show more"
-                                },
-                                style = MaterialTheme.typography.labelLarge.copy(
+                                text = descText,
+                                style = MaterialTheme.typography.bodyMedium.copy(
                                     fontFamily = SnProFamily,
-                                    fontWeight = FontWeight.SemiBold,
+                                    lineHeight = 22.sp,
+                                    lineBreak = LineBreak.Paragraph,
+                                    hyphens = Hyphens.Auto,
                                 ),
-                                color = onBg,
+                                color = muted,
+                                maxLines = if (descriptionExpanded) Int.MAX_VALUE else 5,
+                                overflow = TextOverflow.Ellipsis,
                             )
-                            Spacer(Modifier.width(6.dp))
-                            Icon(
-                                Icons.Rounded.KeyboardArrowDown,
-                                contentDescription = null,
-                                tint = onBg,
+                            Spacer(Modifier.height(16.dp))
+
+                            val pillBg = if (isDark) Color.White.copy(alpha = 0.10f) else Color.Black.copy(alpha = 0.06f)
+                            val chevronRotation by animateFloatAsState(
+                                targetValue = if (descriptionExpanded) 180f else 0f,
+                                animationSpec = MotionTokens.standard(),
+                                label = "descExpandChevron",
+                            )
+                            Row(
                                 modifier = Modifier
-                                    .size(18.dp)
-                                    .graphicsLayer { rotationZ = chevronRotation },
-                            )
+                                    .clip(CircleShape)
+                                    .background(pillBg)
+                                    .border(1.dp, onBg.copy(alpha = 0.09f), CircleShape)
+                                    .clickable(
+                                        interactionSource = remember { MutableInteractionSource() },
+                                        indication = null,
+                                    ) { descriptionExpanded = !descriptionExpanded }
+                                    .padding(horizontal = 18.dp, vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Text(
+                                    text = if (descriptionExpanded) {
+                                        if (ru) "Свернуть" else "Show less"
+                                    } else {
+                                        if (ru) "Подробнее" else "Show more"
+                                    },
+                                    style = MaterialTheme.typography.labelLarge.copy(
+                                        fontFamily = SnProFamily,
+                                        fontWeight = FontWeight.SemiBold,
+                                    ),
+                                    color = onBg,
+                                )
+                                Spacer(Modifier.width(6.dp))
+                                Icon(
+                                    Icons.Rounded.KeyboardArrowDown,
+                                    contentDescription = null,
+                                    tint = onBg,
+                                    modifier = Modifier
+                                        .size(18.dp)
+                                        .graphicsLayer { rotationZ = chevronRotation },
+                                )
+                            }
                         }
                     }
                 }
