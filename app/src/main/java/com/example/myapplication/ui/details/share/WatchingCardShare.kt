@@ -33,7 +33,13 @@ data class WatchingCardOptions(
     val minimal: Boolean = false,
     /** Ник на карточке; пустой — вместо него имя приложения. */
     val nick: String = "",
-)
+    /** Комментарий пользователя (до [MAX_COMMENT_LENGTH] символов): пузырь-мысль над карточкой; пустой — без пузыря. */
+    val comment: String = "",
+) {
+    companion object {
+        const val MAX_COMMENT_LENGTH = 52
+    }
+}
 
 /**
  * Собирает данные карточки «Что я сейчас смотрю» из тех же источников, что и прогресс на карточке
@@ -54,9 +60,10 @@ class WatchingCardBuilder(
         dark: Boolean,
         posterPath: String?,
         status: WatchStatus?,
+        description: String?,
         options: WatchingCardOptions,
     ): Bitmap = withContext(Dispatchers.Default) {
-        val data = build(anime, title, ru, dark, posterPath, status, options)
+        val data = build(anime, title, ru, dark, posterPath, status, description, options)
         val bitmap = WatchingCardRenderer.render(data)
         data.poster?.recycle()
         bitmap
@@ -69,6 +76,7 @@ class WatchingCardBuilder(
         dark: Boolean,
         posterPath: String?,
         status: WatchStatus?,
+        description: String?,
         options: WatchingCardOptions,
     ): ShareCardData {
         val isManga = anime.mediaType == MediaType.MANGA
@@ -119,7 +127,9 @@ class WatchingCardBuilder(
         }
         val tags = anime.tags.filter { it.isNotBlank() }
         val year = anime.releaseYear?.takeIf { it > 0 }?.toString().orEmpty()
-        val note = anime.comment.trim().takeIf { it.isNotEmpty() }?.let { if (it.length > 240) it.take(240) else it }
+        // Под оранжевой строкой: своя заметка тайтла в «ёлочках», а если её нет, то описание тайтла как в Details.
+        val ownNote = anime.comment.trim().takeIf { it.isNotEmpty() }?.let { if (it.length > 240) it.take(240) else it }
+        val note = ownNote ?: cleanDescription(description)
         val rating = anime.rating.takeIf { it > 0f }?.let {
             val shown = if (it % 1f == 0f) it.toInt().toString() else RatingScale.format(it)
             "$shown/10"
@@ -135,12 +145,36 @@ class WatchingCardBuilder(
             ratingText = if (minimal) null else rating,
             currentUnit = if (minimal) null else currentUnit,
             note = if (minimal) null else note,
+            noteQuoted = ownNote != null,
+            comment = options.comment.trim().take(WatchingCardOptions.MAX_COMMENT_LENGTH).ifEmpty { null },
             genres = if (minimal) tags.take(3).joinToString(" • ").ifEmpty { null } else null,
             footerLeft = if (minimal) "Vetro Collection" else tags.take(2).joinToString(" • ").ifEmpty { "Vetro Collection" },
             footerRight = if (minimal) year else addedSince(anime.dateAdded, ru),
             dark = dark,
             poster = posterPath?.let { decodePoster(it) },
         )
+    }
+
+    /**
+     * Описание из источников приходит с разметкой: HTML-теги, BB-коды Shikimori («[character=1]…[/character]»),
+     * пометки об источнике. На карточку идёт чистый текст без переносов, не длиннее 320 символов (дальше
+     * текст всё равно обрежется по числу строк).
+     */
+    private fun cleanDescription(raw: String?): String? {
+        val text = raw?.takeIf { it.isNotBlank() && it != "null" } ?: return null
+        val cleaned = text
+            .replace(Regex("<br\\s*/?>", RegexOption.IGNORE_CASE), " ")
+            .replace(Regex("<[^>]+>"), "")
+            .replace(Regex("\\[/?[a-zA-Z_]+(=[^\\]]*)?\\]"), "")
+            .replace(Regex("\\((Source|Written by)[^)]*\\)", RegexOption.IGNORE_CASE), "")
+            .replace(Regex("\\[(Source|Written by)[^\\]]*\\]", RegexOption.IGNORE_CASE), "")
+            .replace("&quot;", "\"")
+            .replace("&amp;", "&")
+            .replace("&#039;", "'")
+            .replace("&nbsp;", " ")
+            .replace(Regex("\\s+"), " ")
+            .trim()
+        return cleaned.takeIf { it.isNotEmpty() }?.let { if (it.length > 320) it.take(320) else it }
     }
 
     private fun statusLabel(status: WatchStatus?, manga: Boolean, ru: Boolean): String = when {

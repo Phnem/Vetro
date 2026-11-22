@@ -75,6 +75,10 @@ fun WatchingCardSheet(
     isDark: Boolean,
     posterPath: String?,
     status: WatchStatus?,
+    /** Описание тайтла из Details: идёт на карточку, если у тайтла нет своей заметки. */
+    description: String?,
+    /** Комментарий пользователя для пузыря над карточкой; пустой — без пузыря. */
+    comment: String,
     onDismiss: () -> Unit,
 ) {
     val state = remember { MutableTransitionState(false) }
@@ -98,10 +102,13 @@ fun WatchingCardSheet(
             nickLoaded = true
         }
         // Перерисовка при смене ника и режима; набор ника сглаживаем паузой, первый кадр без задержки.
-        LaunchedEffect(nickLoaded, nick, minimal) {
+        LaunchedEffect(nickLoaded, nick, minimal, comment) {
             if (!nickLoaded) return@LaunchedEffect
             if (bitmap != null) delay(250)
-            bitmap = builder.render(anime, title, ru, isDark, posterPath, status, WatchingCardOptions(minimal, nick))
+            bitmap = builder.render(
+                anime, title, ru, isDark, posterPath, status, description,
+                WatchingCardOptions(minimal = minimal, nick = nick, comment = comment),
+            )
             settings.edit { it[NickKey] = nick.trim() }
         }
 

@@ -42,8 +42,12 @@ internal data class ShareCardData(
     val ratingText: String?,
     /** Оранжевая строка под названием: «Эп. 19», «S3 E5», «Глава 82»; null — нет. */
     val currentUnit: String?,
-    /** Личная заметка из карточки тайтла (цитата с оранжевой чертой); null — нет. */
+    /** Текст под оранжевой строкой (с оранжевой чертой слева): заметка пользователя или описание тайтла; null — нет. */
     val note: String?,
+    /** Заметка пользователя берётся в «ёлочки», описание тайтла идёт как есть. */
+    val noteQuoted: Boolean,
+    /** Комментарий пользователя: пузырь-мысль над карточкой, холст растёт под него; null — нет. */
+    val comment: String?,
     /** Жанры вместо цитаты в режиме «минимум данных»; null — нет. */
     val genres: String?,
     val footerLeft: String,
@@ -71,8 +75,13 @@ internal object WatchingCardRenderer {
     /** (380 + 2 × 28) × 3 */
     const val WIDTH = 1308
 
-    /** (530 + 2 × 28) × 3 */
-    const val HEIGHT = 1758
+    /** (530 + 2 × 28) × 3; с пузырём-комментарием над карточкой холст выше. */
+    const val BASE_HEIGHT = 1758
+
+    /** Пузырь-комментарий: отступ от верха холста, зазор до карточки, сдвиг от левого края карточки. */
+    private const val BUBBLE_TOP = 16f
+    private const val BUBBLE_GAP = 12f
+    private const val BUBBLE_INSET = 6f
 
     private const val ORANGE = 0xFFE85002.toInt()
     private const val LOGO_ORANGE = 0xFFE84500.toInt()
@@ -151,12 +160,17 @@ internal object WatchingCardRenderer {
     )
 
     fun render(data: ShareCardData): Bitmap {
-        val bitmap = Bitmap.createBitmap(WIDTH, HEIGHT, Bitmap.Config.ARGB_8888)
-        val c = Canvas(bitmap)
         val t = if (data.dark) dark else light
-        drawBackdrop(c, paletteFor(data.poster), data.dark)
+        val bubble = data.comment?.trim()?.takeIf { it.isNotEmpty() }?.let { measureBubble(it, data.dark) }
+        // Пузырь стоит над карточкой, и холст растёт ровно на его высоту (с хвостом и зазором).
+        val extraTop = bubble?.let { max(0f, BUBBLE_TOP + it.totalHeight + BUBBLE_GAP - PAD) } ?: 0f
+        val height = ((CARD_H + PAD * 2f + extraTop) * UNIT).roundToInt()
+        val bitmap = Bitmap.createBitmap(WIDTH, height, Bitmap.Config.ARGB_8888)
+        val c = Canvas(bitmap)
+        drawBackdrop(c, paletteFor(data.poster), data.dark, height)
         c.scale(UNIT, UNIT)
-        c.translate(PAD, PAD)
+        bubble?.let { drawBubble(c, it, PAD + BUBBLE_INSET, BUBBLE_TOP) }
+        c.translate(PAD, PAD + extraTop)
         drawCard(c, data, t)
         return bitmap
     }
@@ -184,9 +198,9 @@ internal object WatchingCardRenderer {
         )
     }
 
-    private fun drawBackdrop(c: Canvas, a: Ambient, isDark: Boolean) {
+    private fun drawBackdrop(c: Canvas, a: Ambient, isDark: Boolean, height: Int) {
         val w = WIDTH.toFloat()
-        val h = HEIGHT.toFloat()
+        val h = height.toFloat()
         c.drawColor(if (isDark) a.darkBase else a.lightBase)
         // Три цветных пятна: радиальный градиент вместо размытия, чтобы не тянуть RenderScript.
         val alphas = if (isDark) floatArrayOf(0.72f, 0.58f, 0.52f) else floatArrayOf(0.48f, 0.42f, 0.36f)
@@ -205,6 +219,78 @@ internal object WatchingCardRenderer {
             )
         }
         c.drawCircle(cx, cy, radius, paint)
+    }
+
+    // ---------------------------------------------------------------- пузырь-комментарий
+
+    /** Размеры пузыря-мысли: капсула с текстом, под ней эллипс и кружок «хвоста», как на референсе. */
+    private class Bubble(
+        val layout: StaticLayout,
+        val layoutWidth: Float,
+        val fill: Int,
+        val width: Float,
+        val capsuleH: Float,
+        val tailRx: Float,
+        val tailRy: Float,
+        val dotR: Float,
+    ) {
+        /** Капсула вместе с хвостом, который свисает ниже неё. */
+        val totalHeight: Float
+            get() = capsuleH + max(tailRy, 0.26f * capsuleH + dotR)
+    }
+
+    private fun measureBubble(text: String, isDark: Boolean): Bubble {
+        val paint = paint(14f, 600, if (isDark) 0xFF141414.toInt() else Color.WHITE)
+        val padH = 22f
+        val padV = 13f
+        val maxText = CARD_W - 12f - padH * 2f
+        val layout = StaticLayout.Builder
+            .obtain(text, 0, text.length, paint, maxText.toInt())
+            .setMaxLines(2)
+            .setEllipsize(TextUtils.TruncateAt.END)
+            .setAlignment(Layout.Alignment.ALIGN_CENTER)
+            .setLineSpacing(0f, 1.06f)
+            .build()
+        var textW = 0f
+        for (i in 0 until layout.lineCount) textW = max(textW, layout.getLineWidth(i))
+        val width = max(textW + padH * 2f, 96f)
+        val capsuleH = layout.height + padV * 2f
+        val rx = max(14f, 0.38f * capsuleH)
+        return Bubble(
+            layout = layout,
+            layoutWidth = maxText,
+            // Тёмная тема — светлый пузырь и наоборот, как инверсная плашка статуса.
+            fill = if (isDark) 0xFFF4F3EF.toInt() else 0xFF2B2A29.toInt(),
+            width = width,
+            capsuleH = capsuleH,
+            tailRx = rx,
+            tailRy = rx * 0.55f,
+            dotR = max(4.5f, 0.106f * capsuleH),
+        )
+    }
+
+    /** Рисует пузырь одним контуром (капсула + эллипс + кружок), чтобы тень легла один раз. */
+    private fun drawBubble(c: Canvas, b: Bubble, left: Float, top: Float) {
+        val h = b.capsuleH
+        // Хвост всегда целится в логотип под пузырём: его центр примерно в 33 единицах правее края пузыря.
+        val ellipseX = left + 47f.coerceIn(30f, b.width - 30f)
+        val ellipseY = top + h - 1f
+        val shape = Path().apply {
+            addRoundRect(RectF(left, top, left + b.width, top + h), h / 2f, h / 2f, Path.Direction.CW)
+            addOval(RectF(ellipseX - b.tailRx, ellipseY - b.tailRy, ellipseX + b.tailRx, ellipseY + b.tailRy), Path.Direction.CW)
+            addCircle(ellipseX - 0.32f * h, top + h + 0.26f * h, b.dotR, Path.Direction.CW)
+        }
+        c.drawPath(
+            shape,
+            Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = b.fill
+                setShadowLayer(8f, 0f, 4f, Color.argb(70, 0, 0, 0))
+            },
+        )
+        c.save()
+        c.translate(left + (b.width - b.layoutWidth) / 2f, top + 13f)
+        b.layout.draw(c)
+        c.restore()
     }
 
     // ---------------------------------------------------------------- карточка
@@ -336,9 +422,9 @@ internal object WatchingCardRenderer {
             val notePaint = paint(12.5f, 400, t.note, italic = true)
             val noteX = left + 2.5f + 11f
             val lineH = 12.5f * 1.42f
-            val room = ((footerLine - 8f - y) / lineH).toInt().coerceAtMost(3)
+            val room = ((footerLine - 8f - y) / lineH).toInt().coerceAtMost(4)
             if (room >= 1) {
-                val text = "«${d.note}»"
+                val text = if (d.noteQuoted) "«${d.note}»" else d.note
                 val layout = StaticLayout.Builder
                     .obtain(text, 0, text.length, notePaint, (right - noteX).toInt())
                     .setMaxLines(room)

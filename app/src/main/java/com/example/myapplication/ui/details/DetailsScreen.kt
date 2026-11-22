@@ -30,7 +30,10 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.AddComment
+import androidx.compose.material.icons.rounded.Comment
 import androidx.compose.material.icons.rounded.IosShare
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.rounded.Bookmark
@@ -341,6 +344,9 @@ fun DetailsScreen(
 
                 // Отдельный пузырь левее «⋯»: карточка «Что я сейчас смотрю» картинкой для друзей и соцсетей.
                 var showCardSheet by remember { mutableStateOf(false) }
+                var showCommentSheet by remember { mutableStateOf(false) }
+                // Комментарий для пузыря над карточкой: живёт, пока открыт экран, и уходит в PNG вместе с карточкой.
+                var cardComment by rememberSaveable { mutableStateOf("") }
                 DetailsGlassBackButton(
                     backdrop = backdrop,
                     isDark = isDark,
@@ -357,6 +363,23 @@ fun DetailsScreen(
                         .padding(top = 12.dp, end = 16.dp + 48.dp + 8.dp)
                         .zIndex(4f),
                 )
+                // Ещё левее: «комментарий с плюсиком» — добавить комментарий пузырём на карточку.
+                DetailsGlassBackButton(
+                    backdrop = backdrop,
+                    isDark = isDark,
+                    onClick = {
+                        performHaptic(view, Haptic.Light)
+                        showCommentSheet = true
+                    },
+                    icon = if (cardComment.isEmpty()) Icons.Rounded.AddComment else Icons.Rounded.Comment,
+                    contentDescription = if (language == AppLanguage.RU) "Добавить комментарий" else "Add comment",
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .statusBarsPadding()
+                        // Правее «⋯» и «Поделиться»: 16 отступ + 2 × (48 кнопка + 8 зазор).
+                        .padding(top = 12.dp, end = 16.dp + (48.dp + 8.dp) * 2)
+                        .zIndex(4f),
+                )
                 Box(Modifier.fillMaxSize().zIndex(10f)) {
                     com.example.myapplication.ui.details.share.WatchingCardSheet(
                         visible = showCardSheet,
@@ -366,7 +389,22 @@ fun DetailsScreen(
                         isDark = isDark,
                         posterPath = viewModel.getImgPath(current.imageFileName),
                         status = watchStatus,
+                        description = (uiState as? DetailsUiState.Success)?.details?.description,
+                        comment = cardComment,
                         onDismiss = { showCardSheet = false },
+                    )
+                    com.example.myapplication.ui.details.share.WatchingCardCommentSheet(
+                        visible = showCommentSheet,
+                        initial = cardComment,
+                        ru = language == AppLanguage.RU,
+                        isDark = isDark,
+                        onSubmit = { text ->
+                            cardComment = text.take(com.example.myapplication.ui.details.share.WatchingCardOptions.MAX_COMMENT_LENGTH)
+                            showCommentSheet = false
+                            // Сразу показываем карточку с пузырём: ради неё комментарий и пишется.
+                            showCardSheet = true
+                        },
+                        onDismiss = { showCommentSheet = false },
                     )
                 }
 

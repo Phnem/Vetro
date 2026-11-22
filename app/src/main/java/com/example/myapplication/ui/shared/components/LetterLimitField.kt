@@ -36,6 +36,10 @@ import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import kotlinx.coroutines.delay
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
@@ -122,6 +126,8 @@ fun LetterLimitField(
     nearThreshold: Int = 10,
     pileSpace: Dp = 64.dp,
     containerColor: Color = IosDesign.elevatedCard(isAppInDarkTheme()),
+    /** Сразу поставить каретку в поле и показать клавиатуру: для шторок, где поле — единственное содержимое. */
+    autoFocus: Boolean = false,
 ) {
     require(limit > 0) { "limit must be positive" }
     val density = LocalDensity.current
@@ -143,6 +149,15 @@ fun LetterLimitField(
     var root by remember { mutableStateOf<LayoutCoordinates?>(null) }
     var card by remember { mutableStateOf<LayoutCoordinates?>(null) }
     var textBox by remember { mutableStateOf<LayoutCoordinates?>(null) }
+    val focusRequester = remember { FocusRequester() }
+    val keyboard = LocalSoftwareKeyboardController.current
+    LaunchedEffect(autoFocus) {
+        if (!autoFocus) return@LaunchedEffect
+        // Шторка ещё выезжает: фокус в первый кадр клавиатуру не поднимает.
+        delay(AUTO_FOCUS_DELAY_MILLIS)
+        focusRequester.requestFocus()
+        keyboard?.show()
+    }
 
     val fill = remember { Animatable(field.text.length / limit.toFloat()) }
     val countPop = remember { Animatable(1f) }
@@ -235,6 +250,7 @@ fun LetterLimitField(
                     modifier = Modifier
                         .fillMaxWidth()
                         .heightIn(min = 72.dp)
+                        .focusRequester(focusRequester)
                         .onGloballyPositioned { textBox = it },
                     decorationBox = { inner ->
                         Box {
@@ -463,6 +479,7 @@ private const val FLOOR_BELOW_CARD = 46f
 private const val FLOOR_MARGIN = 14f
 private const val DOWN_FADE_SEC = 0.5f
 private const val COLOR_MILLIS = 200
+private const val AUTO_FOCUS_DELAY_MILLIS = 250L
 /** Толчок скорости «мотания головой» на отклонённой букве и масштаб сдвига — как в limit.js. */
 private const val SHAKE_KICK = 34f
 private const val SHAKE_SCALE = 0.5f
