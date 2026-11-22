@@ -340,23 +340,13 @@ fun DetailsScreen(
                 )
 
                 // Отдельный пузырь левее «⋯»: карточка «Что я сейчас смотрю» картинкой для друзей и соцсетей.
-                val shareBuilder: com.example.myapplication.ui.details.share.WatchingCardBuilder = org.koin.compose.koinInject()
-                val shareContext = LocalContext.current
+                var showCardSheet by remember { mutableStateOf(false) }
                 DetailsGlassBackButton(
                     backdrop = backdrop,
                     isDark = isDark,
                     onClick = {
                         performHaptic(view, Haptic.Light)
-                        scope.launch {
-                            com.example.myapplication.ui.details.share.shareWatchingCard(
-                                context = shareContext,
-                                builder = shareBuilder,
-                                anime = current,
-                                title = displayTitle,
-                                ru = language == AppLanguage.RU,
-                                posterPath = viewModel.getImgPath(current.imageFileName),
-                            )
-                        }
+                        showCardSheet = true
                     },
                     icon = Icons.Rounded.IosShare,
                     contentDescription = if (language == AppLanguage.RU) "Поделиться" else "Share",
@@ -367,6 +357,18 @@ fun DetailsScreen(
                         .padding(top = 12.dp, end = 16.dp + 48.dp + 8.dp)
                         .zIndex(4f),
                 )
+                Box(Modifier.fillMaxSize().zIndex(10f)) {
+                    com.example.myapplication.ui.details.share.WatchingCardSheet(
+                        visible = showCardSheet,
+                        anime = current,
+                        title = displayTitle,
+                        ru = language == AppLanguage.RU,
+                        isDark = isDark,
+                        posterPath = viewModel.getImgPath(current.imageFileName),
+                        status = watchStatus,
+                        onDismiss = { showCardSheet = false },
+                    )
+                }
 
                 // Мини-плеер аудиокниг стоит над этим доком, пока Details на экране.
                 val miniClearanceOwner = remember { Any() }
