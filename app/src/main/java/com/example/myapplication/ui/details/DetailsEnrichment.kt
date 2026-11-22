@@ -11,6 +11,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -45,6 +46,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -195,17 +197,7 @@ internal fun WatchPanel(
                     )
                 }
                 Spacer(Modifier.height(4.dp))
-                Text(
-                    text = value,
-                    // Цифры одной ширины — строка не дрожит каждую секунду.
-                    style = MaterialTheme.typography.titleLarge.copy(
-                        fontFamily = SnProFamily,
-                        fontWeight = FontWeight.Bold,
-                        fontFeatureSettings = "tnum",
-                    ),
-                    color = onBg,
-                    maxLines = 2,
-                )
+                CountdownValue(remaining = remaining, ru = ru, color = onBg)
             }
         } else {
             // Расписания нет — слева просто название блока, иконки справа.
@@ -235,6 +227,28 @@ internal fun WatchPanel(
                 }
             }
         }
+    }
+}
+
+/**
+ * Число таймера в одну строку. Полный вид («13 ч 36 мин 40 сек») берётся, пока он помещается в доступную
+ * ширину; иначе строка не переносится, а переходит в компактный («13ч 36м 40с»). Ширина меряется по
+ * реальному тексту, поэтому решение верно и для длинных «дн», и для узких экранов, и для крупного шрифта.
+ */
+@Composable
+private fun CountdownValue(remaining: Duration?, ru: Boolean, color: Color) {
+    val measurer = rememberTextMeasurer()
+    // Цифры одной ширины — строка не дрожит каждую секунду.
+    val style = MaterialTheme.typography.titleLarge.copy(
+        fontFamily = SnProFamily,
+        fontWeight = FontWeight.Bold,
+        fontFeatureSettings = "tnum",
+    )
+    BoxWithConstraints {
+        val full = remaining?.let { countdownText(it, ru) } ?: return@BoxWithConstraints
+        val fits = measurer.measure(full, style, maxLines = 1, softWrap = false).size.width <= constraints.maxWidth
+        val text = if (fits) full else countdownText(remaining, ru, compact = true) ?: full
+        Text(text = text, style = style, color = color, maxLines = 1, softWrap = false)
     }
 }
 

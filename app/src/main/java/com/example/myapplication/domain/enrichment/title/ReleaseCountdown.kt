@@ -187,19 +187,25 @@ object ReleaseCountdownRules {
  * «4 дн 16 ч 33 мин 00 сек» / «16 ч 33 мин 00 сек» / «33 мин 00 сек». Секунды округляются вверх:
  * «00 сек» не висит, пока до выхода ещё есть время. null — время вышло, показывать нечего.
  */
-fun countdownText(remaining: Duration, ru: Boolean): String? {
+fun countdownText(remaining: Duration, ru: Boolean, compact: Boolean = false): String? {
     if (remaining.isNegative || remaining.isZero) return null
     val total = (remaining.toMillis() + 999) / 1000
     val d = total / 86_400
     val h = total % 86_400 / 3_600
     val m = total % 3_600 / 60
     val s = total % 60
-    val units = if (ru) listOf("дн", "ч", "мин", "сек") else listOf("d", "h", "min", "sec")
+    // Компактный вид («4д 16ч 33м 00с») — для узкой строки: без пробела у числа, единицы в одну букву.
+    val units = when {
+        compact -> if (ru) listOf("д", "ч", "м", "с") else listOf("d", "h", "m", "s")
+        ru -> listOf("дн", "ч", "мин", "сек")
+        else -> listOf("d", "h", "min", "sec")
+    }
+    val gap = if (compact) "" else " "
     return buildList {
-        if (d > 0) add("$d ${units[0]}")
-        if (d > 0 || h > 0) add("$h ${units[1]}")
-        add("$m ${units[2]}")
-        add("%02d ${units[3]}".format(s))
+        if (d > 0) add("$d$gap${units[0]}")
+        if (d > 0 || h > 0) add("$h$gap${units[1]}")
+        add("$m$gap${units[2]}")
+        add("%02d$gap${units[3]}".format(s))
     }.joinToString(" ")
 }
 
