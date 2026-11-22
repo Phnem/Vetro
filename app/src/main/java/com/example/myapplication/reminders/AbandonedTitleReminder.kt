@@ -4,6 +4,7 @@ import com.example.myapplication.data.local.AnimeLocalDataSource
 import com.example.myapplication.data.local.SeasonEpisodesStore
 import com.example.myapplication.data.local.SeriesSeasonsStore
 import com.example.myapplication.data.models.MediaType
+import com.example.myapplication.data.models.effectiveWatchStatus
 import com.example.myapplication.domain.seasons.regularSeasons
 import com.example.myapplication.domain.status.AutoWatchStatusResolver
 import com.example.myapplication.manga.data.MangaReadingStore
@@ -53,8 +54,11 @@ class AbandonedTitleReminder(
         history: AbandonedReminderStore.History,
         t: Long,
     ): AbandonedCandidate? {
+        // Статус тот же, что видит пользователь (выбранный вручную или авто по прогрессу): тайтл, который
+        // приложение само считает «Просмотрено», продолжать не зовём.
+        val auto = autoStatus.statusSnapshot()
         val titles = localDataSource.getAllAnimeList()
-            .filter { it.id !in hidden && AbandonedTitleRules.isStatusEligible(it.watchStatus) }
+            .filter { it.id !in hidden && AbandonedTitleRules.isStatusEligible(it.effectiveWatchStatus(auto[it.id])) }
         val found = ArrayList<AbandonedCandidate>()
         found += episodeCandidates(
             titles.filter { it.mediaType == MediaType.ANIME || it.mediaType == MediaType.SERIES },

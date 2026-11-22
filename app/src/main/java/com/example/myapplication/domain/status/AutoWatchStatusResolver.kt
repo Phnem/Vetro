@@ -112,6 +112,13 @@ class AutoWatchStatusResolver(
     /** Разовый снимок чтения манги по всем привязанным тайтлам: для фоновых проверок, где подписка не нужна. */
     suspend fun mangaReadingSnapshot(): Map<String, MangaReadingSummary> = mangaReading().first()
 
+    /**
+     * Разовый снимок авто-статусов всей коллекции: для фоновых проверок, где подписка не нужна. Пустая
+     * карта = посчитать не удалось; вызывающий в этом случае берёт [defaultWatchStatusFor] через
+     * `effectiveWatchStatus(null)`.
+     */
+    suspend fun statusSnapshot(): Map<String, WatchStatus> = statusesFlow().first() ?: emptyMap()
+
     /** Прогресс чтения манги — те же условия, что у карточки (только привязанные к источнику тайтлы). */
     private fun mangaReading(onlyId: String? = null): Flow<Map<String, MangaReadingSummary>> =
         mangaBindingStore.flow.map { all -> if (onlyId == null) all else all.filterKeys { it == onlyId } }.flatMapLatest { bindings ->
