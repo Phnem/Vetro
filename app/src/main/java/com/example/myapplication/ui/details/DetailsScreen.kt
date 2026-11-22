@@ -30,6 +30,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.IosShare
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.rounded.Bookmark
@@ -336,6 +337,35 @@ fun DetailsScreen(
                     isSecret = isSecret,
                     onToggleSecret = viewModel::toggleSecret,
                     showCatalogActions = !isManga,
+                )
+
+                // Отдельный пузырь левее «⋯»: карточка «Что я сейчас смотрю» картинкой для друзей и соцсетей.
+                val shareBuilder: com.example.myapplication.ui.details.share.WatchingCardBuilder = org.koin.compose.koinInject()
+                val shareContext = LocalContext.current
+                DetailsGlassBackButton(
+                    backdrop = backdrop,
+                    isDark = isDark,
+                    onClick = {
+                        performHaptic(view, Haptic.Light)
+                        scope.launch {
+                            com.example.myapplication.ui.details.share.shareWatchingCard(
+                                context = shareContext,
+                                builder = shareBuilder,
+                                anime = current,
+                                title = displayTitle,
+                                ru = language == AppLanguage.RU,
+                                posterPath = viewModel.getImgPath(current.imageFileName),
+                            )
+                        }
+                    },
+                    icon = Icons.Rounded.IosShare,
+                    contentDescription = if (language == AppLanguage.RU) "Поделиться" else "Share",
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .statusBarsPadding()
+                        // Правее «⋯»: 16 отступ + 48 кнопка + 8 зазор.
+                        .padding(top = 12.dp, end = 16.dp + 48.dp + 8.dp)
+                        .zIndex(4f),
                 )
 
                 // Мини-плеер аудиокниг стоит над этим доком, пока Details на экране.

@@ -645,6 +645,14 @@ val appModule = module {
     single { com.example.myapplication.reminders.AbandonedReminderStore(get(named("settings"))) }
     single { com.example.myapplication.reminders.AbandonedTitleNotifier(androidContext()) }
     single {
+        com.example.myapplication.ui.details.share.WatchingCardBuilder(
+            playback = get(),
+            seasonEpisodes = get(),
+            seriesSeasons = get(),
+            autoStatus = get(),
+        )
+    }
+    single {
         com.example.myapplication.reminders.AbandonedTitleReminder(
             localDataSource = get(),
             playback = get(),
