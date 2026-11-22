@@ -18,7 +18,7 @@
 
 <p align="center">
   <a href="https://github.com/Phnem/Vetro/releases">Releases</a> ·
-  <a href="#whats-new-in-349">What's new</a> ·
+  <a href="#whats-new-in-360">What's new</a> ·
   <a href="CHANGELOG.md">Changelog</a> ·
   <a href="#roadmap">Roadmap</a> ·
   <a href="#what-vetro-does">Features</a> ·
@@ -33,42 +33,42 @@ Vetro is an Android media library. Build a personal collection, follow new episo
 
 Vetro does not host any media. It connects to catalogues and sources that you choose, including your own servers.
 
-> **Current stable release:** [`v3.4.9-Stable`](https://github.com/Phnem/Vetro/releases/tag/v3.4.9-Stable). The app is actively evolving; source availability can vary by region.
+> **Latest release:** [`v3.6.0-Beta`](https://github.com/Phnem/Vetro/releases/tag/v3.6.0-Beta), which rolls up the Alpha builds 3.5.0 to 3.5.9. The last stable release is [`v3.4.9-Stable`](https://github.com/Phnem/Vetro/releases/tag/v3.4.9-Stable). The app is actively evolving; source availability can vary by region.
 
 <p align="center"><img src="images/readme/divider.svg" alt="" width="880" /></p>
 
-## What's new in 3.4.9
+## What's new in 3.6.0
 
 <p align="center">
-  <img src="images/readme/whats-new.svg" alt="What's new in Vetro 3.4.9: Mihon extensions installed inside the app in one tap, audiobooks as 3D book models, a week view in the release calendar, and an animated mascot on empty screens" width="880" />
+  <img src="images/readme/whats-new.svg" alt="What's new in Vetro 3.6.0: a catalogue of about 176,000 audiobooks, smart models that run on your phone, a share card for what you are watching, and quieter per-title notifications" width="880" />
 </p>
 
 <table>
   <tr>
     <td width="50%" valign="top">
-      <b>Mihon extensions in one tap</b><br />
-      The manga source sheet now holds the Keiyoushi catalogue: one button installs the recommended sources for your language. Extensions stay inside Vetro, are signature-checked and are searched with the built-in sources.
+      <b>A catalogue of 176,000 audiobooks</b><br />
+      The first Vetro source for books keeps a search index on the phone, so lookups are instant and work offline. Search by direction and recommendations now ask the Vetro catalogue too, and your collection is linked to it on the first start.
     </td>
     <td width="50%" valign="top">
-      <b>Books as 3D models</b><br />
-      Audiobooks sit on the shelves as small books with a real binding and the cover on the front board. Books from your own folders now open a full details page.
+      <b>Smart models on your phone</b><br />
+      Title matching, file and genre parsing and taste recommendations run on the device and stay off until you switch them on. Hold any setting to read what it does.
     </td>
   </tr>
   <tr>
     <td width="50%" valign="top">
-      <b>A week view in the calendar</b><br />
-      Tap a day and the month folds into its week, with that day's release cards underneath. Pull the handle to open the month again.
+      <b>A card for what you are watching</b><br />
+      A frosted-glass picture with your nickname, the cover, progress and rating, and a thought-bubble comment of up to 52 characters. Switch between full and minimal data, then save a PNG or share it.
     </td>
     <td width="50%" valign="top">
-      <b>A mascot on empty screens</b><br />
-      Empty folders, searches, notifications, the calendar, books and manga get a small animated character instead of a blank page.
+      <b>Quieter notifications</b><br />
+      A bell on every title switches its notifications off, quiet reminders nudge you about titles you paused, and the availability threshold waits for dubbing studios before it pings you.
     </td>
   </tr>
 </table>
 
-<p align="center"><sub>Also in this build: new titles without progress start as <i>Not Started</i>, a light haze on cover cards in the light theme, search by frame in the app's own style, Remanga works again, and no more flash of the update sheet when you return from Recents.</sub></p>
+<p align="center"><sub>Also in this build: a "not dubbed yet" screen in the player, letters that drop into every text field, experimental mini notifications, a description card and one block for the countdown and where to watch on the title page, and no full sync every time you return from Recents.</sub></p>
 
-<p align="center"><a href="CHANGELOG.md">Detailed 3.4.9 changelog</a></p>
+<p align="center"><a href="CHANGELOG.md">Detailed 3.6.0 changelog</a></p>
 
 <p align="center"><img src="images/readme/divider.svg" alt="" width="880" /></p>
 
@@ -110,6 +110,7 @@ Vetro does not host any media. It connects to catalogues and sources that you ch
 - A watch status on every title: Planned, Watching, Completed, Rewatching, On Hold, Dropped or Not Started. Left unset, it follows your progress: Watching for titles you are partway through, Completed for finished ones, and Not Started for a title you added without any progress.
 - Sort and filter in one sheet: by content type, status and genre (up to three each), release year, rating and number of episodes with two-handle sliders; search locally or online.
 - Rate more than titles: hold an episode or a season to rate it or mark it watched or not watched, or tap the score on a card to change it in place. Episode scores sync with your account.
+- Share what you are watching: a frosted-glass card with your nickname, the cover, progress and rating, and an optional thought-bubble comment saved with the title. Choose full or minimal data, then save a PNG or share it.
 - Statistics with short AI-written explanations (optional), plus insights: an activity heatmap, a month-by-month curve, rewatch/reread/relisten counts, finished-vs-dropped rates per genre and your last 90 days against the whole collection. A recommendations deck you swipe through.
 - Background enrichment fills in missing titles, IDs and links, and keeps episode counts current.
 
@@ -118,6 +119,7 @@ Vetro does not host any media. It connects to catalogues and sources that you ch
 - Episode checks across several anime and TV catalogues.
 - Progress is counted by season: cards show `S3 E12` instead of a franchise-wide total. A new episode is never marked as watched for you: the counter moves only when you (or the player) move it.
 - New episodes arrive as a stack of notification cards. They fold into a bell next to the dock and open as a notification centre.
+- A bell on every title switches its notifications off: no push, no card, no waiting for dubbing. Quiet reminders nudge you, at most once in three days, about a title you left unfinished for three weeks or more. An optional availability threshold holds a new episode back until at least four dubbing studios have it.
 - Titles that are airing or have unread episodes stay at the top of the library, under favourites.
 - A release calendar in the dock's menu: every airing title on its day, a stack of covers when several come out together. When no source names the day of a dub's next episode, Vetro learns it from the weekdays of the episodes that already came out. Tap a day to fold the month into its week with that day's release cards.
 - Details show a countdown to the next episode, a trailer, critic ratings, the title logo, backdrop art and Russian dub studios.
@@ -143,6 +145,7 @@ Vetro does not host any media. It connects to catalogues and sources that you ch
 ### Listen to audiobooks
 
 - A separate Books section with shelves from Russian and English sources, cross-source search and automatic fallback when a source goes down.
+- The Vetro book catalogue: about 176,000 books with descriptions, genres, series, ratings and covers. It keeps a search index on the phone, so lookups work offline, and the app proves it is the real Vetro to the catalogue server without any Google services.
 - A Books tab in the main search: find a book across all sources and add it to your library in one tap.
 - Some sources stream while the file is still downloading.
 - Books are drawn as small 3D models with the cover on the front board.
@@ -165,6 +168,7 @@ Vetro does not host any media. It connects to catalogues and sources that you ch
 ### Make it yours
 
 - Light and dark themes, English and Russian interface.
+- Smart models that run on your phone: title matching across catalogues, file-name and genre parsing, and a recommendation ranker that learns from your own ratings. All three are off until you switch them on, and nothing leaves the device unless you opt in to the optional anonymous statistics. Press and hold any setting to read what it does.
 - iOS-style motion throughout: spring physics, swipe back from Details and frosted-glass surfaces.
 - Optional cloud account with sync and backup, plus import and export of lists from popular trackers.
 - Optional Bring Your Own Key (BYOK) AI provider for AI-assisted features.
@@ -256,7 +260,7 @@ Vetro is a Kotlin and Jetpack Compose Android application with unidirectional st
 
 ## Roadmap
 
-- **Vetro API: our own API.** Today the app talks to many catalogues and sites, and each of them can change or go down. We are building an API of our own so that Vetro asks one service. It starts with **books**; **movies, anime, series and manga** follow. Nothing changes for you until each part is ready, and sources you connect yourself keep working as they do now.
+- **Vetro API: our own API.** Today the app talks to many catalogues and sites, and each of them can change or go down. We are building an API of our own so that Vetro asks one service. It already serves **books** (the audiobook catalogue), the **Anime** and **TV Series** search tabs and the linking of your collection to the catalogue; **manga** and the rest follow. Nothing changes for you until each part is ready, and sources you connect yourself keep working as they do now.
 - Further work follows the [changelog](CHANGELOG.md): each release lists what has already shipped.
 
 <p align="center"><img src="images/readme/divider.svg" alt="" width="880" /></p>

@@ -1,5 +1,66 @@
 # Vetro changelog
 
+## v3.6.0-Beta — November 22, 2026
+
+App version: `v3.6.0-Beta`. Android version code: `360`.
+Changes since 3.4.9-Stable. This build rolls up every Alpha from 3.5.0 to 3.5.9 (the in-app updater ignores Alpha tags, so this is the first update that carries them) and adds the share-card and title-page polish made after 3.5.9.
+
+### Audiobooks: the Vetro book catalogue
+
+- A new first source for audiobooks: a catalogue of about 176,000 books. It keeps a search index on the phone, so lookups work offline and instantly, and asks the server only when the local index is not enough. The index is refreshed to version 3.
+- The book page and the library show the catalogue details: description, genres, series, the original title and the rating. Covers come from the same catalogue (about 1,000 new ones). If the index cannot be refreshed, the reason is written to the log instead of being swallowed.
+- The app proves to the catalogue server that it is the real Vetro (Android Key Attestation, no Google services needed) and gets an install token for 30 days. Phones without hardware attestation, and builds the server does not know, keep working with the sources used before. The token goes only to the catalogue host, and tokens are refused for devices whose attestation certificates Google has revoked.
+
+### Search, catalogue linking and recommendations
+
+- Search by direction asks the Vetro catalogue first: Anime looks only in the anime database, TV Series in series and films (each result keeps its own type), so an anime query no longer returns books or series. A film found under the TV Series tab is labelled as a film. Manga and Books work as before.
+- First start of this version: a short screen with the mascot links the titles of your collection to the Vetro catalogue, first by the ids they already have (AniList, MAL, Shikimori, TMDB, IMDb), then by name, and downloads a cover where a title lacks one. If the network is down nothing is marked and it tries again next launch; after 30 seconds you can continue in the background. Titles are linked once; new ones are linked quietly when recommendations refresh.
+- Recommendations use the same algorithm, but candidates are also checked against the catalogue: a title that is already in your collection under other ids or another name is no longer offered, and records of one title from different sources are merged by the catalogue id.
+
+### Smart models and local AI
+
+- Three small model packs now run on the phone: Identity (title matching across anime, films, series, manga and audiobooks), Catalog (file-name parsing for audiobook folders, person names, title language, genre aliases) and Experience (genre associations and a ranker that learns from your own ratings and picks). They start in observation mode and change nothing until you turn an effect on.
+- Settings has a Smart models section with one switch per model: title matching, files and genres, taste recommendations. All are off until you turn them on, and each switch also enables what that model can change (search order, genre aliases, recommendation order). Together they are one "Local AI" row with a single switch; the developer section has one "Local AI" row with the "previous version" switches and the observation counters.
+- "Files and genres" also recognises the stock picture some sources serve instead of a cover (Shikimori's "404 not found" girl): it is no longer saved as a cover, and covers already in your collection are checked once and replaced from the Vetro catalogue or removed so the usual cover search takes over. Nothing changes if the catalogue cannot be reached.
+- "Help improve Vetro" is off by default and asks for your consent before it turns on. Once a day it can send anonymous numbers about how the models work, plus the public facts of books that other sites returned but the catalogue lacks. Search queries and your collection are never sent, and "Show the exact text of the next upload" lives in the option's details. It exists only in builds signed by the developer.
+
+### Player and notifications
+
+- "Not dubbed yet" screen: when an anime source stays silent twice in a row and the episode has fewer than 4 dubbing studios and came out at most 2 days ago, the player shows the mascot with "Looks like the studios haven't dubbed this episode yet" and three buttons: Exit, Settings and retry.
+- New switch Availability threshold (off by default): a new episode with fewer than 4 dubbing studios and at most 2 days since release gives no notification and no card until either condition stops holding. The audit repeats every 6 hours.
+- A bell button on the title screen switches notifications of that title off and on: no push, no Home card, no notification-centre entry, no waiting for dubbing; the release calendar still shows it. The setting stays on the phone, series keep counting episodes so nothing floods in later, and the words "Notifications on / off" are only for screen readers.
+- Quiet reminders: a gentle notification when you left a title for 3 weeks or more after at least 2 episodes or chapters and there is still something released to continue. Completed and Dropped titles, titles with the bell off and titles in the secret folder are skipped. It has its own low-priority channel, comes at most once in 3 days between 10:00 and 21:00, never about the same title within 45 days and at most twice for one pause. Tapping it opens the title; there is a switch in Settings.
+
+### Settings
+
+- Press and hold any setting, including the developer section and the smart models, to read what it does in a bottom sheet with a grey "Back" button and an orange "Turn on" / "Turn off" / "Open" button. Rows without a written description get one built from their title and subtitle.
+- Coming from the player's "Settings" button scrolls to the option and flashes it; the first time, a pointer also shows how to hold a row.
+
+### Text fields and mini notifications
+
+- Every text field got a new feel: each letter drops in with a bounce, deleted letters float away, the caret glides and stretches with its speed, the label rises above the text and the frame thickens on focus. With "Remove animations" on, the letters simply appear. The drop is about a quarter gentler than in the first Alpha.
+- Mini notifications (experimental, Settings, For developers): short messages and sync progress appear as a compact pill at the bottom that grows and shrinks like Dynamic Island, centred and above the floating dock, instead of toasts. It can unfold into a card with a title, a tag and a subtitle for sync, switching the source, list sync, saving and sign-in errors, and it replaces the old "Sync" pill at the top.
+
+### Share card: "Now watching"
+
+- A share bubble next to the "⋯" menu on a title opens a preview of a frosted-glass post frame you can send to friends: the logo, your nickname and the type, the cover with progress and your rating, a 10-segment progress bar, the current episode or chapter, a short text and a footer, on a soft backdrop that takes its colours from the cover. It follows the app theme and language and has "Save PNG" (Pictures/Vetro) and "Share".
+- The text under the title is your own note, or the cleaned description of the title if there is none.
+- The nickname is edited in its own sheet with the Letter Limit field (a ring, a counter, letters spilling out), so the keyboard never covers it, and it is remembered.
+- Data level and the comment are round icon buttons with animated icons, like the notification bell: Full / Minimal data, and show / hide the comment.
+- The preview is drawn live with springs. Switching Minimal / Full stretches the backdrop and the card smoothly with no empty space under the content: the episode line, the note and the genres grow and shrink, the text rises into place or settles away, and the rating and the progress percentage fade in. The saved picture is drawn by the same code.
+- A comment of up to 52 characters (spaces and punctuation included) is drawn as a thought bubble above the card; turning it on or off stretches the backdrop and the bubble pops out of its tail like a small cloud.
+- The comment is now saved per title. The title page shows it as a "My comment" section: tap it to edit, or use the trash button, confirm, and the section turns red and flies off the screen.
+
+### Title page
+
+- The description sits in a rounded card with a "Show more" button inside; the card grows with a spring.
+- "Next episode in:" (when there is a schedule) and the "Where to watch" source icons are one block. The countdown switches to a compact form ("13h 36m 40s") instead of wrapping when the line is too narrow.
+
+### Fixes
+
+- Returning to Vetro from Recents no longer starts a full sync every time (the account session re-announced "signed in" on each token refresh).
+- This build contains the model files of Title matching, Files and genres and Taste recommendations; an earlier Alpha shipped without them.
+
 ## v3.5.9-Alpha — November 22, 2026
 
 App version: `v3.5.9-Alpha`. Android version code: `359`.

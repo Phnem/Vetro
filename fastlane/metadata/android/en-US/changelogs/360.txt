@@ -1,0 +1,8 @@
+New
+• Vetro book catalogue: about 176,000 audiobooks, searchable offline.
+• Search and recommendations use the Vetro catalogue.
+• Smart models on your phone (off until you enable them).
+• "Now watching" share card with a thought-bubble comment.
+• Notification bell per title, quiet reminders, availability threshold.
+Fixes
+• No full sync every time you return from Recents.
