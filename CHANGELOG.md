@@ -1,5 +1,31 @@
 # Vetro changelog
 
+## v3.5.9-Alpha — November 22, 2026
+
+App version: `v3.5.9-Alpha`. Android version code: `359`.
+Changes since 3.5.8-Alpha. This is a pre-release: the in-app updater ignores Alpha tags, install it by hand.
+
+### Share card: "Now watching"
+
+- A new share bubble next to the "⋯" menu on a title opens a preview of a picture you can send to friends or post. It is drawn as a frosted-glass post frame: the logo, your nickname and the type of the title, the cover with the progress and your rating, a 10-segment progress bar, the current episode or chapter, a short text and a footer. A soft backdrop takes its colours from the cover.
+- The card follows the app theme (light or dark) and the app language, not the system ones.
+- The text under the title is your own note for the title; if there is none, it is the description of the title, cleaned of markup.
+- The preview has a nickname field (remembered), a Full data / Minimal data switch, "Save PNG" (saved to Pictures/Vetro) and "Share".
+
+### Card comment
+
+- Another bubble next to Share (a speech bubble with a plus) adds a comment of up to 52 characters, spaces and punctuation included. It uses the Letter Limit field: a ring and a counter show what is left, and extra letters spill out under the field.
+- The comment is drawn as a thought bubble above the card (light on dark theme, dark on light) and goes into the saved picture; the picture grows by the height of the bubble.
+
+### Quiet reminders about unfinished titles
+
+- A gentle notification when you left a title for 3 weeks or more after at least 2 episodes or chapters, and there is still something released to continue. Titles the app already shows as Completed or Dropped, titles with the bell switched off and titles in the secret folder are skipped.
+- It has its own low-priority channel (no sound, no pop-up), comes at most once in 3 days between 10:00 and 21:00, never about the same title again within 45 days and at most twice for one pause. Tapping it opens the title. There is a switch in Settings.
+
+### Mini notifications (experimental)
+
+- The pill can now unfold into a card with a title, a tag and a subtitle for sync, switching the source, list sync, saving and sign-in errors (while the "Mini notifications" switch is on).
+
 ## v3.5.8-Alpha — November 21, 2026
 
 App version: `v3.5.8-Alpha`. Android version code: `358`.
