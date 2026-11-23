@@ -6,13 +6,18 @@
 // VETRO-TAIL[billing-mail]: ещё один транспорт = функция `async ({ to, subject, text }, env, fetchImpl)` (бросает при ошибке)
 // и строка в TRANSPORTS. Кандидаты: Cloudflare Email Service, MailChannels.
 
+import { htmlKeyEmail, htmlReminderEmail, htmlRenewalEmail, limitsShort, SUPPORT_EMAIL } from "./mailhtml.js";
+
+export { limitsShort };
+
 const TRANSPORTS = {
-  async resend({ to, subject, text }, env, fetchImpl) {
+  async resend({ to, subject, text, html }, env, fetchImpl) {
     if (!env.MAIL_API_KEY || !env.MAIL_FROM) throw new Error("mail_not_configured");
     const res = await fetchImpl("https://api.resend.com/emails", {
       method: "POST",
       headers: { authorization: `Bearer ${env.MAIL_API_KEY}`, "content-type": "application/json" },
-      body: JSON.stringify({ from: env.MAIL_FROM, to: [to], subject, text }),
+      // reply_to: ответ на письмо с ключом попадает на адрес поддержки, а не в пустой ящик отправителя.
+      body: JSON.stringify({ from: env.MAIL_FROM, to: [to], subject, text, ...(html ? { html } : {}), reply_to: SUPPORT_EMAIL }),
     });
     if (!res.ok) throw new Error("mail_http_" + res.status);
   },
@@ -37,7 +42,7 @@ export function fmtLimits(tier, lang) {
 }
 
 /** Тексты согласованы с docs брифа §7 (строка лимитов добавлена по правилам оплаты). `domains` — только для проекта-сайта. */
-export function composeKeyEmail({ lang, signer, plan, expiresAt, key, domains, limits }) {
+function textKeyEmail({ lang, signer, plan, expiresAt, key, domains, limits }) {
   const date = fmtUtc(expiresAt);
   if (lang === "ru") {
     const line = domains?.length ? `Ключ работает только с этих доменов: ${domains.join(", ")}.\n` : "";
@@ -50,7 +55,7 @@ export function composeKeyEmail({ lang, signer, plan, expiresAt, key, domains, l
         (limits ? `${limits}\n\n` : "") +
         `Передавайте его в заголовке "Authorization: Bearer <ключ>" на https://api.vetrostudio.bid.\n${line}` +
         `Документация: https://vetrostudio.bid/api-docs.html\n\n` +
-        `Потеряли ключ или есть вопрос? Напишите владельцу: https://t.me/Vetro_chat\n— Vetro Studio\n`,
+        `Потеряли ключ или есть вопрос? Напишите нам: support@vetrostudio.bid\n— Vetro Studio\n`,
     };
   }
   const line = domains?.length ? `The key works from these domains only: ${domains.join(", ")}.\n` : "";
@@ -63,12 +68,12 @@ export function composeKeyEmail({ lang, signer, plan, expiresAt, key, domains, l
       (limits ? `${limits}\n\n` : "") +
       `Use it in the header "Authorization: Bearer <key>" on https://api.vetrostudio.bid.\n${line}` +
       `Documentation: https://vetrostudio.bid/api-docs.html\n\n` +
-      `Lost the key or have a question? Write to the owner: https://t.me/Vetro_chat\n— Vetro Studio\n`,
+      `Lost the key or have a question? Write to us: support@vetrostudio.bid\n— Vetro Studio\n`,
   };
 }
 
 /** ЧЕРНОВИК текста (владелец согласует с сайтом): напоминание за 3 дня до конца пакета. У подписки напоминаний нет: она продлевается сама. */
-export function composeReminderEmail({ lang, signer, plan, expiresAt, prefix }) {
+function textReminderEmail({ lang, signer, plan, expiresAt, prefix }) {
   const date = fmtUtc(expiresAt);
   const hello = (w) => `${w}${signer ? ", " + signer : ""}!`;
   if (lang === "ru") {
@@ -77,7 +82,7 @@ export function composeReminderEmail({ lang, signer, plan, expiresAt, prefix }) 
       text:
         `${hello("Здравствуйте")}\n\nКлюч ${prefix} (тариф ${plan}) действует до ${date} UTC. Пакет не продлевается сам.\n` +
         `Чтобы продлить, оформите тот же тариф для того же проекта на https://vetrostudio.bid/api.html: купленные дни прибавятся к текущему сроку, ключ останется прежним.\n\n` +
-        `Вопросы: https://t.me/Vetro_chat\n— Vetro Studio\n`,
+        `Вопросы: support@vetrostudio.bid\n— Vetro Studio\n`,
     };
   }
   return {
@@ -85,26 +90,26 @@ export function composeReminderEmail({ lang, signer, plan, expiresAt, prefix }) 
     text:
       `${hello("Hello")}\n\nYour key ${prefix} (${plan}) is valid until ${date} UTC. This prepaid pack does not renew by itself.\n` +
       `To extend it, buy the same plan for the same project on https://vetrostudio.bid/api.html: the days you buy are added to the current term and the key stays the same.\n\n` +
-      `Questions: https://t.me/Vetro_chat\n— Vetro Studio\n`,
+      `Questions: support@vetrostudio.bid\n— Vetro Studio\n`,
   };
 }
 
 /** ЧЕРНОВИК текста (владелец согласует с сайтом): продление уже выданного ключа, сам ключ не повторяется. */
-export function composeRenewalEmail({ lang, signer, plan, expiresAt, prefix }) {
+function textRenewalEmail({ lang, signer, plan, expiresAt, prefix }) {
   const date = fmtUtc(expiresAt);
   if (lang === "ru") {
     return {
       subject: "Ваш ключ Vetro API продлён",
       text:
         `Здравствуйте, ${signer}!\n\nСпасибо за заказ. Ключ ${prefix} (тариф ${plan}) продлён и действует до ${date} UTC.\n` +
-        `Сам ключ не изменился: используйте тот же.\n\nЕсть вопрос? Напишите владельцу: https://t.me/Vetro_chat\n— Vetro Studio\n`,
+        `Сам ключ не изменился: используйте тот же.\n\nЕсть вопрос? Напишите нам: support@vetrostudio.bid\n— Vetro Studio\n`,
     };
   }
   return {
     subject: "Your Vetro API key is extended",
     text:
       `Hello, ${signer}!\n\nThank you for your order. Your key ${prefix} (${plan}) is extended and valid until ${date} UTC.\n` +
-      `The key itself is unchanged: keep using the same one.\n\nQuestions? Write to the owner: https://t.me/Vetro_chat\n— Vetro Studio\n`,
+      `The key itself is unchanged: keep using the same one.\n\nQuestions? Write to us: support@vetrostudio.bid\n— Vetro Studio\n`,
   };
 }
 
@@ -124,4 +129,23 @@ export async function sendKeyEmail(env, message, { fetchImpl = fetch, sleep = (m
     }
   }
   return "failed";
+}
+
+// Публичные функции: текстовая версия (для почтовиков без HTML и для антиспама) + HTML-версия из mailhtml.js.
+export function composeKeyEmail(p) {
+  const lang = p.lang === "ru" ? "ru" : "en";
+  return {
+    ...textKeyEmail({ ...p, lang }),
+    html: htmlKeyEmail({ lang, signer: p.signer, plan: p.plan, date: fmtUtc(p.expiresAt), key: p.key, domains: p.domains, limits: p.limitsShort }),
+  };
+}
+
+export function composeRenewalEmail(p) {
+  const lang = p.lang === "ru" ? "ru" : "en";
+  return { ...textRenewalEmail({ ...p, lang }), html: htmlRenewalEmail({ lang, signer: p.signer, plan: p.plan, date: fmtUtc(p.expiresAt), prefix: p.prefix }) };
+}
+
+export function composeReminderEmail(p) {
+  const lang = p.lang === "ru" ? "ru" : "en";
+  return { ...textReminderEmail({ ...p, lang }), html: htmlReminderEmail({ lang, signer: p.signer, plan: p.plan, date: fmtUtc(p.expiresAt), prefix: p.prefix }) };
 }

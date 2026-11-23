@@ -6,7 +6,7 @@
 // Доступ везде один: ключ работает, пока status = active и expires_at > now. Лимиты посуточные и от срока не зависят.
 import { isTest } from "./http.js";
 import { newApiKey } from "./keys.js";
-import { composeKeyEmail, composeRenewalEmail, fmtLimits, sendKeyEmail } from "./mail.js";
+import { composeKeyEmail, composeRenewalEmail, fmtLimits, limitsShort, sendKeyEmail } from "./mail.js";
 import { providerByName } from "./providers/index.js";
 
 const DAY = 86_400_000;
@@ -234,6 +234,7 @@ async function deliver(env, order, tier, customer, contract, plain, expiresAt, d
       key: plain,
       domains: order.project_type === "site" && order.origins ? JSON.parse(order.origins) : [],
       limits: fmtLimits(tier, lang),
+      limitsShort: limitsShort(tier, lang),
     });
     const status = await sendKeyEmail(env, { to: customer.email, ...mail }, { fetchImpl: deps.fetchImpl, sleep: deps.sleep });
     if (status === "failed") await run(env.DB, "UPDATE web_orders SET email_failed = 1 WHERE id = ?1", order.id);
