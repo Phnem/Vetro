@@ -16,8 +16,6 @@ test("the e-mail texts follow the brief, EN and RU, domains line only for sites"
   assert.match(en.text, /Your Vetro API key \(Pro, valid until 2026-12-23 12:00 UTC\):\n\nvk_pro_/);
   assert.match(en.text, /The key works from these domains only: a\.com, b\.com\./);
   assert.match(en.text, /Write to us: support@vetrostudio\.bid\n— Vetro Studio\n$/);
-— Vetro Studio
-$/);
   assert.match(en.text, /Authorization: Bearer <key>" on https:\/\/api\.vetrostudio\.bid/);
   assert.doesNotMatch(composeKeyEmail({ ...base, lang: "en", domains: [] }).text, /domains only/);
 
