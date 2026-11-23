@@ -1,0 +1,47 @@
+# Оплата ключей Vetro API на сайте (docs/adr/0003, .scratch/billing/worker-brief.md): billing.vetrostudio.bid.
+# Отдельный Worker, а не маршрут api.vetrostudio.bid: у API ключевой шлюз и CORS "*", у оплаты CORS строгий и ключа нет.
+name = "vetro-books-billing"
+main = "src/worker.js"
+compatibility_date = "2026-11-01"
+workers_dev = false
+
+[[routes]]
+pattern = "billing.vetrostudio.bid"
+custom_domain = true
+
+# Общая база D1 с vetro-books-api, ботом и панелью. Базу не делить.
+[[d1_databases]]
+binding = "DB"
+database_name = "vetro-books"
+database_id = "5574b392-dfb0-4ab6-9afc-336993d7947a"
+
+# Одноразовый показ ключа на странице успеха (ключ лежит 10 минут и удаляется при чтении).
+# Создать: npx wrangler kv namespace create REVEAL  -> вписать id сюда.
+[[kv_namespaces]]
+binding = "REVEAL"
+id = "REPLACE_WITH_KV_ID"
+
+# Ограничитель по IP. Привязка не хранит историю адресов.
+[[ratelimits]]
+name = "LIMITER"
+namespace_id = "1002"
+  [ratelimits.simple]
+  limit = 20
+  period = 60
+
+# Те же обещания, что у остальных Worker Vetro: метаданные запросов не пишем.
+[observability]
+enabled = false
+
+[triggers]
+crons = ["17 * * * *"]
+
+# test = переходник mock, страница «Оплатить (тест)», ключи на сутки с меткой TEST. Любое другое значение = боевой режим.
+# Боевой режим включать только по слову владельца и после чтения условий на сайте.
+[vars]
+BILLING_MODE = "test"
+RETURN_BASE = "https://vetrostudio.bid/api.html"
+
+# Секреты только через `npx wrangler secret put <ИМЯ>` (ключи провайдеров, секреты вебхуков, ключ почтового сервиса):
+#   MOCK_WEBHOOK_SECRET (необязателен, нужен только для проверки вебхука в тестовом режиме)
+#   MAIL_API_KEY (появится вместе с почтовым переходником)
