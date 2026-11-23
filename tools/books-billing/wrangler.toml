@@ -48,6 +48,9 @@ crons = ["17 * * * *"]
 # Боевой режим включать только по слову владельца и после чтения условий на сайте.
 [vars]
 BILLING_MODE = "test"
+# Письма через Resend (домен vetrostudio.bid, регион eu-west-1). Секрет MAIL_API_KEY (ключ только на отправку, привязан к домену) лежит в secret.
+MAIL_TRANSPORT = "resend"
+MAIL_FROM = "Vetro Studio <keys@vetrostudio.bid>"
 # Очистка суточных счётчиков по ключам (usage_daily) старше N дней, по политике 60. Не задано = ничего не удаляется.
 # USAGE_RETENTION_DAYS = "60"
 
