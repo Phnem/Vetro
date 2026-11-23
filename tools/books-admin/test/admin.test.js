@@ -200,11 +200,11 @@ function seedWeb(sqlite) {
   sqlite.exec("INSERT INTO web_customers (id, email, language, banned, created_at) VALUES (1, 'buyer@example.com', 'en', 0, 1)");
   sqlite.exec("INSERT INTO api_keys (id, key_hash, key_prefix, tier, status, owner, created_at, expires_at) VALUES ('k_111111111111', 'h-web1', 'vk_pro_zzzz…', 'pro', 'active', 'web:1', 1, 99999999999999)");
   sqlite.exec("INSERT INTO api_keys (id, key_hash, key_prefix, tier, status, owner, created_at, expires_at) VALUES ('k_222222222222', 'h-web2', 'vk_pro_yyyy…', 'pro', 'active', 'web:test', 1, 99999999999999)");
-  const order = sqlite.prepare("INSERT INTO web_orders (checkout_ref, customer_id, tier, provider, method, amount_minor, status, key_id, project_name, project_type, project_description, origins, email_failed, note, created_at, paid_at) " +
-    "VALUES (?, 1, 'pro', ?, 'card', 700, 'paid', ?, ?, 'site', 'A <b>site</b> description', '[\"example.com\"]', ?, ?, ?, ?)");
+  const order = sqlite.prepare("INSERT INTO web_orders (checkout_ref, customer_id, tier, provider, method, amount_minor, status, key_id, project_name, project_type, project_description, origins, email_failed, note, created_at, paid_at, policies_accepted_at) " +
+    "VALUES (?, 1, 'pro', ?, 'card', 700, 'paid', ?, ?, 'site', 'A <b>site</b> description', '[\"example.com\"]', ?, ?, ?, ?, 5)");
   order.run("ord_" + "a".repeat(32), "paddle", "k_111111111111", "My <img src=x onerror=alert(1)>", 1, null, NOW - 1000, NOW - 500);
   order.run("ord_" + "b".repeat(32), "mock", "k_222222222222", "Test project", 0, null, NOW - 900, NOW - 400);
-  sqlite.exec(`INSERT INTO contract_signatures (order_id, signer, terms_hash, signature_svg, client_signed_at, accepted_at, lang) VALUES (1, 'Ivan Petrov', 'f3bee9bb6eb9', '${SVG}', '2026-11-23T11:59:00.000Z', 5, 'en')`);
+  sqlite.exec(`INSERT INTO contract_signatures (order_id, signer, terms_hash, refund_hash, privacy_hash, signature_svg, client_signed_at, accepted_at, lang) VALUES (1, 'Ivan Petrov', 'f3bee9bb6eb9', 'a1b2c3d4e5f6', '0123456789ab', '${SVG}', '2026-11-23T11:59:00.000Z', 5, 'en')`);
 }
 
 test("тарифы: цена в центах правится в панели, отрицательная отклоняется", async () => {
@@ -280,4 +280,30 @@ test("панель, выложенная раньше схемы сайта, н�
   assert.deepEqual((await call(env, "/api/overview")).data.paid_web_30d, { orders: 0, usd_minor: 0 });
   assert.equal((await call(env, "/api/web-orders/1/signature")).status, 404);
   assert.equal((await call(env, "/api/web-customers/1/ban", { method: "POST", body: {} })).status, 404);
+});
+
+test("заказ сайта: хэши трёх документов и число запросов по ключу (без _denied)", async () => {
+  const { env, sqlite } = freshEnv();
+  seedWeb(sqlite);
+  sqlite.exec("INSERT INTO usage_daily (key_id, day, route, requests) VALUES ('k_111111111111', '2026-11-20', 'search', 7), ('k_111111111111', '2026-11-21', 'books', 3), ('k_111111111111', '2026-11-21', '_denied', 50)");
+  const o = (await call(env, "/api/web-orders")).data.orders.find((x) => x.provider === "paddle");
+  assert.equal(o.requests_total, 10);
+  assert.equal(o.refund_hash, "a1b2c3d4e5f6");
+  assert.equal(o.privacy_hash, "0123456789ab");
+  assert.equal(o.policies_accepted_at, 5);
+  assert.equal(o.kind, "new");
+});
+
+test("ручной возврат: заказ refunded, ключ отозван, продление ключ не трогает, повтор отклонён", async () => {
+  const { env, sqlite } = freshEnv();
+  seedWeb(sqlite);
+  assert.equal((await call(env, "/api/web-orders/99/refund", { method: "POST", body: {} })).status, 404);
+  assert.equal((await call(env, "/api/web-orders/1/refund", { method: "POST", body: {} })).status, 200);
+  assert.equal(sqlite.prepare("SELECT note FROM web_orders WHERE id = 1").get().note, "refunded_manual");
+  assert.equal(sqlite.prepare("SELECT status FROM api_keys WHERE id = 'k_111111111111'").get().status, "revoked");
+  assert.equal((await call(env, "/api/web-orders/1/refund", { method: "POST", body: {} })).status, 400, "уже не paid");
+  sqlite.exec("UPDATE web_orders SET kind = 'renew' WHERE id = 2");
+  assert.equal((await call(env, "/api/web-orders/2/refund", { method: "POST", body: {} })).status, 200);
+  assert.equal(sqlite.prepare("SELECT status FROM api_keys WHERE id = 'k_222222222222'").get().status, "active", "ключ продления не отзывается");
+  assert.match(JSON.stringify(sqlite.prepare("SELECT * FROM admin_log").all()), /web_order\.refund/);
 });

@@ -186,10 +186,11 @@ async function setBan(env, actor, id, banned, now) {
 
 function webOrders(env) {
   return withoutWebTables(() => all(env.DB,
-    "SELECT o.id, o.checkout_ref, o.tier, o.kind, o.provider, o.method, o.amount_minor, o.currency, o.status, o.note, o.email_failed, o.key_id, " +
+    "SELECT o.id, o.checkout_ref, o.tier, o.kind, o.policies_accepted_at, o.provider, o.method, o.amount_minor, o.currency, o.status, o.note, o.email_failed, o.key_id, " +
       "o.project_name, o.project_type, o.project_description, o.origins, o.created_at, o.paid_at, " +
       "c.id AS customer_id, c.email, c.banned, " +
-      "s.signer, s.terms_hash, s.accepted_at, s.client_signed_at, (s.signature_svg IS NOT NULL) AS has_signature, k.key_prefix, k.status AS key_status " +
+      "s.signer, s.terms_hash, s.refund_hash, s.privacy_hash, s.accepted_at, s.client_signed_at, (s.signature_svg IS NOT NULL) AS has_signature, k.key_prefix, k.status AS key_status, " +
+      "(SELECT COALESCE(SUM(u.requests), 0) FROM usage_daily u WHERE u.key_id = o.key_id AND u.route != '_denied') AS requests_total " +
       "FROM web_orders o JOIN web_customers c ON c.id = o.customer_id LEFT JOIN contract_signatures s ON s.order_id = o.id LEFT JOIN api_keys k ON k.id = o.key_id " +
       "ORDER BY o.created_at DESC LIMIT 300"), []);
 }
@@ -206,6 +207,21 @@ async function webSignature(env, orderId) {
   const s = await withoutWebTables(() => one(env.DB, "SELECT signature_svg FROM contract_signatures WHERE order_id = ?", orderId), null);
   if (!s) throw missing();
   return { src: "data:image/svg+xml;base64," + toBase64(s.signature_svg) };
+}
+
+/**
+ * Ручной возврат: деньги возвращает провайдер (Polar / lava / шлюз) или владелец (USDT); здесь только состояние. Заказ → refunded, ключ отозван.
+ * У заказа-продления ключ не трогаем (он оплачен и более ранним периодом): срок поправить вручную в «Ключах».
+ */
+async function refundWebOrder(env, actor, id, now) {
+  const o = await withoutWebTables(() => one(env.DB, "SELECT id, kind, key_id, status FROM web_orders WHERE id = ?", id), null);
+  if (!o) throw missing();
+  if (o.status !== "paid") throw bad("status");
+  const renewal = o.kind === "renew";
+  await run(env.DB, "UPDATE web_orders SET status = 'refunded', note = ? WHERE id = ?", renewal ? "refunded_renewal_manual" : "refunded_manual", id);
+  if (o.key_id && !renewal) await run(env.DB, "UPDATE api_keys SET status = 'revoked', revoked_at = ? WHERE id = ? AND status != 'revoked'", now, o.key_id);
+  await log(env, actor, "web_order.refund", String(id), { renewal }, now);
+  return { ok: true, note: renewal ? "Заказ отмечен возвращённым. Срок ключа поправьте вручную (минус 30 дней)." : "Заказ отмечен возвращённым, ключ отозван. Деньги возвращаются у провайдера." };
 }
 
 async function setWebBan(env, actor, id, banned, now) {
@@ -328,6 +344,7 @@ export async function handleApi(request, env, actor, now = Date.now()) {
       if ((seg = path.match(/^\/api\/applications\/(\d+)$/)) && m === "PATCH") return [200, await patchApplication(env, actor, Number(seg[1]), await body(), now)];
       if ((seg = path.match(/^\/api\/applications\/(\d+)\/reject$/))) return [200, await rejectApplication(env, actor, Number(seg[1]), await body(), now)];
       if ((seg = path.match(/^\/api\/customers\/(\d+)\/(ban|unban)$/))) return [200, await setBan(env, actor, Number(seg[1]), seg[2] === "ban", now)];
+      if ((seg = path.match(/^\/api\/web-orders\/(\d+)\/refund$/))) return [200, await refundWebOrder(env, actor, Number(seg[1]), now)];
       if ((seg = path.match(/^\/api\/web-customers\/(\d+)\/(ban|unban)$/))) return [200, await setWebBan(env, actor, Number(seg[1]), seg[2] === "ban", now)];
       if (path === "/api/message") return [200, await message(env, actor, await body(), now)];
       if ((seg = path.match(/^\/api\/installs\/([^/]+)\/(revoke|restore)$/))) return [200, await setInstallStatus(env, actor, seg[1], seg[2] === "revoke" ? "revoked" : "active", now)];

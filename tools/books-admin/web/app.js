@@ -128,11 +128,18 @@
 
   // --- заявки ---
   // Заказы с сайта (tools/books-billing). Подпись показывается только как <img src="data:...">: это не исполняемый SVG.
+  // Подсказка по политике возврата: 7 дней с оплаты и 0 запросов по ключу. Остальные основания (простой > 72 ч, двойное списание) решает владелец.
+  function refundHint(o) {
+    if (o.status !== "paid" || !o.paid_at) return null;
+    var days = (Date.now() - o.paid_at) / 86400000;
+    var ok = days <= 7 && Number(o.requests_total || 0) === 0 && o.kind !== "renew";
+    return h("div", { class: ok ? "note" : "mute" }, ok ? "Возврат по правилу 7 дней и 0 запросов: можно" : "Правило «7 дней и 0 запросов» не выполнено");
+  }
   function webOrdersBlock(orders) {
     var sig = h("div", { class: "box", hidden: true });
     var rows = orders.map(function (o) {
       return tr([
-        td(h("b", null, o.project_name), h("div", { class: "mute" }, "#" + o.id + " · " + o.project_type + " · " + o.provider + "/" + o.method), h("div", { class: "mute" }, o.checkout_ref),
+        td(h("b", null, o.project_name), h("div", { class: "mute" }, "#" + o.id + " · " + o.kind + " · " + o.project_type + " · " + o.provider + "/" + o.method), h("div", { class: "mute" }, o.checkout_ref),
           o.origins ? h("div", { class: "mute" }, JSON.parse(o.origins).join(", ")) : null),
         td(o.project_description),
         td(o.email, h("div", { class: "mute" }, o.banned ? "забанен" : "")),
@@ -140,8 +147,9 @@
         td(badge(o.status), h("div", { class: "mute" }, when(o.created_at)),
           o.note ? h("div", { class: "note" }, "Пометка: " + o.note) : null,
           o.email_failed ? h("div", { class: "note" }, "Письмо с ключом не ушло: отправьте ключ вручную") : null,
-          o.key_id ? h("div", { class: "mute" }, o.key_id + " · " + o.key_prefix + " · " + o.key_status) : null),
-        td(o.signer ? o.signer : "—", h("div", { class: "mute" }, o.accepted_at ? "условия приняты " + when(o.accepted_at) + " · версия " + o.terms_hash : "условия не приняты")),
+          o.key_id ? h("div", { class: "mute" }, o.key_id + " · " + o.key_prefix + " · " + o.key_status + " · запросов: " + num(o.requests_total)) : null,
+          refundHint(o)),
+        td(o.signer ? o.signer : "—", h("div", { class: "mute" }, o.accepted_at ? "условия приняты " + when(o.accepted_at) + " · terms " + o.terms_hash + " · refund " + o.refund_hash + " · privacy " + o.privacy_hash : "условия не приняты")),
         td(
           o.has_signature ? btn("Подпись", function () {
             api("/api/web-orders/" + o.id + "/signature").then(function (s) {
@@ -149,6 +157,7 @@
               append(sig, [h("div", { class: "mute" }, "Подпись: " + o.signer + " (заказ #" + o.id + ")"), h("img", { class: "sig", src: s.src, alt: "Подпись" })]);
             }).catch(fail);
           }) : null,
+          o.status === "paid" ? btn("Возврат вручную", function () { if (confirm("Отметить заказ #" + o.id + " возвращённым" + (o.kind === "renew" ? "?" : " и отозвать ключ?") + " Деньги возвращаются у провайдера.")) api("/api/web-orders/" + o.id + "/refund", "POST", {}).then(function (x) { alert(x.note); load(); }).catch(fail); }, "danger") : null,
           btn(o.banned ? "Разбанить" : "Бан", function () { if (o.banned || confirm("Забанить и отозвать все ключи покупателя?")) act("/api/web-customers/" + o.customer_id + (o.banned ? "/unban" : "/ban")); }, o.banned ? "" : "danger"))
       ]);
     });
