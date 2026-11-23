@@ -21,12 +21,20 @@ database_id = "5574b392-dfb0-4ab6-9afc-336993d7947a"
 binding = "REVEAL"
 id = "REPLACE_WITH_KV_ID"
 
-# Ограничитель по IP. Привязка не хранит историю адресов.
+# Ограничители по IP. Привязки не хранят историю адресов.
+# LIMITER: опрос заказа страницей успеха (раз в 3 с, до 40 раз за заказ). LIMITER_CHECKOUT: создание заказов.
 [[ratelimits]]
 name = "LIMITER"
 namespace_id = "1002"
   [ratelimits.simple]
-  limit = 20
+  limit = 60
+  period = 60
+
+[[ratelimits]]
+name = "LIMITER_CHECKOUT"
+namespace_id = "1003"
+  [ratelimits.simple]
+  limit = 10
   period = 60
 
 # Те же обещания, что у остальных Worker Vetro: метаданные запросов не пишем.
@@ -40,7 +48,6 @@ crons = ["17 * * * *"]
 # Боевой режим включать только по слову владельца и после чтения условий на сайте.
 [vars]
 BILLING_MODE = "test"
-RETURN_BASE = "https://vetrostudio.bid/api.html"
 
 # Секреты только через `npx wrangler secret put <ИМЯ>` (ключи провайдеров, секреты вебхуков, ключ почтового сервиса):
 #   MOCK_WEBHOOK_SECRET (необязателен, нужен только для проверки вебхука в тестовом режиме)
