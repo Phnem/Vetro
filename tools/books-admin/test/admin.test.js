@@ -27,7 +27,7 @@ function fakeD1(sqlite) {
 
 function freshEnv() {
   const sqlite = new DatabaseSync(":memory:");
-  for (const f of ["../../books-api/schema/access.sql", "../../books-api/schema/bot.sql", "../schema/admin.sql"]) {
+  for (const f of ["../../books-api/schema/access.sql", "../../books-api/schema/bot.sql", "../../books-billing/schema/billing-001-tier-price.sql", "../../books-billing/schema/billing.sql", "../schema/admin.sql"]) {
     sqlite.exec(readFileSync(new URL(f, import.meta.url), "utf8"));
   }
   sqlite.exec("INSERT INTO customers (id, telegram_id, username, first_name, created_at) VALUES (1, 111, 'buyer', 'B', 1)");
@@ -190,4 +190,94 @@ test("обзор считает ключи, установки и очередь
   assert.equal(o.keys.find((k) => k.tier === "pro").n, 1);
   assert.equal(o.installs[0].n, 1);
   assert.equal(o.outbox_pending, 0);
+});
+
+// --- заказы с сайта (tools/books-billing) ---------------------------------------------------------------------------
+
+const SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 9 9"><path d="M0 0L9 9"/></svg>';
+
+function seedWeb(sqlite) {
+  sqlite.exec("INSERT INTO web_customers (id, email, language, banned, created_at) VALUES (1, 'buyer@example.com', 'en', 0, 1)");
+  sqlite.exec("INSERT INTO api_keys (id, key_hash, key_prefix, tier, status, owner, created_at, expires_at) VALUES ('k_111111111111', 'h-web1', 'vk_pro_zzzz…', 'pro', 'active', 'web:1', 1, 99999999999999)");
+  sqlite.exec("INSERT INTO api_keys (id, key_hash, key_prefix, tier, status, owner, created_at, expires_at) VALUES ('k_222222222222', 'h-web2', 'vk_pro_yyyy…', 'pro', 'active', 'web:test', 1, 99999999999999)");
+  const order = sqlite.prepare("INSERT INTO web_orders (checkout_ref, customer_id, tier, provider, method, amount_minor, status, key_id, project_name, project_type, project_description, origins, email_failed, note, created_at, paid_at) " +
+    "VALUES (?, 1, 'pro', ?, 'card', 700, 'paid', ?, ?, 'site', 'A <b>site</b> description', '[\"example.com\"]', ?, ?, ?, ?)");
+  order.run("ord_" + "a".repeat(32), "paddle", "k_111111111111", "My <img src=x onerror=alert(1)>", 1, null, NOW - 1000, NOW - 500);
+  order.run("ord_" + "b".repeat(32), "mock", "k_222222222222", "Test project", 0, null, NOW - 900, NOW - 400);
+  sqlite.exec(`INSERT INTO contract_signatures (order_id, signer, terms_hash, signature_svg, client_signed_at, accepted_at, lang) VALUES (1, 'Ivan Petrov', 'f3bee9bb6eb9', '${SVG}', '2026-11-23T11:59:00.000Z', 5, 'en')`);
+}
+
+test("тарифы: цена в центах правится в панели, отрицательная отклоняется", async () => {
+  const { env, sqlite } = freshEnv();
+  const t = (await call(env, "/api/tiers")).data.tiers.find((x) => x.name === "pro");
+  assert.equal(t.price_usd_minor, 700);
+  assert.equal((await call(env, "/api/tiers/pro", { method: "PATCH", body: { price_usd_minor: -1 } })).status, 400);
+  assert.equal((await call(env, "/api/tiers/pro", { method: "PATCH", body: { price_usd_minor: 900 } })).status, 200);
+  assert.equal(sqlite.prepare("SELECT price_usd_minor FROM tiers WHERE name = 'pro'").get().price_usd_minor, 900);
+  assert.match(APP_JS, /price_usd_minor/);
+});
+
+test("заказы сайта: список без подписи, с e-mail, проектом, версией условий и меткой письма", async () => {
+  const { env, sqlite } = freshEnv();
+  seedWeb(sqlite);
+  const r = await call(env, "/api/web-orders");
+  assert.equal(r.status, 200);
+  assert.equal(r.data.orders.length, 2);
+  const o = r.data.orders.find((x) => x.provider === "paddle");
+  assert.equal(o.email, "buyer@example.com");
+  assert.equal(o.project_name, "My <img src=x onerror=alert(1)>");
+  assert.equal(o.signer, "Ivan Petrov");
+  assert.equal(o.terms_hash, "f3bee9bb6eb9");
+  assert.equal(o.accepted_at, 5);
+  assert.equal(o.email_failed, 1);
+  assert.equal(o.has_signature, 1);
+  assert.equal(o.key_prefix, "vk_pro_zzzz…");
+  assert.equal(r.text.includes("<svg"), false, "сам SVG в список не попадает");
+  assert.equal(r.text.includes("key_hash"), false);
+});
+
+test("подпись отдаётся только как data:-адрес картинки, неизвестный заказ — 404", async () => {
+  const { env, sqlite } = freshEnv();
+  seedWeb(sqlite);
+  const r = await call(env, "/api/web-orders/1/signature");
+  assert.equal(r.status, 200);
+  assert.match(r.data.src, /^data:image\/svg\+xml;base64,[A-Za-z0-9+/=]+$/);
+  assert.equal(Buffer.from(r.data.src.split(",")[1], "base64").toString("utf8"), SVG);
+  assert.equal((await call(env, "/api/web-orders/2/signature")).status, 404, "у заказа нет подписи");
+  assert.equal((await call(env, "/api/web-orders/99/signature")).status, 404);
+  assert.match(APP_JS, /"img", \{ class: "sig", src: s\.src/);
+});
+
+test("обзор: доход сайта за 30 дней в центах, тестовые заказы не считаются", async () => {
+  const { env, sqlite } = freshEnv();
+  seedWeb(sqlite);
+  const o = (await call(env, "/api/overview")).data;
+  assert.deepEqual(o.paid_web_30d, { orders: 1, usd_minor: 700 });
+  sqlite.exec(`UPDATE web_orders SET paid_at = ${NOW - 31 * 86_400_000} WHERE provider = 'paddle'`);
+  assert.deepEqual((await call(env, "/api/overview")).data.paid_web_30d, { orders: 0, usd_minor: 0 });
+});
+
+test("бан покупателя сайта отзывает его активные ключи (owner web:<id> и выданные его заказами), разбан не возвращает их", async () => {
+  const { env, sqlite } = freshEnv();
+  seedWeb(sqlite);
+  assert.equal((await call(env, "/api/web-customers/99/ban", { method: "POST", body: {} })).status, 404);
+  assert.equal((await call(env, "/api/web-customers/1/ban", { method: "POST", body: {} })).status, 200);
+  assert.equal(sqlite.prepare("SELECT banned FROM web_customers WHERE id = 1").get().banned, 1);
+  const st = (id) => sqlite.prepare("SELECT status, revoked_at FROM api_keys WHERE id = ?").get(id);
+  assert.equal(st("k_111111111111").status, "revoked");
+  assert.equal(st("k_222222222222").status, "revoked");
+  assert.equal(st("k_aaaaaaaaaaaa").status, "active", "ключ Telegram-покупателя не тронут");
+  assert.match(JSON.stringify(sqlite.prepare("SELECT * FROM admin_log").all()), /web_customer\.ban/);
+  assert.equal((await call(env, "/api/web-customers/1/unban", { method: "POST", body: {} })).status, 200);
+  assert.equal(sqlite.prepare("SELECT banned FROM web_customers WHERE id = 1").get().banned, 0);
+  assert.equal(st("k_111111111111").status, "revoked");
+});
+
+test("панель, выложенная раньше схемы сайта, не падает: заказов нет, доход нулевой", async () => {
+  const { env, sqlite } = freshEnv();
+  sqlite.exec("DROP TABLE contract_signatures; DROP TABLE web_orders; DROP TABLE web_customers;");
+  assert.deepEqual((await call(env, "/api/web-orders")).data, { orders: [] });
+  assert.deepEqual((await call(env, "/api/overview")).data.paid_web_30d, { orders: 0, usd_minor: 0 });
+  assert.equal((await call(env, "/api/web-orders/1/signature")).status, 404);
+  assert.equal((await call(env, "/api/web-customers/1/ban", { method: "POST", body: {} })).status, 404);
 });

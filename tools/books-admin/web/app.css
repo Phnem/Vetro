@@ -32,3 +32,5 @@ input[type=checkbox] { width: auto; }
 code { word-break: break-all; }
 .box { margin: 8px 0 14px; }
 @media (max-width: 640px) { main { padding: 10px; } }
+
+.sig{display:block;margin-top:.5rem;max-width:360px;background:#fff;border:1px solid #ccc;border-radius:6px}

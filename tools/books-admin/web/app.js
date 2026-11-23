@@ -33,6 +33,7 @@
   function fail(e) { alert("Ошибка: " + e.message); }
   function when(ms) { return ms ? new Date(ms).toLocaleString("ru-RU") : "—"; }
   function num(n) { return Number(n || 0).toLocaleString("ru-RU"); }
+  function usd(minor) { return "$" + (Number(minor || 0) / 100).toFixed(2); }
   function badge(s) { return h("span", { class: "badge b-" + s }, s); }
   function btn(label, fn, cls) { return h("button", { class: cls || "", onclick: fn }, label); }
   function td() { var c = h("td"); for (var i = 0; i < arguments.length; i++) append(c, arguments[i]); return c; }
@@ -58,6 +59,7 @@
         stat("Запросов сегодня", num(todayN)),
         stat("Установок за 24 ч", num(o.installs_24h)),
         stat("Звёзд за 30 дней", num(o.paid_30d.stars) + " ⭐ (" + num(o.paid_30d.orders) + " заказов)"),
+        stat("Доход сайта за 30 дней", usd(o.paid_web_30d.usd_minor) + " (" + num(o.paid_web_30d.orders) + " заказов)"),
         stat("Уведомлений в очереди", num(o.outbox_pending)));
       var days = {}, routes = {};
       o.usage.forEach(function (u) { (days[u.day] = days[u.day] || {})[u.route] = u.n; routes[u.route] = 1; });
@@ -125,8 +127,39 @@
   }
 
   // --- заявки ---
+  // Заказы с сайта (tools/books-billing). Подпись показывается только как <img src="data:...">: это не исполняемый SVG.
+  function webOrdersBlock(orders) {
+    var sig = h("div", { class: "box", hidden: true });
+    var rows = orders.map(function (o) {
+      return tr([
+        td(h("b", null, o.project_name), h("div", { class: "mute" }, "#" + o.id + " · " + o.project_type + " · " + o.provider + "/" + o.method), h("div", { class: "mute" }, o.checkout_ref),
+          o.origins ? h("div", { class: "mute" }, JSON.parse(o.origins).join(", ")) : null),
+        td(o.project_description),
+        td(o.email, h("div", { class: "mute" }, o.banned ? "забанен" : "")),
+        td(o.tier, h("div", { class: "mute" }, usd(o.amount_minor) + " " + o.currency)),
+        td(badge(o.status), h("div", { class: "mute" }, when(o.created_at)),
+          o.note ? h("div", { class: "note" }, "Пометка: " + o.note) : null,
+          o.email_failed ? h("div", { class: "note" }, "Письмо с ключом не ушло: отправьте ключ вручную") : null,
+          o.key_id ? h("div", { class: "mute" }, o.key_id + " · " + o.key_prefix + " · " + o.key_status) : null),
+        td(o.signer ? o.signer : "—", h("div", { class: "mute" }, o.accepted_at ? "условия приняты " + when(o.accepted_at) + " · версия " + o.terms_hash : "условия не приняты")),
+        td(
+          o.has_signature ? btn("Подпись", function () {
+            api("/api/web-orders/" + o.id + "/signature").then(function (s) {
+              sig.hidden = false; sig.textContent = "";
+              append(sig, [h("div", { class: "mute" }, "Подпись: " + o.signer + " (заказ #" + o.id + ")"), h("img", { class: "sig", src: s.src, alt: "Подпись" })]);
+            }).catch(fail);
+          }) : null,
+          btn(o.banned ? "Разбанить" : "Бан", function () { if (o.banned || confirm("Забанить и отозвать все ключи покупателя?")) act("/api/web-customers/" + o.customer_id + (o.banned ? "/unban" : "/ban")); }, o.banned ? "" : "danger"))
+      ]);
+    });
+    return h("div", null, h("h3", null, "Заказы с сайта (" + orders.length + ")"),
+      h("p", { class: "mute" }, "Возврат делается у платёжного провайдера; его событие отзывает ключ и ставит заказ в «refunded». Тестовые заказы (mock) помечены провайдером."),
+      sig, table(["Проект", "Описание", "Покупатель", "Тариф", "Статус", "Условия", ""], rows));
+  }
+
   function viewApplications() {
-    return api("/api/applications").then(function (r) {
+    return Promise.all([api("/api/applications"), api("/api/web-orders")]).then(function (res) {
+      var r = res[0];
       var rows = r.applications.map(function (a) {
         return tr([
           td(h("b", null, a.app_name), h("div", { class: "mute" }, "#" + a.id + " · " + a.kind + (a.commercial ? " · коммерческое" : ""))),
@@ -142,7 +175,7 @@
         ]);
       });
       return h("div", null, h("p", { class: "mute" }, "Возврат Stars делается в боте командой /refund; здесь заявка отклоняется, ключи отзываются, покупатель получает сообщение."),
-        table(["Проект", "Описание", "Покупатель", "Тариф", "Статус", ""], rows));
+        table(["Проект", "Описание", "Покупатель", "Тариф", "Статус", ""], rows), webOrdersBlock(res[1].orders));
     });
   }
 
@@ -169,8 +202,8 @@
   }
 
   // --- тарифы ---
-  var NUM = ["per_second", "per_minute", "per_day", "max_limit", "max_ids", "max_keys", "price_stars", "period_days"];
-  var NAMES = { per_second: "в секунду", per_minute: "в минуту", per_day: "в сутки", max_limit: "limit", max_ids: "ids", max_keys: "ключей", price_stars: "⭐", period_days: "дней" };
+  var NUM = ["per_second", "per_minute", "per_day", "max_limit", "max_ids", "max_keys", "price_stars", "price_usd_minor", "period_days"];
+  var NAMES = { per_second: "в секунду", per_minute: "в минуту", per_day: "в сутки", max_limit: "limit", max_ids: "ids", max_keys: "ключей", price_stars: "⭐", price_usd_minor: "цена, центы USD", period_days: "дней" };
   function viewTiers() {
     return api("/api/tiers").then(function (r) {
       var rows = r.tiers.map(function (t) {

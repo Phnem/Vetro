@@ -73,7 +73,7 @@ const publicKey = "SELECT k.id, k.key_prefix, k.tier, k.status, k.label, k.owner
 async function overview(env, now) {
   const today = day(now);
   const since = day(now - 13 * DAY);
-  const [keys, installs, usage, paid, apps, pending, top, recentInstalls] = await Promise.all([
+  const [keys, installs, usage, paid, apps, pending, top, recentInstalls, paidWeb] = await Promise.all([
     all(env.DB, "SELECT tier, status, COUNT(*) AS n FROM api_keys GROUP BY tier, status"),
     all(env.DB, "SELECT status, COUNT(*) AS n FROM installs GROUP BY status"),
     all(env.DB, "SELECT day, route, SUM(requests) AS n FROM usage_daily WHERE day >= ? GROUP BY day, route ORDER BY day", since),
@@ -82,8 +82,20 @@ async function overview(env, now) {
     one(env.DB, "SELECT COUNT(*) AS n FROM bot_outbox WHERE sent_at IS NULL"),
     all(env.DB, "SELECT u.key_id, k.label, k.tier, SUM(u.requests) AS n FROM usage_daily u LEFT JOIN api_keys k ON k.id = u.key_id WHERE u.day = ? GROUP BY u.key_id ORDER BY n DESC LIMIT 8", today),
     one(env.DB, "SELECT COUNT(*) AS n FROM installs WHERE last_seen >= ?", now - DAY),
+    // Доход сайта в центах США; тестовые заказы (provider = mock) не считаются. Таблиц сайта может ещё не быть в базе.
+    withoutWebTables(() => one(env.DB, "SELECT COUNT(*) AS orders, COALESCE(SUM(amount_minor), 0) AS usd_minor FROM web_orders WHERE status = 'paid' AND provider != 'mock' AND paid_at >= ?", now - 30 * DAY), { orders: 0, usd_minor: 0 }),
   ]);
-  return { today, keys, installs, installs_24h: recentInstalls?.n ?? 0, usage, paid_30d: paid, applications: apps, outbox_pending: pending?.n ?? 0, top_keys_today: top };
+  return { today, keys, installs, installs_24h: recentInstalls?.n ?? 0, usage, paid_30d: paid, paid_web_30d: paidWeb, applications: apps, outbox_pending: pending?.n ?? 0, top_keys_today: top };
+}
+
+/** Панель может быть выложена раньше, чем в базу применена schema/billing.sql: тогда «заказов сайта нет», а не 500. */
+async function withoutWebTables(fn, fallback) {
+  try {
+    return await fn();
+  } catch (e) {
+    if (/no such table/i.test(String(e?.message))) return fallback;
+    throw e;
+  }
 }
 
 // --- ключи ---------------------------------------------------------------------------------------------------------
@@ -170,6 +182,44 @@ async function setBan(env, actor, id, banned, now) {
   return { ok: true };
 }
 
+// --- заказы с сайта (tools/books-billing) --------------------------------------------------------------------------
+
+function webOrders(env) {
+  return withoutWebTables(() => all(env.DB,
+    "SELECT o.id, o.checkout_ref, o.tier, o.kind, o.provider, o.method, o.amount_minor, o.currency, o.status, o.note, o.email_failed, o.key_id, " +
+      "o.project_name, o.project_type, o.project_description, o.origins, o.created_at, o.paid_at, " +
+      "c.id AS customer_id, c.email, c.banned, " +
+      "s.signer, s.terms_hash, s.accepted_at, s.client_signed_at, (s.signature_svg IS NOT NULL) AS has_signature, k.key_prefix, k.status AS key_status " +
+      "FROM web_orders o JOIN web_customers c ON c.id = o.customer_id LEFT JOIN contract_signatures s ON s.order_id = o.id LEFT JOIN api_keys k ON k.id = o.key_id " +
+      "ORDER BY o.created_at DESC LIMIT 300"), []);
+}
+
+function toBase64(text) {
+  const bytes = new TextEncoder().encode(text);
+  let bin = "";
+  for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return btoa(bin);
+}
+
+/** Подпись отдаётся только как data:-адрес картинки: <img> не исполняет скрипты, в отличие от inline-SVG в окне владельца. */
+async function webSignature(env, orderId) {
+  const s = await withoutWebTables(() => one(env.DB, "SELECT signature_svg FROM contract_signatures WHERE order_id = ?", orderId), null);
+  if (!s) throw missing();
+  return { src: "data:image/svg+xml;base64," + toBase64(s.signature_svg) };
+}
+
+async function setWebBan(env, actor, id, banned, now) {
+  const c = await withoutWebTables(() => one(env.DB, "SELECT id FROM web_customers WHERE id = ?", id), null);
+  if (!c) throw missing();
+  await run(env.DB, "UPDATE web_customers SET banned = ? WHERE id = ?", banned ? 1 : 0, id);
+  // Как setBan для Telegram: бан отзывает активные ключи покупателя (owner web:<id> и ключи, выданные его заказами, в том числе тестовые).
+  if (banned) {
+    await run(env.DB, "UPDATE api_keys SET status = 'revoked', revoked_at = ? WHERE status = 'active' AND (owner = ? OR id IN (SELECT key_id FROM web_orders WHERE customer_id = ? AND key_id IS NOT NULL))", now, `web:${id}`, id);
+  }
+  await log(env, actor, banned ? "web_customer.ban" : "web_customer.unban", String(id), null, now);
+  return { ok: true };
+}
+
 async function message(env, actor, body, now) {
   const text = cleanText(body.text, 1000, true);
   await queue(env, Number(body.customer_id), esc(text), now);
@@ -209,7 +259,8 @@ async function toggleSignature(env, actor, body, now) {
 
 // --- тарифы --------------------------------------------------------------------------------------------------------
 
-const TIER_INTS = { per_second: 0, per_minute: 0, per_day: 0, max_limit: 1, max_ids: 1, max_keys: 0, price_stars: 0, period_days: 1, sort: 0 };
+// price_usd_minor: центы США за period_days для продажи на сайте (tools/books-billing); 0 = не продавать.
+const TIER_INTS = { per_second: 0, per_minute: 0, per_day: 0, max_limit: 1, max_ids: 1, max_keys: 0, price_stars: 0, price_usd_minor: 0, period_days: 1, sort: 0 };
 const TIER_FLAGS = ["allow_covers", "allow_index", "sold"];
 
 async function patchTier(env, actor, name, body, now) {
@@ -265,6 +316,8 @@ export async function handleApi(request, env, actor, now = Date.now()) {
       if (path === "/api/signatures") return [200, { signatures: await all(env.DB, "SELECT package, sha256, label, enabled FROM app_signatures ORDER BY package, label") }];
       if (path === "/api/tiers") return [200, { tiers: await all(env.DB, "SELECT * FROM tiers ORDER BY sort, name") }];
       if (path === "/api/orders") return [200, { orders: await all(env.DB, "SELECT o.id, o.application_id, a.app_name, o.tier, o.kind, o.stars, o.status, o.key_id, o.created_at, o.paid_at FROM orders o JOIN applications a ON a.id = o.application_id ORDER BY o.created_at DESC LIMIT 300") }];
+      if (path === "/api/web-orders") return [200, { orders: await webOrders(env) }];
+      if ((seg = path.match(/^\/api\/web-orders\/(\d+)\/signature$/))) return [200, await webSignature(env, Number(seg[1]))];
       if (path === "/api/log") return [200, { log: await all(env.DB, "SELECT id, at, actor, action, target, detail FROM admin_log ORDER BY id DESC LIMIT 200") }];
       return [404, { error: "not_found" }];
     }
@@ -275,6 +328,7 @@ export async function handleApi(request, env, actor, now = Date.now()) {
       if ((seg = path.match(/^\/api\/applications\/(\d+)$/)) && m === "PATCH") return [200, await patchApplication(env, actor, Number(seg[1]), await body(), now)];
       if ((seg = path.match(/^\/api\/applications\/(\d+)\/reject$/))) return [200, await rejectApplication(env, actor, Number(seg[1]), await body(), now)];
       if ((seg = path.match(/^\/api\/customers\/(\d+)\/(ban|unban)$/))) return [200, await setBan(env, actor, Number(seg[1]), seg[2] === "ban", now)];
+      if ((seg = path.match(/^\/api\/web-customers\/(\d+)\/(ban|unban)$/))) return [200, await setWebBan(env, actor, Number(seg[1]), seg[2] === "ban", now)];
       if (path === "/api/message") return [200, await message(env, actor, await body(), now)];
       if ((seg = path.match(/^\/api\/installs\/([^/]+)\/(revoke|restore)$/))) return [200, await setInstallStatus(env, actor, seg[1], seg[2] === "revoke" ? "revoked" : "active", now)];
       if (path === "/api/signatures" && m === "POST") return [200, await addSignature(env, actor, await body(), now)];
