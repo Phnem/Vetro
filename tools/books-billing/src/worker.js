@@ -3,6 +3,7 @@
 import { handleCheckout } from "./checkout.js";
 import { ApiError, json, isTest, preflight, readBody } from "./http.js";
 import { expirePending, processEvent } from "./issue.js";
+import { purgeOldUsage, sendExpiryReminders } from "./reminders.js";
 import { handleOrder } from "./order.js";
 import { providerByName } from "./providers/index.js";
 import { handleTestPay, handleTestPayPage } from "./testpay.js";
@@ -63,5 +64,7 @@ export default {
   async scheduled(_controller, env) {
     if (!env.DB) return;
     await expirePending(env);
+    await sendExpiryReminders(env);
+    await purgeOldUsage(env);
   },
 };

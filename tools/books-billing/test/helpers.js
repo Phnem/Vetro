@@ -69,6 +69,8 @@ export function body(over = {}) {
   return {
     plan: "pro",
     method: "card",
+    billing: (rest.method ?? "card") === "card" ? "subscription" : "one_time",
+    days: 30,
     lang: "en",
     policiesAccepted: true,
     email: "Buyer@Example.com ",

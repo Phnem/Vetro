@@ -15,11 +15,13 @@ CREATE TABLE IF NOT EXISTS web_orders (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   checkout_ref TEXT NOT NULL UNIQUE,     -- «ord_» + 32 hex (128 бит): это и есть orderId для сайта
   customer_id INTEGER NOT NULL REFERENCES web_customers(id),
-  kind TEXT NOT NULL DEFAULT 'new',      -- new | renew | upgrade (сайт пока шлёт только new)
+  kind TEXT NOT NULL DEFAULT 'new',      -- new | renew (повторная покупка того же проекта и тарифа) | upgrade (не используется)
+  billing TEXT NOT NULL,                 -- subscription (Polar, card, ежемесячно) | one_time (lava, usdt: пакет на days дней)
+  days INTEGER NOT NULL,                 -- срок оплаты: 30 для подписки, 30 | 90 | 180 | 365 для пакета
   tier TEXT NOT NULL REFERENCES tiers(name),
   provider TEXT NOT NULL,                -- mock | polar | lava | usdt
   method TEXT NOT NULL,                  -- то, что прислал сайт: card (Polar.sh) | lava (lava.top) | usdt (USDT, Solana)
-  amount_minor INTEGER NOT NULL,         -- берётся из tiers.price_usd_minor на сервере, не от клиента
+  amount_minor INTEGER NOT NULL,         -- центы США; считает сервер (подписка: tiers.price_usd_minor, пакет: сетка src/pricing.js), не клиент
   currency TEXT NOT NULL DEFAULT 'USD',
   provider_ref TEXT UNIQUE,              -- id платежа/события у провайдера; UNIQUE = повтор вебхука не выдаст второй ключ
   status TEXT NOT NULL DEFAULT 'pending',-- pending | paid | failed | refunded | expired
@@ -49,4 +51,35 @@ CREATE TABLE IF NOT EXISTS contract_signatures (
   client_signed_at TEXT,                 -- время браузера, не доверенное, хранится отдельно
   accepted_at INTEGER NOT NULL,          -- серверное время приёма условий, мс
   lang TEXT
+);
+
+-- Подписка у провайдера (Polar: ежемесячная). Создаётся при первой оплате, дальше события продлевают ключ заказа-источника.
+CREATE TABLE IF NOT EXISTS web_subscriptions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  sub_ref TEXT NOT NULL UNIQUE,          -- id подписки у провайдера
+  provider TEXT NOT NULL,
+  order_id INTEGER NOT NULL REFERENCES web_orders(id), -- заказ-источник; ключ = web_orders.key_id
+  status TEXT NOT NULL DEFAULT 'active', -- active | canceled (продлений не будет, доступ до конца периода) | revoked (доступ закончен)
+  note TEXT,                             -- renewal_mismatch | key_revoked | ...
+  created_at INTEGER NOT NULL,
+  canceled_at INTEGER
+);
+CREATE INDEX IF NOT EXISTS web_subscriptions_order ON web_subscriptions(order_id);
+
+-- Подтверждённые продления подписки (каждое = +1 месяц к тому же ключу). UNIQUE(provider_ref) = повтор вебхука ничего не продлевает.
+CREATE TABLE IF NOT EXISTS web_renewals (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  subscription_id INTEGER NOT NULL REFERENCES web_subscriptions(id),
+  provider_ref TEXT NOT NULL UNIQUE,
+  amount_minor INTEGER NOT NULL,
+  status TEXT NOT NULL DEFAULT 'paid',   -- paid | refunded
+  paid_at INTEGER NOT NULL
+);
+
+-- Напоминания «ключ-пакет заканчивается через 3 дня»: одно на значение expires_at, поэтому после продления напомнит снова.
+CREATE TABLE IF NOT EXISTS web_reminders (
+  key_id TEXT NOT NULL,
+  expires_at INTEGER NOT NULL,
+  sent_at INTEGER NOT NULL,
+  PRIMARY KEY (key_id, expires_at)
 );

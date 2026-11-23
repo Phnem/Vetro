@@ -1,5 +1,6 @@
 // Серверная проверка тела checkout. Клиентская проверка на сайте — только удобство, эта — главная.
 import { ApiError } from "./http.js";
+import { BILLING_BY_METHOD, PACK_DAYS } from "./pricing.js";
 import { sanitizeSignatureSvg, SvgError } from "./svg.js";
 
 // card = Polar.sh (международные карты), lava = lava.top (местные способы), usdt = USDT в сети Solana.
@@ -61,6 +62,14 @@ export function validateCheckout(body) {
 
   if (typeof plan !== "string" || !PLAN_RE.test(plan)) throw bad("plan");
   if (typeof method !== "string" || !METHODS.includes(method)) throw new ApiError(400, "bad_method");
+  // card <=> подписка (30 дней), lava | usdt <=> пакет на 30 / 90 / 180 / 365 дней.
+  const billing = body.billing;
+  if (billing !== BILLING_BY_METHOD[method]) throw bad("billing");
+  const days = body.days;
+  if (billing === "subscription" ? days !== 30 : !PACK_DAYS.includes(days)) throw bad("days");
+  // Сумма с сайта только для сверки с ценой, которую считает сервер.
+  const expected = body.expectedAmountUsd;
+  if (expected !== undefined && (typeof expected !== "number" || !Number.isFinite(expected) || expected < 0)) throw bad("expectedAmountUsd");
   if (lang !== "en" && lang !== "ru") throw bad("lang");
 
   if (typeof email !== "string") throw bad("email");
@@ -101,6 +110,9 @@ export function validateCheckout(body) {
   return {
     plan,
     method,
+    billing,
+    days,
+    expectedAmountUsd: expected,
     lang,
     email: mail,
     project: { name, type: project.type, description, domains: hosts },

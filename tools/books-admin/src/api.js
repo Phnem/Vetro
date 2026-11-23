@@ -83,7 +83,12 @@ async function overview(env, now) {
     all(env.DB, "SELECT u.key_id, k.label, k.tier, SUM(u.requests) AS n FROM usage_daily u LEFT JOIN api_keys k ON k.id = u.key_id WHERE u.day = ? GROUP BY u.key_id ORDER BY n DESC LIMIT 8", today),
     one(env.DB, "SELECT COUNT(*) AS n FROM installs WHERE last_seen >= ?", now - DAY),
     // Доход сайта в центах США; тестовые заказы (provider = mock) не считаются. Таблиц сайта может ещё не быть в базе.
-    withoutWebTables(() => one(env.DB, "SELECT COUNT(*) AS orders, COALESCE(SUM(amount_minor), 0) AS usd_minor FROM web_orders WHERE status = 'paid' AND provider != 'mock' AND paid_at >= ?", now - 30 * DAY), { orders: 0, usd_minor: 0 }),
+    withoutWebTables(async () => {
+      // Заказы (первая оплата или пакет) и продления подписки; тестовые заказы (provider = mock) не считаются.
+      const o = await one(env.DB, "SELECT COUNT(*) AS n, COALESCE(SUM(amount_minor), 0) AS usd FROM web_orders WHERE status = 'paid' AND provider != 'mock' AND paid_at >= ?", now - 30 * DAY);
+      const r = await one(env.DB, "SELECT COUNT(*) AS n, COALESCE(SUM(r.amount_minor), 0) AS usd FROM web_renewals r JOIN web_subscriptions s ON s.id = r.subscription_id WHERE r.status = 'paid' AND s.provider != 'mock' AND r.paid_at >= ?", now - 30 * DAY);
+      return { orders: o.n + r.n, usd_minor: o.usd + r.usd };
+    }, { orders: 0, usd_minor: 0 }),
   ]);
   return { today, keys, installs, installs_24h: recentInstalls?.n ?? 0, usage, paid_30d: paid, paid_web_30d: paidWeb, applications: apps, outbox_pending: pending?.n ?? 0, top_keys_today: top };
 }
@@ -186,7 +191,7 @@ async function setBan(env, actor, id, banned, now) {
 
 function webOrders(env) {
   return withoutWebTables(() => all(env.DB,
-    "SELECT o.id, o.checkout_ref, o.tier, o.kind, o.policies_accepted_at, o.provider, o.method, o.amount_minor, o.currency, o.status, o.note, o.email_failed, o.key_id, " +
+    "SELECT o.id, o.checkout_ref, o.tier, o.kind, o.billing, o.days, o.policies_accepted_at, (SELECT ws.status FROM web_subscriptions ws WHERE ws.order_id = o.id) AS sub_status, o.provider, o.method, o.amount_minor, o.currency, o.status, o.note, o.email_failed, o.key_id, " +
       "o.project_name, o.project_type, o.project_description, o.origins, o.created_at, o.paid_at, " +
       "c.id AS customer_id, c.email, c.banned, " +
       "s.signer, s.terms_hash, s.refund_hash, s.privacy_hash, s.accepted_at, s.client_signed_at, (s.signature_svg IS NOT NULL) AS has_signature, k.key_prefix, k.status AS key_status, " +
@@ -220,8 +225,10 @@ async function refundWebOrder(env, actor, id, now) {
   const renewal = o.kind === "renew";
   await run(env.DB, "UPDATE web_orders SET status = 'refunded', note = ? WHERE id = ?", renewal ? "refunded_renewal_manual" : "refunded_manual", id);
   if (o.key_id && !renewal) await run(env.DB, "UPDATE api_keys SET status = 'revoked', revoked_at = ? WHERE id = ? AND status != 'revoked'", now, o.key_id);
+  // Подписка Polar отменяется у провайдера; здесь только отмечаем состояние, чтобы продления не считались.
+  await run(env.DB, "UPDATE web_subscriptions SET status = 'canceled', canceled_at = COALESCE(canceled_at, ?) WHERE order_id = ? AND status = 'active'", now, id);
   await log(env, actor, "web_order.refund", String(id), { renewal }, now);
-  return { ok: true, note: renewal ? "Заказ отмечен возвращённым. Срок ключа поправьте вручную (минус 30 дней)." : "Заказ отмечен возвращённым, ключ отозван. Деньги возвращаются у провайдера." };
+  return { ok: true, note: renewal ? "Заказ отмечен возвращённым. Срок ключа поправьте вручную (минус 30 дней)." : "Заказ отмечен возвращённым, ключ отозван. Деньги возвращаются у провайдера; подписку в Polar отмените там же." };
 }
 
 async function setWebBan(env, actor, id, banned, now) {

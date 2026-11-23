@@ -200,8 +200,8 @@ function seedWeb(sqlite) {
   sqlite.exec("INSERT INTO web_customers (id, email, language, banned, created_at) VALUES (1, 'buyer@example.com', 'en', 0, 1)");
   sqlite.exec("INSERT INTO api_keys (id, key_hash, key_prefix, tier, status, owner, created_at, expires_at) VALUES ('k_111111111111', 'h-web1', 'vk_pro_zzzz…', 'pro', 'active', 'web:1', 1, 99999999999999)");
   sqlite.exec("INSERT INTO api_keys (id, key_hash, key_prefix, tier, status, owner, created_at, expires_at) VALUES ('k_222222222222', 'h-web2', 'vk_pro_yyyy…', 'pro', 'active', 'web:test', 1, 99999999999999)");
-  const order = sqlite.prepare("INSERT INTO web_orders (checkout_ref, customer_id, tier, provider, method, amount_minor, status, key_id, project_name, project_type, project_description, origins, email_failed, note, created_at, paid_at, policies_accepted_at) " +
-    "VALUES (?, 1, 'pro', ?, 'card', 700, 'paid', ?, ?, 'site', 'A <b>site</b> description', '[\"example.com\"]', ?, ?, ?, ?, 5)");
+  const order = sqlite.prepare("INSERT INTO web_orders (checkout_ref, customer_id, tier, provider, method, billing, days, amount_minor, status, key_id, project_name, project_type, project_description, origins, email_failed, note, created_at, paid_at, policies_accepted_at) " +
+    "VALUES (?, 1, 'pro', ?, 'card', 'subscription', 30, 700, 'paid', ?, ?, 'site', 'A <b>site</b> description', '[\"example.com\"]', ?, ?, ?, ?, 5)");
   order.run("ord_" + "a".repeat(32), "paddle", "k_111111111111", "My <img src=x onerror=alert(1)>", 1, null, NOW - 1000, NOW - 500);
   order.run("ord_" + "b".repeat(32), "mock", "k_222222222222", "Test project", 0, null, NOW - 900, NOW - 400);
   sqlite.exec(`INSERT INTO contract_signatures (order_id, signer, terms_hash, refund_hash, privacy_hash, signature_svg, client_signed_at, accepted_at, lang) VALUES (1, 'Ivan Petrov', 'f3bee9bb6eb9', 'a1b2c3d4e5f6', '0123456789ab', '${SVG}', '2026-11-23T11:59:00.000Z', 5, 'en')`);
@@ -306,4 +306,18 @@ test("ручной возврат: заказ refunded, ключ отозван,
   assert.equal((await call(env, "/api/web-orders/2/refund", { method: "POST", body: {} })).status, 200);
   assert.equal(sqlite.prepare("SELECT status FROM api_keys WHERE id = 'k_222222222222'").get().status, "active", "ключ продления не отзывается");
   assert.match(JSON.stringify(sqlite.prepare("SELECT * FROM admin_log").all()), /web_order\.refund/);
+});
+
+test("обзор: доход сайта включает продления подписки (кроме тестовых), у заказа виден статус подписки", async () => {
+  const { env, sqlite } = freshEnv();
+  seedWeb(sqlite);
+  sqlite.exec("INSERT INTO web_subscriptions (id, sub_ref, provider, order_id, status, created_at) VALUES (1, 'sub_1', 'paddle', 1, 'active', 1)");
+  sqlite.exec(`INSERT INTO web_renewals (subscription_id, provider_ref, amount_minor, status, paid_at) VALUES (1, 'i1', 700, 'paid', ${NOW - 100}), (1, 'i2', 700, 'refunded', ${NOW - 100})`);
+  assert.deepEqual((await call(env, "/api/overview")).data.paid_web_30d, { orders: 2, usd_minor: 1400 });
+  const o = (await call(env, "/api/web-orders")).data.orders.find((x) => x.provider === "paddle");
+  assert.equal(o.sub_status, "active");
+  assert.equal(o.billing, "subscription");
+  assert.equal(o.days, 30);
+  await call(env, "/api/web-orders/1/refund", { method: "POST", body: {} });
+  assert.equal(sqlite.prepare("SELECT status FROM web_subscriptions").get().status, "canceled", "ручной возврат гасит подписку в учёте");
 });

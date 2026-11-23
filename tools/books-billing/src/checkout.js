@@ -2,6 +2,7 @@
 // Всё, что можно проверить без записи, проверяется до первой записи в D1: 503 method_unavailable не оставляет в базе ничего.
 import { ApiError, json, limited, readBody, returnUrl } from "./http.js";
 import { newOrderRef } from "./keys.js";
+import { packPriceMinor } from "./pricing.js";
 import { providerForMethod } from "./providers/index.js";
 import { validateCheckout } from "./validate.js";
 
@@ -53,6 +54,10 @@ export async function handleCheckout(request, env, deps = {}) {
   // Цена и «продаётся» берутся из tiers, не от клиента.
   const tier = await one(db, "SELECT * FROM tiers WHERE name = ?1", v.plan);
   if (!tier || Number(tier.sold) !== 1 || !(Number(tier.price_usd_minor) > 0)) throw new ApiError(400, "bad_field", { field: "plan" });
+  // Подписка: цена из tiers; пакет: сетка в src/pricing.js. Сумма с сайта только сверяется.
+  const priceMinor = v.billing === "subscription" ? Number(tier.price_usd_minor) : packPriceMinor(tier.name, v.days);
+  if (!(priceMinor > 0)) throw new ApiError(400, "bad_field", { field: "plan" });
+  if (v.expectedAmountUsd !== undefined && Math.round(v.expectedAmountUsd * 100) !== priceMinor) throw new ApiError(400, "price_mismatch");
 
   if (await limited(env.LIMITER_CHECKOUT ?? env.LIMITER, "co", request)) throw new ApiError(429, "rate_limited");
 
@@ -67,6 +72,10 @@ export async function handleCheckout(request, env, deps = {}) {
     if (Number(recent?.n ?? 0) >= ORDERS_PER_EMAIL_HOUR) throw new ApiError(429, "rate_limited");
     // Повторная покупка того же проекта на том же тарифе = продление существующего ключа (max(now, expires_at) + 30 дней), а не новый ключ.
     renewKeyId = await findRenewKey(db, existing.id, tier.name, v.project.name);
+    // Ключ уже оплачивается подпиской: второй заказ на него не нужен (он удвоил бы списания).
+    if (renewKeyId && (await one(db, "SELECT 1 AS x FROM web_subscriptions s JOIN web_orders o ON o.id = s.order_id WHERE s.status = 'active' AND o.key_id = ?1", renewKeyId))) {
+      throw new ApiError(409, "subscription_active");
+    }
     if (!renewKeyId && (await countActiveKeys(db, existing.id, now)) >= Number(tier.max_keys)) throw new ApiError(409, "key_limit");
   }
 
@@ -81,11 +90,11 @@ export async function handleCheckout(request, env, deps = {}) {
   await db.batch([
     db
       .prepare(
-        "INSERT INTO web_orders (checkout_ref, customer_id, kind, renew_key_id, tier, provider, method, amount_minor, currency, status, " +
+        "INSERT INTO web_orders (checkout_ref, customer_id, kind, renew_key_id, tier, provider, method, billing, days, amount_minor, currency, status, " +
           "project_name, project_type, project_description, origins, policies_accepted_at, created_at) " +
-          "VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 'USD', 'pending', ?9, ?10, ?11, ?12, ?13, ?14)",
+          "VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, 'USD', 'pending', ?11, ?12, ?13, ?14, ?15, ?16)",
       )
-      .bind(ref, customer.id, renewKeyId ? "renew" : "new", renewKeyId, tier.name, provider.name, v.method, Number(tier.price_usd_minor), v.project.name, v.project.type, v.project.description, origins, now, now),
+      .bind(ref, customer.id, renewKeyId ? "renew" : "new", renewKeyId, tier.name, provider.name, v.method, v.billing, v.days, priceMinor, v.project.name, v.project.type, v.project.description, origins, now, now),
     db
       .prepare(
         "INSERT INTO contract_signatures (order_id, signer, terms_hash, refund_hash, privacy_hash, signature_svg, client_signed_at, accepted_at, lang) " +

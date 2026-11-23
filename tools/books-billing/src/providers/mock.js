@@ -17,7 +17,7 @@ export const mock = {
 
   /**
    * Разбор вебхука: сначала подпись по сырому телу, потом JSON. Возвращает событие или null (подпись неверна/не настроена).
-   * Тело: { type: "paid"|"refunded"|"failed", orderId, paymentId, amountMinor, currency, tier }.
+   * Тело: { type: "paid"|"renewed"|"canceled"|"revoked"|"refunded"|"failed", orderId, paymentId, amountMinor, currency, tier, subscriptionId, periodEnd }.
    */
   async parseWebhook(request, rawBody, env) {
     const secret = env.MOCK_WEBHOOK_SECRET;
@@ -32,6 +32,14 @@ export const mock = {
       amountMinor: b.amountMinor,
       currency: b.currency,
       tier: b.tier,
+      subscriptionId: b.subscriptionId,
+      subRef: b.subscriptionId,
+      periodEnd: b.periodEnd,
     };
+  },
+
+  /** Отмена подписки при возврате. У mock отмена только записывается (env.MOCK_CANCELLED), чтобы это видели тесты. */
+  async cancelSubscription(env, subRef) {
+    env.MOCK_CANCELLED?.push(subRef);
   },
 };

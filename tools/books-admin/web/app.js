@@ -139,7 +139,7 @@
     var sig = h("div", { class: "box", hidden: true });
     var rows = orders.map(function (o) {
       return tr([
-        td(h("b", null, o.project_name), h("div", { class: "mute" }, "#" + o.id + " · " + o.kind + " · " + o.project_type + " · " + o.provider + "/" + o.method), h("div", { class: "mute" }, o.checkout_ref),
+        td(h("b", null, o.project_name), h("div", { class: "mute" }, "#" + o.id + " · " + o.kind + " · " + (o.billing === "subscription" ? "подписка" + (o.sub_status ? " (" + o.sub_status + ")" : "") : o.days + " дн.") + " · " + o.project_type + " · " + o.provider + "/" + o.method), h("div", { class: "mute" }, o.checkout_ref),
           o.origins ? h("div", { class: "mute" }, JSON.parse(o.origins).join(", ")) : null),
         td(o.project_description),
         td(o.email, h("div", { class: "mute" }, o.banned ? "забанен" : "")),

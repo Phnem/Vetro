@@ -290,7 +290,10 @@ test("mock test pay page: pay → key via the same issuance as the webhook → r
   const again = await call(env, "/v1/billing/test/pay", { method: "POST", raw: `order=${ref}` });
   assert.equal(again.status, 303, "pressing twice is harmless");
   assert.equal(count(env, "api_keys"), 1);
-  assert.match((await call(env, `/v1/billing/test/pay?order=${ref}`)).text, /already processed/);
+  assert.match((await call(env, `/v1/billing/test/pay?order=${ref}`)).text, /Renewal \(test\)/, "a paid subscription offers the renewal and cancel events");
+  const pack = (await checkout(env, { email: "pack@example.com", method: "usdt", days: 90 })).data.orderId;
+  await call(env, "/v1/billing/test/pay", { method: "POST", raw: `order=${pack}` });
+  assert.match((await call(env, `/v1/billing/test/pay?order=${pack}`)).text, /already processed/);
 });
 
 test("the test pay page answers 404 outside test mode and for unknown or foreign orders", async () => {
