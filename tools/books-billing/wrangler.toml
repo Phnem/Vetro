@@ -19,7 +19,7 @@ database_id = "5574b392-dfb0-4ab6-9afc-336993d7947a"
 # Создать: npx wrangler kv namespace create REVEAL  -> вписать id сюда.
 [[kv_namespaces]]
 binding = "REVEAL"
-id = "REPLACE_WITH_KV_ID"
+id = "1a41690d91c4410580982d5bb868b5d8"
 
 # Ограничители по IP. Привязки не хранят историю адресов.
 # LIMITER: опрос заказа страницей успеха (раз в 3 с, до 40 раз за заказ). LIMITER_CHECKOUT: создание заказов.
