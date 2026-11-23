@@ -2,7 +2,9 @@
 import { ApiError } from "./http.js";
 import { sanitizeSignatureSvg, SvgError } from "./svg.js";
 
-export const METHODS = ["card", "usdt", "ru"]; // ru зарезервирован под российские карты; включён ли метод, решает реестр провайдеров
+// card = Polar.sh (международные карты), lava = lava.top (местные способы), usdt = USDT в сети Solana.
+// Включён ли метод, решает реестр провайдеров (providers/index.js), а не этот список.
+export const METHODS = ["card", "lava", "usdt"];
 export const PROJECT_TYPES = ["site", "app", "server", "other"];
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -53,7 +55,9 @@ function domains(v, type) {
 /** Возвращает очищенные значения или бросает ApiError(400, bad_field | bad_method | bad_signature). */
 export function validateCheckout(body) {
   if (!isObj(body)) throw bad("body");
-  const { plan, method, lang, email, project, contract } = body;
+  const { plan, method, lang, email, project, contract, policiesAccepted } = body;
+  // Чекбокс «Terms, Privacy, Refund, цифровая услуга активируется сразу после оплаты»: без него заказ не создаётся.
+  if (policiesAccepted !== true) throw bad("policiesAccepted");
 
   if (typeof plan !== "string" || !PLAN_RE.test(plan)) throw bad("plan");
   if (typeof method !== "string" || !METHODS.includes(method)) throw new ApiError(400, "bad_method");
@@ -72,6 +76,15 @@ export function validateCheckout(body) {
   if (!isObj(contract)) throw bad("contract");
   const signer = text(contract.signer, 2, 80, "signer");
   if (typeof contract.termsVersion !== "string" || !TERMS_RE.test(contract.termsVersion)) throw bad("termsVersion");
+  // Версии трёх документов (первые 12 hex SHA-256 английского текста); termsVersion обязан совпадать с documents.terms.
+  if (!isObj(contract.documents)) throw bad("documents");
+  const documents = {};
+  for (const k of ["terms", "refund", "privacy"]) {
+    const v = contract.documents[k];
+    if (typeof v !== "string" || !TERMS_RE.test(v)) throw bad("documents");
+    documents[k] = v;
+  }
+  if (documents.terms !== contract.termsVersion) throw bad("termsVersion");
   // Время браузера не доверенное: сохраняем как отдельное поле, если оно читается как дата, иначе не сохраняем.
   let signedAt = null;
   if (typeof contract.signedAt === "string" && contract.signedAt.length <= 40 && Number.isFinite(Date.parse(contract.signedAt))) {
@@ -91,6 +104,6 @@ export function validateCheckout(body) {
     lang,
     email: mail,
     project: { name, type: project.type, description, domains: hosts },
-    contract: { signer, signedAt, termsVersion: contract.termsVersion, signatureSvg },
+    contract: { signer, signedAt, documents, signatureSvg },
   };
 }

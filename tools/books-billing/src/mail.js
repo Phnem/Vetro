@@ -53,6 +53,25 @@ export function composeKeyEmail({ lang, signer, plan, expiresAt, key, domains })
   };
 }
 
+/** ЧЕРНОВИК текста (владелец согласует с сайтом): продление уже выданного ключа, сам ключ не повторяется. */
+export function composeRenewalEmail({ lang, signer, plan, expiresAt, prefix }) {
+  const date = fmtUtc(expiresAt);
+  if (lang === "ru") {
+    return {
+      subject: "Ваш ключ Vetro API продлён",
+      text:
+        `Здравствуйте, ${signer}!\n\nСпасибо за заказ. Ключ ${prefix} (тариф ${plan}) продлён и действует до ${date} UTC.\n` +
+        `Сам ключ не изменился: используйте тот же.\n\nЕсть вопрос? Напишите владельцу: https://t.me/Vetro_chat\n— Vetro Studio\n`,
+    };
+  }
+  return {
+    subject: "Your Vetro API key is extended",
+    text:
+      `Hello, ${signer}!\n\nThank you for your order. Your key ${prefix} (${plan}) is extended and valid until ${date} UTC.\n` +
+      `The key itself is unchanged: keep using the same one.\n\nQuestions? Write to the owner: https://t.me/Vetro_chat\n— Vetro Studio\n`,
+  };
+}
+
 /**
  * Отправка с тремя попытками. Возвращает "sent" | "skipped" (транспорта нет, тестовый режим) | "failed".
  * Ошибки транспорта не логируются: в них могут быть адрес получателя и тело письма с ключом.

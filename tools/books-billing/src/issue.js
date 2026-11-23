@@ -4,7 +4,7 @@
 //  (6) возврат/спор → ключ revoked, заказ refunded.
 import { isTest } from "./http.js";
 import { newApiKey } from "./keys.js";
-import { composeKeyEmail, sendKeyEmail } from "./mail.js";
+import { composeKeyEmail, composeRenewalEmail, sendKeyEmail } from "./mail.js";
 
 const DAY = 86_400_000;
 export const REVEAL_TTL = 600;
@@ -54,7 +54,12 @@ async function fulfilPaid(env, providerName, event, deps) {
   if (event.amountMinor !== order.amount_minor) return reject(db, order, event, "mismatch_amount");
   if (event.currency !== order.currency) return reject(db, order, event, "mismatch_currency");
   if (event.tier !== order.tier) return reject(db, order, event, "mismatch_tier");
-  if (order.kind !== "new") return reject(db, order, event, "unsupported_kind");
+  if (order.kind !== "new" && order.kind !== "renew") return reject(db, order, event, "unsupported_kind");
+  if (order.kind === "renew") {
+    // Ключ, который продлевается, мог быть отозван (нарушение, бан) уже после checkout: тогда продлевать нечего.
+    const target = await one(db, "SELECT status FROM api_keys WHERE id = ?1", order.renew_key_id);
+    if (!target || target.status !== "active") return reject(db, order, event, "renew_target_revoked");
+  }
 
   const customer = await one(db, "SELECT * FROM web_customers WHERE id = ?1", order.customer_id);
   if (!customer || customer.banned === 1) return reject(db, order, event, "banned");
@@ -97,7 +102,44 @@ async function resume(env, order, event, deps, now) {
   return issue(env, order, tier, customer, contract, deps, now);
 }
 
+/** Продление: expires_at = max(now, expires_at) + период, считается в SQL (два продления подряд не затирают друг друга). Новый ключ не создаётся. */
+async function renew(env, order, tier, customer, contract, deps, now) {
+  const db = env.DB;
+  const period = isTest(env) ? DAY : tier.period_days * DAY;
+  const [ext, link] = await db.batch([
+    db
+      .prepare(
+        "UPDATE api_keys SET expires_at = MAX(?1, COALESCE(expires_at, ?1)) + ?2 WHERE id = ?3 AND status = 'active' " +
+          "AND EXISTS (SELECT 1 FROM web_orders WHERE id = ?4 AND status = 'paid' AND key_id IS NULL AND renew_key_id = ?3)",
+      )
+      .bind(now, period, order.renew_key_id, order.id),
+    db
+      .prepare(
+        "UPDATE web_orders SET key_id = renew_key_id WHERE id = ?1 AND status = 'paid' AND key_id IS NULL " +
+          "AND EXISTS (SELECT 1 FROM api_keys WHERE id = web_orders.renew_key_id AND status = 'active')",
+      )
+      .bind(order.id),
+  ]);
+  if (changes(ext) !== 1 || changes(link) !== 1) return { result: "duplicate" };
+  const key = await one(db, "SELECT key_prefix, expires_at FROM api_keys WHERE id = ?1", order.renew_key_id);
+  const task = deliverRenewal(env, order, tier, customer, contract, key, deps);
+  if (deps.waitUntil) deps.waitUntil(task);
+  else await task;
+  return { result: "renewed", keyId: order.renew_key_id };
+}
+
+async function deliverRenewal(env, order, tier, customer, contract, key, deps) {
+  try {
+    const mail = composeRenewalEmail({ lang: contract.lang ?? customer.language ?? "en", signer: contract.signer, plan: tier.title ?? tier.name, expiresAt: key.expires_at, prefix: key.key_prefix });
+    const status = await sendKeyEmail(env, { to: customer.email, ...mail }, { fetchImpl: deps.fetchImpl, sleep: deps.sleep });
+    if (status === "failed") await run(env.DB, "UPDATE web_orders SET email_failed = 1 WHERE id = ?1", order.id);
+  } catch {
+    await run(env.DB, "UPDATE web_orders SET email_failed = 1 WHERE id = ?1", order.id).catch(() => {});
+  }
+}
+
 async function issue(env, order, tier, customer, contract, deps, now) {
+  if (order.kind === "renew") return renew(env, order, tier, customer, contract, deps, now);
   const db = env.DB;
   const test = isTest(env);
   const key = await newApiKey(tier.name);
@@ -157,8 +199,14 @@ async function refundOrder(env, providerName, event, deps) {
   if (!order || order.provider !== providerName) return { result: "unknown_order" };
   if (order.status !== "paid") return { result: order.status === "refunded" ? "duplicate" : "ignored" };
   // Как markOrderRefunded у бота: заказ → refunded, ключ → revoked. Пометка для владельца — в note.
-  await run(db, "UPDATE web_orders SET status = 'refunded', note = 'refunded' WHERE id = ?1 AND status = 'paid'", order.id);
-  if (order.key_id) {
+  await run(db, "UPDATE web_orders SET status = 'refunded', note = ?1 WHERE id = ?2 AND status = 'paid'", order.kind === "renew" ? "refunded_renewal" : "refunded", order.id);
+  if (order.key_id && order.kind === "renew") {
+    // Возврат продления забирает только оплаченные им дни; если срок после этого вышел, ключ отзывается.
+    const tier = await one(db, "SELECT period_days FROM tiers WHERE name = ?1", order.tier);
+    const period = isTest(env) ? DAY : (tier?.period_days ?? 30) * DAY;
+    await run(db, "UPDATE api_keys SET expires_at = expires_at - ?1 WHERE id = ?2 AND expires_at IS NOT NULL", period, order.key_id);
+    await run(db, "UPDATE api_keys SET status = 'revoked', revoked_at = ?1 WHERE id = ?2 AND status = 'active' AND expires_at <= ?1", now, order.key_id);
+  } else if (order.key_id) {
     await run(db, "UPDATE api_keys SET status = 'revoked', revoked_at = ?1 WHERE id = ?2 AND status != 'revoked'", now, order.key_id);
   }
   try {

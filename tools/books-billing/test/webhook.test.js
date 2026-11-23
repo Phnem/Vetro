@@ -136,7 +136,7 @@ test("the signature of the webhook is checked before anything else", async () =>
 
 test("webhook routing: unknown or unconfigured providers and wrong methods", async () => {
   const env = makeEnv();
-  for (const name of ["paddle", "usdt", "ru", "crypto", "nobody"]) {
+  for (const name of ["polar", "lava", "usdt", "paddle", "crypto", "nobody"]) {
     assert.equal((await call(env, `/v1/billing/webhook/${name}`, { method: "POST", raw: "{}" })).status, 404, name);
   }
   assert.equal((await call(env, "/v1/billing/webhook/mock", { method: "GET" })).status, 405);
@@ -152,7 +152,7 @@ test("an unknown order or an order of another provider is ignored", async () => 
   const res = await mockWebhook(env, paidEvent("ord_" + "0".repeat(32)));
   assert.equal(res.status, 200);
   assert.equal(res.data.result, "unknown_order");
-  env.sqlite.exec("UPDATE web_orders SET provider = 'paddle'");
+  env.sqlite.exec("UPDATE web_orders SET provider = 'polar'");
   assert.equal((await mockWebhook(env, paidEvent(order))).data.result, "unknown_order");
   assert.equal(count(env, "api_keys"), 0);
 });
@@ -306,7 +306,7 @@ test("the test pay page answers 404 outside test mode and for unknown or foreign
   assert.equal((await call(env, "/v1/billing/test/pay")).status, 404);
   assert.equal((await call(env, "/v1/billing/test/pay?order=%3Cscript%3E")).status, 404);
   assert.equal((await call(env, "/v1/billing/test/pay", { method: "POST", raw: "order=nope" })).status, 404);
-  env.sqlite.exec("UPDATE web_orders SET provider = 'paddle'");
+  env.sqlite.exec("UPDATE web_orders SET provider = 'polar'");
   assert.equal((await call(env, `/v1/billing/test/pay?order=${ref}`)).status, 404, "only mock orders can be paid on the test page");
   assert.equal(count(env, "api_keys"), 0);
 });
@@ -317,4 +317,87 @@ test("the browser return alone never issues a key: only a provider event does", 
   for (let i = 0; i < 3; i++) await call(env, `/v1/billing/order/${ref}`);
   assert.equal(count(env, "api_keys"), 0);
   assert.equal(getOrderRow(env, ref).status, "pending");
+});
+
+// --- продление повторной покупкой ----------------------------------------------------------------------------------
+
+async function boughtAndRenewOrdered(env, { plan = "basic" } = {}) {
+  const first = await placed(env, { plan });
+  await mockWebhook(env, paidEvent(first, { paymentId: "first" }));
+  const keyId = getOrderRow(env, first.checkout_ref).key_id;
+  const second = await placed(env, { plan });
+  return { first, second, keyId };
+}
+
+test("a renewal pays max(now, expires_at) + period onto the same key and creates no second key (live: 30 days)", async () => {
+  const env = makeEnv();
+  const { second, keyId } = await boughtAndRenewOrdered(env);
+  env.BILLING_MODE = "live";
+  const exp = (id) => env.sqlite.prepare("SELECT expires_at FROM api_keys WHERE id = ?").get(id).expires_at;
+  env.sqlite.prepare("UPDATE api_keys SET expires_at = ? WHERE id = ?").run(T0 + 10 * DAY, keyId);
+  const ev = { type: "paid", checkoutRef: second.checkout_ref, providerRef: "ren1", amountMinor: 300, currency: "USD", tier: "basic" };
+  assert.equal((await processEvent(env, "mock", ev, { now: T0 + DAY })).result, "renewed");
+  assert.equal(exp(keyId), T0 + 40 * DAY, "unexpired key: the period is added to the old end");
+  assert.equal(count(env, "api_keys"), 1);
+  const row = getOrderRow(env, second.checkout_ref);
+  assert.equal(row.status, "paid");
+  assert.equal(row.key_id, keyId);
+  assert.equal(env.REVEAL.m.size, 1, "only the first order's one-time copy is left; the renewal added none");
+
+  assert.equal((await processEvent(env, "mock", ev, { now: T0 + DAY })).result, "duplicate", "a replay extends nothing");
+  assert.equal(exp(keyId), T0 + 40 * DAY);
+});
+
+test("renewing an expired key counts from now; the order page says renewed and shows no key", async () => {
+  const env = makeEnv();
+  const { second, keyId } = await boughtAndRenewOrdered(env);
+  env.sqlite.prepare("UPDATE api_keys SET expires_at = ? WHERE id = ?").run(T0 - 5 * DAY, keyId);
+  assert.equal((await mockWebhook(env, paidEvent(second, { paymentId: "ren2" }))).data.result, "renewed");
+  assert.equal(env.sqlite.prepare("SELECT expires_at FROM api_keys WHERE id = ?").get(keyId).expires_at, T0 + DAY, "test mode period is one day");
+  assert.deepEqual((await call(env, `/v1/billing/order/${second.checkout_ref}`)).data, { status: "paid", renewed: true });
+});
+
+test("a key revoked between checkout and payment is not renewed: the order fails with a note", async () => {
+  const env = makeEnv();
+  const { second, keyId } = await boughtAndRenewOrdered(env);
+  env.sqlite.prepare("UPDATE api_keys SET status = 'revoked' WHERE id = ?").run(keyId);
+  assert.equal((await mockWebhook(env, paidEvent(second, { paymentId: "ren3" }))).data.result, "rejected");
+  const row = getOrderRow(env, second.checkout_ref);
+  assert.equal(row.status, "failed");
+  assert.equal(row.note, "renew_target_revoked");
+});
+
+test("refunding a renewal takes back only its period; the key is revoked only if nothing is left", async () => {
+  const env = makeEnv();
+  const { first, second, keyId } = await boughtAndRenewOrdered(env, { plan: "pro" });
+  await mockWebhook(env, paidEvent(second, { paymentId: "ren4" }));
+  const exp = () => env.sqlite.prepare("SELECT status, expires_at FROM api_keys WHERE id = ?").get(keyId);
+  assert.equal(exp().expires_at, T0 + 2 * DAY, "first order T0 + 1 day, renewal + 1 day");
+  const refund = (o, id) => ({ type: "refunded", orderId: o.checkout_ref, paymentId: id, amountMinor: 700, currency: "USD", tier: "pro" });
+  assert.equal((await mockWebhook(env, refund(second, "r1"))).data.result, "refunded");
+  assert.equal(getOrderRow(env, second.checkout_ref).note, "refunded_renewal");
+  assert.equal(exp().status, "active");
+  assert.equal(exp().expires_at, T0 + DAY);
+  env.sqlite.prepare("UPDATE api_keys SET expires_at = ? WHERE id = ?").run(0, keyId);
+  assert.equal((await mockWebhook(env, refund(first, "r2"))).data.result, "refunded");
+  assert.equal(exp().status, "revoked", "refunding the original order revokes the key");
+});
+
+test("a renewal sends the renewal e-mail (draft text) and never the key", async () => {
+  const sent = [];
+  const env = makeEnv({ MAIL_TRANSPORT: "resend", MAIL_API_KEY: "k", MAIL_FROM: "x@y.z" });
+  const first = await placed(env, { plan: "basic" });
+  env.BILLING_MODE = "live";
+  const base = { checkoutRef: first.checkout_ref, amountMinor: 300, currency: "USD", tier: "basic", type: "paid" };
+  const fetchImpl = async (_u, init) => (sent.push(JSON.parse(init.body)), new Response("{}"));
+  await processEvent(env, "mock", { ...base, providerRef: "a" }, { now: T0, fetchImpl });
+  env.BILLING_MODE = "test";
+  const second = await placed(env, { plan: "basic" });
+  env.BILLING_MODE = "live";
+  await processEvent(env, "mock", { ...base, checkoutRef: second.checkout_ref, providerRef: "b" }, { now: T0, fetchImpl });
+  assert.equal(sent.length, 2);
+  assert.match(sent[0].text, /vk_basic_[a-z2-7]{32}/);
+  assert.equal(sent[1].subject, "Your Vetro API key is extended");
+  assert.doesNotMatch(sent[1].text, /vk_basic_[a-z2-7]{32}/);
+  assert.match(sent[1].text, /vk_basic_[a-z2-7]{0,}…|vk_basic/);
 });

@@ -70,9 +70,10 @@ export function body(over = {}) {
     plan: "pro",
     method: "card",
     lang: "en",
+    policiesAccepted: true,
     email: "Buyer@Example.com ",
     project: { name: "My Site", type: "site", description: "A small reading list website", domains: ["Example.com", "www.example.com"], ...project },
-    contract: { signer: "Ivan Petrov", signedAt: "2026-11-23T11:59:00.000Z", termsVersion: "f3bee9bb6eb9", signatureSvg: SIGNATURE, ...contract },
+    contract: { signer: "Ivan Petrov", signedAt: "2026-11-23T11:59:00.000Z", termsVersion: "f3bee9bb6eb9", documents: { terms: "f3bee9bb6eb9", refund: "a1b2c3d4e5f6", privacy: "0123456789ab" }, signatureSvg: SIGNATURE, ...contract },
     ...rest,
   };
 }

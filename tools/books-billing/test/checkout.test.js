@@ -40,6 +40,9 @@ test("happy path: order id format, https url to the test page, data stored on th
   assert.equal(sig.order_id, order.id);
   assert.equal(sig.signer, "Ivan Petrov");
   assert.equal(sig.terms_hash, "f3bee9bb6eb9");
+  assert.equal(sig.refund_hash, "a1b2c3d4e5f6");
+  assert.equal(sig.privacy_hash, "0123456789ab");
+  assert.equal(order.policies_accepted_at, T0, "server clock");
   assert.equal(sig.signature_svg, SIGNATURE);
   assert.equal(sig.client_signed_at, "2026-11-23T11:59:00.000Z", "browser time is stored separately");
   assert.equal(sig.accepted_at, T0, "server time of acceptance");
@@ -202,7 +205,7 @@ test("bad JSON, non-object bodies and oversize bodies", async () => {
 
 test("a method that is not configured gives 503 and leaves nothing in D1", async () => {
   const env = makeEnv({ BILLING_MODE: "live" }); // боевой режим, ни одного настроенного провайдера
-  for (const method of ["card", "usdt", "ru"]) {
+  for (const method of ["card", "lava", "usdt"]) {
     const res = await checkout(env, { method });
     assert.equal(res.status, 503, method);
     assert.deepEqual(res.data, { error: "method_unavailable" });
@@ -255,18 +258,56 @@ test("max_keys per buyer: 409 key_limit once the active keys reach the tier cap"
   };
   await buy("basic", "pay_b1"); // 1 активный ключ
   const before = rowsWritten(env);
-  const second = await checkout(env, { plan: "basic" }); // basic.max_keys = 1
+  const second = await checkout(env, { plan: "basic", project: { name: "Another Site" } }); // basic.max_keys = 1, другой проект
   assert.equal(second.status, 409);
   assert.deepEqual(second.data, { error: "key_limit" });
   assert.deepEqual(rowsWritten(env), before, "409 writes nothing");
 
   await buy("pro", "pay_p1"); // pro.max_keys = 2: 1 < 2, можно; теперь 2 ключа
-  assert.equal((await checkout(env, { plan: "pro" })).status, 409);
+  assert.equal((await checkout(env, { plan: "pro", project: { name: "Another Site" } })).status, 409);
   assert.equal((await checkout(env, { plan: "ultra" })).status, 200, "ultra allows 5");
 
   // Отозванные и истёкшие ключи в лимит не входят.
   env.sqlite.exec("UPDATE api_keys SET status = 'revoked', revoked_at = 1 WHERE tier = 'basic'");
-  assert.equal((await checkout(env, { plan: "pro" })).status, 200, "a revoked key frees the slot");
+  assert.equal((await checkout(env, { plan: "pro", project: { name: "Another Site" } })).status, 200, "a revoked key frees the slot");
   env.sqlite.exec("UPDATE api_keys SET expires_at = 1 WHERE tier = 'pro'");
-  assert.equal((await checkout(env, { plan: "basic" })).status, 200, "an expired key frees the slot");
+  assert.equal((await checkout(env, { plan: "basic", project: { name: "Another Site" } })).status, 200, "an expired key frees the slot");
+});
+
+test("policiesAccepted must be exactly true, otherwise nothing is created", async () => {
+  for (const v of [false, undefined, "true", 1, null]) await rejects({ policiesAccepted: v }, "bad_field", 400, "policiesAccepted");
+});
+
+test("the three document versions are required, 12 hex each, and terms must equal termsVersion", async () => {
+  const ok = { terms: "f3bee9bb6eb9", refund: "a1b2c3d4e5f6", privacy: "0123456789ab" };
+  await rejects({ contract: { documents: undefined } }, "bad_field", 400, "documents");
+  await rejects({ contract: { documents: { ...ok, refund: undefined } } }, "bad_field", 400, "documents");
+  await rejects({ contract: { documents: { ...ok, privacy: "XYZ" } } }, "bad_field", 400, "documents");
+  await rejects({ contract: { documents: { ...ok, refund: "A1B2C3D4E5F6" } } }, "bad_field", 400, "documents");
+  await rejects({ contract: { documents: { ...ok, terms: "ffffffffffff" } } }, "bad_field", 400, "termsVersion");
+});
+
+test("methods are card, lava and usdt; the old ru and paddle are unknown", async () => {
+  const env = makeEnv();
+  for (const method of ["card", "lava", "usdt"]) assert.equal((await checkout(env, { method, email: `${method}@example.com` })).status, 200, method);
+  for (const method of ["ru", "paddle", "polar", "stars"]) assert.equal((await checkout(env, { method })).data.error, "bad_method", method);
+});
+
+test("buying the same project on the same tier again is a renewal: no key_limit, kind renew pointing at the existing key", async () => {
+  const env = makeEnv();
+  const first = await checkout(env, { plan: "basic" });
+  await mockWebhook(env, paidEvent(getOrderRow(env, first.data.orderId), { paymentId: "p1" }));
+  const keyId = getOrderRow(env, first.data.orderId).key_id;
+  const again = await checkout(env, { plan: "basic" });
+  assert.equal(again.status, 200, "basic allows 1 key, but this is a renewal");
+  const order = getOrderRow(env, again.data.orderId);
+  assert.equal(order.kind, "renew");
+  assert.equal(order.renew_key_id, keyId);
+  assert.equal(order.key_id, null);
+  // другой тариф или другой проект — не продление
+  assert.equal(getOrderRow(env, (await checkout(env, { plan: "pro" })).data.orderId).kind, "new");
+  assert.equal((await checkout(env, { plan: "basic", project: { name: "Elsewhere" } })).status, 409);
+  // отозванный ключ не продлевается: новый заказ упирается в лимит как обычно
+  env.sqlite.exec("UPDATE api_keys SET status = 'revoked' WHERE id = '" + keyId + "'");
+  assert.equal(getOrderRow(env, (await checkout(env, { plan: "basic" })).data.orderId).kind, "new");
 });

@@ -25,6 +25,19 @@ export async function countActiveKeys(db, customerId, now) {
   return Number(row?.n ?? 0);
 }
 
+/** Не отозванный ключ этого покупателя на этом тарифе, выданный под проект с тем же названием (истёкший тоже можно продлить). */
+async function findRenewKey(db, customerId, tier, projectName) {
+  const k = await one(
+    db,
+    "SELECT id FROM api_keys WHERE status = 'active' AND tier = ?1 AND id IN " +
+      "(SELECT key_id FROM web_orders WHERE customer_id = ?2 AND project_name = ?3 AND key_id IS NOT NULL) ORDER BY expires_at DESC LIMIT 1",
+    tier,
+    customerId,
+    projectName,
+  );
+  return k?.id ?? null;
+}
+
 export async function handleCheckout(request, env, deps = {}) {
   const now = deps.now ?? Date.now();
   const raw = await readBody(request, MAX_BODY);
@@ -47,11 +60,14 @@ export async function handleCheckout(request, env, deps = {}) {
   if (!provider) throw new ApiError(503, "method_unavailable");
 
   const existing = await one(db, "SELECT * FROM web_customers WHERE email = ?1", v.email);
+  let renewKeyId = null;
   if (existing) {
     if (existing.banned === 1) throw new ApiError(403, "forbidden");
     const recent = await one(db, "SELECT COUNT(*) AS n FROM web_orders WHERE customer_id = ?1 AND created_at > ?2", existing.id, now - HOUR);
     if (Number(recent?.n ?? 0) >= ORDERS_PER_EMAIL_HOUR) throw new ApiError(429, "rate_limited");
-    if ((await countActiveKeys(db, existing.id, now)) >= Number(tier.max_keys)) throw new ApiError(409, "key_limit");
+    // Повторная покупка того же проекта на том же тарифе = продление существующего ключа (max(now, expires_at) + 30 дней), а не новый ключ.
+    renewKeyId = await findRenewKey(db, existing.id, tier.name, v.project.name);
+    if (!renewKeyId && (await countActiveKeys(db, existing.id, now)) >= Number(tier.max_keys)) throw new ApiError(409, "key_limit");
   }
 
   // С этой точки пишем в D1.
@@ -65,17 +81,17 @@ export async function handleCheckout(request, env, deps = {}) {
   await db.batch([
     db
       .prepare(
-        "INSERT INTO web_orders (checkout_ref, customer_id, kind, tier, provider, method, amount_minor, currency, status, " +
-          "project_name, project_type, project_description, origins, created_at) " +
-          "VALUES (?1, ?2, 'new', ?3, ?4, ?5, ?6, 'USD', 'pending', ?7, ?8, ?9, ?10, ?11)",
+        "INSERT INTO web_orders (checkout_ref, customer_id, kind, renew_key_id, tier, provider, method, amount_minor, currency, status, " +
+          "project_name, project_type, project_description, origins, policies_accepted_at, created_at) " +
+          "VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 'USD', 'pending', ?9, ?10, ?11, ?12, ?13, ?14)",
       )
-      .bind(ref, customer.id, tier.name, provider.name, v.method, Number(tier.price_usd_minor), v.project.name, v.project.type, v.project.description, origins, now),
+      .bind(ref, customer.id, renewKeyId ? "renew" : "new", renewKeyId, tier.name, provider.name, v.method, Number(tier.price_usd_minor), v.project.name, v.project.type, v.project.description, origins, now, now),
     db
       .prepare(
-        "INSERT INTO contract_signatures (order_id, signer, terms_hash, signature_svg, client_signed_at, accepted_at, lang) " +
-          "VALUES ((SELECT id FROM web_orders WHERE checkout_ref = ?1), ?2, ?3, ?4, ?5, ?6, ?7)",
+        "INSERT INTO contract_signatures (order_id, signer, terms_hash, refund_hash, privacy_hash, signature_svg, client_signed_at, accepted_at, lang) " +
+          "VALUES ((SELECT id FROM web_orders WHERE checkout_ref = ?1), ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
       )
-      .bind(ref, v.contract.signer, v.contract.termsVersion, v.contract.signatureSvg, v.contract.signedAt, now, v.lang),
+      .bind(ref, v.contract.signer, v.contract.documents.terms, v.contract.documents.refund, v.contract.documents.privacy, v.contract.signatureSvg, v.contract.signedAt, now, v.lang),
   ]);
   const order = await one(db, "SELECT * FROM web_orders WHERE checkout_ref = ?1", ref);
 

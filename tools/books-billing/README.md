@@ -11,14 +11,35 @@
 
 | Маршрут | Что делает |
 |---|---|
-| `POST /v1/billing/checkout` | валидация → rate limit → метод настроен? → бан / `max_keys` → запись заказа и подписи → переходник → `{ orderId, url }` |
-| `GET /v1/billing/order/{id}` | `{ status: pending\|paid\|failed }`; ключ в поле `key` только при первом чтении после `paid` (KV `REVEAL`, TTL 600 с) |
+| `POST /v1/billing/checkout` | валидация → rate limit → метод настроен? → бан / продление / `max_keys` → запись заказа и подписи → переходник → `{ orderId, url }` |
+| `GET /v1/billing/order/{id}` | `{ status: pending\|paid\|failed }`; ключ в поле `key` только при первом чтении после `paid` (KV `REVEAL`, TTL 600 с); у продления `{ status: "paid", renewed: true }` без ключа |
 | `POST /v1/billing/webhook/{provider}` | подпись провайдера по сырому телу → сверка суммы, валюты и тарифа → идемпотентная выдача ключа или возврат |
 | `GET/POST /v1/billing/test/pay` | страница «Оплатить (тест)»; только при `BILLING_MODE=test`, иначе 404 |
 | `GET /v1/billing/health` | `{ ok, mode }` |
 
 CORS строгий: эхо одного из `https://vetrostudio.bid`, `https://www.vetrostudio.bid`, `https://phnem.github.io`, иначе без заголовка. Ключа сайта и авторизации нет.
 Адрес возврата `https://vetrostudio.bid/api.html?order=<orderId>` задан в коде (`src/http.js`), из тела запроса он не берётся.
+
+## Методы оплаты и поля запроса
+
+`method`: `card` → Polar.sh (международные карты, разовые товары без подписки), `lava` → lava.top, `usdt` → USDT в сети Solana. Провайдеры `polar`, `lava`, `usdt`
+пока **не подключены** (хвост `billing-provider`): в боевом режиме любой метод даёт `503 method_unavailable`. В тестовом режиме все три обслуживает `mock`.
+
+Обязательные поля сверх брифа: `policiesAccepted: true` (иначе `400 bad_field`, `field: "policiesAccepted"`; время принятия хранится как `web_orders.policies_accepted_at`
+по серверным часам) и `contract.documents = { terms, refund, privacy }` (12 hex каждый; `terms` должен равняться `contract.termsVersion`; хранятся как
+`contract_signatures.terms_hash / refund_hash / privacy_hash`).
+
+## Продление
+
+Срок 30 дней с подтверждения оплаты, автопродления нет. Повторная покупка **того же проекта (название) на том же тарифе** при не отозванном ключе = заказ `kind = renew`:
+`max_keys` не проверяется, новый ключ не создаётся, `expires_at = max(now, expires_at) + 30 дней` считается в SQL. Страница заказа получает `{ status: "paid", renewed: true }`,
+покупателю уходит письмо о продлении. Возврат продления отнимает только его период (ключ отзывается, если срока не осталось). Другой тариф или проект = новый ключ (с проверкой `max_keys`).
+
+## Возвраты, хранение, логи
+
+Возврат делает провайдер (Polar / lava / шлюз): его событие `refunded` отзывает ключ и ставит заказ в `refunded`. Правила политик (7 дней и 0 запросов, простой по нашей вине > 72 ч,
+двойное списание; USDT только вручную) владелец применяет сам: в панели у заказа сайта видны число запросов по ключу и кнопка «Возврат вручную» (заказ → `refunded`, ключ отозван).
+Платёжные записи (`web_*`) не удаляются никогда (хранить 7 лет). Логи Worker выключены, IP и user-agent не пишутся (IP живёт только как ключ счётчика rate limit).
 
 ## Тестовый режим (`BILLING_MODE=test`, сейчас так в `wrangler.toml`)
 
@@ -40,7 +61,7 @@ npx wrangler d1 execute vetro-books --remote --file ../books-billing/schema/bill
 npx wrangler d1 execute vetro-books --remote --file ../books-billing/schema/billing.sql
 ```
 
-Отличие от брифа: в `web_orders` добавлена колонка `note` (пометка владельцу: `mismatch_amount`, `mismatch_currency`, `mismatch_tier`, `no_contract`, `banned`,
+Отличие от брифа: в `web_orders` добавлены колонки `note`, `renew_key_id`, `policies_accepted_at`, в `contract_signatures` — `refund_hash` и `privacy_hash`. `note` (пометка владельцу: `mismatch_amount`, `mismatch_currency`, `mismatch_tier`, `no_contract`, `banned`,
 `duplicate_payment_ref`, `refunded`, `provider_failed`, `provider_error`). IP-адреса и user-agent не пишутся нигде.
 
 ## Выдача ключа (`src/issue.js`)

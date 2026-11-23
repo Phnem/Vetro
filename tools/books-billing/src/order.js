@@ -9,13 +9,16 @@ export async function handleOrder(request, env, id) {
   if (!ID_RE.test(id)) throw new ApiError(404, "not_found");
   if (await limited(env.LIMITER, "ord", request)) throw new ApiError(429, "rate_limited");
 
-  const order = await env.DB.prepare("SELECT status, key_id FROM web_orders WHERE checkout_ref = ?1").bind(id).first();
+  const order = await env.DB.prepare("SELECT status, key_id, kind FROM web_orders WHERE checkout_ref = ?1").bind(id).first();
   if (!order) throw new ApiError(404, "not_found");
 
   if (order.status === "pending") return json(request, { status: "pending" });
   if (order.status !== "paid") return json(request, { status: "failed" }); // failed | refunded | expired
   // Оплачен, но ключ ещё не выдан (между «деньги пришли» и «ключ записан»): для страницы это всё ещё ожидание.
   if (!order.key_id) return json(request, { status: "pending" });
+
+  // Продление: нового ключа нет, страница просто узнаёт, что срок продлён (поле renewed, остальное как у обычного paid).
+  if (order.kind === "renew") return json(request, { status: "paid", renewed: true });
 
   // Только при первом чтении: ключ достаётся из REVEAL и сразу удаляется.
   let key = null;
