@@ -139,3 +139,21 @@ npm test
 ```
 
 Фейковая D1 поверх `node:sqlite` (`test/helpers.js`), как у `tools/books-bot`.
+
+## Подключение Polar.sh (адаптер `src/providers/polar.js`)
+
+Адаптер написан и покрыт тестами, но включается только когда заданы все параметры и `BILLING_MODE` не `test` (в тестовом режиме карта идёт на страницу mock).
+
+| Что | Где |
+|---|---|
+| `POLAR_ACCESS_TOKEN` (Organization Access Token, права на checkouts и subscriptions) | `npx wrangler secret put POLAR_ACCESS_TOKEN` |
+| `POLAR_WEBHOOK_SECRET` (секрет endpoint'а, `whsec_…`) | `npx wrangler secret put POLAR_WEBHOOK_SECRET` |
+| `POLAR_PRODUCT_BASIC`, `POLAR_PRODUCT_PRO`, `POLAR_PRODUCT_ULTRA` (ID подписочных товаров Recurring Monthly, $3 / $7 / $12) | `[vars]` в `wrangler.toml` (не секрет) |
+| `POLAR_SERVER` = `sandbox` для репетиции на sandbox.polar.sh, по умолчанию `production` | `[vars]` |
+
+Endpoint вебхуков в Polar: `https://billing.vetrostudio.bid/v1/billing/webhook/polar`, события `order.paid`, `order.refunded`, `subscription.canceled`, `subscription.uncanceled`, `subscription.revoked`.
+Подпись: Standard Webhooks (`webhook-id`, `webhook-timestamp`, `webhook-signature`), допуск по времени 5 минут; поддержаны обе схемы ключа (секреты до и после 8.09.2026).
+
+Как Polar ложится на движок: `order.paid` с `billing_reason` `subscription_create`/`purchase` → выдача ключа, `subscription_cycle` → продление на тот же ключ (срок = конец периода подписки + 1 день запаса),
+`subscription.canceled` → продлений не будет (доступ до конца периода), `order.refunded` → ключ отозван (для продления — минус месяц) и подписка отменяется запросом `DELETE /v1/subscriptions/{id}`.
+Скидочные коды в checkout выключены; сумма сверяется по `net_amount` без налога. Заказ сайта передаётся в `metadata.order_ref`, цена продукта в Polar должна совпадать с `tiers.price_usd_minor` (3.00 / 7.00 / 12.00 USD).

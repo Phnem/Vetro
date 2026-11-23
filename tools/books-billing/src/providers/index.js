@@ -15,8 +15,9 @@
 // Не готовый провайдер просто возвращает configured() = false. Ключи и секреты вебхуков только через `wrangler secret put`.
 import { isTest } from "../http.js";
 import { mock } from "./mock.js";
+import { polar } from "./polar.js";
 
-const PROVIDERS = { mock };
+const PROVIDERS = { mock, polar };
 
 /** Какой провайдер обслуживает метод, который прислал сайт. Включён он или нет, решает configured(). */
 const METHOD_PROVIDER = { card: "polar", lava: "lava", usdt: "usdt" };

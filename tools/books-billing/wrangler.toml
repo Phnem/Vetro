@@ -51,6 +51,11 @@ BILLING_MODE = "test"
 # Письма через Resend (домен vetrostudio.bid, регион eu-west-1). Секрет MAIL_API_KEY (ключ только на отправку, привязан к домену) лежит в secret.
 MAIL_TRANSPORT = "resend"
 MAIL_FROM = "Vetro Studio <keys@vetrostudio.bid>"
+# Polar.sh (card): ID подписочных товаров Recurring Monthly. Секреты POLAR_ACCESS_TOKEN и POLAR_WEBHOOK_SECRET только через `wrangler secret put`.
+# POLAR_PRODUCT_BASIC = ""
+# POLAR_PRODUCT_PRO = ""
+# POLAR_PRODUCT_ULTRA = ""
+# POLAR_SERVER = "sandbox"   # репетиция на sandbox.polar.sh; по умолчанию production
 # Очистка суточных счётчиков по ключам (usage_daily) старше N дней, по политике 60. Не задано = ничего не удаляется.
 # USAGE_RETENTION_DAYS = "60"
 

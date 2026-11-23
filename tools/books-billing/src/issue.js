@@ -37,6 +37,8 @@ export async function processEvent(env, providerName, event, deps = {}) {
     case "canceled":
     case "revoked":
       return endSubscription(env, providerName, event, deps);
+    case "uncanceled":
+      return resumeSubscription(env, providerName, event);
     case "refunded":
       return refundOrder(env, providerName, event, deps);
     case "failed":
@@ -298,6 +300,15 @@ async function endSubscription(env, providerName, event, deps) {
   if (!sub || sub.provider !== providerName) return { result: "unknown_order" };
   const status = event.type === "revoked" ? "revoked" : "canceled";
   await run(env.DB, "UPDATE web_subscriptions SET status = ?1, canceled_at = COALESCE(canceled_at, ?2) WHERE id = ?3 AND status != 'revoked'", status, now, sub.id);
+  return { result: "ignored" };
+}
+
+/** Клиент вернул подписку после отмены (до конца периода): продления снова ожидаются. Закрытую (revoked) подписку не оживляем. */
+async function resumeSubscription(env, providerName, event) {
+  if (typeof event.subRef !== "string") return { result: "ignored" };
+  const sub = await one(env.DB, SUB_JOIN + "WHERE s.sub_ref = ?1", event.subRef);
+  if (!sub || sub.provider !== providerName) return { result: "unknown_order" };
+  await run(env.DB, "UPDATE web_subscriptions SET status = 'active', canceled_at = NULL WHERE id = ?1 AND status = 'canceled'", sub.id);
   return { result: "ignored" };
 }
 
