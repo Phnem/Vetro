@@ -52,7 +52,7 @@ BILLING_MODE = "test"
 MAIL_TRANSPORT = "resend"
 MAIL_FROM = "Vetro Studio <keys@vetrostudio.bid>"
 # Polar.sh (card): ID подписочных товаров Recurring Monthly. Секреты POLAR_ACCESS_TOKEN и POLAR_WEBHOOK_SECRET только через `wrangler secret put`.
-# POLAR_PRODUCT_BASIC = ""
+POLAR_PRODUCT_BASIC = "41af235c-0dcd-433b-8786-fc5821cc81bd"   # Vetro API, $3 в месяц
 # POLAR_PRODUCT_PRO = ""
 # POLAR_PRODUCT_ULTRA = ""
 # POLAR_SERVER = "sandbox"   # репетиция на sandbox.polar.sh; по умолчанию production
