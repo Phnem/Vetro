@@ -64,13 +64,19 @@ async function fulfilPaid(env, providerName, event, deps) {
   if (!tier) return reject(db, order, event, "tier_gone");
 
   // Атомарно: ровно одна доставка получает changes = 1. pending и expired: деньги пришли — поздний платёж тоже оплата.
-  const claim = await run(
-    db,
-    "UPDATE web_orders SET status = 'paid', provider_ref = ?1, paid_at = ?2 WHERE checkout_ref = ?3 AND status IN ('pending', 'expired') AND provider_ref IS NULL",
-    event.providerRef,
-    now,
-    event.checkoutRef,
-  );
+  let claim;
+  try {
+    claim = await run(
+      db,
+      "UPDATE web_orders SET status = 'paid', provider_ref = ?1, paid_at = ?2 WHERE checkout_ref = ?3 AND status IN ('pending', 'expired') AND provider_ref IS NULL",
+      event.providerRef,
+      now,
+      event.checkoutRef,
+    );
+  } catch {
+    // UNIQUE(provider_ref): тот же платёж провайдера уже привязан к другому заказу. Ключ не выдаём, владелец разбирается руками.
+    return reject(db, order, event, "duplicate_payment_ref");
+  }
   if (changes(claim) !== 1) {
     const fresh = await one(db, "SELECT * FROM web_orders WHERE id = ?1", order.id);
     return fresh && fresh.status === "paid" ? resume(env, fresh, event, deps, now) : { result: "duplicate" };

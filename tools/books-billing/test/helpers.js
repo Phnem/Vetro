@@ -92,8 +92,9 @@ export async function call(env, path, { method = "GET", json, raw, headers = {},
   try {
     res = await route(request, env, { now, waitUntil: (p) => pending.push(p), ...deps });
   } catch (e) {
-    if (e?.status === undefined) throw e;
-    res = new Response(JSON.stringify({ error: e.code, ...e.extra }), { status: e.status, headers: { "content-type": "application/json" } });
+    // Как default.fetch в src/worker.js: ApiError → его код, всё остальное → 500 internal.
+    const known = e?.status !== undefined;
+    res = new Response(JSON.stringify(known ? { error: e.code, ...e.extra } : { error: "internal" }), { status: known ? e.status : 500, headers: { "content-type": "application/json" } });
   }
   await Promise.all(pending);
   const text = await res.text();
