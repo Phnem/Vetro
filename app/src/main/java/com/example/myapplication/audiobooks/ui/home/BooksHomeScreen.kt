@@ -232,19 +232,17 @@ fun BooksHomeScreen(
             }
             val newShelves = com.example.myapplication.ui.shared.LocalNewShelves.current
             if (newShelves) {
-                // До 3 книг: те же три обложки, что стояли под углом на карточке, летят на свои
-                // места в сетке плоских книг. Больше: вместо полёта поднимается лента корешков.
-                val flying = shelf.books.size <= ANGLED_MAX
+                // Новые полки: книги (стоящие под углом или корешками) поворачиваются в плоское
+                // положение и разлетаются на свои места в сетке.
                 ShelfPageV2(
                     shelf = shelf,
                     strings = strings,
                     isDark = isDark,
                     morph = morph,
-                    flying = flying,
                     onBook = openBook,
                     onClose = closeShelf,
                 )
-                if (flying) FlyingCovers(morph, shelf, fanned = false)
+                FlyingBooks(morph, shelf)
                 return@let
             }
             ShelfPage(
@@ -380,21 +378,13 @@ private fun HomeList(
                     topEnd = if (shelf.books.isEmpty()) "" else topEnd,
                     books = shelf.books,
                     isDark = isDark,
-                    // Полная полка (> 3): сцена гаснет, пока лента корешков растёт на странице.
-                    // До 3 книг сцену не трогаем: оттуда улетают обложки, а список гаснет целиком.
-                    stageModifier = Modifier
-                        .onPlaced { morph.fanCoords["${shelf.key}#stage"] = it }
-                        .graphicsLayer {
-                            alpha = if (shelf.books.size > ANGLED_MAX && morph.open?.key == shelf.key) {
-                                1f - (morph.progress.value / StageFadeEnd).coerceIn(0f, 1f)
-                            } else {
-                                1f
-                            }
-                        },
-                    coverModifier = { index ->
+                    stageModifier = Modifier.onPlaced { morph.fanCoords["${shelf.key}#stage"] = it },
+                    // Каждая книга сообщает морфу, откуда ей лететь, и скрывается на время полёта:
+                    // вместо неё по экрану летит её копия (FlyingBooks).
+                    bookModifier = { index ->
                         Modifier
                             .onPlaced { morph.fanCoords["${shelf.key}#$index"] = it }
-                            .graphicsLayer { alpha = if (morph.hidesFan(shelf.key)) 0f else 1f }
+                            .graphicsLayer { alpha = if (morph.hidesBook(shelf.key, index)) 0f else 1f }
                     },
                     modifier = cardClick,
                 )
@@ -448,12 +438,17 @@ internal class ShelfMorph {
 
     fun hidesFan(key: String): Boolean = open?.key == key && progress.value > 0.001f
 
+    /** Книга [index] новой полки: на время полёта скрыта на карточке, если у неё есть и старт, и посадка. */
+    fun hidesBook(key: String, index: Int): Boolean =
+        open?.key == key && progress.value > 0.001f &&
+            from.getOrNull(index) != null && to.getOrNull(index) != null
+
     /** Обложки ряда страницы, прилетевшие из веера, до конца полёта нарисованы летящей копией. */
     fun hidesRow(index: Int): Boolean = progress.value < 0.999f && from.getOrNull(index) != null
 
     fun expand(shelf: OpenShelf, scope: CoroutineScope, reducedMotion: Boolean) {
         if (open != null) return
-        from = (0 until FLYING).map { rectOf(fanCoords["${shelf.key}#$it"]) }
+        from = (0 until TRACKED).map { rectOf(fanCoords["${shelf.key}#$it"]) }
         card = rectOf(cardCoords[shelf.key])
         stage = rectOf(fanCoords["${shelf.key}#stage"])
         targetCoords.clear()
@@ -462,7 +457,7 @@ internal class ShelfMorph {
             // Кадр на композицию страницы и кадр на раскладку — дальше её позиции известны.
             withFrameNanos { }
             withFrameNanos { }
-            to = (0 until FLYING).map { rectOf(targetCoords[it]) }
+            to = (0 until TRACKED).map { rectOf(targetCoords[it]) }
             if (reducedMotion) progress.snapTo(1f) else progress.animateTo(1f, MotionTokens.largeSurfaceEnter())
         }
     }
@@ -479,8 +474,8 @@ internal class ShelfMorph {
 
     fun collapse(scope: CoroutineScope, reducedMotion: Boolean) {
         val shelf = open ?: return
-        from = (0 until FLYING).map { rectOf(fanCoords["${shelf.key}#$it"]) }
-        to = (0 until FLYING).map { rectOf(targetCoords[it]) }
+        from = (0 until TRACKED).map { rectOf(fanCoords["${shelf.key}#$it"]) }
+        to = (0 until TRACKED).map { rectOf(targetCoords[it]) }
         scope.launch {
             if (reducedMotion) progress.snapTo(0f) else progress.animateTo(0f, MotionTokens.largeSurfaceExit())
             open = null
@@ -500,7 +495,11 @@ internal class ShelfMorph {
     }
 
     companion object {
+        /** Веер (старые полки): летят три обложки. */
         const val FLYING = 3
+
+        /** Новые полки: сколько книг полки отслеживает морф (откуда летят и куда садятся). */
+        const val TRACKED = 24
     }
 }
 
@@ -548,12 +547,6 @@ internal fun authorShelves(books: List<com.example.myapplication.audiobooks.data
         }
 }
 
-/** Лицо летящей обложки: веер — как в старой странице, новые полки — как плоская книга сетки. */
-@Composable
-private fun FlyingCoverFace(fanned: Boolean, book: CachedBook, modifier: Modifier) {
-    if (fanned) BookCover(book = book, modifier = modifier) else FlatCover(book, modifier)
-}
-
 /**
  * Три обложки веера в полёте — отдельный слой поверх дома и страницы на всё время перехода.
  * Размер — финальный (ряд полки), путь и поворот — transform, так что картинка не перемеряется.
@@ -564,7 +557,7 @@ private fun FlyingCoverFace(fanned: Boolean, book: CachedBook, modifier: Modifie
  * уходит за кромку, и в последнем кадре срез совпадает с клипом карточки пиксель в пиксель.
  */
 @Composable
-private fun BoxScope.FlyingCovers(morph: ShelfMorph, shelf: OpenShelf, fanned: Boolean = true) {
+private fun BoxScope.FlyingCovers(morph: ShelfMorph, shelf: OpenShelf) {
     val density = LocalDensity.current
     Box(Modifier.matchParentSize()) {
         // Порядок отрисовки = порядок веера: FanBookIndex кладёт первую книгу (середину) последней.
@@ -572,10 +565,8 @@ private fun BoxScope.FlyingCovers(morph: ShelfMorph, shelf: OpenShelf, fanned: B
             val book = shelf.books.getOrNull(i) ?: continue
             val from = morph.from.getOrNull(i) ?: continue
             val to = morph.to.getOrNull(i) ?: continue
-            // Книги новых полок стоят без веерного поворота: летят прямо, садятся на планку.
-            val rotation = if (fanned) FanPoses[FanBookIndex.indexOf(i)].rotation else 0f
-            FlyingCoverFace(
-                fanned = fanned,
+            val rotation = FanPoses[FanBookIndex.indexOf(i)].rotation
+            BookCover(
                 book = book,
                 modifier = Modifier
                     .size(with(density) { to.width.toDp() }, with(density) { to.height.toDp() })

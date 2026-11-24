@@ -1,7 +1,6 @@
 package com.example.myapplication.audiobooks.ui.home
 
 import androidx.activity.compose.BackHandler
-import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -12,6 +11,7 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -23,7 +23,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -32,7 +31,6 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
-import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -40,16 +38,13 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -57,11 +52,8 @@ import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
-import androidx.compose.ui.graphics.Matrix
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.TransformOrigin
-import androidx.compose.ui.graphics.drawscope.scale
-import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.layout
@@ -77,47 +69,37 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.geometry.lerp as lerpOffset
 import androidx.compose.ui.util.lerp
 import coil3.compose.AsyncImage
 import com.example.myapplication.audiobooks.data.CachedBook
 import com.example.myapplication.ui.shared.theme.IosDesign
 import com.example.myapplication.ui.shared.theme.SnProFamily
-import kotlinx.coroutines.launch
 import kotlin.math.cos
 import kotlin.math.sin
 
 // ==========================================
-// Новые книжные полки (dev-флаг NEW_SHELVES). Три положения книги, как у реальной полки:
-//   1. ≤ 3 книг — тонкие книги стоят под углом: срез обложки вместо корешка, сгиб переплёта,
-//      узкая кромка страниц. Угол — настоящая перспектива, как CSS rotateY(-14°) при perspective 760.
-//   2. > 3 книг — полка целиком: все книги корешками вперёд, одной ширины, обложка проступает
-//      сквозь затемнение, название идёт вдоль корешка.
+// Новые книжные полки (dev-флаг NEW_SHELVES). Книга — настоящая коробка (см. BookBox.kt): обложка и
+// корешок как плоскости с перспективой. Три положения:
+//   1. ≤ 3 книг — книги стоят под углом: обложка и тонкая полоска корешка.
+//   2. > 3 книг — полка целиком: все книги корешками вперёд, одной ширины.
 //   3. Внутри открытой полки — почти плоские книги лицом к зрителю.
-// Книга здесь строгая и тонкая: никаких раздутых моделек, один сгиб и одна кромка страниц.
+// При открытии книги поворачиваются из положения 1 или 2 в плоское и разлетаются на свои места в сетке.
 // ==========================================
 
 private val SpineHeight = 168.dp
 private val SpineGap = 5.dp
 private val SpineMaxWidth = 28.dp
 private val SpineMinWidth = 18.dp
-private val StripSpineHeight = 118.dp
-private val StripSpineWidth = 24.dp
-private val SpineShape = RoundedCornerShape(6.dp)
-
-private const val TiltDegrees = -14f
-private val CameraDistance = 760.dp
-
-/** Полка до стольких книг показывает их под углом; больше — полная полка корешками. */
-internal const val ANGLED_MAX = 3
-
-/** Доля хода морфа, за которую сцена на карточке гаснет, а лента на странице проявляется. */
-internal const val StageFadeEnd = 0.3f
 
 /** Высота сцены полки: не прыгает при переходе между «под углом» и «корешками». */
 private val StageMinHeight = 176.dp
 
-private val SpineBase = Color(0xFF16181E)
-private val SpineInk = Color(0xFF0B0D10)
+/** Полка до стольких книг показывает их под углом; больше — полная полка корешками. */
+internal const val ANGLED_MAX = 3
+
+private val RestTilt: () -> Float = { AngledTilt }
+private val RestSpine: () -> Float = { 90f }
 
 // ---------- Обложка ----------
 
@@ -126,7 +108,7 @@ private val SpineInk = Color(0xFF0B0D10)
  * картинку для корешков, [showTitle] выключают там, где название и так написано отдельно.
  */
 @Composable
-private fun CoverImage(
+internal fun CoverImage(
     book: CachedBook,
     modifier: Modifier = Modifier,
     alignment: Alignment = Alignment.Center,
@@ -134,7 +116,7 @@ private fun CoverImage(
     showTitle: Boolean = true,
 ) {
     val url = book.coverUrl
-    var failed by remember(url) { mutableStateOf(false) }
+    var failed by remember(url) { androidx.compose.runtime.mutableStateOf(false) }
     val style = remember(book.title) { placeholderStyleFor(book.title) }
     if (url == null || failed) {
         Box(modifier.background(style.palette.card), contentAlignment = Alignment.Center) {
@@ -166,133 +148,9 @@ private fun CoverImage(
     }
 }
 
-// ---------- Положение 1: тонкая книга под углом ----------
-
-/**
- * Тонкая книга под углом. [book] == null — пустая заготовка в цвете [style] (полка ещё грузится).
- * Перспектива строится матрицей, а не вращением слоя: тот же результат, что у CSS-эталона, —
- * поворот вокруг левого края, правый край чуть ближе к зрителю.
- */
-@Composable
-internal fun AngledBook(
-    book: CachedBook?,
-    style: PlaceholderStyle,
-    coverWidth: Dp,
-    modifier: Modifier = Modifier,
-    /** Метка передней крышки: по ней морф знает, откуда лететь обложке (полки до 3 книг). */
-    coverModifier: Modifier = Modifier,
-) {
-    val coverHeight = coverWidth * 1.5f
-    val cameraPx = with(LocalDensity.current) { CameraDistance.toPx() }
-    Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
-        Row(
-            Modifier
-                .height(coverHeight)
-                .drawWithContent {
-                    val t = Math.toRadians(TiltDegrees.toDouble())
-                    // Индексы массива, а не [строка, столбец]: ячейки перспективы названы в самом Matrix.
-                    val m = Matrix().apply {
-                        values[Matrix.ScaleX] = cos(t).toFloat()
-                        values[Matrix.Perspective0] = (sin(t) / cameraPx).toFloat()
-                    }
-                    withTransform({
-                        translate(0f, size.height / 2f)
-                        transform(m)
-                        translate(0f, -size.height / 2f)
-                    }) { this@drawWithContent.drawContent() }
-                },
-        ) {
-            // Корешок: левая полоска обложки, затемнённая, с гранью.
-            Box(
-                Modifier
-                    .width(9.dp)
-                    .fillMaxHeight()
-                    .clip(RoundedCornerShape(topStart = 4.dp, bottomStart = 4.dp))
-                    .background(SpineBase),
-            ) {
-                if (book != null) {
-                    CoverImage(book, Modifier.fillMaxSize(), alignment = Alignment.CenterStart, dim = 0.55f, showTitle = false)
-                } else {
-                    Box(Modifier.fillMaxSize().background(style.palette.card.copy(alpha = 0.6f)))
-                }
-                Box(
-                    Modifier.fillMaxSize().background(
-                        Brush.horizontalGradient(
-                            listOf(Color.White.copy(alpha = 0.14f), Color.Transparent, Color.Black.copy(alpha = 0.58f)),
-                        ),
-                    ),
-                )
-            }
-            // Передняя крышка со сгибом переплёта у левого края.
-            Box(
-                coverModifier
-                    .width(coverWidth)
-                    .fillMaxHeight()
-                    .clip(RoundedCornerShape(topEnd = 6.dp, bottomEnd = 6.dp))
-                    .background(style.palette.card),
-            ) {
-                if (book != null) CoverImage(book, Modifier.fillMaxSize())
-                Box(
-                    Modifier
-                        .padding(start = 6.dp)
-                        .width(1.5.dp)
-                        .fillMaxHeight()
-                        .background(
-                            Brush.horizontalGradient(
-                                listOf(Color.Black.copy(alpha = 0.46f), Color.White.copy(alpha = 0.12f)),
-                            ),
-                        ),
-                )
-                Box(
-                    Modifier.fillMaxSize().drawBehind {
-                        val line = 1.dp.toPx()
-                        drawRect(Color.White.copy(alpha = 0.08f), size = Size(size.width, line))
-                        drawRect(Color.Black.copy(alpha = 0.4f), topLeft = Offset(0f, size.height - line), size = Size(size.width, line))
-                    },
-                )
-            }
-            // Кромка страниц: тонкая светлая полоска справа.
-            Box(
-                Modifier
-                    .padding(vertical = 4.dp)
-                    .width(2.dp)
-                    .fillMaxHeight()
-                    .clip(RoundedCornerShape(topEnd = 2.dp, bottomEnd = 2.dp))
-                    .background(Brush.verticalGradient(listOf(Color(0xFFC9C4BA), Color(0xFFA5A096))))
-                    .alpha(0.75f),
-            )
-        }
-        // Ширина тени считается от книги, а не от родителя: fillMaxWidth(доля) растянул бы
-        // колонку книги до доли всей полки и вытолкнул соседние книги за край.
-        ContactShadow(Modifier.width((coverWidth + 11.dp) * 0.86f).offset(y = (-2).dp))
-    }
-}
-
-/** Мягкая контактная тень под книгой: эллипс, густой в центре. */
-@Composable
-private fun ContactShadow(modifier: Modifier = Modifier) {
-    Box(
-        modifier
-            .height(7.dp)
-            .drawBehind {
-                val r = size.width / 2f
-                val c = Offset(size.width / 2f, size.height / 2f)
-                scale(1f, size.height / size.width, c) {
-                    drawCircle(
-                        Brush.radialGradient(listOf(Color.Black.copy(alpha = 0.72f), Color.Transparent), c, r),
-                        r,
-                        c,
-                    )
-                }
-            },
-    )
-}
-
-// ---------- Положение 2: корешки ----------
-
 /** Заголовок вдоль корешка: текст читается сверху вниз, как writing-mode vertical-rl. */
 @Composable
-private fun VerticalTitle(text: String, fontSize: TextUnit, modifier: Modifier = Modifier) {
+internal fun VerticalTitle(text: String, fontSize: TextUnit, modifier: Modifier = Modifier) {
     Text(
         text = text,
         style = TextStyle(
@@ -319,87 +177,12 @@ private fun VerticalTitle(text: String, fontSize: TextUnit, modifier: Modifier =
     )
 }
 
-/**
- * Корешок: одна ширина и высота у всех, обложка проступает сквозь затемнение, название вдоль
- * корешка, номер внизу. [active] приподнимает корешок и обводит его.
- */
-@Composable
-internal fun SpineBook(
-    book: CachedBook,
-    index: Int,
-    width: Dp,
-    height: Dp,
-    modifier: Modifier = Modifier,
-    active: Boolean = false,
-) {
-    val style = remember(book.title) { placeholderStyleFor(book.title) }
-    val lift by animateDpAsState(if (active) (-5).dp else 0.dp, label = "spineLift")
-    val fontSize = (width.value * 0.38f).coerceIn(8f, 10.5f).sp
-    Box(
-        modifier
-            .offset(y = lift)
-            .size(width, height)
-            .shadow(if (active) 8.dp else 4.dp, SpineShape, clip = false)
-            .clip(SpineShape)
-            .background(SpineBase),
-    ) {
-        if (book.coverUrl != null) {
-            CoverImage(book, Modifier.fillMaxSize(), dim = 0.45f, showTitle = false)
-        } else {
-            Box(Modifier.fillMaxSize().background(style.palette.card))
-        }
-        Box(
-            Modifier.fillMaxSize().background(
-                Brush.horizontalGradient(
-                    listOf(
-                        Color.White.copy(alpha = 0.06f),
-                        SpineInk.copy(alpha = 0.28f),
-                        SpineInk.copy(alpha = 0.38f),
-                        Color.Black.copy(alpha = 0.56f),
-                    ),
-                ),
-            ),
-        )
-        Box(
-            Modifier.fillMaxSize().background(
-                Brush.verticalGradient(
-                    listOf(SpineInk.copy(alpha = 0.52f), SpineInk.copy(alpha = 0.22f), SpineInk.copy(alpha = 0.68f)),
-                ),
-            ),
-        )
-        Column(Modifier.fillMaxSize().padding(bottom = 9.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            VerticalTitle(
-                text = book.title,
-                fontSize = fontSize,
-                modifier = Modifier.padding(top = 12.dp).weight(1f, fill = false),
-            )
-            Spacer(Modifier.weight(1f, fill = true))
-            Text(
-                text = "%02d".format(index + 1),
-                color = Color(0xFFF4F2EE).copy(alpha = 0.62f),
-                fontFamily = SnProFamily,
-                fontWeight = FontWeight.Medium,
-                fontSize = 7.5.sp,
-            )
-        }
-        // Грани: светлая слева, тёмная справа, светлая кромка сверху.
-        Box(
-            Modifier.fillMaxSize().drawBehind {
-                val line = 1.dp.toPx()
-                drawRect(Color.White.copy(alpha = 0.14f), size = Size(line, size.height))
-                drawRect(Color.Black.copy(alpha = 0.45f), topLeft = Offset(size.width - line, 0f), size = Size(line, size.height))
-                drawRect(Color.White.copy(alpha = 0.08f), size = Size(size.width, line))
-            },
-        )
-        if (active) {
-            Box(Modifier.fillMaxSize().border(1.dp, Color.White.copy(alpha = 0.48f), SpineShape))
-        }
-    }
-}
+// ---------- Ряд корешков ----------
 
 /**
  * Ряд корешков одной ширины. Ширина подбирается так, чтобы все книги влезли; если и при
- * минимальной ширине не помещаются — ряд прокручивается по горизонтали.
+ * минимальной ширине не помещаются — ряд прокручивается по горизонтали. [bookModifier] даёт
+ * модификатор книги [index]: по нему морф узнаёт, откуда лететь.
  */
 @Composable
 internal fun SpineRow(
@@ -407,14 +190,14 @@ internal fun SpineRow(
     maxSpineWidth: Dp,
     spineHeight: Dp,
     modifier: Modifier = Modifier,
-    activeKey: String? = null,
-    onSpineClick: ((index: Int, book: CachedBook) -> Unit)? = null,
+    bookModifier: (index: Int) -> Modifier = { Modifier },
 ) {
     BoxWithConstraints(modifier.fillMaxWidth()) {
         val n = books.size
         val fit = (maxWidth - SpineGap * (n - 1)) / n
         val spineWidth = fit.coerceIn(SpineMinWidth, maxSpineWidth)
         val scrolls = fit < SpineMinWidth
+        val dims = remember(spineWidth, spineHeight) { spineDims(spineWidth, spineHeight) }
         Row(
             Modifier
                 .fillMaxWidth()
@@ -426,20 +209,14 @@ internal fun SpineRow(
             verticalAlignment = Alignment.Bottom,
         ) {
             books.forEachIndexed { index, book ->
-                SpineBook(
+                BookBox(
                     book = book,
+                    style = remember(book.title) { placeholderStyleFor(book.title) },
                     index = index,
-                    width = spineWidth,
-                    height = spineHeight,
-                    active = activeKey != null && bookKey(book) == activeKey,
-                    modifier = if (onSpineClick != null) {
-                        Modifier.clickable(
-                            interactionSource = remember { MutableInteractionSource() },
-                            indication = null,
-                        ) { onSpineClick(index, book) }
-                    } else {
-                        Modifier
-                    },
+                    dims = dims,
+                    angle = RestSpine,
+                    groundShadow = FullGroundShadow,
+                    modifier = Modifier.size(spineWidth, spineHeight).then(bookModifier(index)),
                 )
             }
         }
@@ -484,7 +261,7 @@ internal fun ShelfBaseline(isDark: Boolean, modifier: Modifier = Modifier) {
 
 /**
  * Карточка полки в списке: подписи сверху, ниже сцена. До 3 книг — под углом, больше — корешками
- * вперёд (все). [stageModifier] нужен морфу: по нему узнаётся, откуда «взлетает» шапка корешков.
+ * вперёд (все). [stageModifier] нужен морфу: по нему узнаётся сцена; [bookModifier] — отдельная книга.
  */
 @Composable
 internal fun ShelfCardV2(
@@ -496,8 +273,7 @@ internal fun ShelfCardV2(
     isDark: Boolean,
     modifier: Modifier = Modifier,
     stageModifier: Modifier = Modifier,
-    /** Метка обложки книги [index] на сцене до 3 книг: оттуда стартует полёт обложки в полку. */
-    coverModifier: (index: Int) -> Modifier = { Modifier },
+    bookModifier: (index: Int) -> Modifier = { Modifier },
 ) {
     val ink = if (isDark) Color.White else Color(0xFF111111)
     val shape = RoundedCornerShape(24.dp)
@@ -537,47 +313,69 @@ internal fun ShelfCardV2(
             stageModifier.fillMaxWidth().heightIn(min = StageMinHeight),
             contentAlignment = Alignment.BottomCenter,
         ) {
-            ShelfStage(books, coverModifier)
+            ShelfStage(books, bookModifier)
         }
         ShelfBaseline(isDark)
     }
 }
 
 @Composable
-private fun ShelfStage(books: List<CachedBook>, coverModifier: (Int) -> Modifier) {
+private fun ShelfStage(books: List<CachedBook>, bookModifier: (Int) -> Modifier) {
+    val tilt = Math.toRadians(AngledTilt.toDouble())
+    val sinT = sin(tilt).toFloat()
+    val cosT = cos(tilt).toFloat()
     when {
         books.isEmpty() -> BoxWithConstraints(Modifier.fillMaxWidth()) {
             // Полка ещё грузится: три пустые книги в фирменных цветах вместо дыры.
             val gap = 14.dp
-            val coverWidth = ((maxWidth - gap * 2) / 3 - 11.dp).coerceIn(56.dp, 104.dp)
+            val footprint = (maxWidth - gap * 2) / 3
+            val cover = ((footprint - AngledThickness * sinT) / cosT).coerceIn(56.dp, 104.dp)
+            val dims = angledDims(cover)
             Row(
                 Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(gap, Alignment.CenterHorizontally),
                 verticalAlignment = Alignment.Bottom,
             ) {
-                PlaceholderStyles.take(3).forEach { AngledBook(null, it, coverWidth) }
+                PlaceholderStyles.take(3).forEachIndexed { index, style ->
+                    BookBox(
+                        book = null,
+                        style = style,
+                        index = index,
+                        dims = dims,
+                        angle = RestTilt,
+                        groundShadow = FullGroundShadow,
+                        modifier = Modifier.size(dims.footprintWidth(AngledTilt), dims.height),
+                    )
+                }
             }
         }
         books.size <= ANGLED_MAX -> BoxWithConstraints(Modifier.fillMaxWidth()) {
             val n = books.size
             val gap = if (n == 3) 14.dp else 24.dp
-            val coverWidth = ((maxWidth - gap * (n - 1)) / n - 11.dp).coerceIn(56.dp, 104.dp)
+            val footprint = (maxWidth - gap * (n - 1)) / n
+            val cover = ((footprint - AngledThickness * sinT) / cosT).coerceIn(56.dp, 104.dp)
+            val dims = angledDims(cover)
             Row(
                 Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(gap, Alignment.CenterHorizontally),
                 verticalAlignment = Alignment.Bottom,
             ) {
                 books.forEachIndexed { index, book ->
-                    AngledBook(
-                        book,
-                        remember(book.title) { placeholderStyleFor(book.title) },
-                        coverWidth,
-                        coverModifier = coverModifier(index),
+                    BookBox(
+                        book = book,
+                        style = remember(book.title) { placeholderStyleFor(book.title) },
+                        index = index,
+                        dims = dims,
+                        angle = RestTilt,
+                        groundShadow = FullGroundShadow,
+                        modifier = Modifier
+                            .size(dims.footprintWidth(AngledTilt), dims.height)
+                            .then(bookModifier(index)),
                     )
                 }
             }
         }
-        else -> SpineRow(books, maxSpineWidth = SpineMaxWidth, spineHeight = SpineHeight)
+        else -> SpineRow(books, maxSpineWidth = SpineMaxWidth, spineHeight = SpineHeight, bookModifier = bookModifier)
     }
 }
 
@@ -637,8 +435,8 @@ internal fun FlatBook(book: CachedBook, modifier: Modifier = Modifier, coverModi
 }
 
 /**
- * Страница открытой полки: шапка, лента корешков (навигатор) и сетка плоских книг. Лента «прилетает»
- * с карточки: стартует там, где стояла сцена полки, и садится на место по ходу морфа.
+ * Страница открытой полки: шапка и сетка плоских книг. Книги сюда прилетают с карточки
+ * ([FlyingBooks]): пока идёт полёт, настоящая обложка скрыта, а её место в сетке известно морфу.
  */
 @Composable
 internal fun ShelfPageV2(
@@ -648,17 +446,11 @@ internal fun ShelfPageV2(
     morph: ShelfMorph,
     onBook: (CachedBook) -> Unit,
     onClose: () -> Unit,
-    /** До 3 книг: без ленты корешков, обложки прилетают с карточки на свои места в сетке. */
-    flying: Boolean = false,
 ) {
     val ink = if (isDark) Color.White else Color(0xFF111111)
     val density = LocalDensity.current
     val rise = with(density) { 24.dp.toPx() }
     var drag by remember { mutableFloatStateOf(0f) }
-    var selectedKey by remember { mutableStateOf<String?>(null) }
-    var stripTop by remember { mutableFloatStateOf(Float.NaN) }
-    val gridState = rememberLazyGridState()
-    val scope = rememberCoroutineScope()
     BackHandler(onBack = onClose)
 
     fun contentAlpha(p: Float) = ((p - 0.4f) / 0.6f).coerceIn(0f, 1f)
@@ -670,7 +462,6 @@ internal fun ShelfPageV2(
             .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {},
     ) {
         LazyVerticalGrid(
-            state = gridState,
             columns = GridCells.Fixed(2),
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 32.dp),
             horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -720,63 +511,10 @@ internal fun ShelfPageV2(
                         totalSec.takeIf { it > 0 }?.let { strings.duration(it) },
                     ).joinToString(" · ")
                     Text(sub, color = ink.copy(alpha = 0.55f), fontFamily = SnProFamily, fontSize = 14.sp)
-                }
-            }
-            if (!flying) item(span = { GridItemSpan(maxLineSpan) }) {
-                val stripShape = RoundedCornerShape(16.dp)
-                Column(
-                    Modifier
-                        .padding(top = 6.dp, bottom = 6.dp)
-                        .fillMaxWidth()
-                        .onPlaced { c ->
-                            val root = morph.root
-                            stripTop = if (root != null && root.isAttached && c.isAttached) {
-                                root.localPositionOf(c, Offset.Zero).y + c.size.height / 2f
-                            } else {
-                                Float.NaN
-                            }
-                        }
-                        .graphicsLayer {
-                            val p = morph.progress.value
-                            val stage = morph.stage
-                            if (stage != null) {
-                                // Лента растёт из сцены карточки: центр едет вверх, прозрачность
-                                // набирается с нуля, пока сцена на карточке гаснет (alpha без скачка в
-                                // первом кадре; пока позиция не известна, ленты ещё не видно).
-                                translationY = if (stripTop.isNaN()) 0f else (stage.center.y - stripTop) * (1f - p)
-                                val s = lerp(0.9f, 1f, p.coerceIn(0f, 1f))
-                                scaleX = s
-                                scaleY = s
-                                alpha = if (stripTop.isNaN()) 0f else (p / StageFadeEnd).coerceIn(0f, 1f)
-                            } else {
-                                val a = contentAlpha(p)
-                                alpha = a
-                                translationY = rise * (1f - a)
-                            }
-                        }
-                        .clip(stripShape)
-                        .background(ink.copy(alpha = if (isDark) 0.05f else 0.04f))
-                        .border(Dp.Hairline, ink.copy(alpha = 0.1f), stripShape)
-                        .padding(start = 12.dp, end = 12.dp, top = 14.dp, bottom = 4.dp),
-                ) {
-                    Box(Modifier.fillMaxWidth().heightIn(min = StripSpineHeight), contentAlignment = Alignment.BottomCenter) {
-                        SpineRow(
-                            books = shelf.books,
-                            maxSpineWidth = StripSpineWidth,
-                            spineHeight = StripSpineHeight,
-                            activeKey = selectedKey,
-                            onSpineClick = { index, book ->
-                                selectedKey = bookKey(book)
-                                // Две строки до книг: шапка и лента.
-                                scope.launch { gridState.animateScrollToItem(2 + index) }
-                            },
-                        )
-                    }
-                    ShelfBaseline(isDark)
+                    Spacer(Modifier.height(14.dp))
                 }
             }
             itemsIndexed(shelf.books, key = { _, b -> bookKey(b) }) { index, book ->
-                val selected = selectedKey == bookKey(book)
                 val cardShape = RoundedCornerShape(14.dp)
                 Column(
                     Modifier
@@ -786,16 +524,15 @@ internal fun ShelfPageV2(
                             translationY = rise * (1f - a)
                         }
                         .clip(cardShape)
-                        .background(ink.copy(alpha = if (selected) 0.065f else 0.02f))
-                        .border(1.dp, if (selected) ink.copy(alpha = 0.24f) else Color.Transparent, cardShape)
+                        .background(ink.copy(alpha = 0.02f))
                         .clickable { onBook(book) }
                         .padding(10.dp),
                 ) {
                     FlatBook(
                         book,
                         Modifier.fillMaxWidth(),
-                        // Место посадки летящей обложки; до конца полёта настоящая скрыта.
-                        coverModifier = if (flying && index < ShelfMorph.FLYING) {
+                        // Место посадки летящей книги; до конца полёта настоящая обложка скрыта.
+                        coverModifier = if (index < ShelfMorph.TRACKED) {
                             Modifier
                                 .onPlaced { morph.targetCoords[index] = it }
                                 .graphicsLayer { alpha = if (morph.hidesRow(index)) 0f else 1f }
@@ -814,6 +551,67 @@ internal fun ShelfPageV2(
                     )
                 }
             }
+        }
+    }
+}
+
+// ---------- Полёт книг ----------
+
+/**
+ * Книги в полёте: отдельный слой поверх дома и страницы на всё время перехода. Каждая книга
+ * (коробка из [BookBox]) стартует там, где стояла на карточке, поворачивается из угла полки
+ * (под углом или корешком) в плоское положение и садится на своё место в сетке. Книги стартуют
+ * с небольшой задержкой друг за другом, поэтому полка не «схлопывается» разом, а разлетается.
+ */
+@Composable
+internal fun BoxScope.FlyingBooks(morph: ShelfMorph, shelf: OpenShelf) {
+    val density = LocalDensity.current
+    val spined = shelf.books.size > ANGLED_MAX
+    val restAngle = if (spined) 90f else AngledTilt
+    Box(Modifier.matchParentSize()) {
+        for (i in 0 until minOf(shelf.books.size, ShelfMorph.TRACKED)) {
+            val book = shelf.books[i]
+            // Книга собирается по старту (он известен сразу), а посадка читается при рисовании:
+            // тяжёлая первая композиция слоёв и картинок приходится на кадры до начала полёта,
+            // а не на его первый кадр.
+            val from = morph.from.getOrNull(i) ?: continue
+            val fromWidth = with(density) { from.width.toDp() }
+            val fromHeight = with(density) { from.height.toDp() }
+            val dims = if (spined) spineDims(fromWidth, fromHeight) else angledDims(fromHeight / 1.5f)
+            val style = remember(book.title) { placeholderStyleFor(book.title) }
+            val delay = minOf(i, 8) * 0.028f
+            val coverWidthPx = with(density) { dims.width.toPx() }
+            BookBox(
+                book = book,
+                style = style,
+                index = i,
+                dims = dims,
+                angle = {
+                    val p = ((morph.progress.value - delay) / (1f - delay)).coerceIn(0f, 1f)
+                    // Поворот заканчивается раньше посадки: книга успевает лечь и только потом доезжает.
+                    val t = (p / 0.8f).coerceIn(0f, 1f)
+                    restAngle * (1f - t * t * (3f - 2f * t))
+                },
+                groundShadow = { 1f - ((morph.progress.value - delay) / (1f - delay)).coerceIn(0f, 1f) },
+                modifier = Modifier
+                    .size(fromWidth, fromHeight)
+                    .graphicsLayer {
+                        val to = morph.to.getOrNull(i)
+                        val raw = morph.progress.value
+                        if (to == null) {
+                            alpha = 0f
+                            return@graphicsLayer
+                        }
+                        val p = ((raw - delay) / (1f - delay)).coerceAtLeast(0f)
+                        val c = lerpOffset(from.center, to.center, p)
+                        translationX = c.x - from.width / 2f
+                        translationY = c.y - from.height / 2f
+                        scaleX = lerp(1f, to.width / coverWidthPx, p)
+                        scaleY = lerp(1f, to.height / from.height, p)
+                        // На карточке и на странице стоят настоящие книги, слой виден только между ними.
+                        alpha = if (raw > 0.001f && raw < 0.999f) 1f else 0f
+                    },
+            )
         }
     }
 }
