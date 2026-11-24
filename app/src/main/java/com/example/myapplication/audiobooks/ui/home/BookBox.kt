@@ -13,6 +13,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -100,14 +101,27 @@ internal fun BookBox(
     angle: () -> Float,
     modifier: Modifier = Modifier,
     groundShadow: () -> Float = NoShadow,
+    /** Ширина «следа» книги в строке для тени; по умолчанию — ширина самой коробки. */
+    shadowSpan: Dp? = null,
+    /**
+     * Готовые слои граней чужой книги. Если они заданы, коробка ничего не собирает сама (ни картинок,
+     * ни текста) и только рисует эти слои со своей матрицей: так летящая копия совпадает со стоящей
+     * книгой до пикселя и не тратит кадр на повторную сборку.
+     */
+    faces: BookFaceLayers? = null,
+    /** Сообщает слои собственных граней: их берёт летящая копия. */
+    onFaces: ((BookFaceLayers) -> Unit)? = null,
 ) {
     val density = LocalDensity.current
+    val shadowSpanPx = shadowSpan?.let { with(density) { it.toPx() } }
     val camera = with(density) { BookCamera.toPx() }
     val widthPx = with(density) { dims.width.toPx() }
     val heightPx = with(density) { dims.height.toPx() }
     val thicknessPx = with(density) { dims.thickness.toPx() }
-    val coverLayer = rememberGraphicsLayer()
-    val spineLayer = rememberGraphicsLayer()
+    val own = if (faces == null) BookFaceLayers(rememberGraphicsLayer(), rememberGraphicsLayer()) else null
+    val coverLayer = (faces ?: own!!).cover
+    val spineLayer = (faces ?: own!!).spine
+    if (own != null && onFaces != null) SideEffect { onFaces(own) }
     val matrix = remember { android.graphics.Matrix() }
     val src = remember { FloatArray(8) }
     val dst = remember { FloatArray(8) }
@@ -135,7 +149,7 @@ internal fun BookBox(
 
             val shadow = groundShadow()
             if (shadow > 0.01f) {
-                val w = size.width * 0.9f + thicknessPx * 0.6f
+                val w = (shadowSpanPx ?: size.width) * 0.9f + thicknessPx * 0.6f
                 val r = w / 2f
                 val center = Offset(cx, cy + hh)
                 scale(1f, 7.dp.toPx() / w, center) {
@@ -163,12 +177,17 @@ internal fun BookBox(
         },
         contentAlignment = Alignment.Center,
     ) {
-        Box(Modifier.requiredSize(dims.width, dims.height).recordInto(coverLayer)) { CoverFace(book, style) }
-        Box(Modifier.requiredSize(dims.thickness, dims.height).recordInto(spineLayer)) {
-            SpineFace(book, style, index, dims.thickness)
+        if (faces == null) {
+            Box(Modifier.requiredSize(dims.width, dims.height).recordInto(coverLayer)) { CoverFace(book, style) }
+            Box(Modifier.requiredSize(dims.thickness, dims.height).recordInto(spineLayer)) {
+                SpineFace(book, style, index, dims.thickness)
+            }
         }
     }
 }
+
+/** Слои двух граней книги-коробки: обложка и корешок. */
+internal class BookFaceLayers(val cover: GraphicsLayer, val spine: GraphicsLayer)
 
 /** Грань рисуется, только если повёрнута к зрителю (знак площади четырёхугольника). */
 private fun DrawScope.drawFace(
@@ -223,7 +242,7 @@ private fun Modifier.recordInto(layer: GraphicsLayer): Modifier =
 
 @Composable
 private fun CoverFace(book: CachedBook?, style: PlaceholderStyle) {
-    val shape = RoundedCornerShape(topStart = 1.5.dp, bottomStart = 1.5.dp, topEnd = 4.dp, bottomEnd = 4.dp)
+    val shape = RoundedCornerShape(topStart = 3.dp, bottomStart = 3.dp, topEnd = 4.5.dp, bottomEnd = 4.5.dp)
     Box(Modifier.fillMaxSize().clip(shape).background(style.palette.card)) {
         if (book != null) CoverImage(book, Modifier.fillMaxSize())
         // Сгиб переплёта у левого края.

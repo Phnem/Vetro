@@ -45,6 +45,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -54,6 +55,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.layout
@@ -191,6 +193,7 @@ internal fun SpineRow(
     spineHeight: Dp,
     modifier: Modifier = Modifier,
     bookModifier: (index: Int) -> Modifier = { Modifier },
+    onFaces: (index: Int, faces: BookFaceLayers) -> Unit = { _, _ -> },
 ) {
     BoxWithConstraints(modifier.fillMaxWidth()) {
         val n = books.size
@@ -217,6 +220,7 @@ internal fun SpineRow(
                     angle = RestSpine,
                     groundShadow = FullGroundShadow,
                     modifier = Modifier.size(spineWidth, spineHeight).then(bookModifier(index)),
+                    onFaces = { onFaces(index, it) },
                 )
             }
         }
@@ -274,6 +278,7 @@ internal fun ShelfCardV2(
     modifier: Modifier = Modifier,
     stageModifier: Modifier = Modifier,
     bookModifier: (index: Int) -> Modifier = { Modifier },
+    onFaces: (index: Int, faces: BookFaceLayers) -> Unit = { _, _ -> },
 ) {
     val ink = if (isDark) Color.White else Color(0xFF111111)
     val shape = RoundedCornerShape(24.dp)
@@ -313,14 +318,18 @@ internal fun ShelfCardV2(
             stageModifier.fillMaxWidth().heightIn(min = StageMinHeight),
             contentAlignment = Alignment.BottomCenter,
         ) {
-            ShelfStage(books, bookModifier)
+            ShelfStage(books, bookModifier, onFaces)
         }
         ShelfBaseline(isDark)
     }
 }
 
 @Composable
-private fun ShelfStage(books: List<CachedBook>, bookModifier: (Int) -> Modifier) {
+private fun ShelfStage(
+    books: List<CachedBook>,
+    bookModifier: (Int) -> Modifier,
+    onFaces: (Int, BookFaceLayers) -> Unit,
+) {
     val tilt = Math.toRadians(AngledTilt.toDouble())
     val sinT = sin(tilt).toFloat()
     val cosT = cos(tilt).toFloat()
@@ -371,11 +380,18 @@ private fun ShelfStage(books: List<CachedBook>, bookModifier: (Int) -> Modifier)
                         modifier = Modifier
                             .size(dims.footprintWidth(AngledTilt), dims.height)
                             .then(bookModifier(index)),
+                        onFaces = { onFaces(index, it) },
                     )
                 }
             }
         }
-        else -> SpineRow(books, maxSpineWidth = SpineMaxWidth, spineHeight = SpineHeight, bookModifier = bookModifier)
+        else -> SpineRow(
+            books,
+            maxSpineWidth = SpineMaxWidth,
+            spineHeight = SpineHeight,
+            bookModifier = bookModifier,
+            onFaces = onFaces,
+        )
     }
 }
 
@@ -450,6 +466,7 @@ internal fun ShelfPageV2(
     val ink = if (isDark) Color.White else Color(0xFF111111)
     val density = LocalDensity.current
     val rise = with(density) { 24.dp.toPx() }
+    val captionRise = with(density) { 6.dp.toPx() }
     var drag by remember { mutableFloatStateOf(0f) }
     BackHandler(onBack = onClose)
 
@@ -535,20 +552,31 @@ internal fun ShelfPageV2(
                         coverModifier = if (index < ShelfMorph.TRACKED) {
                             Modifier
                                 .onPlaced { morph.targetCoords[index] = it }
-                                .graphicsLayer { alpha = if (morph.hidesRow(index)) 0f else 1f }
+                                // Настоящая обложка проявляется под растворяющейся копией (последние 8% пути).
+                                .graphicsLayer { alpha = morph.gridCoverAlpha(index) }
                         } else {
                             Modifier
                         },
                     )
                     Spacer(Modifier.height(10.dp))
-                    Text(
-                        book.title, color = ink, fontFamily = SnProFamily, fontWeight = FontWeight.SemiBold,
-                        fontSize = 13.sp, lineHeight = 17.sp, maxLines = 2, overflow = TextOverflow.Ellipsis,
-                    )
-                    Text(
-                        book.authors.joinToString(", "), color = ink.copy(alpha = 0.55f), fontFamily = SnProFamily,
-                        fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                    )
+                    // Подпись держится прозрачной, пока книга летит, и проявляется на последних 20%
+                    // её пути: садящаяся книга не перекрывает уже видимый текст.
+                    Column(
+                        Modifier.graphicsLayer {
+                            val a = if (index < ShelfMorph.TRACKED) morph.captionAlpha(index) else 1f
+                            alpha = a
+                            translationY = captionRise * (1f - a)
+                        },
+                    ) {
+                        Text(
+                            book.title, color = ink, fontFamily = SnProFamily, fontWeight = FontWeight.SemiBold,
+                            fontSize = 13.sp, lineHeight = 17.sp, maxLines = 2, overflow = TextOverflow.Ellipsis,
+                        )
+                        Text(
+                            book.authors.joinToString(", "), color = ink.copy(alpha = 0.55f), fontFamily = SnProFamily,
+                            fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                        )
+                    }
                 }
             }
         }
@@ -571,47 +599,70 @@ internal fun BoxScope.FlyingBooks(morph: ShelfMorph, shelf: OpenShelf) {
     Box(Modifier.matchParentSize()) {
         for (i in 0 until minOf(shelf.books.size, ShelfMorph.TRACKED)) {
             val book = shelf.books[i]
-            // Книга собирается по старту (он известен сразу), а посадка читается при рисовании:
-            // тяжёлая первая композиция слоёв и картинок приходится на кадры до начала полёта,
-            // а не на его первый кадр.
             val from = morph.from.getOrNull(i) ?: continue
+            // Грани берутся готовыми со стоящей на карточке книги: летящая копия не собирает ни
+            // картинки, ни текст заново, поэтому совпадает с ней до пикселя и не тратит кадр на сборку.
+            val faces = morph.faceLayers["${shelf.key}#$i"]?.takeUnless { it.cover.isReleased || it.spine.isReleased }
+                ?: continue
             val fromWidth = with(density) { from.width.toDp() }
             val fromHeight = with(density) { from.height.toDp() }
             val dims = if (spined) spineDims(fromWidth, fromHeight) else angledDims(fromHeight / 1.5f)
             val style = remember(book.title) { placeholderStyleFor(book.title) }
             val delay = minOf(i, 8) * 0.028f
             val coverWidthPx = with(density) { dims.width.toPx() }
-            BookBox(
-                book = book,
-                style = style,
-                index = i,
-                dims = dims,
-                angle = {
-                    val p = ((morph.progress.value - delay) / (1f - delay)).coerceIn(0f, 1f)
-                    // Поворот заканчивается раньше посадки: книга успевает лечь и только потом доезжает.
-                    val t = (p / 0.8f).coerceIn(0f, 1f)
-                    restAngle * (1f - t * t * (3f - 2f * t))
+            // Узел больше самой книги: при растворении (alpha < 1) слой не должен обрезать обложку,
+            // которая шире, чем след корешка, и перспективу у краёв.
+            val nodeWidth = maxOf(dims.width, fromWidth) + 16.dp
+            val nodeHeight = dims.height + 16.dp
+            val nodeWidthPx = with(density) { nodeWidth.toPx() }
+            val nodeHeightPx = with(density) { nodeHeight.toPx() }
+            // Клип по карточке: на подходе к полке (и на старте) книга не вылезает ниже её нижней
+            // кромки, дальше от полки окно плавно раскрывается на весь экран.
+            Box(
+                Modifier.matchParentSize().drawWithContent {
+                    val card = morph.card
+                    val k = ((morph.bookProgress(i) - 0.35f) / 0.3f).coerceIn(0f, 1f)
+                    val spread = k * k * (3f - 2f * k)
+                    val bottom = if (card == null) size.height else lerp(card.bottom, size.height, spread)
+                    clipRect(left = 0f, top = 0f, right = size.width, bottom = bottom) {
+                        this@drawWithContent.drawContent()
+                    }
                 },
-                groundShadow = { 1f - ((morph.progress.value - delay) / (1f - delay)).coerceIn(0f, 1f) },
-                modifier = Modifier
-                    .size(fromWidth, fromHeight)
-                    .graphicsLayer {
-                        val to = morph.to.getOrNull(i)
-                        val raw = morph.progress.value
-                        if (to == null) {
-                            alpha = 0f
-                            return@graphicsLayer
-                        }
-                        val p = ((raw - delay) / (1f - delay)).coerceAtLeast(0f)
-                        val c = lerpOffset(from.center, to.center, p)
-                        translationX = c.x - from.width / 2f
-                        translationY = c.y - from.height / 2f
-                        scaleX = lerp(1f, to.width / coverWidthPx, p)
-                        scaleY = lerp(1f, to.height / from.height, p)
-                        // На карточке и на странице стоят настоящие книги, слой виден только между ними.
-                        alpha = if (raw > 0.001f && raw < 0.999f) 1f else 0f
+            ) {
+                BookBox(
+                    book = book,
+                    style = style,
+                    index = i,
+                    dims = dims,
+                    angle = {
+                        val p = ((morph.progress.value - delay) / (1f - delay)).coerceIn(0f, 1f)
+                        // Поворот заканчивается на 88% пути: последние кадры книга доезжает уже
+                        // плоской, без сброса перспективы на посадке.
+                        val t = (p / 0.88f).coerceIn(0f, 1f)
+                        restAngle * (1f - t * t * (3f - 2f * t))
                     },
-            )
+                    groundShadow = { 1f - morph.bookProgress(i) },
+                    shadowSpan = fromWidth,
+                    faces = faces,
+                    modifier = Modifier
+                        .size(nodeWidth, nodeHeight)
+                        .graphicsLayer {
+                            val to = morph.to.getOrNull(i)
+                            val p = ((morph.progress.value - delay) / (1f - delay)).coerceAtLeast(0f)
+                            val target = to ?: from
+                            val c = lerpOffset(from.center, target.center, if (to == null) 0f else p)
+                            translationX = c.x - nodeWidthPx / 2f
+                            translationY = c.y - nodeHeightPx / 2f
+                            if (to != null) {
+                                scaleX = lerp(1f, to.width / coverWidthPx, p)
+                                scaleY = lerp(1f, to.height / from.height, p)
+                            }
+                            // Копия проявляется поверх стоящей книги и растворяется поверх настоящей
+                            // обложки сетки; в остальное время её не видно.
+                            alpha = if (to == null) 0f else morph.overlayAlpha(i)
+                        },
+                )
+            }
         }
     }
 }

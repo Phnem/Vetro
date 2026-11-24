@@ -188,6 +188,7 @@ fun BooksHomeScreen(
             key to label
         }.toMap()
     }
+    val newShelvesFlag = com.example.myapplication.ui.shared.LocalNewShelves.current
     CompositionLocalProvider(LocalBookProgress provides { book -> progressLabels["${book.source}:${book.key}"] }) {
     Box(
         modifier
@@ -208,7 +209,7 @@ fun BooksHomeScreen(
             onRetry = vm::retry,
             onOpenShelf = { shelf ->
                 openShelfKey = shelf.key
-                morph.expand(shelf, scope, reducedMotion)
+                morph.expand(shelf, scope, reducedMotion, critical = newShelvesFlag)
             },
             onAddFolder = { runCatching { folderPicker.launch(null) } },
             importing = importing > 0,
@@ -315,7 +316,10 @@ private fun HomeList(
             // Список под раскрытой полкой гаснет и чуть уходит вниз (видео, 2,0–2,6 с).
             .graphicsLayer {
                 val p = morph.progress.value
-                alpha = 1f - (p / HOME_FADE_END).coerceIn(0f, 1f)
+                // Новые полки при закрытии возвращают список с 65% пути: к посадке книг подложка
+                // карточки и нижняя панель уже видны, а не проявляются вторым рывком.
+                val end = if (newShelves && morph.closing) HOME_FADE_CLOSE_END else HOME_FADE_END
+                alpha = 1f - (p / end).coerceIn(0f, 1f)
                 translationY = lift * p
             },
     ) {
@@ -384,8 +388,9 @@ private fun HomeList(
                     bookModifier = { index ->
                         Modifier
                             .onPlaced { morph.fanCoords["${shelf.key}#$index"] = it }
-                            .graphicsLayer { alpha = if (morph.hidesBook(shelf.key, index)) 0f else 1f }
+                            .graphicsLayer { alpha = morph.cardBookAlpha(shelf.key, index) }
                     },
+                    onFaces = { index, faces -> morph.faceLayers["${shelf.key}#$index"] = faces },
                     modifier = cardClick,
                 )
                 return@items
@@ -425,6 +430,9 @@ internal class ShelfMorph {
     // Координаты узлов пишутся без состояния (onPlaced), читаются только в момент перехода: так
     // скролл дома не превращается в поток записей в снапшот (урок stage 3.4 «positions on demand»).
     val fanCoords = HashMap<String, LayoutCoordinates>()
+
+    /** Слои граней книг на карточках (новые полки): летящая копия рисует именно их. */
+    val faceLayers = HashMap<String, BookFaceLayers>()
     val cardCoords = HashMap<String, LayoutCoordinates>()
     val targetCoords = HashMap<Int, LayoutCoordinates>()
     var root: LayoutCoordinates? = null
@@ -438,16 +446,55 @@ internal class ShelfMorph {
 
     fun hidesFan(key: String): Boolean = open?.key == key && progress.value > 0.001f
 
-    /** Книга [index] новой полки: на время полёта скрыта на карточке, если у неё есть и старт, и посадка. */
-    fun hidesBook(key: String, index: Int): Boolean =
-        open?.key == key && progress.value > 0.001f &&
-            from.getOrNull(index) != null && to.getOrNull(index) != null
+    /** Закрытие идёт: список возвращается раньше (с 65% пути), а не после остановки книг. */
+    var closing by mutableStateOf(false)
+        private set
+
+    // ---- Новые полки: прогресс каждой книги и передача между слоями -------------------------
+    // Книги стартуют по очереди (задержка по индексу), поэтому «приземлилась» у каждой своё время.
+    // Всё, что зависит от посадки или старта (подмена слоёв, подписи), считается от прогресса
+    // именно этой книги, а не общего.
+
+    private fun bookDelay(index: Int): Float = minOf(index, 8) * 0.028f
+
+    fun bookProgress(index: Int): Float {
+        val d = bookDelay(index)
+        return ((progress.value - d) / (1f - d)).coerceIn(0f, 1f)
+    }
+
+    private fun flies(index: Int): Boolean = from.getOrNull(index) != null && to.getOrNull(index) != null
+
+    /** Настоящая книга на карточке: скрыта, пока над ней летит копия. */
+    fun cardBookAlpha(key: String, index: Int): Float =
+        if (open?.key == key && flies(index) && bookProgress(index) >= DOCK) 0f else 1f
+
+    /**
+     * Летящая копия растворяется поверх настоящей обложки сетки за последние 1,5% пути: подмена слоёв
+     * не происходит за один кадр. На карточке подмена жёсткая и совпадает со стоящей книгой до пикселя.
+     */
+    fun overlayAlpha(index: Int): Float {
+        val bp = bookProgress(index)
+        // На карточке копия и стоящая книга рисуют одни и те же слои, поэтому подмена там жёсткая,
+        // но только когда копия отошла от места меньше чем на пиксель (начало и конец пути).
+        val rise = if (bp >= DOCK) 1f else 0f
+        val fall = 1f - ((bp - (1f - HANDOFF)) / HANDOFF).coerceIn(0f, 1f)
+        return rise * fall
+    }
+
+    /** Настоящая обложка в сетке проявляется под растворяющейся копией. */
+    fun gridCoverAlpha(index: Int): Float =
+        if (flies(index)) ((bookProgress(index) - (1f - HANDOFF)) / HANDOFF).coerceIn(0f, 1f) else 1f
+
+    /** Подпись под книгой в сетке: только на последних 20% пути этой книги, пока она не села. */
+    fun captionAlpha(index: Int): Float =
+        if (flies(index)) ((bookProgress(index) - 0.8f) / 0.2f).coerceIn(0f, 1f) else 1f
 
     /** Обложки ряда страницы, прилетевшие из веера, до конца полёта нарисованы летящей копией. */
     fun hidesRow(index: Int): Boolean = progress.value < 0.999f && from.getOrNull(index) != null
 
-    fun expand(shelf: OpenShelf, scope: CoroutineScope, reducedMotion: Boolean) {
+    fun expand(shelf: OpenShelf, scope: CoroutineScope, reducedMotion: Boolean, critical: Boolean = false) {
         if (open != null) return
+        closing = false
         from = (0 until TRACKED).map { rectOf(fanCoords["${shelf.key}#$it"]) }
         card = rectOf(cardCoords[shelf.key])
         stage = rectOf(fanCoords["${shelf.key}#stage"])
@@ -458,7 +505,12 @@ internal class ShelfMorph {
             withFrameNanos { }
             withFrameNanos { }
             to = (0 until TRACKED).map { rectOf(targetCoords[it]) }
-            if (reducedMotion) progress.snapTo(1f) else progress.animateTo(1f, MotionTokens.largeSurfaceEnter())
+            when {
+                reducedMotion -> progress.snapTo(1f)
+                // Новые полки: критическое затухание без отскока, книги не перелетают место посадки.
+                critical -> progress.animateTo(1f, androidx.compose.animation.core.spring(dampingRatio = 1f, stiffness = 380f))
+                else -> progress.animateTo(1f, MotionTokens.largeSurfaceEnter())
+            }
         }
     }
 
@@ -474,6 +526,7 @@ internal class ShelfMorph {
 
     fun collapse(scope: CoroutineScope, reducedMotion: Boolean) {
         val shelf = open ?: return
+        closing = true
         from = (0 until TRACKED).map { rectOf(fanCoords["${shelf.key}#$it"]) }
         to = (0 until TRACKED).map { rectOf(targetCoords[it]) }
         scope.launch {
@@ -500,6 +553,12 @@ internal class ShelfMorph {
 
         /** Новые полки: сколько книг полки отслеживает морф (откуда летят и куда садятся). */
         const val TRACKED = 24
+
+        /** Доля пути книги, за которую копия растворяется поверх настоящей обложки в сетке. */
+        const val HANDOFF = 0.015f
+
+        /** Доля пути, в пределах которой копия ещё неотличима от стоящей на карточке книги (< 1 пикселя). */
+        const val DOCK = 0.004f
     }
 }
 
@@ -797,3 +856,4 @@ private const val TOP_ON_SHELF = 8
  * своей заливки — под обоими общий градиент раздела, и на обратном ходе не остаётся «чёрного окна».
  */
 private const val HOME_FADE_END = 0.4f
+private const val HOME_FADE_CLOSE_END = 0.65f
