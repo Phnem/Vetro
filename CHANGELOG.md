@@ -1,5 +1,18 @@
 # Vetro changelog
 
+## v3.6.2-Alpha — November 24, 2026
+
+App version: `v3.6.2-Alpha`. Android version code: `362`.
+Changes since 3.6.1-Alpha. This is a pre-release: the in-app updater ignores Alpha tags, install it by hand.
+Only the "New bookshelves" experiment (Settings, For developers, off by default) changed.
+
+### New bookshelves (experimental)
+
+- Fixed a shelf with 3 books: the shadow under each book stretched its column to most of the shelf width, so the first book sat in the middle and pushed the others out of the card. Each book now takes only its own width.
+- The tilt of the thin books is now drawn with real perspective (the right edge is a little closer to you), as in the reference; before, only the narrowing was applied.
+- A shelf with up to 3 books opens the way it did before: the three covers fly from the card into the shelf page. Only a full shelf (more than 3 books) opens with the strip of spines rising to the top.
+- The strip of spines now grows out of the shelf card smoothly: it fades in from nothing while the shelf on the card fades out, instead of popping in on the first frame.
+
 ## v3.6.1-Alpha — November 24, 2026
 
 App version: `v3.6.1-Alpha`. Android version code: `361`.
