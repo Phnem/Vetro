@@ -1,5 +1,25 @@
 # Vetro changelog
 
+## v3.6.1-Alpha — November 24, 2026
+
+App version: `v3.6.1-Alpha`. Android version code: `361`.
+Changes since 3.6.0-Beta. This is a pre-release: the in-app updater ignores Alpha tags, install it by hand.
+Both features below are experiments: each has its own switch in Settings, For developers, and both are off by default, so nothing changes until you turn them on.
+
+### Details from search (experimental)
+
+- With the "Details from search" switch on, tapping a result in search opens a title page with the poster, name, chips, genres and description taken from the search result. There is no Watch, Download or timers there: first add the title, then work with it. Audiobook results still behave as before.
+- The "+ Add" pill is alive: it glints now and then; on tap the label disappears, the plus slides to the centre and spins while the title is being saved, then slows down and turns into a check mark.
+- Right after the check an iOS NameDrop-style effect plays: the screen is pulled up and blurred, a lens wave runs down from the top, and under its cover the page is replaced by the usual title page with Watch, Download, the bell and the rest. Then a mini notification says that the title was added to your collection.
+- The effect is a shader and runs on Android 13 and newer. On Android 12 it is a simple pull with blur, and on older versions a plain pull. A title that is already in the collection opens the usual title page at once, with no animation.
+
+### New bookshelves (experimental)
+
+- With the "New bookshelves" switch on, the audiobook shelves are redrawn. Books become thin and strict instead of the old chunky low-poly ones: a slice of the cover for the spine, a hinge, a page edge and a contact shadow.
+- A shelf with up to 3 books shows them thin and slightly turned, in real perspective. A shelf with more than 3 books becomes a real shelf: every book stands spine out, the cover shows through the shade, the title runs along the spine, and a row that does not fit scrolls sideways.
+- Inside an opened shelf the books lie almost flat in a two-column grid. A strip of spines on top flies in from the shelf card; tapping a spine highlights the book and scrolls the grid to it.
+- With the switch off the shelves are exactly as in 3.6.0-Beta.
+
 ## v3.6.0-Beta — November 22, 2026
 
 App version: `v3.6.0-Beta`. Android version code: `360`.
