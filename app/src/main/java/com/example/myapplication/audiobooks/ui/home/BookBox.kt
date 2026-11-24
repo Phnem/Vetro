@@ -141,12 +141,18 @@ internal fun BookBox(
             val hh = heightPx / 2f
             val ht = thicknessPx / 2f
 
+            // Ближняя к зрителю грань принимается за плоскость экрана (f = 1): книга имеет свой
+            // размер без увеличения «поближе к камере» (корешок в 90° иначе раздувался на 8% и
+            // вылезал ниже полки), а обложка при угле 0 совпадает с обложкой в сетке до пикселя.
+            val zRef = maxOf(hw * s, ht * c)
+
             fun put(out: FloatArray, k: Int, x: Float, y: Float, z: Float) {
                 val xr = x * c + z * s
-                val zr = -x * s + z * c
+                val zr = -x * s + z * c - zRef
                 val f = camera / (camera - zr)
                 out[2 * k] = cx + xr * f
-                out[2 * k + 1] = cy + y * f
+                // Камера на уровне пола: низ книги не уезжает от линии полки, перспектива сужает верх.
+                out[2 * k + 1] = cy + hh + (y - hh) * f
             }
 
             val shadow = groundShadow()

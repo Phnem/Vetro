@@ -588,7 +588,7 @@ internal class ShelfMorph {
         const val SETTLE_MS = 110
 
         /** Доля пути, в пределах которой копия ещё неотличима от стоящей на карточке книги (< 1 пикселя). */
-        const val DOCK = 0.004f
+        const val DOCK = 0.0015f
     }
 }
 
