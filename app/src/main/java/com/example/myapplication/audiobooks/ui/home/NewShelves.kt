@@ -121,19 +121,22 @@ internal fun CoverImage(
     var failed by remember(url) { androidx.compose.runtime.mutableStateOf(false) }
     val style = remember(book.title) { placeholderStyleFor(book.title) }
     if (url == null || failed) {
-        Box(modifier.background(style.palette.card), contentAlignment = Alignment.Center) {
+        // Размер подписи и поля — доли ширины обложки: копия, выросшая до размера обложки в сетке,
+        // даёт тот же текст, что сама обложка в этом размере (нет скачка размера букв при посадке).
+        BoxWithConstraints(modifier.background(style.palette.card), contentAlignment = Alignment.Center) {
             if (showTitle) {
+                val w = maxWidth.value
                 Text(
                     text = book.title,
                     color = style.palette.line,
                     fontFamily = SnProFamily,
                     fontWeight = FontWeight.Bold,
-                    fontSize = 11.sp,
-                    lineHeight = 13.sp,
+                    fontSize = (w * 0.1236f).sp,
+                    lineHeight = (w * 0.146f).sp,
                     textAlign = TextAlign.Center,
                     maxLines = 4,
                     overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(horizontal = 10.dp),
+                    modifier = Modifier.padding(horizontal = (w * 0.112f).dp),
                 )
             }
         }
@@ -403,33 +406,16 @@ private fun ShelfStage(
  */
 @Composable
 internal fun FlatCover(book: CachedBook, modifier: Modifier = Modifier) {
-    val shape = RoundedCornerShape(6.dp)
     val style = remember(book.title) { placeholderStyleFor(book.title) }
     Box(
         modifier
-            .shadow(8.dp, shape, clip = false)
-            .clip(shape)
+            // Обычная elevation-тень (shadow()) отличается от тени летящей копии: рисуем ту же, что у копии.
+            .drawBehind { drawSoftCoverShadow(0f, 0f, size.width, size.height, 1f) }
+            .clip(CoverShape)
             .background(style.palette.card),
     ) {
         CoverImage(book, Modifier.fillMaxSize())
-        Box(
-            Modifier
-                .padding(start = 5.dp)
-                .width(1.5.dp)
-                .fillMaxHeight()
-                .background(
-                    Brush.horizontalGradient(
-                        listOf(Color.Black.copy(alpha = 0.4f), Color.White.copy(alpha = 0.12f)),
-                    ),
-                ),
-        )
-        Box(
-            Modifier.fillMaxSize().drawBehind {
-                val line = 1.dp.toPx()
-                drawRect(Color.White.copy(alpha = 0.1f), size = Size(line, size.height))
-                drawRect(Color.White.copy(alpha = 0.07f), size = Size(size.width, line))
-            },
-        )
+        CoverDecor()
     }
 }
 
@@ -538,7 +524,10 @@ internal fun ShelfPageV2(
                         .graphicsLayer {
                             val a = contentAlpha(morph.progress.value)
                             alpha = a
-                            translationY = rise * (1f - a)
+                            // Карточки с летящими книгами не сдвигаются: место посадки измеряется до
+                            // начала полёта, и сдвиг на 24 dp на старте уводил бы копию мимо места, где
+                            // обложка окажется в конце (это и был щелчок при посадке).
+                            if (index >= ShelfMorph.TRACKED) translationY = rise * (1f - a)
                         }
                         .clip(cardShape)
                         .background(ink.copy(alpha = 0.02f))
@@ -642,6 +631,11 @@ internal fun BoxScope.FlyingBooks(morph: ShelfMorph, shelf: OpenShelf) {
                         restAngle * (1f - t * t * (3f - 2f * t))
                     },
                     groundShadow = { 1f - morph.bookProgress(i) },
+                    // К посадке копия отбрасывает ту же тень, что обложка в сетке.
+                    coverShadow = {
+                        val t = ((morph.bookProgress(i) - 0.5f) / 0.5f).coerceIn(0f, 1f)
+                        t * t * (3f - 2f * t)
+                    },
                     shadowSpan = fromWidth,
                     faces = faces,
                     modifier = Modifier

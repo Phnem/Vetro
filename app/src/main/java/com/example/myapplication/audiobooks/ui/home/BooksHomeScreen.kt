@@ -229,7 +229,7 @@ fun BooksHomeScreen(
             }
             val closeShelf: () -> Unit = {
                 openShelfKey = null
-                morph.collapse(scope, reducedMotion)
+                morph.collapse(scope, reducedMotion, critical = newShelvesFlag)
             }
             val newShelves = com.example.myapplication.ui.shared.LocalNewShelves.current
             if (newShelves) {
@@ -320,7 +320,9 @@ private fun HomeList(
                 // карточки и нижняя панель уже видны, а не проявляются вторым рывком.
                 val end = if (newShelves && morph.closing) HOME_FADE_CLOSE_END else HOME_FADE_END
                 alpha = 1f - (p / end).coerceIn(0f, 1f)
-                translationY = lift * p
+                // Новые полки: список не сдвигается. Место возврата книги измеряется на старте закрытия, когда
+                // список уже опущен, и копия садилась бы на смещённое место, а в конце «подпрыгивала».
+                translationY = if (newShelves) 0f else lift * p
             },
     ) {
         item(key = "header") {
@@ -450,6 +452,13 @@ internal class ShelfMorph {
     var closing by mutableStateOf(false)
         private set
 
+    /**
+     * Передача между летящей копией и настоящей обложкой сетки: 0 — виден только полёт, 1 — только
+     * сетка. Идёт по времени уже после остановки книг (книги и обложки стоят на одном месте), а не
+     * по хвосту пружины: хвост растягивает кроссфейд и даёт двойной контур.
+     */
+    val settle = Animatable(0f)
+
     // ---- Новые полки: прогресс каждой книги и передача между слоями -------------------------
     // Книги стартуют по очереди (задержка по индексу), поэтому «приземлилась» у каждой своё время.
     // Всё, что зависит от посадки или старта (подмена слоёв, подписи), считается от прогресса
@@ -469,21 +478,26 @@ internal class ShelfMorph {
         if (open?.key == key && flies(index) && bookProgress(index) >= DOCK) 0f else 1f
 
     /**
-     * Летящая копия растворяется поверх настоящей обложки сетки за последние 1,5% пути: подмена слоёв
-     * не происходит за один кадр. На карточке подмена жёсткая и совпадает со стоящей книгой до пикселя.
+     * Летящая копия растворяется поверх настоящей обложки сетки уже после остановки книг ([settle],
+     * по времени): подмена слоёв не происходит за один кадр. На карточке подмена жёсткая и совпадает
+     * со стоящей книгой до пикселя.
      */
     fun overlayAlpha(index: Int): Float {
         val bp = bookProgress(index)
         // На карточке копия и стоящая книга рисуют одни и те же слои, поэтому подмена там жёсткая,
         // но только когда копия отошла от места меньше чем на пиксель (начало и конец пути).
         val rise = if (bp >= DOCK) 1f else 0f
-        val fall = 1f - ((bp - (1f - HANDOFF)) / HANDOFF).coerceIn(0f, 1f)
-        return rise * fall
+        return rise * (1f - settle.value)
     }
 
-    /** Настоящая обложка в сетке проявляется под растворяющейся копией. */
+    /**
+     * Настоящая обложка в сетке: скрыта, пока книга летит, и сразу полностью видна под копией, как
+     * только та села. Копия при этом ещё непрозрачна и растворяется сверху: пара «настоящая под
+     * растворяющейся» всё время непрозрачна, а парный кроссфейд (одна гаснет, другая проявляется)
+     * на середине просвечивал бы фон и бледнел.
+     */
     fun gridCoverAlpha(index: Int): Float =
-        if (flies(index)) ((bookProgress(index) - (1f - HANDOFF)) / HANDOFF).coerceIn(0f, 1f) else 1f
+        if (flies(index)) (if (bookProgress(index) >= 0.995f || settle.value > 0f) 1f else 0f) else 1f
 
     /** Подпись под книгой в сетке: только на последних 20% пути этой книги, пока она не села. */
     fun captionAlpha(index: Int): Float =
@@ -505,10 +519,19 @@ internal class ShelfMorph {
             withFrameNanos { }
             withFrameNanos { }
             to = (0 until TRACKED).map { rectOf(targetCoords[it]) }
+            settle.snapTo(0f)
             when {
-                reducedMotion -> progress.snapTo(1f)
+                reducedMotion -> {
+                    progress.snapTo(1f)
+                    settle.snapTo(1f)
+                }
                 // Новые полки: критическое затухание без отскока, книги не перелетают место посадки.
-                critical -> progress.animateTo(1f, androidx.compose.animation.core.spring(dampingRatio = 1f, stiffness = 380f))
+                // Порог видимости мелкий: стандартный (0,01) обрывает пружину за ~1% до цели и
+                // последний шаг (несколько пикселей) делается одним кадром — это и есть щелчок.
+                critical -> {
+                    progress.animateTo(1f, androidx.compose.animation.core.spring(1f, 380f, 0.0005f))
+                    settle.animateTo(1f, androidx.compose.animation.core.tween(SETTLE_MS))
+                }
                 else -> progress.animateTo(1f, MotionTokens.largeSurfaceEnter())
             }
         }
@@ -522,15 +545,22 @@ internal class ShelfMorph {
         stage = null
         open = shelf
         progress.snapTo(1f)
+        settle.snapTo(1f)
     }
 
-    fun collapse(scope: CoroutineScope, reducedMotion: Boolean) {
+    fun collapse(scope: CoroutineScope, reducedMotion: Boolean, critical: Boolean = false) {
         val shelf = open ?: return
         closing = true
         from = (0 until TRACKED).map { rectOf(fanCoords["${shelf.key}#$it"]) }
         to = (0 until TRACKED).map { rectOf(targetCoords[it]) }
+        // Копия сразу ложится поверх обложки сетки (они совпадают до пикселя, пока книги стоят).
+        scope.launch { settle.snapTo(0f) }
         scope.launch {
-            if (reducedMotion) progress.snapTo(0f) else progress.animateTo(0f, MotionTokens.largeSurfaceExit())
+            when {
+                reducedMotion -> progress.snapTo(0f)
+                critical -> progress.animateTo(0f, androidx.compose.animation.core.spring(1f, 438.6f, 0.0005f))
+                else -> progress.animateTo(0f, MotionTokens.largeSurfaceExit())
+            }
             open = null
         }
     }
@@ -554,8 +584,8 @@ internal class ShelfMorph {
         /** Новые полки: сколько книг полки отслеживает морф (откуда летят и куда садятся). */
         const val TRACKED = 24
 
-        /** Доля пути книги, за которую копия растворяется поверх настоящей обложки в сетке. */
-        const val HANDOFF = 0.015f
+        /** Длительность передачи между летящей копией и обложкой в сетке, мс. */
+        const val SETTLE_MS = 110
 
         /** Доля пути, в пределах которой копия ещё неотличима от стоящей на карточке книги (< 1 пикселя). */
         const val DOCK = 0.004f

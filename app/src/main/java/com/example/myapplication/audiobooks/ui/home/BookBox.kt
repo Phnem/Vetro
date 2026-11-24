@@ -101,6 +101,8 @@ internal fun BookBox(
     angle: () -> Float,
     modifier: Modifier = Modifier,
     groundShadow: () -> Float = NoShadow,
+    /** Тень обложки, ложащейся плоско (в конце полёта в сетку); 0 — нет. */
+    coverShadow: () -> Float = NoShadow,
     /** Ширина «следа» книги в строке для тени; по умолчанию — ширина самой коробки. */
     shadowSpan: Dp? = null,
     /**
@@ -160,6 +162,8 @@ internal fun BookBox(
                     )
                 }
             }
+
+            drawSoftCoverShadow(cx - hw, cy - hh, widthPx, heightPx, coverShadow())
 
             // Обложка: передняя грань (z = +T/2).
             put(dst, 0, -hw, -hh, ht)
@@ -240,28 +244,61 @@ private fun Modifier.recordInto(layer: GraphicsLayer): Modifier =
 
 // ---------- Лица граней ----------
 
+/** Форма обложки: радиусы заданы долей ширины, поэтому у летящей копии и у обложки в сетке углы совпадают при любом масштабе. */
+internal val CoverShape = RoundedCornerShape(topStartPercent = 3, bottomStartPercent = 3, topEndPercent = 5, bottomEndPercent = 5)
+
+/**
+ * Сгиб переплёта и кромки обложки. Все размеры — доли ширины: копия, увеличенная до размера обложки
+ * в сетке, выглядит так же, как сама обложка, нарисованная в этом размере.
+ */
+@Composable
+internal fun CoverDecor() {
+    Box(
+        Modifier.fillMaxSize().drawBehind {
+            val w = size.width
+            val hingeX = w * 0.045f
+            val hingeW = maxOf(1f, w * 0.014f)
+            drawRect(
+                Brush.horizontalGradient(
+                    listOf(Color.Black.copy(alpha = 0.43f), Color.White.copy(alpha = 0.12f)),
+                    startX = hingeX,
+                    endX = hingeX + hingeW,
+                ),
+                topLeft = Offset(hingeX, 0f),
+                size = Size(hingeW, size.height),
+            )
+            val line = maxOf(1f, w * 0.011f)
+            drawRect(Color.White.copy(alpha = 0.08f), size = Size(w, line))
+            drawRect(Color.Black.copy(alpha = 0.4f), topLeft = Offset(0f, size.height - line), size = Size(w, line))
+        },
+    )
+}
+
+/**
+ * Мягкая тень обложки, ложащейся плоско (вместо системной elevation-тени): размеры — доли ширины,
+ * поэтому она одинакова у летящей копии и у обложки в сетке.
+ */
+internal fun DrawScope.drawSoftCoverShadow(left: Float, top: Float, w: Float, h: Float, alpha: Float) {
+    if (alpha <= 0.01f) return
+    val radius = w * 0.05f
+    val spread = w * 0.06f
+    val dy = w * 0.045f
+    for (i in 0 until 6) {
+        val grow = spread * (1f - i / 5f)
+        drawRoundRect(
+            Color.Black.copy(alpha = alpha * 0.045f),
+            topLeft = Offset(left - grow, top - grow * 0.6f + dy),
+            size = Size(w + 2f * grow, h + 1.8f * grow),
+            cornerRadius = androidx.compose.ui.geometry.CornerRadius(radius + grow),
+        )
+    }
+}
+
 @Composable
 private fun CoverFace(book: CachedBook?, style: PlaceholderStyle) {
-    val shape = RoundedCornerShape(topStart = 3.dp, bottomStart = 3.dp, topEnd = 4.5.dp, bottomEnd = 4.5.dp)
-    Box(Modifier.fillMaxSize().clip(shape).background(style.palette.card)) {
+    Box(Modifier.fillMaxSize().clip(CoverShape).background(style.palette.card)) {
         if (book != null) CoverImage(book, Modifier.fillMaxSize())
-        // Сгиб переплёта у левого края.
-        Box(
-            Modifier
-                .padding(start = 6.dp)
-                .width(1.5.dp)
-                .fillMaxHeight()
-                .background(
-                    Brush.horizontalGradient(listOf(Color.Black.copy(alpha = 0.46f), Color.White.copy(alpha = 0.12f))),
-                ),
-        )
-        Box(
-            Modifier.fillMaxSize().drawBehind {
-                val line = 1.dp.toPx()
-                drawRect(Color.White.copy(alpha = 0.08f), size = Size(size.width, line))
-                drawRect(Color.Black.copy(alpha = 0.4f), topLeft = Offset(0f, size.height - line), size = Size(size.width, line))
-            },
-        )
+        CoverDecor()
     }
 }
 
