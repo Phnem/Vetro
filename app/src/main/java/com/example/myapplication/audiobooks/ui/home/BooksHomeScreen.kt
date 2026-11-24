@@ -231,15 +231,20 @@ fun BooksHomeScreen(
                 morph.collapse(scope, reducedMotion)
             }
             val newShelves = com.example.myapplication.ui.shared.LocalNewShelves.current
-            if (newShelves && shelf.books.size > ANGLED_MAX) {
+            if (newShelves) {
+                // До 3 книг: те же три обложки, что стояли под углом на карточке, летят на свои
+                // места в сетке плоских книг. Больше: вместо полёта поднимается лента корешков.
+                val flying = shelf.books.size <= ANGLED_MAX
                 ShelfPageV2(
                     shelf = shelf,
                     strings = strings,
                     isDark = isDark,
                     morph = morph,
+                    flying = flying,
                     onBook = openBook,
                     onClose = closeShelf,
                 )
+                if (flying) FlyingCovers(morph, shelf, fanned = false)
                 return@let
             }
             ShelfPage(
@@ -265,7 +270,7 @@ fun BooksHomeScreen(
                     morph.collapse(scope, reducedMotion)
                 },
             )
-            FlyingCovers(morph, shelf, fanned = !newShelves)
+            FlyingCovers(morph, shelf)
         }
 
         BookSheet(
@@ -543,6 +548,12 @@ internal fun authorShelves(books: List<com.example.myapplication.audiobooks.data
         }
 }
 
+/** Лицо летящей обложки: веер — как в старой странице, новые полки — как плоская книга сетки. */
+@Composable
+private fun FlyingCoverFace(fanned: Boolean, book: CachedBook, modifier: Modifier) {
+    if (fanned) BookCover(book = book, modifier = modifier) else FlatCover(book, modifier)
+}
+
 /**
  * Три обложки веера в полёте — отдельный слой поверх дома и страницы на всё время перехода.
  * Размер — финальный (ряд полки), путь и поворот — transform, так что картинка не перемеряется.
@@ -563,7 +574,8 @@ private fun BoxScope.FlyingCovers(morph: ShelfMorph, shelf: OpenShelf, fanned: B
             val to = morph.to.getOrNull(i) ?: continue
             // Книги новых полок стоят без веерного поворота: летят прямо, садятся на планку.
             val rotation = if (fanned) FanPoses[FanBookIndex.indexOf(i)].rotation else 0f
-            BookCover(
+            FlyingCoverFace(
+                fanned = fanned,
                 book = book,
                 modifier = Modifier
                     .size(with(density) { to.width.toDp() }, with(density) { to.height.toDp() })

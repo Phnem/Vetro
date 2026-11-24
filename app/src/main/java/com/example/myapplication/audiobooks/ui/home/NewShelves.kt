@@ -583,40 +583,47 @@ private fun ShelfStage(books: List<CachedBook>, coverModifier: (Int) -> Modifier
 
 // ---------- Положение 3: почти плоская книга внутри полки ----------
 
-/** Почти плоская книга лицом к зрителю: карточка 2:3, сгиб слева, узкая кромка страниц справа. */
+/**
+ * Лицо плоской книги: обложка со сгибом слева. Одно и то же рисуется в сетке и в полёте с карточки,
+ * поэтому в момент посадки летящая копия совпадает с настоящей без швов.
+ */
 @Composable
-internal fun FlatBook(book: CachedBook, modifier: Modifier = Modifier) {
+internal fun FlatCover(book: CachedBook, modifier: Modifier = Modifier) {
     val shape = RoundedCornerShape(6.dp)
     val style = remember(book.title) { placeholderStyleFor(book.title) }
-    Row(modifier.fillMaxWidth().aspectRatio(2f / 3f)) {
+    Box(
+        modifier
+            .shadow(8.dp, shape, clip = false)
+            .clip(shape)
+            .background(style.palette.card),
+    ) {
+        CoverImage(book, Modifier.fillMaxSize())
         Box(
             Modifier
-                .weight(1f)
+                .padding(start = 5.dp)
+                .width(1.5.dp)
                 .fillMaxHeight()
-                .shadow(8.dp, shape, clip = false)
-                .clip(shape)
-                .background(style.palette.card),
-        ) {
-            CoverImage(book, Modifier.fillMaxSize())
-            Box(
-                Modifier
-                    .padding(start = 5.dp)
-                    .width(1.5.dp)
-                    .fillMaxHeight()
-                    .background(
-                        Brush.horizontalGradient(
-                            listOf(Color.Black.copy(alpha = 0.4f), Color.White.copy(alpha = 0.12f)),
-                        ),
+                .background(
+                    Brush.horizontalGradient(
+                        listOf(Color.Black.copy(alpha = 0.4f), Color.White.copy(alpha = 0.12f)),
                     ),
-            )
-            Box(
-                Modifier.fillMaxSize().drawBehind {
-                    val line = 1.dp.toPx()
-                    drawRect(Color.White.copy(alpha = 0.1f), size = Size(line, size.height))
-                    drawRect(Color.White.copy(alpha = 0.07f), size = Size(size.width, line))
-                },
-            )
-        }
+                ),
+        )
+        Box(
+            Modifier.fillMaxSize().drawBehind {
+                val line = 1.dp.toPx()
+                drawRect(Color.White.copy(alpha = 0.1f), size = Size(line, size.height))
+                drawRect(Color.White.copy(alpha = 0.07f), size = Size(size.width, line))
+            },
+        )
+    }
+}
+
+/** Почти плоская книга лицом к зрителю: карточка 2:3, сгиб слева, узкая кромка страниц справа. */
+@Composable
+internal fun FlatBook(book: CachedBook, modifier: Modifier = Modifier, coverModifier: Modifier = Modifier) {
+    Row(modifier.fillMaxWidth().aspectRatio(2f / 3f)) {
+        FlatCover(book, coverModifier.weight(1f).fillMaxHeight())
         Box(
             Modifier
                 .padding(vertical = 5.dp)
@@ -641,6 +648,8 @@ internal fun ShelfPageV2(
     morph: ShelfMorph,
     onBook: (CachedBook) -> Unit,
     onClose: () -> Unit,
+    /** До 3 книг: без ленты корешков, обложки прилетают с карточки на свои места в сетке. */
+    flying: Boolean = false,
 ) {
     val ink = if (isDark) Color.White else Color(0xFF111111)
     val density = LocalDensity.current
@@ -713,7 +722,7 @@ internal fun ShelfPageV2(
                     Text(sub, color = ink.copy(alpha = 0.55f), fontFamily = SnProFamily, fontSize = 14.sp)
                 }
             }
-            item(span = { GridItemSpan(maxLineSpan) }) {
+            if (!flying) item(span = { GridItemSpan(maxLineSpan) }) {
                 val stripShape = RoundedCornerShape(16.dp)
                 Column(
                     Modifier
@@ -766,7 +775,7 @@ internal fun ShelfPageV2(
                     ShelfBaseline(isDark)
                 }
             }
-            itemsIndexed(shelf.books, key = { _, b -> bookKey(b) }) { _, book ->
+            itemsIndexed(shelf.books, key = { _, b -> bookKey(b) }) { index, book ->
                 val selected = selectedKey == bookKey(book)
                 val cardShape = RoundedCornerShape(14.dp)
                 Column(
@@ -782,7 +791,18 @@ internal fun ShelfPageV2(
                         .clickable { onBook(book) }
                         .padding(10.dp),
                 ) {
-                    FlatBook(book, Modifier.fillMaxWidth())
+                    FlatBook(
+                        book,
+                        Modifier.fillMaxWidth(),
+                        // Место посадки летящей обложки; до конца полёта настоящая скрыта.
+                        coverModifier = if (flying && index < ShelfMorph.FLYING) {
+                            Modifier
+                                .onPlaced { morph.targetCoords[index] = it }
+                                .graphicsLayer { alpha = if (morph.hidesRow(index)) 0f else 1f }
+                        } else {
+                            Modifier
+                        },
+                    )
                     Spacer(Modifier.height(10.dp))
                     Text(
                         book.title, color = ink, fontFamily = SnProFamily, fontWeight = FontWeight.SemiBold,
