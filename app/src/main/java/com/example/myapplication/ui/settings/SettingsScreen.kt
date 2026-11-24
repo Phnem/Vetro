@@ -60,6 +60,7 @@ import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.filled.Image
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.ViewCarousel
 import androidx.compose.material.icons.outlined.BrightnessAuto
 import androidx.compose.material.icons.outlined.Category
@@ -801,6 +802,8 @@ fun SettingsScreen(
                                 onMiniNotifToggle = { performHaptic(view, Haptic.Light); viewModel.setDevMiniNotif(it) },
                                 onExperimentalGridToggle = { performHaptic(view, Haptic.Light); viewModel.setDevExperimentalGrid(it) },
                                 onLegacySplashToggle = { performHaptic(view, Haptic.Light); viewModel.setDevLegacySplash(it) },
+                                onSearchDetailsToggle = { performHaptic(view, Haptic.Light); viewModel.setDevSearchDetailsPreview(it) },
+                                onNewShelvesToggle = { performHaptic(view, Haptic.Light); viewModel.setDevNewShelves(it) },
                                 onExportLogs = { performHaptic(view, Haptic.Light); viewModel.exportLogs(context) },
                                 onExportPdf = { performHaptic(view, Haptic.Light); viewModel.exportCollectionPdf(context) },
                                 onImportDb = { performHaptic(view, Haptic.Light); importDbPicker.launch("*/*") },
@@ -1153,6 +1156,8 @@ private fun DeveloperGroups(
     onMiniNotifToggle: (Boolean) -> Unit,
     onExperimentalGridToggle: (Boolean) -> Unit,
     onLegacySplashToggle: (Boolean) -> Unit,
+    onSearchDetailsToggle: (Boolean) -> Unit,
+    onNewShelvesToggle: (Boolean) -> Unit,
     onExportLogs: () -> Unit,
     onExportPdf: () -> Unit,
     onImportDb: () -> Unit,
@@ -1257,6 +1262,48 @@ private fun DeveloperGroups(
                             IosSwitch(
                                 checked = uiState.devExperimentalGrid,
                                 onCheckedChange = onExperimentalGridToggle,
+                            )
+                        },
+                    )
+                },
+                {
+                    val ru = strings.languageName == "RU"
+                    IosRow(
+                        title = if (ru) "Детали из поиска" else "Details from search",
+                        subtitle = if (ru) {
+                            "Тап по результату открывает тайтл; «Добавить» с NameDrop-анимацией"
+                        } else {
+                            "Tapping a result opens the title; Add plays the NameDrop animation"
+                        },
+                        isDark = isDark,
+                        icon = Icons.Filled.Search,
+                        iconBackground = devIcon,
+                        help = SettingHelpBinding(SettingHelpIds.DEV_SEARCH_DETAILS, checked = uiState.devSearchDetailsPreview, onToggle = onSearchDetailsToggle),
+                        trailing = {
+                            IosSwitch(
+                                checked = uiState.devSearchDetailsPreview,
+                                onCheckedChange = onSearchDetailsToggle,
+                            )
+                        },
+                    )
+                },
+                {
+                    val ru = strings.languageName == "RU"
+                    IosRow(
+                        title = if (ru) "Новые книжные полки" else "New bookshelves",
+                        subtitle = if (ru) {
+                            "Под углом, корешками вперёд и плоско внутри полки"
+                        } else {
+                            "Angled, spine-out, and flat inside a shelf"
+                        },
+                        isDark = isDark,
+                        icon = Icons.Filled.Image,
+                        iconBackground = devIcon,
+                        help = SettingHelpBinding(SettingHelpIds.DEV_NEW_SHELVES, checked = uiState.devNewShelves, onToggle = onNewShelvesToggle),
+                        trailing = {
+                            IosSwitch(
+                                checked = uiState.devNewShelves,
+                                onCheckedChange = onNewShelvesToggle,
                             )
                         },
                     )

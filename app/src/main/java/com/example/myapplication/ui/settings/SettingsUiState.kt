@@ -31,6 +31,10 @@ data class SettingsUiState(
     val devMiniNotif: Boolean = false,
     /** Старая заставка («переливание») вместо новой анимации логотипа, см. `DevPreferencesKeys.LEGACY_SPLASH`. */
     val devLegacySplash: Boolean = false,
+    /** Детали из поиска с добавлением по NameDrop-анимации, см. `DevPreferencesKeys.SEARCH_DETAILS_PREVIEW`. */
+    val devSearchDetailsPreview: Boolean = false,
+    /** Новые книжные полки (угол / корешки / плоско), см. `DevPreferencesKeys.NEW_SHELVES`. */
+    val devNewShelves: Boolean = false,
     val isExportingLogs: Boolean = false,
     val isExportingPdf: Boolean = false,
     val isImportingDb: Boolean = false,

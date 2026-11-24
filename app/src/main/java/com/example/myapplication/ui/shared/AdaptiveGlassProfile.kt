@@ -40,6 +40,12 @@ val LocalModernUi = staticCompositionLocalOf { true }
 /** Dev-флаг: карточки коллекции с обложкой на всю площадь, см. `DevPreferencesKeys.FULL_BLEED_CARDS`. */
 val LocalFullBleedCards = compositionLocalOf { true }
 
+/** Dev-флаг: тап по результату поиска открывает Details-превью, см. `DevPreferencesKeys.SEARCH_DETAILS_PREVIEW`. */
+val LocalSearchDetailsPreview = compositionLocalOf { false }
+
+/** Dev-флаг: новые книжные полки, см. `DevPreferencesKeys.NEW_SHELVES`. */
+val LocalNewShelves = compositionLocalOf { false }
+
 enum class GlassPreset(
     val fullBlur: Dp,
     val reducedBlur: Dp,

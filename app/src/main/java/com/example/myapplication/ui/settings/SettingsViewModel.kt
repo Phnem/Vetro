@@ -101,6 +101,8 @@ private fun mergeSettingsUi(
         devExperimentalGrid = prefs[DevPreferencesKeys.EXPERIMENTAL_GRID] ?: true,
         devMiniNotif = prefs[DevPreferencesKeys.MINI_NOTIF] ?: false,
         devLegacySplash = prefs[DevPreferencesKeys.LEGACY_SPLASH] ?: false,
+        devSearchDetailsPreview = prefs[DevPreferencesKeys.SEARCH_DETAILS_PREVIEW] ?: false,
+        devNewShelves = prefs[DevPreferencesKeys.NEW_SHELVES] ?: false,
         isExportingLogs = t.isExportingLogs,
         isExportingPdf = t.isExportingPdf,
         isImportingDb = t.isImportingDb,
@@ -287,6 +289,18 @@ class SettingsViewModel(
     fun setDevExperimentalGrid(enabled: Boolean) {
         viewModelScope.launch {
             settingsDataStore.edit { it[DevPreferencesKeys.EXPERIMENTAL_GRID] = enabled }
+        }
+    }
+
+    fun setDevSearchDetailsPreview(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsDataStore.edit { it[DevPreferencesKeys.SEARCH_DETAILS_PREVIEW] = enabled }
+        }
+    }
+
+    fun setDevNewShelves(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsDataStore.edit { it[DevPreferencesKeys.NEW_SHELVES] = enabled }
         }
     }
 
