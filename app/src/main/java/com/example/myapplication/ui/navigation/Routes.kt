@@ -23,6 +23,14 @@ data class DetailsRoute(val animeId: String, val openEpisodes: Boolean = false)
 @Serializable
 data class BookDetailsRoute(val source: String, val key: String, val title: String, val cover: String? = null)
 
+/**
+ * «Детали из поиска» (dev-флаг `SEARCH_DETAILS_PREVIEW`): страница тайтла до записи в коллекцию.
+ * В маршруте только ключ из `SearchDetailsHolder`. «DetailsRoute» в имени — не случайность:
+ * [isDetailsDestination] даёт ей то же «вдавливание» главной, что у деталей аниме.
+ */
+@Serializable
+data class SearchDetailsRoute(val key: String)
+
 @Serializable
 data class AddEditRoute(val animeId: String? = null)
 

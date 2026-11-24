@@ -31,6 +31,10 @@ fun NavController.navigateToBook(source: String, key: String, title: String, cov
     navigate(BookDetailsRoute(source = source, key = key, title = title, cover = cover))
 }
 
+fun NavController.navigateToSearchDetails(key: String) {
+    navigate(SearchDetailsRoute(key = key))
+}
+
 fun NavController.navigateToDetails(animeId: String, openEpisodes: Boolean = false) {
     navigate(DetailsRoute(animeId = animeId, openEpisodes = openEpisodes))
 }

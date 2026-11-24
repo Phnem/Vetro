@@ -83,7 +83,9 @@ fun ApiSearchResultCard(
     addedLabel: String = "Added",
     mediaTypeLabel: String = "",
     /** На экранах с локальной тёмной темой (Visual Search) глобальный [isAppInDarkTheme] может быть false — форсируем тёмный вид карточки. */
-    forceDarkCardStyle: Boolean = false
+    forceDarkCardStyle: Boolean = false,
+    /** Тап по карточке (не по кнопке «Добавить»); null — карточка сама ничего не открывает. */
+    onClick: (() -> Unit)? = null,
 ) {
     val state = remember(result, isAdded, isLoading, displayGenres) {
         val r10 = apiRatingTo10(result.rating)
@@ -130,6 +132,7 @@ fun ApiSearchResultCard(
             .clip(RoundedCornerShape(24.dp))
             .background(cardBg)
             .border(1.dp, borderStroke, RoundedCornerShape(24.dp))
+            .then(if (onClick != null) Modifier.fluidClickable(scaleDown = 0.98f, onClick = onClick) else Modifier)
     ) {
         Row(
             modifier = Modifier

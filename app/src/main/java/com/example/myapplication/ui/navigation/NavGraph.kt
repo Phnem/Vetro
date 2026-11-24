@@ -329,6 +329,50 @@ fun AppNavGraph(
                 )
             }
 
+            // «Детали из поиска» (dev-флаг): те же переходы, что у деталей аниме; на пике NameDrop-перехода
+            // содержимое подменяется настоящими «Деталями» добавленного тайтла.
+            composable<SearchDetailsRoute>(
+                enterTransition = {
+                    slideInHorizontally(
+                        initialOffsetX = { it },
+                        animationSpec = MotionTokens.sheetOffset,
+                    )
+                },
+                popExitTransition = {
+                    if (exteraBack()) {
+                        ExitTransition.None
+                    } else if (SwipeBackGesture.active) {
+                        slideOutHorizontally(
+                            targetOffsetX = { it },
+                            animationSpec = MotionTokens.gestureLinear(SWIPE_BACK_LINEAR_MS),
+                        )
+                    } else {
+                        slideOutHorizontally(
+                            targetOffsetX = { it },
+                            animationSpec = MotionTokens.tweenStandard(),
+                        )
+                    }
+                },
+            ) { backStackEntry ->
+                val route = backStackEntry.toRoute<SearchDetailsRoute>()
+                val extera = LocalExteraBackEnabled.current
+                val windowCorner = if (extera) null else transition.animateDp(label = "searchDetailsWindowCorner") { state ->
+                    if (state == EnterExitState.Visible) 0.dp else 42.dp
+                }
+                com.example.myapplication.ui.searchdetails.SearchDetailsScreen(
+                    navController = navController,
+                    key = route.key,
+                    modifier = if (extera) {
+                        Modifier.exteraClosingPage(transition, backStackEntry, navController)
+                    } else {
+                        Modifier.graphicsLayer {
+                            shape = RoundedCornerShape(windowCorner!!.value)
+                            clip = true
+                        }
+                    },
+                )
+            }
+
             // Страница аудиокниги: тот же push, что у деталей аниме (сдвиг справа, «назад» — вправо).
             composable<BookDetailsRoute>(
                 enterTransition = {

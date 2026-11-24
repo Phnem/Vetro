@@ -111,6 +111,14 @@ val viewModelModule = module {
             apiKeySyncRepository = get(),
         )
     }
+    viewModel { (key: String) ->
+        com.example.myapplication.ui.searchdetails.SearchDetailsViewModel(
+            key = key,
+            addFromApiUseCase = get(),
+            repository = get(),
+            settingsDataStore = get(named("settings")),
+        )
+    }
     viewModel { (animeId: String) ->
         DetailsViewModel(
             animeId = animeId,

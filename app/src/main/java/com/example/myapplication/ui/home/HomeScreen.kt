@@ -114,6 +114,7 @@ import com.example.myapplication.domain.seasons.latestSeasonEpisode
 import com.example.myapplication.domain.seasons.releasedEpisodesLabel
 import com.example.myapplication.domain.seasons.ongoingSeason
 import com.example.myapplication.domain.seasons.regularSeasons
+import com.example.myapplication.network.ApiSearchResult
 import com.example.myapplication.network.AppLanguage
 import com.example.myapplication.sync.ExternalListSyncCoordinator
 import com.example.myapplication.sync.supabase.CollectionImageRestoreCoordinator
@@ -136,6 +137,9 @@ import com.example.myapplication.ui.home.updates.EpisodeUpdateStack
 import com.example.myapplication.ui.shared.LocalWorkspaceSearch
 import com.example.myapplication.ui.navigation.navigateToAddEdit
 import com.example.myapplication.ui.navigation.navigateToDetails
+import com.example.myapplication.ui.navigation.navigateToSearchDetails
+import com.example.myapplication.ui.searchdetails.SearchDetailsHolder
+import com.example.myapplication.ui.shared.LocalSearchDetailsPreview
 import com.example.myapplication.ui.navigation.navigateToInspect
 import com.example.myapplication.ui.navigation.navigateToWelcome
 import com.example.myapplication.ui.navigation.navigateToSettings
@@ -800,6 +804,11 @@ fun HomeScreen(
                 Box(modifier = Modifier.fillMaxSize().weight(1f).background(bgColor)) {
                     val isRefreshing by viewModel.isRefreshing.collectAsStateWithLifecycle()
                     val apiSearchModels by viewModel.apiSearchWithStatus.collectAsStateWithLifecycle()
+                    // Dev-флаг «Детали из поиска»: выключен — тап по результату ничего не открывает.
+                    val searchDetailsPreview = LocalSearchDetailsPreview.current
+                    val openSearchPreview: ((ApiSearchResult) -> Unit)? = if (searchDetailsPreview) {
+                        { r -> navController.navigateToSearchDetails(SearchDetailsHolder.put(r)) }
+                    } else null
 
                     val refreshPullState = rememberPullToRefreshState()
                     val refreshController = rememberPullRefreshController(refreshPullState, isRefreshing, view)
@@ -886,7 +895,8 @@ fun HomeScreen(
                                         genreRepository = genreRepository,
                                         view = view,
                                         viewModel = viewModel,
-                                        topPadding = 8.dp
+                                        topPadding = 8.dp,
+                                        onOpenPreview = openSearchPreview,
                                     )
                                     when {
                                         uiState.apiSearchLoading -> Unit
@@ -1054,7 +1064,8 @@ fun HomeScreen(
                                             genreRepository = genreRepository,
                                             view = view,
                                             viewModel = viewModel,
-                                            topPadding = 24.dp
+                                            topPadding = 24.dp,
+                                            onOpenPreview = openSearchPreview,
                                         )
                                     }
                                 } else {
@@ -1667,7 +1678,9 @@ private fun LazyListScope.apiSearchResultsSection(
     genreRepository: GenreRepository,
     view: android.view.View,
     viewModel: HomeViewModel,
-    topPadding: Dp
+    topPadding: Dp,
+    /** Тап по результату открывает «Детали из поиска» (dev-флаг); null — тап ничего не делает. */
+    onOpenPreview: ((ApiSearchResult) -> Unit)? = null,
 ) {
     item {
         Column(
@@ -1755,6 +1768,12 @@ private fun LazyListScope.apiSearchResultsSection(
             },
             modifier = Modifier.padding(horizontal = 16.dp),
             displayGenres = apiGenres,
+            onClick = if (onOpenPreview != null && result.categoryType != BOOK_CATEGORY) {
+                {
+                    performHaptic(view, Haptic.Light)
+                    onOpenPreview(result)
+                }
+            } else null,
             addLabel = strings.addButton,
             addedLabel = strings.addedButton,
             mediaTypeLabel = if (result.categoryType == BOOK_CATEGORY) {
