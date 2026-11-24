@@ -1,5 +1,20 @@
 # Vetro changelog
 
+## v3.6.3-Alpha — November 25, 2026
+
+App version: `v3.6.3-Alpha`. Android version code: `363`.
+Changes since 3.6.2-Alpha. This is a pre-release: the in-app updater ignores Alpha tags, install it by hand.
+Only the "New bookshelves" experiment (Settings, For developers, off by default) changed.
+
+### New bookshelves (experimental)
+
+- Books are now real boxes: the cover and the spine are separate planes drawn with true perspective, so the edges meet at any angle. A shelf with up to 3 books shows them thin and turned; a shelf with more shows every book spine out, standing exactly on the shelf line (before, the spines grew about 8% and stuck out below it).
+- Opening a shelf of any size now turns the books from their pose (turned, or spine out) to nearly flat and flies them one after another into their places in the grid; closing flies them back. The strip of spines on the opened page is gone, the books themselves do that job.
+- Fixed the jump at the end of the flight. The landing place used to be measured while the grid cards were still shifted down by 24 dp, and the return place while the list was shifted by 12 dp, so the books landed off the final spot and snapped. The spring no longer stops about 1% short of its target (the last pixels used to be added in one frame) and has critical damping, so there is no bounce.
+- The flying book and the cover in the grid look identical: the title on a cover without a picture, the hinge, the corners and the shadow are all sized from the cover width and drawn by the same code, and the handoff is a short fade after the books stop, not a swap in one frame.
+- Captions under the books in the grid appear only when their book has landed, so a landing book no longer covers them. When closing, the list, the author card and the bottom bar come back from 65% of the way, not after the books stop. Books are clipped to the author card while they come back to the shelf.
+- With the switch off the shelves are exactly as in 3.6.0-Beta.
+
 ## v3.6.2-Alpha — November 24, 2026
 
 App version: `v3.6.2-Alpha`. Android version code: `362`.
