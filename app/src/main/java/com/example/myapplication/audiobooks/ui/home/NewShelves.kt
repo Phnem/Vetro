@@ -107,6 +107,12 @@ private val SpineShape = RoundedCornerShape(6.dp)
 private const val TiltDegrees = -14f
 private val CameraDistance = 760.dp
 
+/** Полка до стольких книг показывает их под углом; больше — полная полка корешками. */
+internal const val ANGLED_MAX = 3
+
+/** Доля хода морфа, за которую сцена на карточке гаснет, а лента на странице проявляется. */
+internal const val StageFadeEnd = 0.3f
+
 /** Высота сцены полки: не прыгает при переходе между «под углом» и «корешками». */
 private val StageMinHeight = 176.dp
 
@@ -173,6 +179,8 @@ internal fun AngledBook(
     style: PlaceholderStyle,
     coverWidth: Dp,
     modifier: Modifier = Modifier,
+    /** Метка передней крышки: по ней морф знает, откуда лететь обложке (полки до 3 книг). */
+    coverModifier: Modifier = Modifier,
 ) {
     val coverHeight = coverWidth * 1.5f
     val cameraPx = with(LocalDensity.current) { CameraDistance.toPx() }
@@ -182,9 +190,10 @@ internal fun AngledBook(
                 .height(coverHeight)
                 .drawWithContent {
                     val t = Math.toRadians(TiltDegrees.toDouble())
+                    // Индексы массива, а не [строка, столбец]: ячейки перспективы названы в самом Matrix.
                     val m = Matrix().apply {
-                        this[0, 0] = cos(t).toFloat()
-                        this[3, 0] = (sin(t) / cameraPx).toFloat()
+                        values[Matrix.ScaleX] = cos(t).toFloat()
+                        values[Matrix.Perspective0] = (sin(t) / cameraPx).toFloat()
                     }
                     withTransform({
                         translate(0f, size.height / 2f)
@@ -216,7 +225,7 @@ internal fun AngledBook(
             }
             // Передняя крышка со сгибом переплёта у левого края.
             Box(
-                Modifier
+                coverModifier
                     .width(coverWidth)
                     .fillMaxHeight()
                     .clip(RoundedCornerShape(topEnd = 6.dp, bottomEnd = 6.dp))
@@ -253,7 +262,9 @@ internal fun AngledBook(
                     .alpha(0.75f),
             )
         }
-        ContactShadow(Modifier.fillMaxWidth(0.86f).offset(y = (-2).dp))
+        // Ширина тени считается от книги, а не от родителя: fillMaxWidth(доля) растянул бы
+        // колонку книги до доли всей полки и вытолкнул соседние книги за край.
+        ContactShadow(Modifier.width((coverWidth + 11.dp) * 0.86f).offset(y = (-2).dp))
     }
 }
 
@@ -485,6 +496,8 @@ internal fun ShelfCardV2(
     isDark: Boolean,
     modifier: Modifier = Modifier,
     stageModifier: Modifier = Modifier,
+    /** Метка обложки книги [index] на сцене до 3 книг: оттуда стартует полёт обложки в полку. */
+    coverModifier: (index: Int) -> Modifier = { Modifier },
 ) {
     val ink = if (isDark) Color.White else Color(0xFF111111)
     val shape = RoundedCornerShape(24.dp)
@@ -524,14 +537,14 @@ internal fun ShelfCardV2(
             stageModifier.fillMaxWidth().heightIn(min = StageMinHeight),
             contentAlignment = Alignment.BottomCenter,
         ) {
-            ShelfStage(books)
+            ShelfStage(books, coverModifier)
         }
         ShelfBaseline(isDark)
     }
 }
 
 @Composable
-private fun ShelfStage(books: List<CachedBook>) {
+private fun ShelfStage(books: List<CachedBook>, coverModifier: (Int) -> Modifier) {
     when {
         books.isEmpty() -> BoxWithConstraints(Modifier.fillMaxWidth()) {
             // Полка ещё грузится: три пустые книги в фирменных цветах вместо дыры.
@@ -545,7 +558,7 @@ private fun ShelfStage(books: List<CachedBook>) {
                 PlaceholderStyles.take(3).forEach { AngledBook(null, it, coverWidth) }
             }
         }
-        books.size <= 3 -> BoxWithConstraints(Modifier.fillMaxWidth()) {
+        books.size <= ANGLED_MAX -> BoxWithConstraints(Modifier.fillMaxWidth()) {
             val n = books.size
             val gap = if (n == 3) 14.dp else 24.dp
             val coverWidth = ((maxWidth - gap * (n - 1)) / n - 11.dp).coerceIn(56.dp, 104.dp)
@@ -554,8 +567,13 @@ private fun ShelfStage(books: List<CachedBook>) {
                 horizontalArrangement = Arrangement.spacedBy(gap, Alignment.CenterHorizontally),
                 verticalAlignment = Alignment.Bottom,
             ) {
-                books.forEach { book ->
-                    AngledBook(book, remember(book.title) { placeholderStyleFor(book.title) }, coverWidth)
+                books.forEachIndexed { index, book ->
+                    AngledBook(
+                        book,
+                        remember(book.title) { placeholderStyleFor(book.title) },
+                        coverWidth,
+                        coverModifier = coverModifier(index),
+                    )
                 }
             }
         }
@@ -704,7 +722,7 @@ internal fun ShelfPageV2(
                         .onPlaced { c ->
                             val root = morph.root
                             stripTop = if (root != null && root.isAttached && c.isAttached) {
-                                root.localPositionOf(c, Offset.Zero).y
+                                root.localPositionOf(c, Offset.Zero).y + c.size.height / 2f
                             } else {
                                 Float.NaN
                             }
@@ -712,12 +730,15 @@ internal fun ShelfPageV2(
                         .graphicsLayer {
                             val p = morph.progress.value
                             val stage = morph.stage
-                            if (stage != null && !stripTop.isNaN()) {
-                                translationY = (stage.top - stripTop) * (1f - p)
-                                val s = lerp(0.96f, 1f, p)
+                            if (stage != null) {
+                                // Лента растёт из сцены карточки: центр едет вверх, прозрачность
+                                // набирается с нуля, пока сцена на карточке гаснет (alpha без скачка в
+                                // первом кадре; пока позиция не известна, ленты ещё не видно).
+                                translationY = if (stripTop.isNaN()) 0f else (stage.center.y - stripTop) * (1f - p)
+                                val s = lerp(0.9f, 1f, p.coerceIn(0f, 1f))
                                 scaleX = s
                                 scaleY = s
-                                alpha = lerp(0.72f, 1f, (p * 2f).coerceIn(0f, 1f))
+                                alpha = if (stripTop.isNaN()) 0f else (p / StageFadeEnd).coerceIn(0f, 1f)
                             } else {
                                 val a = contentAlpha(p)
                                 alpha = a
