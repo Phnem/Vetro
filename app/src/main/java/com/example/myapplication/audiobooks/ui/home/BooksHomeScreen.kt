@@ -215,6 +215,32 @@ fun BooksHomeScreen(
         )
 
         morph.open?.let { shelf ->
+            val openBook: (CachedBook) -> Unit = { b ->
+                val own = libraryByKey["${b.source}:${b.key}"]
+                when {
+                    // Своя папка: страница собирается из БД и файлов, у сайта её нет.
+                    own != null && own.local && own.variantId != null ->
+                        onOpenBook(com.example.myapplication.audiobooks.data.LOCAL_SOURCE_ID, own.variantId.value, own.title, own.coverUrl)
+                    own != null && own.local -> vm.playLibrary(own)
+                    b.playable -> onOpenBook(b.source, b.key, b.title, b.coverUrl)
+                    else -> sheetBook = b
+                }
+            }
+            val closeShelf: () -> Unit = {
+                openShelfKey = null
+                morph.collapse(scope, reducedMotion)
+            }
+            if (com.example.myapplication.ui.shared.LocalNewShelves.current) {
+                ShelfPageV2(
+                    shelf = shelf,
+                    strings = strings,
+                    isDark = isDark,
+                    morph = morph,
+                    onBook = openBook,
+                    onClose = closeShelf,
+                )
+                return@let
+            }
             ShelfPage(
                 shelf = shelf,
                 strings = strings,
@@ -275,6 +301,7 @@ private fun HomeList(
     val ink = if (isDark) Color.White else Color(0xFF111111)
     val lift = with(LocalDensity.current) { 12.dp.toPx() }
     val now = remember(shelves) { System.currentTimeMillis() }
+    val newShelves = com.example.myapplication.ui.shared.LocalNewShelves.current
     LazyColumn(
         flingBehavior = IosScroll.flingBehavior(),
         contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = bottomInset + 24.dp),
@@ -325,15 +352,39 @@ private fun HomeList(
             } else {
                 strings.books(shelf.books.size)
             }
+            val cardTopStart = when {
+                shelf.library -> ""
+                shelf.fetchedAt != null -> strings.updated(strings.ago(now - shelf.fetchedAt))
+                shelf.key in failed -> strings.shelfFailed
+                else -> strings.loading
+            }
+            val cardClick = Modifier
+                .onPlaced { morph.cardCoords[shelf.key] = it }
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                    enabled = shelf.books.isNotEmpty() || shelf.key in failed,
+                ) { if (shelf.books.isEmpty()) onRetry(shelf.key) else onOpenShelf(shelf) }
+            if (newShelves) {
+                // Новые полки (dev-флаг): до 3 книг под углом, больше — корешками, внутри — плоско.
+                ShelfCardV2(
+                    title = shelf.title,
+                    subtitle = shelf.subtitle,
+                    topStart = cardTopStart,
+                    topEnd = if (shelf.books.isEmpty()) "" else topEnd,
+                    books = shelf.books,
+                    isDark = isDark,
+                    stageModifier = Modifier
+                        .onPlaced { morph.fanCoords["${shelf.key}#stage"] = it }
+                        .graphicsLayer { alpha = if (morph.hidesFan(shelf.key)) 0f else 1f },
+                    modifier = cardClick,
+                )
+                return@items
+            }
             FanShelfCard(
                 title = shelf.title,
                 subtitle = shelf.subtitle,
-                topStart = when {
-                    shelf.library -> ""
-                    shelf.fetchedAt != null -> strings.updated(strings.ago(now - shelf.fetchedAt))
-                    shelf.key in failed -> strings.shelfFailed
-                    else -> strings.loading
-                },
+                topStart = cardTopStart,
                 topEnd = if (shelf.books.isEmpty()) "" else topEnd,
                 books = shelf.books,
                 isDark = isDark,
@@ -373,6 +424,9 @@ internal class ShelfMorph {
     var to by mutableStateOf<List<Rect?>>(emptyList())
     var card by mutableStateOf<Rect?>(null)
 
+    /** Сцена полки на карточке (новые полки): отсюда «взлетает» лента корешков страницы. */
+    var stage by mutableStateOf<Rect?>(null)
+
     fun hidesFan(key: String): Boolean = open?.key == key && progress.value > 0.001f
 
     /** Обложки ряда страницы, прилетевшие из веера, до конца полёта нарисованы летящей копией. */
@@ -382,6 +436,7 @@ internal class ShelfMorph {
         if (open != null) return
         from = (0 until FLYING).map { rectOf(fanCoords["${shelf.key}#$it"]) }
         card = rectOf(cardCoords[shelf.key])
+        stage = rectOf(fanCoords["${shelf.key}#stage"])
         targetCoords.clear()
         open = shelf
         scope.launch {
@@ -398,6 +453,7 @@ internal class ShelfMorph {
         if (open != null) return
         from = emptyList()
         to = emptyList()
+        stage = null
         open = shelf
         progress.snapTo(1f)
     }
