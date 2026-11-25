@@ -12,5 +12,6 @@ sealed interface AddEditEvent {
     data class OnTagsChanged(val tags: List<String>, val categoryType: String) : AddEditEvent
     data class OnCommentModeChanged(val mode: CommentMode) : AddEditEvent
     data class OnSaveComment(val comment: String) : AddEditEvent
+    data class OnCommentDraftChanged(val text: String) : AddEditEvent
     data object OnSave : AddEditEvent
 }

@@ -305,40 +305,13 @@ class SettingsViewModel(
         }
     }
 
-    fun shareWithDb(context: Context) {
-        viewModelScope.launch {
-            withContext(Dispatchers.IO) {
-                val dbFile = context.getDatabasePath("anime.db")
-                val shareText = "Check out Vetro — media list manager: https://github.com/Phnem/Vetro"
-                val sendIntent = if (dbFile.exists()) {
-                    databaseFactory.checkpoint()
-                    val exportDir = File(context.cacheDir, "share").apply { mkdirs() }
-                    val exportFile = File(exportDir, "vetro_list.db")
-                    dbFile.copyTo(exportFile, overwrite = true)
-                    val uri = FileProvider.getUriForFile(
-                        context,
-                        "${context.packageName}.fileprovider",
-                        exportFile
-                    )
-                    Intent().apply {
-                        action = Intent.ACTION_SEND
-                        putExtra(Intent.EXTRA_TEXT, shareText)
-                        putExtra(Intent.EXTRA_STREAM, uri)
-                        type = "text/plain"
-                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                    }
-                } else {
-                    Intent().apply {
-                        action = Intent.ACTION_SEND
-                        putExtra(Intent.EXTRA_TEXT, shareText)
-                        type = "text/plain"
-                    }
-                }
-                withContext(Dispatchers.Main) {
-                    context.startActivity(Intent.createChooser(sendIntent, null))
-                }
-            }
+    /** Поделиться приложением: только текст со ссылкой. Базу коллекции сюда не прикладываем. */
+    fun shareApp(context: Context) {
+        val intent = Intent(Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            putExtra(Intent.EXTRA_TEXT, "Check out Vetro — media list manager: https://github.com/Phnem/Vetro")
         }
+        context.startActivity(Intent.createChooser(intent, null))
     }
 
     fun exportLogs(context: Context) {

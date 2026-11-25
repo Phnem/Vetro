@@ -59,6 +59,8 @@ class SaveAnimeUseCase(
             tmdbNotFoundAt = params.tmdbNotFoundAt,
             kinopoiskNotFoundAt = params.kinopoiskNotFoundAt,
             watchStatus = existing?.watchStatus,
+            // Форма IMDb id не показывает и в параметрах не носит: без этого правка стирала бы его.
+            imdbId = existing?.imdbId,
             releaseYear = params.releaseYear ?: existing?.releaseYear,
         )
 

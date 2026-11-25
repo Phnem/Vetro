@@ -1,5 +1,6 @@
 package com.example.myapplication.microml.contribution
 
+import com.example.myapplication.audiobooks.data.remote.PrivateSources
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -46,6 +47,8 @@ object ContributionSchema {
      */
     fun sourceRecord(raw: SourceRecord): SourceRecord? {
         val source = raw.source.trim().lowercase().takeIf { sourceId.matches(it) } ?: return null
+        // Личные медиатеки в общий каталог не попадают, в том числе уже стоящие в очереди записи.
+        if (source in PrivateSources.IDS) return null
         val key = raw.key.trim().takeIf { it.length in 1..200 } ?: return null
         val title = raw.title.trim().takeIf { it.length in 1..200 } ?: return null
         fun names(list: List<String>) = list.map { it.trim() }.filter { it.length in 1..100 }.distinct().take(5)
@@ -53,7 +56,7 @@ object ContributionSchema {
         return SourceRecord(
             source, key, title, names(raw.authors), names(raw.narrators), tags(raw.genres),
             raw.year?.takeIf { it in 0..2100 },
-            raw.cover?.trim()?.takeIf { it.length <= 400 && cover.matches(it) },
+            raw.cover?.trim()?.takeIf { it.length <= 400 && cover.matches(it) && !PrivateSources.carriesCredentials(it) },
             raw.durationSec?.takeIf { it in 0..1_000_000 },
         )
     }

@@ -22,7 +22,6 @@ import com.example.myapplication.domain.IdGenerator
 import com.example.myapplication.domain.RealIdGenerator
 import com.example.myapplication.domain.addedit.GetAnimeForEditUseCase
 import com.example.myapplication.domain.addedit.SaveAnimeUseCase
-import com.example.myapplication.domain.addedit.UpdateCommentUseCase
 import com.example.myapplication.sync.ExternalListSyncCoordinator
 import org.koin.android.ext.koin.androidContext
 import org.koin.core.qualifier.named
@@ -54,7 +53,6 @@ val databaseModule = module {
     single<IdGenerator> { RealIdGenerator() }
     single { GetAnimeForEditUseCase(get()) }
     single { SaveAnimeUseCase(get(), get(), get(), get()) }
-    single { UpdateCommentUseCase(get()) }
     single<GeminiApiKeyRepository> {
         EncryptedGeminiApiKeyRepository(context = androidContext())
     }

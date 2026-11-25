@@ -50,6 +50,8 @@ import com.example.myapplication.ui.shared.theme.isAppInDarkTheme
 @Composable
 fun SharedTransitionScope.CommentMorphingContainer(
     comment: String,
+    draft: String?,
+    onDraftChange: (String) -> Unit,
     commentMode: CommentMode,
     addCommentLabel: String,
     commentPlaceholder: String,
@@ -57,7 +59,8 @@ fun SharedTransitionScope.CommentMorphingContainer(
     onSaveComment: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var inputText by remember(comment) { mutableStateOf(comment) }
+    // Черновик дублируется в состоянии формы: так его видит кнопка сохранения и он переживает поворот.
+    var inputText by remember(comment) { mutableStateOf(draft ?: comment) }
     val focusRequester = remember { FocusRequester() }
     val isDark = isAppInDarkTheme()
 
@@ -120,7 +123,7 @@ fun SharedTransitionScope.CommentMorphingContainer(
                 ) {
                     SpringyBasicTextField(
                         value = inputText,
-                        onValueChange = { inputText = it },
+                        onValueChange = { inputText = it; onDraftChange(it) },
                         modifier = Modifier
                             .weight(1f)
                             .focusRequester(focusRequester)

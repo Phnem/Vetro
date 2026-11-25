@@ -44,7 +44,9 @@ data class AddEditUiState(
     val isLoading: Boolean = false,
     val error: String? = null,
     val comment: String = "",
-    val commentMode: CommentMode = CommentMode.AddButton
+    val commentMode: CommentMode = CommentMode.AddButton,
+    /** Набранный, но ещё не свёрнутый комментарий; null — поле не редактируют. */
+    val commentDraft: String? = null,
 ) {
     /**
      * Проверка наличия изменений

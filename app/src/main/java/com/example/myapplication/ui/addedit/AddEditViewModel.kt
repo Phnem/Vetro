@@ -10,7 +10,6 @@ import com.example.myapplication.network.AppLanguage
 import com.example.myapplication.domain.addedit.GetAnimeForEditUseCase
 import com.example.myapplication.domain.addedit.SaveAnimeParams
 import com.example.myapplication.domain.addedit.SaveAnimeUseCase
-import com.example.myapplication.domain.addedit.UpdateCommentUseCase
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -20,13 +19,13 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 
 
 class AddEditViewModel(
     private val getAnimeUseCase: GetAnimeForEditUseCase,
     private val saveAnimeUseCase: SaveAnimeUseCase,
-    private val updateCommentUseCase: UpdateCommentUseCase,
     private val imageStorage: ImageStorageRepository,
     settingsDataStore: DataStore<Preferences>
 ) : ViewModel() {
@@ -43,14 +42,22 @@ class AddEditViewModel(
     private val _effect = Channel<AddEditEffect>(Channel.BUFFERED)
     val effect = _effect.receiveAsFlow()
 
-    fun loadAnime(animeId: String?) {
-        if (animeId == null) {
-            _uiState.value = AddEditUiState()
-            return
-        }
+    private var loadedSession: String? = null
+    private var loadJob: Job? = null
 
-        viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true) }
+    /**
+     * [session] один на открытие экрана и переживает пересоздание Activity: повторный вызов с ним же
+     * не затирает набранное. ViewModel общая на всю Activity, поэтому новое открытие начинает с пустой
+     * формы, иначе обложка прошлого тайтла сохранилась бы в следующий.
+     */
+    fun loadAnime(animeId: String?, session: String) {
+        if (session == loadedSession) return
+        loadedSession = session
+        loadJob?.cancel()
+        _uiState.value = AddEditUiState(isLoading = animeId != null)
+        if (animeId == null) return
+
+        loadJob = viewModelScope.launch {
             getAnimeUseCase(animeId)
                 .onSuccess { anime ->
                     anime?.let {
@@ -109,29 +116,31 @@ class AddEditViewModel(
                 }
             }
             is AddEditEvent.OnRatingChanged -> _uiState.update { it.copy(rating = event.rating) }
-            is AddEditEvent.OnImageUriChanged -> _uiState.update { it.copy(imageUri = event.uri) }
+            // Пикер, закрытый без выбора, присылает null: уже выбранную обложку не сбрасываем.
+            is AddEditEvent.OnImageUriChanged -> event.uri?.let { uri -> _uiState.update { it.copy(imageUri = uri) } }
             is AddEditEvent.OnTagsChanged -> _uiState.update {
                 it.copy(selectedTags = event.tags, categoryType = event.categoryType)
             }
-            is AddEditEvent.OnCommentModeChanged -> _uiState.update { it.copy(commentMode = event.mode) }
+            is AddEditEvent.OnCommentModeChanged -> _uiState.update {
+                it.copy(
+                    commentMode = event.mode,
+                    commentDraft = if (event.mode == CommentMode.Editing) it.commentDraft ?: it.comment else null,
+                )
+            }
+            is AddEditEvent.OnCommentDraftChanged -> _uiState.update { it.copy(commentDraft = event.text) }
             is AddEditEvent.OnSaveComment -> handleSaveComment(event.comment)
             is AddEditEvent.OnSave -> saveAnime()
         }
     }
 
+    /** Сворачивает поле. В базу комментарий уходит вместе с формой, чтобы «Назад» его отменял. */
     private fun handleSaveComment(newComment: String) {
         _uiState.update {
             it.copy(
                 comment = newComment,
+                commentDraft = null,
                 commentMode = if (newComment.isBlank()) CommentMode.AddButton else CommentMode.Saved
             )
-        }
-        val id = _uiState.value.animeId ?: return
-        viewModelScope.launch {
-            updateCommentUseCase(id, newComment)
-                .onFailure { error ->
-                    _uiState.update { it.copy(error = error.message) }
-                }
         }
     }
 
@@ -156,7 +165,7 @@ class AddEditViewModel(
                 selectedTags = state.selectedTags,
                 categoryType = state.categoryType,
                 mediaType = state.mediaType,
-                comment = state.comment,
+                comment = state.commentDraft ?: state.comment,
                 anilistId = state.anilistId,
                 malId = state.malId,
                 shikimoriId = state.shikimoriId,

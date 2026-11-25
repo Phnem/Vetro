@@ -70,7 +70,6 @@ val viewModelModule = module {
         AddEditViewModel(
             getAnimeUseCase = get(),
             saveAnimeUseCase = get(),
-            updateCommentUseCase = get(),
             imageStorage = get(),
             settingsDataStore = get(named("settings"))
         )

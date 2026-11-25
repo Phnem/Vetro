@@ -1,5 +1,6 @@
 package com.example.myapplication.sync.supabase
 
+import com.example.myapplication.audiobooks.data.remote.PrivateSources
 import android.content.Context
 import android.util.Log
 import com.example.myapplication.audiobooks.data.AudiobookRepository
@@ -141,7 +142,10 @@ class AudiobookSyncRepository(
                 is_collection = if (remote.is_collection) 1 else 0,
                 // Обложка-файл на этом устройстве (облако было недоступно при импорте) — осознанный
                 // выбор пользователя: чужая из облака её не затирает.
-                cover_url = local?.cover_url?.takeIf { it.startsWith(LOCAL_COVER_PREFIX) } ?: remote.cover_url,
+                cover_url = local?.cover_url?.takeIf { it.startsWith(LOCAL_COVER_PREFIX) }
+                    ?: remote.cover_url?.takeUnless(PrivateSources::carriesCredentials)
+                    // Обложку личного сервера мы в облако не отдаём, поэтому и не стираем.
+                    ?: local?.cover_url?.takeIf(PrivateSources::carriesCredentials),
                 // Палитра и blurhash — производные от обложки, считаются на устройстве.
                 cover_palette_json = local?.cover_palette_json,
                 cover_blurhash = local?.cover_blurhash,
@@ -200,7 +204,9 @@ class AudiobookSyncRepository(
             year = work.year?.toInt(),
             is_collection = work.is_collection != 0L,
             // file:// есть только на этом телефоне: другим устройствам он ничего не даст.
-            cover_url = work.cover_url?.takeUnless { it.startsWith(LOCAL_COVER_PREFIX) },
+            cover_url = work.cover_url?.takeUnless {
+                it.startsWith(LOCAL_COVER_PREFIX) || PrivateSources.carriesCredentials(it)
+            },
             selected_narration_id = work.selected_narration_id,
             is_favorite = work.is_favorite != 0L,
             in_library = work.in_library != 0L,

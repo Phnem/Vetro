@@ -878,7 +878,7 @@ fun SettingsScreen(
                             .clickable(
                                 interactionSource = remember { MutableInteractionSource() },
                                 indication = null,
-                                onClick = { performHaptic(view, Haptic.Light); viewModel.shareWithDb(context) }
+                                onClick = { performHaptic(view, Haptic.Light); viewModel.shareApp(context) }
                             ),
                         contentAlignment = Alignment.Center
                     ) {

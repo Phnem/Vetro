@@ -24,6 +24,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -123,8 +124,9 @@ fun AddEditScreen(
         }
     }
 
-    LaunchedEffect(animeId) {
-        viewModel.loadAnime(animeId)
+    val formSession = rememberSaveable(animeId) { java.util.UUID.randomUUID().toString() }
+    LaunchedEffect(formSession) {
+        viewModel.loadAnime(animeId, formSession)
         collisionState.triggerCollision(
             impactForce = 55f,
             stiffness = 200f,
@@ -414,6 +416,8 @@ fun AddEditScreen(
                     AnimatedFormRow(index = 13, collisionState = collisionState) {
                         CommentMorphingContainer(
                             comment = uiState.comment,
+                            draft = uiState.commentDraft,
+                            onDraftChange = { viewModel.onEvent(AddEditEvent.OnCommentDraftChanged(it)) },
                             commentMode = uiState.commentMode,
                             addCommentLabel = commentStrings.addButton,
                             commentPlaceholder = commentStrings.placeholder,
