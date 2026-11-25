@@ -1,5 +1,25 @@
 # Vetro changelog
 
+## v3.6.4-Alpha — November 25, 2026
+
+App version: `v3.6.4-Alpha`. Android version code: `364`.
+Changes since 3.6.3-Alpha. This is a pre-release: the in-app updater ignores Alpha tags, install it by hand.
+
+### New sign-in screen
+
+- The background is the app gradient that now flows slowly and shimmers. The title "VETRO COLLECTION" is set in a heavy two-line face (Russo One, SIL OFL), midnight ink on the light theme and burnt orange on the dark one.
+- The mascot sits on the title with its legs hanging, whistles and looks around. While you type your password it covers its eyes, and now and then peeks.
+- Three buttons at the bottom: Google, GitHub and email, plus "Continue as Guest". Email opens the fields in place, with "Forgot password?" and a way back to the other options.
+
+### Fingerprint offer after sign-in
+
+- After signing in to an account the app now offers to open by fingerprint or face, with the mascot showing a thumb with a fingerprint. It appears only if the phone has biometrics set up and the app lock is off. Guests and people already signed in are not asked.
+- "Add fingerprint sign-in" opens the system prompt; on success the button turns into a check mark and the home screen opens through the lens transition. "Not now" goes straight to the home screen. The lock can be turned on or off later in Settings.
+
+### Details from search and new bookshelves are on for everyone
+
+- The two experiments from 3.6.1-3.6.3 are no longer experiments: their switches in "For developers" are gone and the old shelves are removed.
+
 ## v3.6.3-Alpha — November 25, 2026
 
 App version: `v3.6.3-Alpha`. Android version code: `363`.
