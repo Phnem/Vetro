@@ -190,6 +190,9 @@ class DetailsViewModel(
                 .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
         }
 
+    private var detailsJob: kotlinx.coroutines.Job? = null
+    private var enrichmentJob: kotlinx.coroutines.Job? = null
+
     init {
         viewModelScope.launch { webLinksStore.ensureLoaded() }
         // Фильм или сериал открыли — добираем id (TMDB, Кинопоиск, IMDb) и русское название из
@@ -225,7 +228,7 @@ class DetailsViewModel(
                 runCatching { seasonCatchUp.catchUp(animeId) }
             }
         }
-        viewModelScope.launch {
+        enrichmentJob = viewModelScope.launch {
             val prefs = settingsDataStore.data.first()
             _currentLanguage.value = AppLanguagePrefs.from(prefs)
             _currentAnime.value?.let { loadDetails(it, _currentLanguage.value) }
@@ -249,7 +252,8 @@ class DetailsViewModel(
         if (refreshedReleaseAt == at) return
         refreshedReleaseAt = at
         _enrichment.value = _enrichment.value?.copy(nextRelease = null)
-        viewModelScope.launch { loadEnrichment(refresh = true) }
+        enrichmentJob?.cancel()
+        enrichmentJob = viewModelScope.launch { loadEnrichment(refresh = true) }
     }
 
     private suspend fun loadEnrichment(refresh: Boolean) {
@@ -412,7 +416,7 @@ class DetailsViewModel(
                 playbackStore.markWatched(animeId, keys)
                 val total = regular.sumOf { it.episodes }
                 if (anime.mediaType == MediaType.ANIME && total > anime.episodes) {
-                    val updated = anime.copy(episodes = total)
+                    val updated = latest(anime).copy(episodes = total)
                     localDataSource.updateAnime(updated)
                     _currentAnime.value = updated
                 }
@@ -452,6 +456,12 @@ class DetailsViewModel(
         }
     }
 
+    /**
+     * Строка из базы на момент записи. Пишется она целиком, а снимок на экране к этому времени мог
+     * устареть (фоновое обогащение, избранное, оценка), и запись снимком стёрла бы их.
+     */
+    private suspend fun latest(fallback: Anime): Anime = localDataSource.getAnimeById(fallback.id) ?: fallback
+
     fun pickCover(poster: PosterCandidate) {
         val anime = _currentAnime.value ?: return
         val current = _picker.value as? DetailsPickerState.Covers ?: return
@@ -463,7 +473,7 @@ class DetailsViewModel(
                 say("Не удалось загрузить обложку", "Couldn't download the cover")
                 return@launch
             }
-            val updated = anime.copy(imageFileName = saved)
+            val updated = latest(anime).copy(imageFileName = saved)
             runCatching { localDataSource.updateAnime(updated) }
                 .onSuccess {
                     _currentAnime.value = updated
@@ -509,7 +519,8 @@ class DetailsViewModel(
         _picker.value = current.copy(saving = true)
         viewModelScope.launch {
             val poster = candidate.posterUrl?.let { imageStorage.saveImageFromUrl(it, animeId).getOrNull() }
-            val updated = anime.copy(
+            val stored = latest(anime)
+            val updated = stored.copy(
                 titleEn = candidate.titleEn,
                 anilistId = candidate.anilistId,
                 malId = candidate.malId,
@@ -518,7 +529,7 @@ class DetailsViewModel(
                 anilistNotFoundAt = null,
                 malNotFoundAt = null,
                 shikimoriNotFoundAt = null,
-                imageFileName = poster ?: anime.imageFileName,
+                imageFileName = poster ?: stored.imageFileName,
             )
             runCatching {
                 localDataSource.updateAnime(updated)
@@ -530,7 +541,8 @@ class DetailsViewModel(
                 _picker.value = DetailsPickerState.None
                 _enrichment.value = null
                 loadDetails(updated, _currentLanguage.value)
-                launch { loadEnrichment(refresh = true) }
+                enrichmentJob?.cancel()
+                enrichmentJob = viewModelScope.launch { loadEnrichment(refresh = true) }
                 launch { runCatching { seasonEpisodesResolver.ensureResolved(animeId) } }
                 say("Источник: ${candidate.titleEn}", "Source: ${candidate.titleEn}")
             }.onFailure {
@@ -550,7 +562,7 @@ class DetailsViewModel(
         if (current != null) _picker.value = current.copy(saving = true)
         viewModelScope.launch {
             val anime = _currentAnime.value ?: return@launch
-            val cleared = anime.withRejectedSource().copy(imageFileName = null)
+            val cleared = latest(anime).withRejectedSource().copy(imageFileName = null)
             // Метка «разные сущности» для Identity (по согласию); привязка читается до того, как её сняли.
             launch { runCatching { contribution?.recordRejected(anime) } }
             runCatching {
@@ -559,6 +571,8 @@ class DetailsViewModel(
             }.onSuccess {
                 _currentAnime.value = cleared
                 _picker.value = DetailsPickerState.None
+                // Ещё идущий запрос по отклонённому тайтлу не должен вернуть его описание и трейлер.
+                enrichmentJob?.cancel()
                 _enrichment.value = null
                 loadDetails(cleared, _currentLanguage.value)
                 say("Источник сброшен, тайтл помечен как ошибка", "Source cleared, title flagged as wrong match")
@@ -578,7 +592,8 @@ class DetailsViewModel(
     }
 
     private fun loadDetails(anime: Anime, language: AppLanguage) {
-        viewModelScope.launch {
+        detailsJob?.cancel()
+        detailsJob = viewModelScope.launch {
             if (!anime.canLookupDetails(language)) {
                 _uiState.value = DetailsUiState.MissingEnglishTitle
                 return@launch
@@ -602,6 +617,7 @@ class DetailsViewModel(
                         }
                     },
                     onFailure = {
+                        if (it is kotlinx.coroutines.CancellationException) throw it
                         _uiState.value = DetailsUiState.Error
                     }
                 )

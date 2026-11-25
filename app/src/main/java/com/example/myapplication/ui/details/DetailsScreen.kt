@@ -181,6 +181,10 @@ fun DetailsScreen(
     var showDeleteComment by remember { mutableStateOf(false) }
     // Удаление подтверждено: секция наливается красным и улетает, потом комментарий стирается.
     var commentLeaving by remember { mutableStateOf(false) }
+    // Удаление уже подтверждено: уход с экрана во время вылета секции не должен его отменить.
+    DisposableEffect(Unit) {
+        onDispose { if (commentLeaving) viewModel.deleteCardComment() }
+    }
     // Бабл оценки по звёздочке меню. Живой: палец ставит значение, отпускание сохраняет; тап мимо
     // и «назад» закрывают без сохранения. Рисуется ниже, последним ребёнком корня — поверх дока.
     val episodeRatingSlider = remember { RatingSliderState(0f) }

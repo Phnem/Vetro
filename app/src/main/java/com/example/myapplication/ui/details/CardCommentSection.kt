@@ -107,8 +107,15 @@ private fun CommentBody(
     val fly = remember { Animatable(0f) }
     val red = remember { Animatable(0f) }
 
-    LaunchedEffect(leaving) {
-        if (!leaving) return@LaunchedEffect
+    LaunchedEffect(leaving, text) {
+        if (!leaving) {
+            // Новый комментарий поверх улетевшего: секцию надо вернуть на место.
+            if (text.isNotEmpty()) {
+                red.snapTo(0f)
+                fly.snapTo(0f)
+            }
+            return@LaunchedEffect
+        }
         if (reduced) {
             onLeft()
             return@LaunchedEffect
