@@ -335,10 +335,18 @@ class EpisodeMenuViewModel(
 
     fun play(season: SeasonInfo, episodeNumber: Int) {
         val key = EpisodeKey(season.seasonNumber, episodeNumber)
-        localPlayback(key)?.let { local ->
-            viewModelScope.launch { _events.emit(local) }
+        if (currentAction(key).localPath() != null) {
+            // Проверка читает заголовки всех скачанных MP4 сезона — не на главном потоке.
+            viewModelScope.launch {
+                val local = withContext(Dispatchers.IO) { localPlayback(key) }
+                if (local != null) _events.emit(local) else watchOnline(season, episodeNumber)
+            }
             return
         }
+        watchOnline(season, episodeNumber)
+    }
+
+    private fun watchOnline(season: SeasonInfo, episodeNumber: Int) {
         requestMediaAction(
             intent = EpisodeQualityIntent.Watch(season, episodeNumber),
             season = season,
@@ -697,18 +705,26 @@ class EpisodeMenuViewModel(
     }
 
     private fun deleteEpisode(key: EpisodeKey, path: String) {
-        val file = File(path)
-        val root = moviesRoot().canonicalFile
-        val target = runCatching { file.canonicalFile }.getOrNull()
-        val isOwned = target != null && target.path.startsWith(root.path + File.separator)
-        if (isOwned && target!!.isFile && !target.delete()) {
-            viewModelScope.launch {
-                _events.emit(EpisodeMenuEvent.Message("Couldn't delete local copy"))
+        // Серия весит гигабайты: удаление — вне главного потока.
+        viewModelScope.launch {
+            val failed = withContext(Dispatchers.IO) {
+                val file = File(path)
+                val root = moviesRoot().canonicalFile
+                val target = runCatching { file.canonicalFile }.getOrNull()
+                val isOwned = target != null && target.path.startsWith(root.path + File.separator)
+                if (isOwned && target!!.isFile && !target.delete()) {
+                    true
+                } else {
+                    if (isOwned) DownloadedSkipStore.delete(file)
+                    false
+                }
             }
-            return
+            if (failed) {
+                _events.emit(EpisodeMenuEvent.Message("Couldn't delete local copy"))
+            } else {
+                setAction(key, EpisodeActionState.Available)
+            }
         }
-        if (isOwned) DownloadedSkipStore.delete(file)
-        setAction(key, EpisodeActionState.Available)
     }
 
     /**
