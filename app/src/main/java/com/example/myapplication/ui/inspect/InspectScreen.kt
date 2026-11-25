@@ -156,7 +156,15 @@ fun InspectScreen(
         pageCount = { 2 },
     )
     val scope = rememberCoroutineScope()
-    LaunchedEffect(pagerState.settledPage) { onSelectMode(pagerState.settledPage) }
+    // Сохранённый режим читается из DataStore позже первого кадра: пейджер догоняет его.
+    LaunchedEffect(contentMode) {
+        val target = if (contentMode == InspectContentMode.Anime) 0 else 1
+        if (pagerState.settledPage != target && !pagerState.isScrollInProgress) pagerState.scrollToPage(target)
+    }
+    LaunchedEffect(pagerState.settledPage) {
+        val settled = if (pagerState.settledPage == 0) InspectContentMode.Anime else InspectContentMode.MoviesSeries
+        if (settled != viewModel.contentMode.value) onSelectMode(pagerState.settledPage)
+    }
 
     val pickLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
@@ -280,10 +288,15 @@ fun InspectScreen(
                                         performHaptic(view, Haptic.Light)
                                         viewModel.clearPreviewAndResults()
                                     },
-                                    iconModifier = Modifier.sharedElement(
-                                        sharedContentState = rememberSharedContentState(key = "inspect_icon"),
-                                        animatedVisibilityScope = animatedVisibilityScope,
-                                    ),
+                                    // Соседняя страница тоже скомпонована: общий ключ — только у текущей.
+                                    iconModifier = if (page == pagerState.currentPage) {
+                                        Modifier.sharedElement(
+                                            sharedContentState = rememberSharedContentState(key = "inspect_icon"),
+                                            animatedVisibilityScope = animatedVisibilityScope,
+                                        )
+                                    } else {
+                                        Modifier
+                                    },
                                     modifier = Modifier.padding(horizontal = 16.dp),
                                 )
                             }

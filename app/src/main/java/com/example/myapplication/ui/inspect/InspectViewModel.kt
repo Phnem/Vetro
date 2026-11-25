@@ -80,6 +80,7 @@ class InspectViewModel(
     val addingFromApiId: StateFlow<String?> = _addingFromApiId
 
     val selectedImageUri = MutableStateFlow<Uri?>(null)
+    private var analyzeJob: kotlinx.coroutines.Job? = null
 
     val uiState: StateFlow<InspectUiState> = combine(
         _rawResults,
@@ -115,6 +116,9 @@ class InspectViewModel(
     }
 
     fun setContentMode(mode: InspectContentMode) {
+        // Возврат на экран присылает тот же режим: результаты не сбрасываем.
+        if (contentMode.value == mode) return
+        analyzeJob?.cancel()
         contentMode.value = mode
         _rawResults.value = emptyList()
         _loadingMessage.value = null
@@ -123,13 +127,15 @@ class InspectViewModel(
 
     fun analyzeImage(context: Context, uri: Uri) {
         selectedImageUri.value = uri
-        viewModelScope.launch {
+        // Предыдущий разбор отменяется: его поздний ответ не должен лечь поверх нового фото.
+        analyzeJob?.cancel()
+        analyzeJob = viewModelScope.launch {
             val lang = uiLanguage.value
             val str = getStrings(lang)
             _errorMessage.value = null
             _rawResults.value = emptyList()
             _loadingMessage.value = str.inspectLoadingAnalyzing
-            val outcome = runCatching {
+            val outcome = com.example.myapplication.utils.runSuspendCatching {
                 val bytes = runCatching { compressVisualSearchImage(context, uri) }.getOrElse {
                     error(str.inspectReadImageFailed)
                 }
