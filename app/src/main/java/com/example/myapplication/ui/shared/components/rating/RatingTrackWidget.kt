@@ -1,5 +1,8 @@
 package com.example.myapplication.ui.shared.components.rating
 
+import androidx.compose.ui.semantics.ProgressBarRangeInfo
+import androidx.compose.ui.semantics.progressBarRangeInfo
+import androidx.compose.ui.semantics.setProgress
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.awaitFirstDown
@@ -117,6 +120,17 @@ fun RatingTrackWidget(
     Column(
         modifier = modifier.semantics {
             contentDescription = "Rating: ${labels.currentValueText}, ${labels.current}"
+            if (onCommitted != null) {
+                progressBarRangeInfo = ProgressBarRangeInfo(quantized, 0f..10f, 99)
+                setProgress { target ->
+                    scope.launch {
+                        state.beginDrag()
+                        state.onDrag(target.coerceIn(0f, 10f))
+                        state.settle { snapped -> currentOnCommitted?.invoke(snapped) }
+                    }
+                    true
+                }
+            }
         },
     ) {
         BoxWithConstraints(

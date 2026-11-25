@@ -1,5 +1,10 @@
 package com.example.myapplication.ui.shared.components
 
+import androidx.compose.ui.semantics.ProgressBarRangeInfo
+import androidx.compose.ui.semantics.progressBarRangeInfo
+import androidx.compose.ui.semantics.setProgress
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.drag
 import androidx.compose.foundation.layout.Box
@@ -211,6 +216,25 @@ fun GlassRangeSlider(
                     .align(Alignment.CenterStart)
                     // Сдвиг через offset{}, а не graphicsLayer: стекло потребляет layerBackdrop трека.
                     .offset { IntOffset((travelPx * fraction).roundToInt(), 0) }
+                    // Без пальца: TalkBack и клавиатура двигают каждый край диапазона отдельно.
+                    .semantics {
+                        contentDescription = if (index == 0) "Minimum" else "Maximum"
+                        val own = if (index == 0) value.start else value.endInclusive
+                        progressBarRangeInfo = ProgressBarRangeInfo(own, valueRange, (divisions - 1).coerceAtLeast(0))
+                        setProgress { target ->
+                            val clamped = target.coerceIn(valueRange.start, valueRange.endInclusive)
+                            val now = currentValue
+                            currentOnChange(
+                                if (index == 0) {
+                                    minOf(clamped, now.endInclusive)..now.endInclusive
+                                } else {
+                                    now.start..maxOf(clamped, now.start)
+                                },
+                            )
+                            currentOnFinished?.invoke()
+                            true
+                        }
+                    }
                     .size(thumbWidth, trackHeight)
                     .frostedGlass(backdrop = trackBackdrop, shape = capsule, material = material),
             )

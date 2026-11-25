@@ -1,5 +1,7 @@
 package com.example.myapplication.ui.shared.components
 
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.ui.semantics.Role
 import com.example.myapplication.ui.shared.theme.BrandOrange
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
@@ -653,9 +655,8 @@ private fun IosSelectionCard(
 
     LaunchedEffect(pressed) {
         if (pressed) {
+            // Только отклик: выбор применяется по завершённому тапу, касание можно отменить.
             everPressed = true
-            // Коммит на касании: новый пункт получает весь отклик, заливка идёт «под пальцем».
-            if (!selected) onSelect(index)
             scale.animateTo(0.985f, tween(80))
         } else if (everPressed) {
             // Отпустили → физический отскок, затем мягкое оседание.
@@ -826,10 +827,13 @@ fun IosSwitch(
             .background(trackColor)
             .then(
                 if (onCheckedChange != null) {
-                    Modifier.clickable(
+                    // toggleable, а не clickable: TalkBack должен слышать «включено/выключено».
+                    Modifier.toggleable(
+                        value = checked,
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null,
-                        onClick = { onCheckedChange(!checked) },
+                        role = Role.Switch,
+                        onValueChange = onCheckedChange,
                     )
                 } else Modifier,
             )
