@@ -363,3 +363,8 @@ dependencies {
     androidTestImplementation(libs.fastlane.screengrab)
     debugImplementation(libs.androidx.ui.test.manifest)
 }
+
+dependencies {
+    // Эксперимент [11]: только проверка поддержки устройством (Media3 beta требует compileSdk 37).
+    androidTestImplementation("com.google.android.gms:play-services-media-effect-enhancement:16.0.0-beta08")
+}
