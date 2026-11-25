@@ -205,7 +205,9 @@ private fun CalendarContent(language: AppLanguage, isDark: Boolean, onOpenTitle:
         if (language == AppLanguage.RU) Locale.forLanguageTag("ru") else Locale.ENGLISH
     }
     val releases: List<CalendarRelease>? by produceState<List<CalendarRelease>?>(null, language) {
-        value = runCatching { repository.load(language) }.getOrDefault(emptyList())
+        value = runCatching { repository.load(language) }
+            .onFailure { if (it is kotlin.coroutines.cancellation.CancellationException) throw it }
+            .getOrDefault(emptyList())
     }
     val today = remember { LocalDate.now() }
     var month by remember { mutableStateOf(YearMonth.from(today)) }
@@ -279,7 +281,8 @@ private fun CalendarContent(language: AppLanguage, isDark: Boolean, onOpenTitle:
         Spacer(Modifier.height(12.dp))
 
         MonthHeader(
-            month = month,
+            // В режиме недели заголовок — по выбранному дню: неделя может принадлежать соседнему месяцу.
+            month = if (weekMode) YearMonth.from(selected) else month,
             locale = locale,
             ink = ink,
             isDark = isDark,

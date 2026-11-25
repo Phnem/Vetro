@@ -384,7 +384,7 @@ private fun androidx.compose.foundation.layout.ColumnScope.SourcesContent(
                 "You can search with your own query or an id."
         },
     )
-    var query by remember { mutableStateOf(state.query) }
+    var query by remember(state.query) { mutableStateOf(state.query) }
     SpringyOutlinedField(
         value = query,
         onValueChange = { query = it },

@@ -324,7 +324,7 @@ fun PillTextField(
                     .background(bgColor)
                     .then(
                         if (borderColor != Color.Transparent)
-                            Modifier.background(Color.Transparent)
+                            Modifier.border(1.dp, borderColor, RoundedCornerShape(50))
                         else Modifier
                     )
                     .padding(horizontal = 20.dp, vertical = 16.dp),

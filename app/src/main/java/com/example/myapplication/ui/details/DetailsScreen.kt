@@ -410,7 +410,8 @@ fun DetailsScreen(
                 Box(Modifier.fillMaxSize().zIndex(10f)) {
                     com.example.myapplication.ui.details.share.WatchingCardSheet(
                         visible = showCardSheet,
-                        anime = current,
+                        // Та же оценка, что на странице: в режиме Manual rating она берётся не из записи.
+                        anime = current.copy(rating = tracking.rating(current.rating)),
                         title = displayTitle,
                         ru = language == AppLanguage.RU,
                         isDark = isDark,

@@ -1669,8 +1669,6 @@ private fun Modifier.homeScrollBlur(blur: () -> Dp): Modifier =
             }
             clip = px > 0f
         }
-    } else if (blur() > 0.dp) {
-        this.then(Modifier.blur(blur()))
     } else {
         this
     }

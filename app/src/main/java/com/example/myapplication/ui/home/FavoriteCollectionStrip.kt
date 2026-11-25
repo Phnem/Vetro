@@ -76,7 +76,7 @@ internal fun FavoriteCollectionStrip(
                 contentPadding = PaddingValues(horizontal = 16.dp),
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                itemsIndexed(favorites, key = { _, anime -> anime.id }) { index, anime ->
+                itemsIndexed(favorites, key = { _, anime -> anime.id }, contentType = { _, _ -> "favorite" }) { index, anime ->
                     cardContent(anime, index + 1, Modifier.width(cardWidth))
                 }
             }

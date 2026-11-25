@@ -241,7 +241,7 @@ fun ModernDetailsEpisodesPage(
                 end = 18.dp,
             ),
         ) {
-            item(key = "season_menu_header") {
+            item(key = "season_menu_header", contentType = "season_menu_header") {
                 SeasonMenuHeader(
                     animeTitle = animeTitle,
                     seasonCount = normalizedSeasons.size,
@@ -264,7 +264,7 @@ fun ModernDetailsEpisodesPage(
                 val expanded = season.seasonNumber in state.expandedSeasons
                 val episodeCount = season.episodes.coerceAtLeast(0)
 
-                item(key = "season_head_${season.seasonNumber}") {
+                item(key = "season_head_${season.seasonNumber}", contentType = "season_head") {
                     val seasonCover = state.seasonCovers[season.seasonNumber]
                     val seasonAction = aggregateSeasonAction(season, state.actions)
                     SeasonHeaderCard(
@@ -314,6 +314,7 @@ fun ModernDetailsEpisodesPage(
                     items(
                         count = episodeCount,
                         key = { index -> "ep_${season.seasonNumber}_${index + 1}" },
+                        contentType = { "episode" },
                     ) { index ->
                         val episode = index + 1
                         val key = EpisodeKey(season.seasonNumber, episode)

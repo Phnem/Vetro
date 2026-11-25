@@ -87,7 +87,7 @@ fun ApiSearchResultCard(
     /** Тап по карточке (не по кнопке «Добавить»); null — карточка сама ничего не открывает. */
     onClick: (() -> Unit)? = null,
 ) {
-    val state = remember(result, isAdded, isLoading, displayGenres) {
+    val state = remember(result, isAdded, isLoading, displayGenres, mediaTypeLabel) {
         val r10 = apiRatingTo10(result.rating)
         ApiSearchResultCardState(
             title = result.title,
@@ -157,11 +157,13 @@ fun ApiSearchResultCard(
                 state.posterUrl?.let { url ->
                     val context = LocalContext.current
                     AsyncImage(
-                        model = ImageRequest.Builder(context)
-                            .data(url)
-                            .size(Size(280, 400))
-                            .crossfade(true)
-                            .build(),
+                        model = remember(url) {
+                            ImageRequest.Builder(context)
+                                .data(url)
+                                .size(Size(280, 400))
+                                .crossfade(true)
+                                .build()
+                        },
                         contentDescription = state.title,
                         contentScale = ContentScale.Crop,
                         modifier = Modifier.fillMaxSize()

@@ -251,7 +251,7 @@ object WatchingCardActions {
                 resolver.delete(uri, null, null)
                 throw t
             }
-        }.isSuccess
+        }.onFailure { if (it is kotlin.coroutines.cancellation.CancellationException) throw it }.isSuccess
     }
 
     /**
@@ -266,9 +266,12 @@ object WatchingCardActions {
                 file.outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
                 FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
             }
-        }.getOrNull() ?: return false
+        }.onFailure { if (it is kotlin.coroutines.cancellation.CancellationException) throw it }
+            .getOrNull() ?: return false
         val send = Intent(Intent.ACTION_SEND).apply {
             type = "image/png"
+            // Без ClipData часть меню «Поделиться» не получает права на чтение и не показывает превью.
+            clipData = android.content.ClipData.newRawUri(null, uri)
             putExtra(Intent.EXTRA_STREAM, uri)
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
