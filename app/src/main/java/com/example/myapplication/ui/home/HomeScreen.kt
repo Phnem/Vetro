@@ -13,6 +13,7 @@ import com.example.myapplication.ui.home.updates.NotificationBellButton
 import com.example.myapplication.ui.home.updates.NotificationBellAnchor
 import com.example.myapplication.ui.home.updates.EpisodeNotificationTray
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.saveable.rememberSaveable
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.drop
@@ -328,7 +329,8 @@ fun HomeScreen(
     val recommendationsViewModel: RecommendationsViewModel = koinViewModel()
     val recsState by recommendationsViewModel.uiState.collectAsStateWithLifecycle()
     val recsStrings = getRecommendationsStrings(currentLanguage)
-    var isSearchVisible by remember { mutableStateOf(false) }
+    // Saveable: запрос переживает пересоздание экрана, и открытая строка поиска должна тоже.
+    var isSearchVisible by rememberSaveable { mutableStateOf(false) }
     var showNotificationsOverlay by remember { mutableStateOf(false) }
     var notificationsBlockingChildDialog by remember { mutableStateOf(false) }
     val notifVisibleState = remember { MutableTransitionState(false) }
