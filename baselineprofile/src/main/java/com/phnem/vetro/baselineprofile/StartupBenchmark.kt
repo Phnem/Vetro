@@ -48,9 +48,13 @@ class StartupBenchmark {
         packageName = targetPackage(),
         metrics = listOf(FrameTimingMetric()),
         compilationMode = mode,
-        startupMode = StartupMode.COLD,
         iterations = 5,
-        setupBlock = { coldStartToHome() },
+        // Без startupMode: при COLD приложение убивается после setupBlock, и свайпы уходят на рабочий
+        // стол. Холодным первый проход делает сам setupBlock.
+        setupBlock = {
+            killProcess()
+            coldStartToHome()
+        },
     ) {
         swipeWorkspacePages()
     }
