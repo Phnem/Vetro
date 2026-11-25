@@ -68,7 +68,7 @@ class AudiobookChapterMetadataDeviceTest {
             assertEquals(1, onMain { controller.currentMediaItem?.mediaMetadata?.extras?.getInt("chapterIndex") })
         } finally {
             onMain { controller.pause() }
-            MediaController.releaseFuture(future)
+            onMain { MediaController.releaseFuture(future) }
             context.stopService(Intent(context, AudiobookPlaybackService::class.java))
             file.delete()
         }
