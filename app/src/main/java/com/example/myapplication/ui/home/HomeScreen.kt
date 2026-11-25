@@ -1590,6 +1590,9 @@ fun HomeScreen(
             // homeScrollBlur (cardMenuTarget входит в shouldBlur), здесь только затемнение,
             // поднятая копия карточки и ряд действий.
             cardMenuTarget?.let { target ->
+                // «Назад» закрывает меню, а не приложение. Стоит здесь, а не наверху экрана: зарегистрированный
+                // при открытии меню обработчик получает «назад» раньше остальных (поиска, например).
+                BackHandler(enabled = cardMenuVisible) { cardMenuVisible = false }
                 val systemBars = WindowInsets.systemBars.asPaddingValues()
                 CardActionMenuOverlay(
                     target = target,
