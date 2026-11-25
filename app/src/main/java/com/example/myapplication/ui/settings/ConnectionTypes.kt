@@ -1,5 +1,9 @@
 package com.example.myapplication.ui.settings
 
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import com.example.myapplication.ui.shared.components.SpringyOutlinedField
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -274,6 +278,14 @@ private fun StremioPage(host: ConnectionHost) {
     InstalledList(host, CustomSourceFamily.STREMIO)
 }
 
+/** Не больше лимита пакета плюс один байт: по нему видно, что файл длиннее. null — не прочитался. */
+private suspend fun readPickedFile(context: android.content.Context, uri: android.net.Uri): ByteArray? =
+    withContext(Dispatchers.IO) {
+        runCatching {
+            context.contentResolver.openInputStream(uri)?.use { it.readNBytesCompat(CustomSourceInstaller.MAX_BUNDLE_BYTES + 1) }
+        }.getOrNull()
+    }
+
 @Composable
 private fun VetroPackagePage(host: ConnectionHost) {
     val ru = host.ru
@@ -281,6 +293,7 @@ private fun VetroPackagePage(host: ConnectionHost) {
     var input by rememberSaveable { mutableStateOf("") }
     val context = LocalContext.current
     val installer = remember { CustomSourceInstaller() }
+    val scope = rememberCoroutineScope()
     // Ошибка самой кнопки .vetro (не тот файл) — до установщика такой файл не доходит.
     var vetroFileError by rememberSaveable { mutableStateOf<String?>(null) }
     // У .vetro нет MIME-типа, по фильтру «application/json» пикер его бы не показал: берём любой
@@ -294,16 +307,16 @@ private fun VetroPackagePage(host: ConnectionHost) {
             vetroFileError = if (ru) "Это не файл .vetro: $name" else "Not a .vetro file: $name"
             return@rememberLauncherForActivityResult
         }
-        val text = runCatching {
-            context.contentResolver.openInputStream(uri)?.use { stream ->
-                stream.readNBytesCompat(CustomSourceInstaller.MAX_BUNDLE_BYTES + 1).toString(Charsets.UTF_8)
-            }
-        }.getOrNull()?.removePrefix("﻿")
+        // Чтение из провайдера документов — не на главном потоке; размер считаем в байтах, не в знаках.
+        scope.launch {
+        val bytes = readPickedFile(context, uri)
+        val tooLarge = bytes != null && bytes.size > CustomSourceInstaller.MAX_BUNDLE_BYTES
+        val text = bytes?.toString(Charsets.UTF_8)?.removePrefix("\uFEFF")
         // Здесь — только «это вообще можно импортировать»: источник, подборка или список ссылок. Что
         // именно внутри и годится ли оно, решает установщик — он же называет точную причину отказа.
         vetroFileError = when {
             text.isNullOrBlank() -> if (ru) "Файл не прочитался" else "Could not read the file"
-            text.length > CustomSourceInstaller.MAX_BUNDLE_BYTES -> if (ru) "Файл больше 2 МБ" else "The file is larger than 2 MB"
+            tooLarge -> if (ru) "Файл больше 2 МБ" else "The file is larger than 2 MB"
             !installer.looksImportable(text) -> if (ru) {
                 "Файл не JSON: ожидается источник { … }, подборка [ … ] или список ссылок, по одной на строку"
             } else {
@@ -312,16 +325,15 @@ private fun VetroPackagePage(host: ConnectionHost) {
             else -> null
         }
         if (vetroFileError == null && text != null) host.viewModel.installCustomSource(text)
+        }
     }
     // Описание из любого файла: читается целиком (он небольшой, лимит проверит установщик).
     val pickFile = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         uri ?: return@rememberLauncherForActivityResult
-        val text = runCatching {
-            context.contentResolver.openInputStream(uri)?.use { stream ->
-                stream.readNBytesCompat(CustomSourceInstaller.MAX_BUNDLE_BYTES + 1).toString(Charsets.UTF_8)
-            }
-        }.getOrNull()
-        if (!text.isNullOrBlank()) host.viewModel.installCustomSource(text)
+        scope.launch {
+            val text = readPickedFile(context, uri)?.toString(Charsets.UTF_8)
+            if (!text.isNullOrBlank()) host.viewModel.installCustomSource(text)
+        }
     }
 
     Hint(

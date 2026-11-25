@@ -333,7 +333,7 @@ class AttachmentSyncManager(
                     connection.inputStream.use { it.readBytes() }
                 }
                 imagePath.startsWith("content://") || imagePath.startsWith("file://") -> {
-                    context.contentResolver.openInputStream(Uri.parse(imagePath))?.readBytes()
+                    context.contentResolver.openInputStream(Uri.parse(imagePath))?.use { it.readBytes() }
                 }
                 else -> resolveLocalImageFile(imagePath)?.readBytes()
             }
