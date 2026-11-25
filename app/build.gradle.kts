@@ -200,6 +200,15 @@ android {
 }
 
 androidComponents {
+    // Съёмка baseline profile и замеры ставятся рядом с боевым приложением, а не поверх него:
+    // ./gradlew ... -PperfPackageSuffix=true
+    finalizeDsl { dsl ->
+        if (providers.gradleProperty("perfPackageSuffix").orNull == "true") {
+            dsl.buildTypes
+                .filter { it.name == "benchmarkRelease" || it.name == "nonMinifiedRelease" }
+                .forEach { it.applicationIdSuffix = ".perf" }
+        }
+    }
     onVariants(selector().withBuildType("release")) { variant ->
         variant.packaging.jniLibs.excludes.add("**/x86_64/libonnxruntime*.so")
     }

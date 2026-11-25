@@ -28,7 +28,8 @@
 # kotlinx.serialization ships its own R8 rules; keep only what the plugin generates for our
 # classes (lookup by name happens for companion serializer() and $$serializer objects).
 -keep,includedescriptorclasses class com.example.myapplication.**$$serializer { *; }
--keepclassmembers class com.example.myapplication.** {
+# Только у сериализуемых: правило на все классы приложения не давало R8 убирать их companion.
+-keepclassmembers @kotlinx.serialization.Serializable class com.example.myapplication.** {
     *** Companion;
 }
 -keepclasseswithmembers class com.example.myapplication.** {
@@ -59,7 +60,9 @@
 # from Vetro's classloader at runtime, so R8 must neither rename nor strip their public API.
 # Same set Mihon keeps; costs some APK size, without it every extension dies with NoSuchMethodError.
 -keep,allowoptimization class eu.kanade.tachiyomi.** { public protected *; }
--keep,allowoptimization class kotlin.** { public protected *; }
+# Внутренности kotlin-reflect (protobuf и разбор метаданных) расширения напрямую не зовут,
+# а общее правило удерживало их целиком.
+-keep,allowoptimization class !kotlin.reflect.jvm.internal.**,kotlin.** { public protected *; }
 -keep,allowoptimization class kotlinx.coroutines.** { public protected *; }
 -keep,allowoptimization class kotlinx.serialization.** { public protected *; }
 -keep,allowoptimization class okhttp3.** { public protected *; }

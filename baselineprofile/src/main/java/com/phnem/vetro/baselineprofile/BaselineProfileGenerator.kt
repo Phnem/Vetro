@@ -21,11 +21,20 @@ class BaselineProfileGenerator {
     @get:Rule
     val rule = BaselineProfileRule()
 
+    /** Стартовый профиль — только путь до первого экрана: по нему R8 раскладывает первый DEX. */
     @Test
-    fun generate() = rule.collect(
+    fun startup() = rule.collect(
         packageName = targetPackage(),
-        // Старт — отдельный профиль: его классы грузятся раньше остальных.
         includeInStartupProfile = true,
+    ) {
+        coldStartToHome()
+    }
+
+    /** Остальные пути компилируются заранее, но в стартовый кластер не попадают. */
+    @Test
+    fun journeys() = rule.collect(
+        packageName = targetPackage(),
+        includeInStartupProfile = false,
     ) {
         coldStartToHome()
         swipeWorkspacePages()
