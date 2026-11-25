@@ -313,7 +313,7 @@ private fun PersonalMediaServerConfig.resolveAllowedUrl(pathOrUrl: String): Stri
     absolute.takeIf(::isAllowedUrl)
 }.getOrNull()
 
-private fun String.urlEncode(): String = URLEncoder.encode(this, StandardCharsets.UTF_8)
+private fun String.urlEncode(): String = URLEncoder.encode(this, StandardCharsets.UTF_8.name())
 
 internal fun VetroVideo.rehydratePersonalServerCredentials(
     provider: PersonalMediaServerProvider,

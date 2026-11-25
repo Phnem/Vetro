@@ -166,6 +166,12 @@ android {
             if (providers.gradleProperty("microMlSmokeBuild").orNull == "true") applicationIdSuffix = ".micromlsmoke"
         }
         release {
+            // Нативные библиотеки есть только под arm64. Чужие папки ABI из зависимостей (zstd,
+            // datastore, graphics-path) заставляли x86_64-устройства с трансляцией выбрать
+            // x86_64 и падать с UnsatisfiedLinkError.
+            ndk {
+                abiFilters += "arm64-v8a"
+            }
             if (audiobookSmokeBuild) {
                 applicationIdSuffix = ".ab07smoke"
                 signingConfig = signingConfigs.getByName("debug")

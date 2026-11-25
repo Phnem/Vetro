@@ -87,6 +87,7 @@ class SyncRepository(
         // таблицы жанры до-синкнутся автоматически на ближайшем синке.
         if (!syncPrefs.getBoolean("tags_resync_done_v2", false)) {
             val taggedIds = db.animeQueries.getAllAnime().executeAsList()
+                .filter { it.mediaType != AUDIOBOOK }
                 .map { it.id }
                 .filter { db.animeQueries.getAnimeTags(it).executeAsList().isNotEmpty() }
             val ok = runCatching { pushTagsForAnime(userId, taggedIds) }
@@ -186,7 +187,11 @@ class SyncRepository(
     private suspend fun pushTagsForAnime(userId: String, syncedIds: List<String>) {
         if (syncedIds.isEmpty()) return
         val now = java.time.Instant.now().toString()
-        syncedIds.chunked(TAG_CHUNK_SIZE).forEach { chunk ->
+        // Строк аудиокниг в облачной anime нет: их теги упали бы по внешнему ключу вместе с пачкой.
+        val cloudIds = syncedIds.filter { id ->
+            db.animeQueries.getAnimeById(id).executeAsOneOrNull()?.mediaType != AUDIOBOOK
+        }
+        cloudIds.chunked(TAG_CHUNK_SIZE).forEach { chunk ->
             supabase.postgrest["anime_tags"].delete {
                 filter {
                     eq("user_id", userId)
@@ -246,6 +251,8 @@ class SyncRepository(
                     if (remoteUpdatedMs > maxUpdatedAt) {
                         maxUpdatedAt = remoteUpdatedMs
                     }
+                    // Такие строки могли выгрузить прежние сборки; локальные книги ими не трогаем.
+                    if (remote.media_type == AUDIOBOOK) return@forEach
 
                     val local = db.animeQueries.getAnimeById(remote.id).executeAsOneOrNull()
 
@@ -421,6 +428,8 @@ class SyncRepository(
         private const val TAG_CHUNK_SIZE = 100
 
         /** Легаси 5-звёздочный рейтинг (1..9) → хранимые единицы 10-балльной шкалы (×20). */
+        private const val AUDIOBOOK = "AUDIOBOOK"
+
         private fun normalizeRemoteRating(rating: Int): Long =
             if (rating in 1..9) (rating * 20L).coerceAtMost(100L) else rating.toLong()
 

@@ -48,10 +48,10 @@ CREATE TABLE anime (
 
 -- Delta Sync: rows that need to be pushed to cloud
 selectPendingSync:
-SELECT * FROM anime WHERE sync_status != 'SYNCED' ORDER BY orderIndex ASC;
+SELECT * FROM anime WHERE sync_status != 'SYNCED' AND mediaType != 'AUDIOBOOK' ORDER BY orderIndex ASC;
 
 countPendingSync:
-SELECT COUNT(*) FROM anime WHERE sync_status != 'SYNCED';
+SELECT COUNT(*) FROM anime WHERE sync_status != 'SYNCED' AND mediaType != 'AUDIOBOOK';
 
 CREATE TABLE anime_tags (
     anime_id TEXT NOT NULL,
@@ -532,8 +532,9 @@ UPDATE anime SET sync_status = 'PENDING_UPDATE' WHERE id = ?;
 markAllAnimeSynced:
 UPDATE anime SET sync_status = 'SYNCED';
 
+-- Аудиокниги в общую таблицу облака не уходят (ADR-0001): у них свой синк.
 markAllAnimePendingUpload:
-UPDATE anime SET sync_status = 'PENDING_UPDATE' WHERE sync_status = 'SYNCED';
+UPDATE anime SET sync_status = 'PENDING_UPDATE' WHERE sync_status = 'SYNCED' AND mediaType != 'AUDIOBOOK';
 
 deleteAnime:
 DELETE FROM anime WHERE id = ?;

@@ -244,7 +244,7 @@ private class MovieSeriesEpisodeSource(
         if (regular.isEmpty()) return null
 
         val now = clock.instant()
-        val today = LocalDate.ofInstant(now, ZoneOffset.UTC)
+        val today = now.atZone(ZoneOffset.UTC).toLocalDate()
         val grouped = regular.groupBy { it.season!! }.toSortedMap()
         val latestSeason = grouped.lastKey()
         val continuing = show.status?.equals("Running", ignoreCase = true) == true

@@ -113,7 +113,7 @@ class WebDavPlaybackSource(
 
     private fun matchesRequest(href: String, request: PlaybackRequest): Boolean {
         val path = runCatching { URI(href).rawPath }.getOrNull() ?: return false
-        val decoded = URLDecoder.decode(path, StandardCharsets.UTF_8).lowercase()
+        val decoded = URLDecoder.decode(path, StandardCharsets.UTF_8.name()).lowercase()
         val fileName = decoded.substringAfterLast('/')
         if (VIDEO_EXTENSIONS.none(fileName::endsWith)) return false
         val aliases = listOf(request.anime.title, request.anime.titleEn, request.anime.titleRu)

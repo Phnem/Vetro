@@ -5,9 +5,5 @@
         <item name="android:windowDrawsSystemBarBackgrounds">true</item>
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>
-        <!-- API 29+: убирает серую подложку за жестовой навигацией при прозрачном navigationBar -->
-        <item name="android:enforceNavigationBarContrast">false</item>
-        <!-- API 35+: убирает серый скрим за статус-баром при edge-to-edge -->
-        <item name="android:enforceStatusBarContrast">false</item>
     </style>
 </resources>

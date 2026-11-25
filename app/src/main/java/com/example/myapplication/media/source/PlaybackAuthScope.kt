@@ -67,7 +67,7 @@ internal class PlaybackAuthScope private constructor(
                 require(base.query == null && base.fragment == null)
                 val relative = relativeRoot.trim().trim('/')
                 val decodedSegments = relative.split('/').filter(String::isNotEmpty).map {
-                    URLDecoder.decode(it, StandardCharsets.UTF_8)
+                    URLDecoder.decode(it, StandardCharsets.UTF_8.name())
                 }
                 require(decodedSegments.none { it == "." || it == ".." || '/' in it || '\\' in it })
                 val root = base.newBuilder().apply {

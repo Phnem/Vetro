@@ -6,6 +6,7 @@ import android.content.Intent
 import android.graphics.Color as AndroidGraphicsColor
 import android.os.Build
 import android.os.Bundle
+import androidx.annotation.RequiresApi
 import android.view.Window
 import androidx.activity.ComponentActivity
 import androidx.fragment.app.FragmentActivity
@@ -379,6 +380,7 @@ class MainActivity : FragmentActivity() {
     }
 }
 
+@RequiresApi(Build.VERSION_CODES.Q)
 @Suppress("DEPRECATION")
 private fun Window.disableStatusBarContrastEnforced() {
     isStatusBarContrastEnforced = false

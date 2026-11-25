@@ -4,6 +4,8 @@ import java.util.concurrent.atomic.AtomicReferenceArray
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.cancelChildren
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.supervisorScope
 import kotlinx.coroutines.withTimeoutOrNull
@@ -47,28 +49,29 @@ internal suspend fun <T> runPlaybackProviderCascade(
     calls.forEachIndexed { index, call ->
         launch {
             val startedAt = System.currentTimeMillis()
-            val result = withTimeoutOrNull(call.timeoutMs) {
-                try {
-                    SourceAttempt<T>(label = call.label, value = call.resolve())
-                } catch (error: CancellationException) {
-                    throw error
-                } catch (_: Exception) {
-                    SourceAttempt<T>(label = call.label, value = null, failed = true)
-                }
+            var attempt: SourceAttempt<T>? = null
+            // Сигнал о завершении уходит всегда: без него цикл ниже вечно ждал бы провайдера,
+            // чья корутина умерла (отмена, пришедшая не от нас, или LinkageError).
+            try {
+                attempt = withTimeoutOrNull(call.timeoutMs) {
+                    try {
+                        SourceAttempt<T>(label = call.label, value = call.resolve())
+                    } catch (_: CancellationException) {
+                        // Настоящую отмену (наш таймаут или вызывающий) пропускаем дальше;
+                        // чужую, например от отменённого внутреннего запроса, считаем сбоем.
+                        currentCoroutineContext().ensureActive()
+                        SourceAttempt<T>(label = call.label, value = null, failed = true)
+                    } catch (_: Exception) {
+                        SourceAttempt<T>(label = call.label, value = null, failed = true)
+                    } catch (_: LinkageError) {
+                        SourceAttempt<T>(label = call.label, value = null, failed = true)
+                    }
+                } ?: SourceAttempt<T>(label = call.label, value = null, failed = true, timedOut = true)
+            } finally {
+                val finished = attempt ?: SourceAttempt<T>(label = call.label, value = null, failed = true)
+                slots.set(index, finished.copy(elapsedMs = System.currentTimeMillis() - startedAt))
+                arrivals.trySend(index)
             }
-            val elapsed = System.currentTimeMillis() - startedAt
-            slots.set(
-                index,
-                result?.copy(elapsedMs = elapsed)
-                    ?: SourceAttempt<T>(
-                        value = null,
-                        label = call.label,
-                        failed = true,
-                        timedOut = true,
-                        elapsedMs = elapsed,
-                    ),
-            )
-            arrivals.trySend(index)
         }
     }
 

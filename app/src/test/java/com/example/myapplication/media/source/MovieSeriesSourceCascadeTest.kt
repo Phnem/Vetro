@@ -10,7 +10,12 @@ import com.example.myapplication.media.source.movieseries.ProviderHealthRegistry
 import com.example.myapplication.media.source.movieseries.ProviderResolution
 import com.example.myapplication.network.AppLanguage
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -113,21 +118,33 @@ class MovieSeriesSourceCascadeTest {
     }
 
     @Test
-    fun `cancellation is propagated and never swallowed as a provider failure`() {
-        var escaped = false
-        try {
-            runBlocking {
-                resolveMovieSeriesSources(
-                    seriesRequest(),
-                    listOf(fakeSource("WebDAV") { throw CancellationException("cancelled") }),
-                    1_000,
-                )
-            }
-        } catch (_: CancellationException) {
-            escaped = true
+    fun `cancelling the caller cancels the cascade`() = runBlocking {
+        val started = CompletableDeferred<Unit>()
+        val job = launch {
+            resolveMovieSeriesSources(
+                seriesRequest(),
+                listOf(fakeSource("WebDAV") { started.complete(Unit); awaitCancellation() }),
+                60_000,
+            )
+        }
+        started.await()
+
+        withTimeout(2_000) { job.cancelAndJoin() }
+
+        assertTrue("The caller must stay cancelled", job.isCancelled)
+    }
+
+    @Test
+    fun `a provider cancelled from inside is a failure, not an endless wait`() = runBlocking {
+        val outcome = withTimeout(2_000) {
+            resolveMovieSeriesSources(
+                seriesRequest(),
+                listOf(fakeSource("WebDAV") { throw CancellationException("sub-call cancelled") }),
+                1_000,
+            )
         }
 
-        assertTrue("CancellationException must escape the cascade", escaped)
+        assertTrue(outcome !is PlaybackResolution.Found)
     }
 
     @Test
