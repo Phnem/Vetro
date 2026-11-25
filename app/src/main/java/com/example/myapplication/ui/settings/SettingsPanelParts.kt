@@ -207,7 +207,7 @@ internal fun PanelRowCard(
     }
 }
 
-internal enum class PanelTone { Primary, Quiet, Danger }
+internal enum class PanelTone { Primary, Danger }
 
 /** Кнопка-пилюля панели: акцентная, тихая или опасная; при [busy] вместо подписи — индикатор. */
 @Composable
@@ -229,10 +229,6 @@ internal fun PanelButton(
         } else {
             background = scheme.onSurface.copy(alpha = 0.08f)
             foreground = scheme.onSurfaceVariant
-        }
-        PanelTone.Quiet -> {
-            background = scheme.onSurface.copy(alpha = 0.08f)
-            foreground = scheme.onSurface
         }
         PanelTone.Danger -> {
             background = scheme.error.copy(alpha = 0.14f)

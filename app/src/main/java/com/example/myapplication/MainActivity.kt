@@ -239,7 +239,7 @@ class MainActivity : FragmentActivity() {
                 val workspaceSearch = remember { WorkspaceSearchState() }
                 val overscrollFactory = remember { iosOverscrollFactory(this@MainActivity) }
                 CompositionLocalProvider(
-                    LocalAdaptiveGlassEnabled provides settingsState.devAdaptiveGlassScroll,
+                    LocalAdaptiveGlassEnabled provides false,
                     LocalModernUi provides settingsState.modernUi,
                     LocalFullBleedCards provides settingsState.devFullBleedCards,
                     LocalExteraBackEnabled provides settingsState.devExteraBack,

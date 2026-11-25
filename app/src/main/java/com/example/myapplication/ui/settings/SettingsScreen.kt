@@ -789,7 +789,6 @@ fun SettingsScreen(
                                 onMirrorDbToggle = { performHaptic(view, Haptic.Light); viewModel.setDevMirrorDb(it) },
                                 onHideShareToggle = { performHaptic(view, Haptic.Light); viewModel.setDevHideShare(it) },
                                 onFpsOverlayToggle = { performHaptic(view, Haptic.Light); viewModel.setDevFpsOverlay(it) },
-                                onAdaptiveGlassToggle = { performHaptic(view, Haptic.Light); viewModel.setDevAdaptiveGlassScroll(it) },
                                 onFullBleedCardsToggle = { performHaptic(view, Haptic.Light); viewModel.setDevFullBleedCards(it) },
                                 onMiniNotifToggle = { performHaptic(view, Haptic.Light); viewModel.setDevMiniNotif(it) },
                                 onExperimentalGridToggle = { performHaptic(view, Haptic.Light); viewModel.setDevExperimentalGrid(it) },
@@ -1072,7 +1071,6 @@ private fun DeveloperGroups(
     onMirrorDbToggle: (Boolean) -> Unit,
     onHideShareToggle: (Boolean) -> Unit,
     onFpsOverlayToggle: (Boolean) -> Unit,
-    onAdaptiveGlassToggle: (Boolean) -> Unit,
     onFullBleedCardsToggle: (Boolean) -> Unit,
     onMiniNotifToggle: (Boolean) -> Unit,
     onExperimentalGridToggle: (Boolean) -> Unit,
@@ -1107,17 +1105,6 @@ private fun DeveloperGroups(
                         iconBackground = devIcon,
                         help = SettingHelpBinding(SettingHelpIds.DEV_HIDE_SHARE, checked = uiState.devHideShareButton, onToggle = onHideShareToggle),
                         trailing = { IosSwitch(checked = uiState.devHideShareButton, onCheckedChange = onHideShareToggle) },
-                    )
-                },
-                {
-                    IosRow(
-                        title = strings.devAdaptiveGlassTitle,
-                        subtitle = strings.devAdaptiveGlassSubtitle,
-                        isDark = isDark,
-                        icon = Icons.Filled.Code,
-                        iconBackground = devIcon,
-                        help = SettingHelpBinding(SettingHelpIds.DEV_ADAPTIVE_GLASS, checked = uiState.devAdaptiveGlassScroll, onToggle = onAdaptiveGlassToggle),
-                        trailing = { IosSwitch(checked = uiState.devAdaptiveGlassScroll, onCheckedChange = onAdaptiveGlassToggle) },
                     )
                 },
                 {

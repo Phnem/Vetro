@@ -21,7 +21,6 @@ object SettingHelpIds {
     const val DEV_AI = "dev_ai"
     const val DEV_MIRROR_DB = "dev_mirror_db"
     const val DEV_HIDE_SHARE = "dev_hide_share"
-    const val DEV_ADAPTIVE_GLASS = "dev_adaptive_glass"
     const val DEV_FULL_COVER = "dev_full_cover"
     const val DEV_MINI_NOTIF = "dev_mini_notif"
     const val DEV_EXPERIMENTAL_GRID = "dev_experimental_grid"
@@ -387,24 +386,6 @@ fun settingHelpText(id: String, ru: Boolean): SettingHelpText? = when (id) {
             lead = "Removes the share action from the corner of the settings screen.",
             points = listOf(
                 HelpPoint("When to use", "When the button gets in the way of screenshots or screen recordings."),
-            ),
-        )
-    }
-
-    SettingHelpIds.DEV_ADAPTIVE_GLASS -> if (ru) {
-        SettingHelpText(
-            title = "Adaptive glass при скролле",
-            lead = "Во время прокрутки списка снижает размытие и линзу, чтобы разгрузить видеочип.",
-            points = listOf(
-                HelpPoint("Для сравнения", "Выключите, чтобы увидеть полное стекло на прокрутке и сравнить плавность."),
-            ),
-        )
-    } else {
-        SettingHelpText(
-            title = "Adaptive glass on scroll",
-            lead = "Reduces blur and lens while a list scrolls, to ease the GPU.",
-            points = listOf(
-                HelpPoint("For comparison", "Turn it off to see the full glass while scrolling and compare smoothness."),
             ),
         )
     }

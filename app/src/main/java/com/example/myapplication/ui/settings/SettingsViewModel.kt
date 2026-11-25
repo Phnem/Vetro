@@ -94,7 +94,6 @@ private fun mergeSettingsUi(
         autoSkipSegments = prefs[PlayerSettingsKeys.AUTO_SKIP] ?: false,
         autoNextEpisode = prefs[PlayerSettingsKeys.AUTO_NEXT] ?: true,
         availabilityThreshold = prefs[com.example.myapplication.data.local.AvailabilityThresholdPrefs.ENABLED] ?: false,
-        devAdaptiveGlassScroll = prefs[DevPreferencesKeys.ADAPTIVE_GLASS_SCROLL] ?: false,
         devFullBleedCards = prefs[DevPreferencesKeys.FULL_BLEED_CARDS] ?: true,
         devExperimentalGrid = prefs[DevPreferencesKeys.EXPERIMENTAL_GRID] ?: true,
         devMiniNotif = prefs[DevPreferencesKeys.MINI_NOTIF] ?: false,
@@ -260,12 +259,6 @@ class SettingsViewModel(
     fun setDevFpsOverlay(enabled: Boolean) {
         viewModelScope.launch {
             settingsDataStore.edit { it[KEY_DEV_FPS_OVERLAY] = enabled }
-        }
-    }
-
-    fun setDevAdaptiveGlassScroll(enabled: Boolean) {
-        viewModelScope.launch {
-            settingsDataStore.edit { it[DevPreferencesKeys.ADAPTIVE_GLASS_SCROLL] = enabled }
         }
     }
 

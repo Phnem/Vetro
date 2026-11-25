@@ -5,7 +5,6 @@ import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 
 object DevPreferencesKeys {
-    val ADAPTIVE_GLASS_SCROLL = booleanPreferencesKey("dev_adaptive_glass_scroll")
 
     /** Разовая проверка записей, привязанных к чужому тайтлу (см. RepairAnimeDbUseCase.auditForeignMatches). */
     val FOREIGN_MATCH_AUDIT_DONE = booleanPreferencesKey("foreign_match_audit_v1_done")
@@ -64,6 +63,8 @@ object DevPreferencesKeys {
         booleanPreferencesKey("dev_github_updates_enabled"),
         // v3.4.3: новый вид bottom sheet стал постоянным, dev-переключатель убран.
         booleanPreferencesKey("dev_sheet_style_test"),
+        // v3.6.5: переключатель ни на что не влиял после постоянного матового стекла.
+        booleanPreferencesKey("dev_adaptive_glass_scroll"),
         // Эксперимент «ползунки как чипы» отменён.
         booleanPreferencesKey("dev_slider_band_style"),
         // v3.4.6: тумблер фонового обогащения убран, оно работает всегда; выключенное раньше — стирается.

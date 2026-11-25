@@ -23,7 +23,6 @@ data class SettingsUiState(
     val autoNextEpisode: Boolean = true,
     /** «Порог доступности»: пуш о серии ждёт озвучек. По умолчанию ВЫКЛ, см. `AvailabilityThresholdPrefs`. */
     val availabilityThreshold: Boolean = false,
-    val devAdaptiveGlassScroll: Boolean = false,
     /** Карточки с обложкой на всю площадь, см. `DevPreferencesKeys.FULL_BLEED_CARDS`. */
     val devFullBleedCards: Boolean = true,
     val devExperimentalGrid: Boolean = true,
