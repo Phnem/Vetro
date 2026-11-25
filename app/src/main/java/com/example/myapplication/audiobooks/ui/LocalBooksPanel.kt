@@ -170,7 +170,7 @@ fun LocalBooksPanel(
     val muted = ink.copy(alpha = 0.6f)
     LazyVerticalGrid(
         flingBehavior = com.example.myapplication.ui.shared.theme.IosScroll.flingBehavior(),
-        columns = GridCells.Fixed(2),
+        columns = GridCells.Adaptive(minSize = 160.dp),
         modifier = modifier,
         contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 32.dp),
         horizontalArrangement = Arrangement.spacedBy(14.dp),

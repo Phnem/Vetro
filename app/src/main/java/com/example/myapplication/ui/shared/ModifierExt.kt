@@ -28,6 +28,9 @@ import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.Dp
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import kotlin.math.ln
@@ -186,3 +189,10 @@ fun Modifier.gradientHighlightBorder(cornerRadiusDp: Dp, isDark: Boolean): Modif
             style = Stroke(width = strokeWidth)
         )
     }
+
+/**
+ * Колонка по центру не шире [maxWidth]: на раскрытом складном и планшете форма и сетки не
+ * растягиваются во всю ширину. На телефоне ширина меньше предела, и ничего не меняется.
+ */
+fun Modifier.centeredContent(maxWidth: Dp): Modifier =
+    fillMaxWidth().wrapContentWidth().widthIn(max = maxWidth).fillMaxWidth()

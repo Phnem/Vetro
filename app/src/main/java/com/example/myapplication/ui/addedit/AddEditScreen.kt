@@ -1,5 +1,6 @@
 package com.example.myapplication.ui.addedit
 
+import com.example.myapplication.ui.shared.centeredContent
 import com.example.myapplication.ui.shared.mininotif.MiniNotif
 import com.example.myapplication.ui.shared.mininotif.MiniNotifKind
 import com.example.myapplication.ui.shared.mininotif.MiniNotifCardStrings
@@ -239,7 +240,8 @@ fun AddEditScreen(
                                 .imePadding()
                                 .navigationBarsPadding()
                                 .padding(horizontal = 24.dp)
-                                .verticalScroll(scrollState, flingBehavior = IosScroll.flingBehavior()),
+                                .verticalScroll(scrollState, flingBehavior = IosScroll.flingBehavior())
+                                .centeredContent(560.dp),
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
                             Spacer(Modifier.height(contentTopInset))

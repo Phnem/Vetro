@@ -465,7 +465,7 @@ internal fun ShelfPageV2(
             .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {},
     ) {
         LazyVerticalGrid(
-            columns = GridCells.Fixed(2),
+            columns = GridCells.Adaptive(minSize = 160.dp),
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 32.dp),
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
