@@ -369,6 +369,7 @@ fun DetailsScreen(
                     isSecret = isSecret,
                     onToggleSecret = viewModel::toggleSecret,
                     showCatalogActions = !isManga,
+                    showAnimeCatalogActions = current.mediaType == MediaType.ANIME,
                 )
 
                 // Отдельный пузырь левее «⋯»: карточка «Что я сейчас смотрю» картинкой для друзей и соцсетей.

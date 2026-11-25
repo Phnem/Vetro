@@ -157,13 +157,19 @@ private class DetailsSwipeBackConnection(
                 containerSize = widthPx,
                 velocity = velocityDp.coerceAtLeast(0f),
             ) && velocityDp > -MotionTokens.DismissVelocityThresholdDpPerSec
-            if (commit) {
-                if (router != null) router.invoked() else dispatcher.onBackPressed()
-            } else {
-                if (router != null) router.cancelled() else dispatcher.dispatchOnBackCancelled()
+            // Экран может размонтироваться раньше конца паузы и отменить эту корутину: без finally
+            // глобальный флаг жеста остался бы поднятым навсегда.
+            try {
+                if (commit) {
+                    if (router != null) router.invoked() else dispatcher.onBackPressed()
+                } else {
+                    if (router != null) router.cancelled() else dispatcher.dispatchOnBackCancelled()
+                }
+                // Переход доигрывает на тех же линейных кривых — флаг снимаем, когда он закончился.
+                delay(SwipeBackGesture.LINEAR_MS.toLong() + SETTLE_MARGIN_MS)
+            } finally {
+                reset()
             }
-            // Переход доигрывает на тех же линейных кривых — флаг снимаем, когда он закончился.
-            delay(SwipeBackGesture.LINEAR_MS.toLong() + SETTLE_MARGIN_MS)
         }
         reset()
         // Скорость жеста «назад» пейджеру не отдаём: иначе он доводил бы страницу по инерции.

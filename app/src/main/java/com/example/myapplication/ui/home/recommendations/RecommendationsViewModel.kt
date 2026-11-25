@@ -85,6 +85,9 @@ class RecommendationsViewModel(
 
     /** Были оценки свайпом: при закрытии шторки пул тихо пересоберётся с их учётом. */
     private var feedbackDirty = false
+    /** Колоду под пальцем не пересобираем: изменения библиотеки ждут закрытия шторки. */
+    private var sheetOpen = false
+    private var libraryDirtyWhileOpen = false
 
     private val language: StateFlow<AppLanguage> = settingsDataStore.data
         .map { prefs ->
@@ -108,8 +111,10 @@ class RecommendationsViewModel(
             localDataSource.observeAllAnime()
                 .map { engine.librarySignature(it) }
                 .distinctUntilChanged()
+                // Первое значение — не изменение: стартовый пересчёт уже идёт выше.
+                .drop(1)
                 .debounce(LIBRARY_CHANGE_DEBOUNCE_MS)
-                .collect { refresh() }
+                .collect { if (sheetOpen) libraryDirtyWhileOpen = true else refresh() }
         }
 
         // Смена языка приложения → пул пересобирается под нужный источник (RU → Shikimori).
@@ -132,6 +137,9 @@ class RecommendationsViewModel(
             applySnapshot(snapshot, isRefreshing = false)
         } else if (_uiState.value !is RecommendationsUiState.Ready) {
             _uiState.value = RecommendationsUiState.Unavailable
+        } else {
+            // Без сети остаётся кэш, и спиннер обновления обязан погаснуть.
+            updateReady { copy(isRefreshing = false) }
         }
     }
 
@@ -206,9 +214,15 @@ class RecommendationsViewModel(
     }
 
     /** Шторка закрыта: если были оценки — пул пересобирается в фоне с их учётом (кэш уже устарел по ревизии). */
+    fun onSheetOpened() {
+        sheetOpen = true
+    }
+
     fun onSheetClosed() {
-        if (!feedbackDirty) return
+        sheetOpen = false
+        if (!feedbackDirty && !libraryDirtyWhileOpen) return
         feedbackDirty = false
+        libraryDirtyWhileOpen = false
         viewModelScope.launch { refresh() }
     }
 

@@ -875,6 +875,7 @@ fun HomeScreen(
                                             onClick = {
                                                 performHaptic(view, Haptic.Light)
                                                 dismissCloudSyncPill()
+                                                recommendationsViewModel.onSheetOpened()
                                                 showRecsSheet = true
                                             },
                                             modifier = Modifier.padding(horizontal = 16.dp),

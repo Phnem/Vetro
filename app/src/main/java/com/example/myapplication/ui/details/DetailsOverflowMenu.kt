@@ -78,6 +78,8 @@ internal fun BoxScope.DetailsOverflowMenu(
     onToggleSecret: () -> Unit,
     /** false у манги: каталоги аниме ей не нужны, в меню остаётся только секретная папка. */
     showCatalogActions: Boolean = true,
+    /** Смена обложки и «Источник неверен» ищут по каталогам аниме: фильму и сериалу они портили бы привязку. */
+    showAnimeCatalogActions: Boolean = showCatalogActions,
 ) {
     val items = buildList {
         if (showCatalogActions) {

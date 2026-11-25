@@ -257,6 +257,7 @@ class HomeViewModel(
 
     private var apiSearchJob: Job? = null
     private var pullToRefreshJob: Job? = null
+    private var updateCheckJob: Job? = null
 
     private val _uiState = MutableStateFlow(HomeUiState())
     val uiState: StateFlow<HomeUiState> = _uiState.asStateFlow()
@@ -398,7 +399,7 @@ class HomeViewModel(
         pullToRefreshJob = viewModelScope.launch {
             _isRefreshing.value = true
             try {
-                checkForUpdates(force = true)
+                checkForUpdates(force = true)?.join()
             } finally {
                 _isRefreshing.value = false
             }
@@ -729,13 +730,20 @@ class HomeViewModel(
         }
     }
 
-    fun checkForUpdates(force: Boolean = false) {
-        if (!force && hasCheckedForUpdatesThisSession) return
-        if (_uiState.value.isCheckingUpdates) return
+    /**
+     * Возвращает идущий проход, чтобы «потянуть и обновить» дождалось его. Явное обновление
+     * заменяет фоновое: раньше оно молча отбрасывалось, пока шла стартовая проверка.
+     */
+    fun checkForUpdates(force: Boolean = false): Job? {
+        if (!force && hasCheckedForUpdatesThisSession) return null
+        if (updateCheckJob?.isActive == true) {
+            if (!force) return updateCheckJob
+            updateCheckJob?.cancel()
+        }
         hasCheckedForUpdatesThisSession = true
         _uiState.update { it.copy(isCheckingUpdates = true) }
-        viewModelScope.launch {
-            runCatching {
+        updateCheckJob = viewModelScope.launch {
+            try {
                 val language = readLanguageFromSettings()
                 episodeUpdateCheckCoordinator.detectAndStore(language, force = force)
                 _uiState.update { it.copy(isCheckingUpdates = false) }
@@ -751,11 +759,14 @@ class HomeViewModel(
                 // in-app стопкой сверху. Убираем из шторки всё, что мог оставить
                 // фоновый воркер, чтобы уведомления не дублировали интерфейс.
                 clearSystemUpdateNotifications()
-            }.onFailure {
-                it.printStackTrace()
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                e.printStackTrace()
                 _uiState.update { it.copy(isCheckingUpdates = false) }
             }
         }
+        return updateCheckJob
     }
 
     /**
