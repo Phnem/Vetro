@@ -1,0 +1,6 @@
+-- Удалённые на этом телефоне тайтлы, о которых облако ещё не знает. Строка anime удаляется сразу,
+-- а отметка живёт до успешной отправки, иначе тайтл воскресал бы при следующем pull.
+CREATE TABLE pending_deletion (
+    id TEXT PRIMARY KEY NOT NULL,
+    deleted_at INTEGER NOT NULL
+);

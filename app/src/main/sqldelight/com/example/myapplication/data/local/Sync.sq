@@ -9,3 +9,22 @@ SELECT last_pulled_at FROM sync_cursors WHERE entity_name = ?;
 setCursor:
 INSERT OR REPLACE INTO sync_cursors(entity_name, last_pulled_at)
 VALUES (?, ?);
+
+-- Удалённые на этом телефоне тайтлы, о которых облако ещё не знает. Строка anime удаляется сразу,
+-- а отметка живёт до успешной отправки, иначе тайтл воскресал бы при следующем pull.
+CREATE TABLE pending_deletion (
+    id TEXT PRIMARY KEY NOT NULL,
+    deleted_at INTEGER NOT NULL
+);
+
+addPendingDeletion:
+INSERT OR REPLACE INTO pending_deletion(id, deleted_at) VALUES (?, ?);
+
+getPendingDeletions:
+SELECT * FROM pending_deletion;
+
+isPendingDeletion:
+SELECT COUNT(*) FROM pending_deletion WHERE id = ?;
+
+removePendingDeletion:
+DELETE FROM pending_deletion WHERE id = ?;

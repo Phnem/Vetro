@@ -96,6 +96,8 @@ class SyncRepository(
             if (ok) syncPrefs.edit().putBoolean("tags_resync_done_v2", true).apply()
         }
 
+        pushDeletions(userId)
+
         val pendingAnime = db.animeQueries.selectPendingSync().executeAsList()
         if (pendingAnime.isEmpty()) return@withContext PushResult(0, null)
 
@@ -214,6 +216,28 @@ class SyncRepository(
         }
     }
 
+    /** Мягкое удаление в облаке: другие устройства увидят `deleted_at` при pull. */
+    private suspend fun pushDeletions(userId: String) {
+        db.syncQueries.getPendingDeletions().executeAsList().forEach { pending ->
+            try {
+                supabase.postgrest["anime"].update({
+                    set("deleted_at", pending.deleted_at)
+                    set("updated_at", java.time.Instant.ofEpochMilli(pending.deleted_at).toString())
+                }) {
+                    filter {
+                        eq("user_id", userId)
+                        eq("id", pending.id)
+                    }
+                }
+                db.syncQueries.removePendingDeletion(pending.id)
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.w(TAG, "Deletion deferred: ${safeSyncError(e)}")
+            }
+        }
+    }
+
     data class PushResult(val pushedCount: Int, val error: String?)
     data class PullResult(val pulledCount: Int, val error: String?)
 
@@ -253,6 +277,12 @@ class SyncRepository(
                     }
                     // Такие строки могли выгрузить прежние сборки; локальные книги ими не трогаем.
                     if (remote.media_type == AUDIOBOOK) return@forEach
+
+                    // Удалено здесь, но облако ещё не знает: не возвращаем.
+                    if (db.syncQueries.isPendingDeletion(remote.id).executeAsOne() > 0L) {
+                        if (remote.deleted_at != null) db.syncQueries.removePendingDeletion(remote.id)
+                        return@forEach
+                    }
 
                     val local = db.animeQueries.getAnimeById(remote.id).executeAsOneOrNull()
 

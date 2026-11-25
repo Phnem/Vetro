@@ -712,6 +712,10 @@ class HomeViewModel(
                 val anime = localDataSource.getAnimeById(id) ?: return@launch
                 anime.imageFileName?.let { imageStorage.deleteImage(it) }
                 localDataSource.deleteAnime(id)
+                // Иначе остаются плашка и системный пуш, ведущие на пустую страницу.
+                localDataSource.removeUpdate(id)
+                notifier.cancelAllUpdateNotifications(listOf(id))
+                seasonEpisodesStore.remove(id)
             }.onFailure { it.printStackTrace() }
         }
     }

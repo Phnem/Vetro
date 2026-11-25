@@ -127,9 +127,15 @@ class AnimeLocalDataSource(
     }
 
     suspend fun deleteAnime(id: String): Unit = withContext(Dispatchers.IO) {
-        db().animeQueries.transaction {
-            db().animeQueries.deleteAnimeTags(id)
-            db().animeQueries.deleteAnime(id)
+        val database = db()
+        database.animeQueries.transaction {
+            // Аудиокниги в общей облачной таблице не живут, отмечать их незачем.
+            val mediaType = database.animeQueries.getAnimeById(id).executeAsOneOrNull()?.mediaType
+            if (mediaType != null && mediaType != "AUDIOBOOK") {
+                database.syncQueries.addPendingDeletion(id, System.currentTimeMillis())
+            }
+            database.animeQueries.deleteAnimeTags(id)
+            database.animeQueries.deleteAnime(id)
         }
         mirrorCoordinator.requestExportIfEnabled()
     }
