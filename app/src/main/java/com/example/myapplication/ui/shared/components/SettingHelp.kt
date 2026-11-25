@@ -1,5 +1,6 @@
 package com.example.myapplication.ui.shared.components
 
+import androidx.compose.ui.composed
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
@@ -97,6 +98,10 @@ val LocalSettingHelp = staticCompositionLocalOf<SettingHelpController?> { null }
 fun Modifier.settingHelpTarget(id: String?, controller: SettingHelpController?): Modifier {
     if (id == null || controller == null) return this
     return this
+        .composed {
+            androidx.compose.runtime.DisposableEffect(id, controller) { onDispose { controller.bounds.remove(id) } }
+            Modifier
+        }
         .onGloballyPositioned { controller.bounds[id] = it.boundsInRoot() }
         .drawBehind {
             if (controller.highlightId == id) {

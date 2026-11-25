@@ -1,5 +1,7 @@
 package com.example.myapplication.ui.shared.components
 
+import androidx.compose.runtime.State
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
@@ -65,19 +67,9 @@ fun ProgressRing(
         animationSpec = MotionTokens.tweenEmphasized(),
         label = "ringColor",
     )
-    val transition = rememberInfiniteTransition(label = "ring")
-    val glint by transition.animateFloat(
-        initialValue = 0f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(tween(1900, easing = LinearEasing), RepeatMode.Restart),
-        label = "glint",
-    )
-    val spin by transition.animateFloat(
-        initialValue = 0f,
-        targetValue = 360f,
-        animationSpec = infiniteRepeatable(tween(1100, easing = LinearEasing), RepeatMode.Restart),
-        label = "spin",
-    )
+    val running = tone != RingTone.Success && tone != RingTone.Error
+    val glint = loopingValue(running && fraction != null, 1f, 1900, "glint")
+    val spin = loopingValue(running && fraction == null, 360f, 1100, "spin")
     val bump = remember { Animatable(1f) }
     LaunchedEffect(tone) {
         if (tone == RingTone.Success) {
@@ -110,13 +102,13 @@ fun ProgressRing(
             when {
                 tone == RingTone.Success -> drawArc(ringColor, -90f, 360f, false, topLeft, arc, style = Stroke(stroke, cap = StrokeCap.Round))
                 tone == RingTone.Error -> drawArc(ringColor.copy(alpha = 0.35f), -90f, 360f, false, topLeft, arc, style = Stroke(stroke))
-                fraction == null -> drawArc(ringColor, -90f + spin, 95f, false, topLeft, arc, style = Stroke(stroke, cap = StrokeCap.Round))
+                fraction == null -> drawArc(ringColor, -90f + spin.value, 95f, false, topLeft, arc, style = Stroke(stroke, cap = StrokeCap.Round))
                 else -> {
                     val sweep = 360f * progress
                     if (sweep > 0.5f) {
                         drawArc(ringColor, -90f, sweep, false, topLeft, arc, style = Stroke(stroke, cap = StrokeCap.Round))
                         if (sweep > 30f) {
-                            val start = -90f + (sweep - 18f) * glint
+                            val start = -90f + (sweep - 18f) * glint.value
                             drawArc(
                                 Color.White.copy(alpha = 0.38f), start, 18f, false, topLeft, arc,
                                 style = Stroke(stroke * 0.55f, cap = StrokeCap.Round),
@@ -129,3 +121,16 @@ fun ProgressRing(
         center()
     }
 }
+
+@Composable
+private fun loopingValue(active: Boolean, target: Float, millis: Int, label: String): State<Float> =
+    if (active) {
+        rememberInfiniteTransition(label = label).animateFloat(
+            initialValue = 0f,
+            targetValue = target,
+            animationSpec = infiniteRepeatable(tween(millis, easing = LinearEasing), RepeatMode.Restart),
+            label = label,
+        )
+    } else {
+        remember { mutableFloatStateOf(0f) }
+    }

@@ -76,6 +76,10 @@ fun LiquidGlassTrack(
     val density = LocalDensity.current
     val capsule = RoundedCornerShape(percent = 50)
     val thumbPx = with(density) { thumbWidth.toPx() }
+    val currentThumbWidth by rememberUpdatedState(thumbWidth)
+    val currentStart by rememberUpdatedState(onScrubStart)
+    val currentScrub by rememberUpdatedState(onScrub)
+    val currentEnd by rememberUpdatedState(onScrubEnd)
 
     // Живая позиция пальца. Отрицательное значение = не тянем, показываем внешнее состояние.
     var scrubFraction by remember { mutableFloatStateOf(-1f) }
@@ -91,34 +95,37 @@ fun LiquidGlassTrack(
             .then(
                 if (onScrub != null) {
                     Modifier.pointerInput(Unit) {
-                        val padPx = thumbPx / 2f
                         awaitPointerEventScope {
                             while (true) {
                                 val down = awaitFirstDown()
                                 down.consume()
+                                // Размер и обработчики берутся на момент жеста: pointerInput живёт дольше них.
+                                val thumb = currentThumbWidth.toPx()
                                 fun xToFraction(x: Float): Float {
-                                    val usable = (size.width - thumbPx).coerceAtLeast(1f)
-                                    return ((x - padPx) / usable).coerceIn(0f, 1f)
+                                    val usable = (size.width - thumb).coerceAtLeast(1f)
+                                    return ((x - thumb / 2f) / usable).coerceIn(0f, 1f)
                                 }
-                                onScrubStart?.invoke()
-                                scrubFraction = xToFraction(down.position.x)
-                                onScrub(scrubFraction)
-                                while (true) {
-                                    val event = awaitPointerEvent()
-                                    val change = event.changes.firstOrNull { it.id == down.id }
-                                        ?: event.changes.first()
-                                    change.consume()
-                                    val next = xToFraction(change.position.x)
-                                    if (!change.pressed) {
-                                        onScrubEnd?.invoke(next)
-                                        // Отпускаем позицию пальца только после коммита: иначе
-                                        // бегунок прыгнул бы на старое значение до того, как
-                                        // владелец состояния успеет обновиться.
-                                        scrubFraction = -1f
-                                        break
+                                try {
+                                    currentStart?.invoke()
+                                    scrubFraction = xToFraction(down.position.x)
+                                    currentScrub?.invoke(scrubFraction)
+                                    while (true) {
+                                        val event = awaitPointerEvent()
+                                        val change = event.changes.firstOrNull { it.id == down.id }
+                                            ?: event.changes.first()
+                                        change.consume()
+                                        val next = xToFraction(change.position.x)
+                                        if (!change.pressed) {
+                                            currentEnd?.invoke(next)
+                                            break
+                                        }
+                                        scrubFraction = next
+                                        currentScrub?.invoke(next)
                                     }
-                                    scrubFraction = next
-                                    onScrub(next)
+                                } finally {
+                                    // Отпускаем позицию пальца после коммита (и при отмене жеста): иначе
+                                    // бегунок прыгнул бы на старое значение или застрял под пальцем.
+                                    scrubFraction = -1f
                                 }
                             }
                         }
