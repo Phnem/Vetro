@@ -39,5 +39,9 @@ class BaselineProfileGenerator {
         coldStartToHome()
         swipeWorkspacePages()
         openFirstTitleAndBack()
+        openBooksAndPlay()
+        // Профиль сохраняется по broadcast, а HyperOS не доставляет его замороженному фоновому
+        // приложению: путь обязан закончиться с приложением на переднем плане.
+        startActivityAndWait()
     }
 }
