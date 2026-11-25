@@ -90,10 +90,10 @@ class BookCoverManager(
 
     /** Обложка из файла пользователя: сжатие, загрузка в облако, запись в `cover_url`. */
     suspend fun import(workId: WorkId, source: Uri): Result = withContext(Dispatchers.IO) {
-        val raw = runCatching { context.contentResolver.openInputStream(source)?.use { it.readBytes() } }
+        val raw = runCatching { context.contentResolver.openInputStream(source)?.use { it.readAtMost(MAX_IMPORT_BYTES) } }
             .onFailure { Log.w(TAG, "cover read failed: ${it.message}") }
             .getOrNull()
-        if (raw == null || raw.isEmpty() || raw.size > MAX_IMPORT_BYTES || !looksLikeImage(raw)) {
+        if (raw == null || raw.isEmpty() || !looksLikeImage(raw)) {
             return@withContext Result.Failed
         }
         val previous = repository.coverInfo(workId)?.coverUrl

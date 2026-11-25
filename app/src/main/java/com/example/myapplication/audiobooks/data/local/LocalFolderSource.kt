@@ -1,5 +1,6 @@
 package com.example.myapplication.audiobooks.data.local
 
+import com.example.myapplication.audiobooks.data.readAtMost
 import android.content.Context
 import android.content.Intent
 import android.media.MediaMetadataRetriever
@@ -131,8 +132,8 @@ class LocalFolderSource(private val context: Context) : ManifestSource {
             runCatching { root.listFiles().firstOrNull { it.isDirectory && it.uri == bookUri } }.getOrNull() ?: return@withContext null
         val cue = runCatching { book.listFiles().singleOrNull { it.isFile && it.name.orEmpty().endsWith(".cue", ignoreCase = true) } }
             .getOrNull() ?: return@withContext null
-        val bytes = runCatching { context.contentResolver.openInputStream(cue.uri)?.use { it.readBytes() } }.getOrNull()
-            ?.takeIf { it.size in 1..MAX_CUE_BYTES } ?: return@withContext null
+        val bytes = runCatching { context.contentResolver.openInputStream(cue.uri)?.use { it.readAtMost(MAX_CUE_BYTES) } }.getOrNull()
+            ?.takeIf { it.isNotEmpty() } ?: return@withContext null
         val utf8 = String(bytes, Charsets.UTF_8)
         if ('�' in utf8) String(bytes, charset("windows-1251")) else utf8
     }

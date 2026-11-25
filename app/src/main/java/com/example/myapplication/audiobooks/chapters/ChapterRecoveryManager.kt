@@ -18,10 +18,15 @@ import com.example.myapplication.media.subtitles.whisper.SpeechRouter
 import com.example.myapplication.media.subtitles.whisper.WhisperModel
 import java.io.File
 import java.security.MessageDigest
+import java.util.concurrent.Executors
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.asCoroutineDispatcher
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -63,36 +68,53 @@ class ChapterRecoveryManager(
     private val _states = MutableStateFlow<Map<VariantId, RecoveryState>>(emptyMap())
     val states: StateFlow<Map<VariantId, RecoveryState>> = _states.asStateFlow()
     private val jobs = mutableMapOf<VariantId, Job>()
+    private val recoveryDispatcher = Executors.newSingleThreadExecutor { task ->
+        Thread({
+            Process.setThreadPriority(Process.THREAD_PRIORITY_BACKGROUND)
+            task.run()
+        }, "chapter-recovery")
+    }.asCoroutineDispatcher()
 
     /** [russian] — язык распознавания и слово «Глава»/«Chapter» у глав без заголовка. */
     @Synchronized
     fun start(variant: VariantId, russian: Boolean) {
-        if (jobs[variant]?.isActive == true) return
+        val previous = jobs[variant]
+        if (previous?.isActive == true) return
         set(variant, RecoveryState.Running(RecoveryState.Stage.METADATA, 0f))
-        jobs[variant] = scope.launch(Dispatchers.IO) {
-            val priority = Process.getThreadPriority(Process.myTid())
+        // Свой поток с фоновым приоритетом: приоритет чужого IO-потока вокруг suspend-кода менять нельзя,
+        // продолжение уходит на другой поток, и пониженным оставался не тот.
+        jobs[variant] = scope.launch(recoveryDispatcher) {
+            // Отменённая задача может ещё держать рабочие файлы варианта.
+            previous?.join()
             try {
-                Process.setThreadPriority(Process.THREAD_PRIORITY_BACKGROUND)
-                set(variant, run(variant, russian))
+                val result = run(variant, russian)
+                ensureActive()
+                set(variant, result)
             } catch (e: CancellationException) {
-                set(variant, RecoveryState.Idle)
                 throw e
             } catch (e: Exception) {
                 Log.w(TAG, "chapter recovery failed: ${e.message}")
-                set(variant, RecoveryState.Failed(RecoveryState.FailReason.UNREADABLE))
-            } finally {
-                runCatching { Process.setThreadPriority(priority) }
+                if (isActive) set(variant, RecoveryState.Failed(RecoveryState.FailReason.UNREADABLE))
             }
         }
     }
 
     @Synchronized
     fun cancel(variant: VariantId) {
-        jobs.remove(variant)?.cancel()
+        // Запись остаётся: следующий запуск дождётся окончания этой задачи.
+        jobs[variant]?.cancel()
         set(variant, RecoveryState.Idle)
     }
 
+    /** Отменить и дождаться: после этого рабочие файлы варианта никто не трогает. */
+    private suspend fun stop(variant: VariantId) {
+        val job = synchronized(this) { jobs[variant] }
+        cancel(variant)
+        job?.join()
+    }
+
     suspend fun apply(variant: VariantId) {
+        stop(variant)
         store.setApplied(variant, true)
         resolver.invalidate(variant)
         scratch(variant).deleteRecursively()
@@ -100,6 +122,7 @@ class ChapterRecoveryManager(
 
     /** «Не надо» и «Вернуть исходные» — одно: снова разметка источника, и сам поиск больше не запускается. */
     suspend fun decline(variant: VariantId) {
+        stop(variant)
         store.setApplied(variant, false)
         resolver.invalidate(variant)
         scratch(variant).deleteRecursively()
@@ -108,7 +131,7 @@ class ChapterRecoveryManager(
 
     /** «Искать снова»: прошлый результат забыт, поиск — с начала. */
     suspend fun restart(variant: VariantId, russian: Boolean) {
-        cancel(variant)
+        stop(variant)
         store.remove(variant)
         resolver.invalidate(variant)
         scratch(variant).deleteRecursively()
@@ -131,7 +154,14 @@ class ChapterRecoveryManager(
         if (remote && isMetered()) return RecoveryState.Failed(RecoveryState.FailReason.NEEDS_WIFI)
 
         // 2. Огибающая громкости каждого трека (с продолжением), затем паузы по всей книге.
-        val dir = scratch(variant).apply { mkdirs() }
+        val dir = scratch(variant)
+        // Огибающие прежнего набора треков не годятся: сверяем, к чему они относятся.
+        val source = fingerprint + manifest.tracks.joinToString("") { "|" + it.url.substringBefore('?') }
+        val marker = File(dir, "source")
+        if (dir.exists() && runCatching { marker.readText() }.getOrNull() != source) dir.deleteRecursively()
+        dir.mkdirs()
+        marker.writeText(source)
+        val owner = currentCoroutineContext()
         val envelopes = ArrayList<ByteArray>(manifest.tracks.size)
         for (track in manifest.tracks) {
             val file = File(dir, "${track.index}.env")
@@ -144,7 +174,7 @@ class ChapterRecoveryManager(
                         fromFrame = already,
                         sink = { out.write(it); out.flush() },
                         onProgress = { p ->
-                            set(variant, RecoveryState.Running(RecoveryState.Stage.SILENCE, (track.index + p) / manifest.tracks.size))
+                            if (owner.isActive) set(variant, RecoveryState.Running(RecoveryState.Stage.SILENCE, (track.index + p) / manifest.tracks.size))
                         },
                         checkpoint = { waitUntilComfortable(variant, RecoveryState.Stage.SILENCE) },
                     )
@@ -171,13 +201,21 @@ class ChapterRecoveryManager(
                 waitUntilComfortable(variant, RecoveryState.Stage.SPEECH)
                 val at = gap?.let(ChapterProposer::boundaryOf) ?: 0L
                 val trackIndex = (trackStarts.indexOfLast { it <= at }).coerceIn(0, manifest.tracks.lastIndex)
-                val pcm = runCatching {
+                val pcm = try {
                     reader.speech(Uri.parse(TrackUriCodec.encode(variant, trackIndex)), at - trackStarts[trackIndex], SPEECH_WINDOW_MS)
-                }.getOrNull() ?: continue
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (_: Exception) {
+                    continue
+                } ?: continue
                 if (pcm.isEmpty()) continue
-                val text = runCatching {
+                val text = try {
                     model.transcribe(pcm, language, WHISPER_THREADS).cues.joinToString(" ") { it.text }
-                }.getOrNull() ?: continue
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (_: Exception) {
+                    continue
+                }
                 val heading = HeadingParser.parse(text) ?: continue
                 if (gap == null) opening = heading else headings[gap] = heading
             }
