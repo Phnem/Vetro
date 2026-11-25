@@ -1,5 +1,6 @@
 package com.example.myapplication.audiobooks.catalog
 
+import com.example.myapplication.media.source.await
 import android.os.Build
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.CancellationException
@@ -38,7 +39,7 @@ class BookCatalogApi(
         try {
             val url = "$apiV1/search".toHttpUrlOrNull()?.newBuilder()
                 ?.addQueryParameter("q", query)?.addQueryParameter("limit", limit.toString())?.build() ?: return@withContext null
-            http.newCall(Request.Builder().url(url).build()).execute().use { resp ->
+            http.newCall(Request.Builder().url(url).build()).await().use { resp ->
                 if (!resp.isSuccessful) return@withContext null
                 json.parseToJsonElement(resp.body.string()).jsonObject["items"]?.jsonArray?.mapNotNull { parse(it.jsonObject) }
             }
@@ -53,7 +54,7 @@ class BookCatalogApi(
     suspend fun details(vid: String): CatalogDetails? = withContext(Dispatchers.IO) {
         try {
             val url = "$apiV1/books/$vid".toHttpUrlOrNull() ?: return@withContext null
-            http.newCall(Request.Builder().url(url).build()).execute().use { resp ->
+            http.newCall(Request.Builder().url(url).build()).await().use { resp ->
                 if (!resp.isSuccessful) return@withContext null
                 parseCatalogDetails(vid, json.parseToJsonElement(resp.body.string()).jsonObject)
             }

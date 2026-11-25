@@ -47,12 +47,23 @@ class BooksHomeViewModel(
     private val _importing = MutableStateFlow(0)
     val importing: StateFlow<Int> = _importing.asStateFlow()
 
+    private val _importProblem = MutableStateFlow<LocalLibraryImporter.ImportResult?>(null)
+    /** Часть папки не добавилась: сколько удалось и сколько нет. null — сообщать нечего. */
+    val importProblem: StateFlow<LocalLibraryImporter.ImportResult?> = _importProblem.asStateFlow()
+
+    fun consumeImportProblem() {
+        _importProblem.value = null
+    }
+
     /** Папка из системного выбора: книги из неё — в библиотеку, с добором метаданных у источников. */
     fun importFolder(uri: android.net.Uri) {
         _importing.update { it + 1 }
         viewModelScope.launch {
             try {
-                runCatching { importer.importTree(uri) }
+                com.example.myapplication.utils.runSuspendCatching { importer.importTree(uri) }
+                    .onSuccess { if (it.failed > 0) _importProblem.value = it }
+                    // Папку не удалось прочитать вовсе.
+                    .onFailure { _importProblem.value = LocalLibraryImporter.ImportResult(0, 0) }
             } finally {
                 _importing.update { (it - 1).coerceAtLeast(0) }
             }

@@ -1,5 +1,8 @@
 package com.example.myapplication.audiobooks.data.remote.web
 
+import com.example.myapplication.media.source.await
+import com.example.myapplication.utils.runSuspendCatching
+import kotlin.coroutines.cancellation.CancellationException
 import com.example.myapplication.audiobooks.domain.source.Availability
 import com.example.myapplication.audiobooks.domain.source.FailureKind
 import com.example.myapplication.audiobooks.domain.source.SourceResult
@@ -56,10 +59,10 @@ class SourceHttp(
                             .header("User-Agent", userAgent)
                             .apply { headers.forEach { (k, v) -> header(k, v) } }
                             .build()
-                        http.newCall(request).execute().use { r ->
+                        http.newCall(request).await().use { r ->
                             r.header("Content-Length")?.toLongOrNull()?.takeIf { r.isSuccessful && it > 0 }
                         }
-                    }.getOrNull()
+                    }.onFailure { if (it is CancellationException) throw it }.getOrNull()
                 }
             }
         }.awaitAll()
@@ -73,8 +76,8 @@ class SourceHttp(
                 .header("User-Agent", userAgent)
                 .apply { headers.forEach { (k, v) -> header(k, v) } }
                 .build()
-            http.newCall(request).execute().use { r -> if (r.isSuccessful) r.body?.bytes() else null }
-        }.getOrNull()
+            http.newCall(request).await().use { r -> if (r.isSuccessful) r.body?.bytes() else null }
+        }.onFailure { if (it is CancellationException) throw it }.getOrNull()
     }
 
     /** Байты [from]..[to] файла (Range) — для чтения заголовка MP3; не ответил — null. */
@@ -85,9 +88,16 @@ class SourceHttp(
                 .header("Range", "bytes=$from-$to")
                 .apply { headers.forEach { (k, v) -> header(k, v) } }
                 .build()
-            http.newCall(request).execute().use { r ->
+            http.newCall(request).await().use { r ->
                 if (!r.isSuccessful) return@use null
-                // Сервер без Range отдаёт файл целиком — читаем только нужное.
+                // B08-11: сервер без Range отдаёт файл с начала. Для смещения 0 это то что нужно, а для
+                // другого смещения начало файла выдавалось бы за кадр после ID3.
+                if (r.code == 206) {
+                    val range = r.header("Content-Range")
+                    if (range != null && !range.startsWith("bytes $from-")) return@use null
+                } else if (from > 0) {
+                    return@use null
+                }
                 r.body?.byteStream()?.use { input ->
                     val buffer = ByteArray((to - from + 1).toInt())
                     var read = 0
@@ -99,7 +109,7 @@ class SourceHttp(
                     buffer.copyOf(read)
                 }
             }
-        }.getOrNull()
+        }.onFailure { if (it is CancellationException) throw it }.getOrNull()
     }
 
     private suspend fun call(builder: Request.Builder, headers: Map<String, String>): SourceResult<String> =
@@ -108,7 +118,7 @@ class SourceHttp(
             builder.header("User-Agent", userAgent)
             headers.forEach { (k, v) -> builder.header(k, v) }
             try {
-                http.newCall(builder.build()).execute().use { response ->
+                http.newCall(builder.build()).await().use { response ->
                     when {
                         response.isSuccessful -> SourceResult.Ok(response.body?.string().orEmpty())
                         response.code == 404 || response.code == 410 -> SourceResult.Restricted(Availability.REMOVED)
@@ -133,7 +143,7 @@ class SourceHttp(
 
 /** Преобразование удачного ответа; исключение парсера — сбой разбора, а не падение. */
 internal inline fun <T, R> SourceResult<T>.mapOk(transform: (T) -> R): SourceResult<R> = when (this) {
-    is SourceResult.Ok -> runCatching { SourceResult.Ok(transform(value)) }
+    is SourceResult.Ok -> runSuspendCatching { SourceResult.Ok(transform(value)) }
         .getOrElse { SourceResult.Failed(FailureKind.PARSE, it) }
     is SourceResult.Restricted -> this
     is SourceResult.Failed -> this
@@ -141,7 +151,7 @@ internal inline fun <T, R> SourceResult<T>.mapOk(transform: (T) -> R): SourceRes
 
 /** Как [mapOk], но разбор сам решает, что страница — не книга (null → сбой разбора). */
 internal inline fun <T, R : Any> SourceResult<T>.parseOk(transform: (T) -> SourceResult<R>): SourceResult<R> = when (this) {
-    is SourceResult.Ok -> runCatching { transform(value) }.getOrElse { SourceResult.Failed(FailureKind.PARSE, it) }
+    is SourceResult.Ok -> runSuspendCatching { transform(value) }.getOrElse { SourceResult.Failed(FailureKind.PARSE, it) }
     is SourceResult.Restricted -> this
     is SourceResult.Failed -> this
 }

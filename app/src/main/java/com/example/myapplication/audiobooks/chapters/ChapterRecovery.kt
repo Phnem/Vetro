@@ -286,7 +286,8 @@ object CueSheet {
                 inTrack && line.startsWith("TITLE ", ignoreCase = true) ->
                     title = line.substringAfter(' ').trim().trim('"')
                 inTrack && line.startsWith("INDEX 01 ", ignoreCase = true) -> {
-                    val parts = line.substringAfter("INDEX 01 ", "").trim().split(':')
+                    // Отрезаем по длине: substringAfter по литералу чувствителен к регистру, а условие выше — нет.
+                    val parts = line.substring("INDEX 01 ".length).trim().split(':')
                     if (parts.size == 3) {
                         val ms = runCatching {
                             parts[0].toLong() * 60_000L + parts[1].toLong() * 1_000L + parts[2].toLong() * 1000L / 75

@@ -49,11 +49,13 @@ class LocalLibraryImporter(
             }
     }
 
-    /** Папка из системного выбора: все книги в ней (или она сама) — в библиотеку. Число добавленных. */
-    suspend fun importTree(treeUri: Uri): Int {
+    data class ImportResult(val added: Int, val failed: Int)
+
+    /** Папка из системного выбора: все книги в ней (или она сама) — в библиотеку. */
+    suspend fun importTree(treeUri: Uri): ImportResult {
         val books = local.addTree(treeUri)
-        books.forEach { import(it) }
-        return books.size
+        val added = books.count { import(it) }
+        return ImportResult(added, books.size - added)
     }
 
     /**
@@ -66,8 +68,8 @@ class LocalLibraryImporter(
         }
     }
 
-    private suspend fun import(book: LocalBook) {
-        try {
+    private suspend fun import(book: LocalBook): Boolean {
+        return try {
             val manifest = runCatching { local.refresh(book.variant) }.getOrNull()
             manifest?.let { resolver.put(it) }
             val folder = FolderName.parse(book.title)
@@ -104,10 +106,12 @@ class LocalLibraryImporter(
                     chapterCount = manifest?.chapters?.size?.takeIf { it > 0 },
                 ),
             )
+            true
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
             Log.w(TAG, "import failed for \"${book.title}\": ${e.message}")
+            false
         }
     }
 

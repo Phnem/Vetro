@@ -126,6 +126,20 @@ fun BooksHomeScreen(
     val context = LocalContext.current
     val library by vm.library.collectAsStateWithLifecycle()
     val importing by vm.importing.collectAsStateWithLifecycle()
+    val importProblem by vm.importProblem.collectAsStateWithLifecycle()
+    LaunchedEffect(importProblem) {
+        val problem = importProblem ?: return@LaunchedEffect
+        val ru = java.util.Locale.getDefault().language == "ru"
+        MiniNotif.show(
+            context,
+            when {
+                problem.failed == 0 -> if (ru) "Папку не удалось прочитать" else "Could not read the folder"
+                ru -> "Добавлено книг: ${problem.added}, не удалось: ${problem.failed}. Выберите папку ещё раз, чтобы повторить."
+                else -> "Books added: ${problem.added}, failed: ${problem.failed}. Pick the folder again to retry."
+            },
+        )
+        vm.consumeImportProblem()
+    }
     // «Добавить» сразу открывает системный выбор папки; выбранная папка уходит в библиотеку.
     val folderPicker = androidx.activity.compose.rememberLauncherForActivityResult(
         androidx.activity.result.contract.ActivityResultContracts.OpenDocumentTree(),
