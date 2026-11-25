@@ -59,7 +59,11 @@
 # Extension APKs are compiled against these classes (compileOnly stubs) and resolve them by name
 # from Vetro's classloader at runtime, so R8 must neither rename nor strip their public API.
 # Same set Mihon keeps; costs some APK size, without it every extension dies with NoSuchMethodError.
--keep,allowoptimization class eu.kanade.tachiyomi.** { public protected *; }
+# API, от которого наследуются расширения, без allowoptimization: иначе R8 помечает final методы, которые в самом
+# приложении никто не переопределяет (fetchRelatedMangaList, getFilterList), и расширение не загружается:
+# LinkageError «overrides final method».
+# Все члены, включая приватные: расширения берут их рефлексией (MangaDex — HttpSource.headers$delegate).
+-keep class eu.kanade.tachiyomi.** { *; }
 # Внутренности kotlin-reflect (protobuf и разбор метаданных) расширения напрямую не зовут,
 # а общее правило удерживало их целиком.
 -keep,allowoptimization class !kotlin.reflect.jvm.internal.**,kotlin.** { public protected *; }
@@ -69,6 +73,10 @@
 -keep,allowoptimization class okio.** { public protected *; }
 -keep,allowoptimization class org.jsoup.** { public protected *; }
 -keep,allowoptimization class uy.kohesive.injekt.** { public protected *; }
+# fullType<T>() читает T из обобщённой сигнатуры анонимного наследника (ExtensionRuntime), а R8 в full mode
+# сохраняет сигнатуры только у классов, названных правилом. Без этого расширения не устанавливаются:
+# «TypeReference constructed without actual type information».
+-keep,allowobfuscation,allowshrinking,allowoptimization class * extends uy.kohesive.injekt.api.FullTypeReference
 -keep,allowoptimization class androidx.preference.** { public protected *; }
 -keep,allowoptimization class com.squareup.zstd.** { public protected *; }
 -dontwarn uy.kohesive.injekt.**
