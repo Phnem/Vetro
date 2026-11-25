@@ -175,13 +175,24 @@ class InspectViewModel(
         }
     }
 
+    private val _addFailed = MutableStateFlow(false)
+    /** Добавление не удалось: экран сообщает плашкой, результаты поиска при этом остаются. */
+    val addFailed: StateFlow<Boolean> = _addFailed
+
+    fun consumeAddFailed() {
+        _addFailed.value = false
+    }
+
     fun addFromApi(result: ApiSearchResult) {
-        val key = result.listKey
+        if (_addingFromApiId.value != null) return
+        _addingFromApiId.value = result.listKey
         viewModelScope.launch {
-            _addingFromApiId.value = key
             addFromApiUseCase(result)
                 .onSuccess { com.example.myapplication.domain.search.reportUserAdded(result, it) }
-                .onFailure { it.printStackTrace() }
+                .onFailure {
+                    it.printStackTrace()
+                    _addFailed.value = true
+                }
             _addingFromApiId.value = null
         }
     }

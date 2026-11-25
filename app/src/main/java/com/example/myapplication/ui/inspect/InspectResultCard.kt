@@ -62,6 +62,7 @@ fun InspectResultCard(
     isLoading: Boolean,
     addLabel: String,
     addedLabel: String,
+    episodesUnit: String,
     onAddClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -122,7 +123,7 @@ fun InspectResultCard(
             }
             OverlayChip(
                 text = buildString {
-                    append(if (result.categoryType == "MOVIE") result.type.ifBlank { "Movie" } else "${result.episodes} эп.")
+                    append(if (result.categoryType == "MOVIE") result.type.ifBlank { "Movie" } else "${result.episodes} $episodesUnit")
                     append(" · ")
                     append(result.source)
                 },

@@ -501,7 +501,8 @@ private fun SecretContent(
         } else {
             LazyColumn(
                 flingBehavior = com.example.myapplication.ui.shared.theme.IosScroll.flingBehavior(),
-                modifier = Modifier.weight(1f),
+                // Нижняя карточка не должна уходить под системную панель навигации.
+                modifier = Modifier.weight(1f).navigationBarsPadding(),
                 contentPadding = PaddingValues(top = 8.dp, bottom = 32.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {

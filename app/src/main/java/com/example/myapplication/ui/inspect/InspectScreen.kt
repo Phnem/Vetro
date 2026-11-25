@@ -136,6 +136,15 @@ fun InspectScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val selectedUri by viewModel.selectedImageUri.collectAsStateWithLifecycle()
     val addingId by viewModel.addingFromApiId.collectAsStateWithLifecycle()
+    val addFailed by viewModel.addFailed.collectAsStateWithLifecycle()
+    androidx.compose.runtime.LaunchedEffect(addFailed) {
+        if (!addFailed) return@LaunchedEffect
+        com.example.myapplication.ui.shared.mininotif.MiniNotif.show(
+            context,
+            if (viewModel.uiLanguage.value == AppLanguage.RU) "Не удалось добавить" else "Could not add the title",
+        )
+        viewModel.consumeAddFailed()
+    }
     val hasVisionProvider by viewModel.hasVisionProvider.collectAsStateWithLifecycle()
     val aiConnectStrings = getAiConnectStrings(lang)
     val ink = MaterialTheme.colorScheme.onBackground
@@ -330,6 +339,7 @@ fun InspectScreen(
                                         addingId = addingId,
                                         addLabel = strings.addButton,
                                         addedLabel = strings.addedButton,
+                                        episodesUnit = if (lang == AppLanguage.RU) "эп." else "ep.",
                                         onAdd = { result ->
                                             performHaptic(view, Haptic.Light)
                                             viewModel.addFromApi(result)
@@ -568,6 +578,7 @@ private fun InspectStateContent(
     addingId: String?,
     addLabel: String,
     addedLabel: String,
+    episodesUnit: String,
     onAdd: (com.example.myapplication.network.ApiSearchResult) -> Unit,
     bottomInset: Dp,
     modifier: Modifier = Modifier,
@@ -632,6 +643,7 @@ private fun InspectStateContent(
                         isLoading = addingId == addKey,
                         addLabel = addLabel,
                         addedLabel = addedLabel,
+                        episodesUnit = episodesUnit,
                         onAddClick = { onAdd(r) },
                         modifier = Modifier.fillMaxWidth(),
                     )
