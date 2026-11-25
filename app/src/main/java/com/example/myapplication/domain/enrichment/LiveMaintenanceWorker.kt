@@ -128,7 +128,9 @@ class LiveMaintenanceWorker(
         try {
             collectReleaseYears(batch, language, found)
         } finally {
-            runSuspendCatching { localDataSource.setReleaseYears(found) }
+            kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) {
+                runSuspendCatching { localDataSource.setReleaseYears(found) }
+            }
         }
     }
 

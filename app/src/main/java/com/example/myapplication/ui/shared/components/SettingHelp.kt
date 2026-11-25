@@ -86,7 +86,7 @@ class SettingHelpController {
                 }
             }
         } finally {
-            highlight.snapTo(0f)
+            kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) { highlight.snapTo(0f) }
             highlightId = null
         }
     }
