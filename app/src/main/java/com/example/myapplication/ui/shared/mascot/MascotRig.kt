@@ -253,9 +253,8 @@ internal fun silhouette(r: BodyRot, n: Int = 180): List<Offset> {
 /** Бок силуэта на высоте плеча: x края, диапазон по y для галтелей, s3x — плечо на боковой грани. */
 private class Edge(var x: Float, val y: Float, val top: Float, val bottom: Float, val s3x: Float)
 
-private fun sideEdge(p: MascotPose, side: Int): Edge {
+private fun sideEdge(p: MascotPose, side: Int, sil: List<Offset>): Edge {
     val r = BodyRot(p)
-    val sil = silhouette(r, 120)
     val s3 = r.project(side * BA * 0.82f, 26f, 0f)
     val ys = s3.y
     var x = side * BA
@@ -352,8 +351,10 @@ private fun armGeom(side: Int, angle: Float, bend: Float, lag: Float, e: Edge, r
 }
 
 /** Рука стороны [side] с краем корпуса; inL/inR уводят корень на плечо боковой грани (рука перед телом). */
-private fun armFor(p: MascotPose, side: Int, reach: Float = 0f): Pair<Edge, Arm> {
-    val e = sideEdge(p, side)
+private fun shoulderOutline(p: MascotPose): List<Offset> = silhouette(BodyRot(p), 120)
+
+private fun armFor(p: MascotPose, side: Int, reach: Float = 0f, outline: List<Offset> = shoulderOutline(p)): Pair<Edge, Arm> {
+    val e = sideEdge(p, side, outline)
     val k = clamp01(if (side < 0) p.inL else p.inR)
     if (k > 0f) e.x += (e.s3x - side * 32f - e.x) * k
     val arm = if (side < 0) armGeom(-1, p.armL, p.bendL, p.lagL, e) else armGeom(1, p.armR, p.bendR, p.lagR, e, reach)
@@ -454,8 +455,9 @@ internal fun DrawScope.drawMascot(
 ) {
     val r = BodyRot(p)
     val sil = polyPath(silhouette(r))
-    val (eL, aL) = armFor(p, -1)
-    val (eR, aR) = armFor(p, 1, extras?.reachR ?: 0f)
+    val shoulders = shoulderOutline(p)
+    val (eL, aL) = armFor(p, -1, outline = shoulders)
+    val (eR, aR) = armFor(p, 1, extras?.reachR ?: 0f, shoulders)
     val armLayers = extras?.arms?.invoke(aL, aR)
     val fil = Path().also {
         if (armLayers == null) {

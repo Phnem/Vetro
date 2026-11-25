@@ -159,7 +159,8 @@ object MiniNotif {
     var enabled: Boolean by mutableStateOf(false)
 
     private val items = Channel<MiniNotifItem>(capacity = 24, onBufferOverflow = BufferOverflow.DROP_OLDEST)
-    private val dismisses = Channel<Unit>(Channel.CONFLATED)
+    /** id плашки, которую закрывают; null — ту, что на экране. */
+    private val dismisses = Channel<Long?>(Channel.CONFLATED)
     private val hosts = AtomicInteger(0)
     private val ids = AtomicLong(0)
 
@@ -265,9 +266,9 @@ object MiniNotif {
         items.trySend(MiniNotifItem(ids.incrementAndGet(), text, kind, holdMillis, card))
     }
 
-    /** Убрать текущую плашку (по тапу делает сам хост). */
-    fun dismiss() {
-        dismisses.trySend(Unit)
+    /** Убрать плашку (по тапу делает сам хост и называет её [id]). */
+    fun dismiss(id: Long? = null) {
+        dismisses.trySend(id)
     }
 
     internal fun setHostVisible(visible: Boolean) {
@@ -288,10 +289,17 @@ object MiniNotif {
     internal suspend fun holdFor(item: MiniNotifItem, millis: Long = item.holdMillis): HoldResult {
         val shownAt = SystemClock.uptimeMillis()
         val result = withTimeoutOrNull(millis) {
-            select<HoldResult> {
-                items.onReceive { HoldResult.Next(it) }
-                dismisses.onReceive { HoldResult.Dismissed }
+            var outcome: HoldResult? = null
+            while (outcome == null) {
+                outcome = select<HoldResult?> {
+                    items.onReceive { HoldResult.Next(it) }
+                    // Закрытие прошлой плашки, пришедшее в паузе между ними, эту не касается.
+                    dismisses.onReceive { id ->
+                        if (id == null || id == item.id || id == item.morphTo?.id) HoldResult.Dismissed else null
+                    }
+                }
             }
+            outcome
         } ?: return HoldResult.Expired
         if (result is HoldResult.Next) {
             val left = MinHoldMillis - (SystemClock.uptimeMillis() - shownAt)
@@ -365,7 +373,8 @@ fun MiniNotifHost(
     bottomClearance: Dp = 84.dp,
 ) {
     val reduced by rememberUpdatedState(rememberReducedMotion())
-    val density = LocalDensity.current
+    val densityNow = LocalDensity.current
+    val density by rememberUpdatedState(densityNow)
     val screenWidthDp = LocalConfiguration.current.screenWidthDp
     val measurer = rememberTextMeasurer()
     val uiScope = rememberCoroutineScope()
@@ -393,7 +402,7 @@ fun MiniNotifHost(
             letterSpacing = (-0.005f * 13).sp, color = onSurface.copy(alpha = 0.65f),
         ),
     )
-    val cardWidth = (screenWidthDp.dp - CardSideMargin * 2).coerceAtLeast(240.dp)
+    val cardWidth by rememberUpdatedState((screenWidthDp.dp - CardSideMargin * 2).coerceAtLeast(240.dp))
 
     val width = remember { Animatable(0f) }
     val height = remember { Animatable(0f) }
@@ -404,9 +413,9 @@ fun MiniNotifHost(
     val hostLift = remember { Animatable(0f) }
     var shown by remember { mutableStateOf<MiniNotifItem?>(null) }
 
-    val textMaxPx = with(density) {
+    val textMaxPx by rememberUpdatedState(with(density) {
         ((screenWidthDp.dp - SideMargin * 2) - PadStart - IconSize - IconGap - PadEnd).coerceAtLeast(96.dp).toPx()
-    }
+    })
     val textMaxDp = with(density) { textMaxPx.toDp() }
 
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -619,7 +628,7 @@ fun MiniNotifHost(
                                 tryAwaitRelease()
                                 if (!reduced) uiScope.launch { press.animateTo(1f, MotionTokens.islandPress()) }
                             },
-                            onTap = { MiniNotif.dismiss() },
+                            onTap = { shown?.let { MiniNotif.dismiss(it.id) } },
                         )
                     }
                     .semantics(mergeDescendants = true) { liveRegion = LiveRegionMode.Polite },
