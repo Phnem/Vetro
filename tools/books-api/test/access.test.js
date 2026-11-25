@@ -159,16 +159,13 @@ test("origin allow-list: exact host, wildcard subdomains, Referer fallback", () 
   assert.equal(originAllowed(list, r({})), false); // ключ «для браузера» с сервера не работает
 });
 
-test("an app token is limited to 120 requests a minute", async () => {
+test("an app token has no rate limit", async () => {
   const e = env({ APP_TOKEN_SECRET: "test-secret" });
   const { token } = await issueAppToken("test-secret", "install-1", 3600, T0).then((t) => (typeof t === "string" ? { token: t } : t));
-  for (let i = 0; i < 120; i++) {
-    const gate = await authorize(req("/v1/search?q=a", bearer(token)), e, T0 + i * 110);
+  for (let i = 0; i < 700; i++) {
+    const gate = await authorize(req("/v1/search?q=a", bearer(token)), e, T0 + i);
     assert.equal(gate.response, undefined, "request " + (i + 1));
   }
-  const over = await authorize(req("/v1/search?q=a", bearer(token)), e, T0 + 120 * 110);
-  assert.equal(over.response.status, 429);
-  assert.ok(over.response.headers.get("retry-after"));
 });
 
 test("open mode lets anonymous calls through, enforce mode asks for a key, health is always open", async () => {

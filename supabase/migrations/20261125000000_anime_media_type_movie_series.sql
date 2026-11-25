@@ -1,5 +1,6 @@
--- Клиент давно пишет в anime.media_type значения 'MOVIE' и 'SERIES', а ограничение из
--- 20260626100000 разрешает только ANIME/MANGA/TV_SERIES: такая строка валит upsert всей пачки.
+-- Выравнивает файлы миграций с боевой базой. Там ограничение уже именно такое (проверено
+-- 2026-11-25), а 20260626100000 разрешает только ANIME/MANGA/TV_SERIES: в базе, поднятой из
+-- файлов, строка 'MOVIE' или 'SERIES' от клиента валила бы upsert всей пачки.
 ALTER TABLE public.anime
     DROP CONSTRAINT IF EXISTS anime_media_type_check;
 

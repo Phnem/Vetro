@@ -204,11 +204,7 @@ export async function authorize(request, env, now = Date.now()) {
     const t = await verifyAppToken(env.APP_TOKEN_SECRET, cred.value, now);
     if (!t.ok) return deny(401, t.error);
     if (await installRevoked(env, t.installId)) return deny(403, "install_revoked");
-    // тариф app (ADR 0003): без этого один извлечённый токен выкачивал бы каталог без всякого предела
-    const appLimit = await admit(env, { id: "app:" + t.installId, per_second: 10, per_minute: 120, per_day: 0 }, route, now);
-    if (!appLimit.ok) {
-      return deny(429, "rate_limited", { scope: appLimit.scope, retry_after: appLimit.retry }, { "retry-after": String(appLimit.retry) });
-    }
+    // тариф app не ограничен по частоте намеренно (ADR 0003); злоупотребление гасится отзывом установки
     return { route, request: req, principal: { kind: "app", id: t.installId, tier: "app" } };
   }
   if (!cred.value.startsWith("vk_")) return deny(401, "invalid_key");
