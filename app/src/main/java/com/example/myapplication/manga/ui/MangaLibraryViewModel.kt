@@ -12,6 +12,7 @@ import com.example.myapplication.manga.data.MangaDownloadStore
 import com.example.myapplication.manga.data.MangaReadingStore
 import com.example.myapplication.manga.domain.MangaChapter
 import com.example.myapplication.manga.domain.MangaItem
+import com.example.myapplication.manga.domain.MangaSourceId
 import com.example.myapplication.manga.ja.JaTailResolver
 import com.example.myapplication.manga.translate.ChapterTranslationPlan
 import com.example.myapplication.manga.translate.MangaTranslateSettings
@@ -48,6 +49,8 @@ sealed interface MangaLibraryUiState {
         val refreshing: Boolean = false,
         /** Включён ли автоперевод: главы-оригиналы в списке помечаются и читаются переведёнными. */
         val autoTranslate: Boolean = false,
+        /** Название источника для шапки; null, пока не узнали или источника больше нет. */
+        val sourceName: String? = null,
     ) : MangaLibraryUiState
 
     data class Error(val message: String) : MangaLibraryUiState
@@ -84,6 +87,9 @@ class MangaLibraryViewModel(
     private var chaptersJob: Job? = null
     private var progressJob: Job? = null
     private var downloadsJob: Job? = null
+    private var nameJob: Job? = null
+    /** id источника и его название — чтобы после смены источника не показать старое. */
+    private var sourceName: Pair<String, String?>? = null
 
     private var autoTranslate: Boolean = translateSettings.ui.value.active
 
@@ -208,6 +214,7 @@ class MangaLibraryViewModel(
      * оглавление не должно исчезать из-за одной неудачной попытки.
      */
     private fun loadChapters(initial: MangaBinding, forceRefresh: Boolean = false) {
+        resolveSourceName(initial.sourceId)
         chaptersJob?.cancel()
         chaptersJob = viewModelScope.launch {
             var binding = initial
@@ -280,7 +287,22 @@ class MangaLibraryViewModel(
             downloading = previous?.downloading.orEmpty(),
             refreshing = refreshing,
             autoTranslate = autoTranslate,
+            sourceName = sourceName?.takeIf { it.first == binding.sourceId }?.second,
         )
+    }
+
+    /**
+     * Отдельно от глав: у расширения название известно только после загрузки его APK, а кэш
+     * оглавления должен показаться сразу.
+     */
+    private fun resolveSourceName(sourceId: String) {
+        nameJob?.cancel()
+        nameJob = viewModelScope.launch {
+            val name = engine.sourceName(MangaSourceId(sourceId))
+            sourceName = sourceId to name
+            val current = _state.value as? MangaLibraryUiState.Chapters ?: return@launch
+            if (current.binding.sourceId == sourceId) _state.value = current.copy(sourceName = name)
+        }
     }
 
     private fun observeProgress(binding: MangaBinding) {

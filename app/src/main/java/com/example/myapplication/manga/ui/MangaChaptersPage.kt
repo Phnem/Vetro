@@ -6,6 +6,9 @@ import com.example.myapplication.ui.shared.mascot.MascotEmptyState
 import com.example.myapplication.ui.shared.theme.IosScroll
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.rememberUpdatedState
+import com.example.myapplication.manga.extensions.MihonSourceAdapter
 import com.example.myapplication.manga.extensions.ui.MangaExtensionsSheet
 import com.example.myapplication.ui.shared.components.IosSheetScaffold
 import androidx.compose.foundation.background
@@ -119,6 +122,8 @@ fun MangaChaptersPage(
     animeTitleEn: String?,
     language: AppLanguage,
     modifier: Modifier = Modifier,
+    /** Открылась или закрылась шторка страницы: хозяин убирает из-под неё свои кнопки и док. */
+    onSheetOpenChange: (Boolean) -> Unit = {},
     // Ключ по тайтлу: без него разные тайтлы в одном ViewModelStore делят одну модель и оглавление.
     viewModel: MangaLibraryViewModel = koinViewModel(key = "manga_chapters_$animeId") {
         parametersOf(animeId, animeTitle, animeTitleEn.orEmpty())
@@ -134,6 +139,11 @@ fun MangaChaptersPage(
     var extensionsChanged by remember { mutableStateOf(false) }
     val pageScope = rememberCoroutineScope()
     val openExtensions = { extensionsOpen = true }
+    val reportSheet by rememberUpdatedState(onSheetOpenChange)
+    DisposableEffect(extensionsOpen) {
+        reportSheet(extensionsOpen)
+        onDispose { reportSheet(false) }
+    }
 
     IosSheetScaffold(
         sheetVisible = extensionsOpen,
@@ -772,7 +782,7 @@ private fun ChaptersHeader(
                     isDark = isDark,
                 )
                 volumeRange?.let { MetaPill(text = it, isDark = isDark) }
-                MetaPill(text = state.binding.sourceId, isDark = isDark)
+                MetaPill(text = sourceLabel(state.sourceName, state.binding.sourceId), isDark = isDark)
             }
         }
         if (state.refreshing) {
@@ -1194,6 +1204,13 @@ private fun MangaChapter.listTitle(ru: Boolean): String {
     return listOfNotNull(number, name).joinToString(" — ")
         .ifBlank { if (ru) "Глава" else "Chapter" }
 }
+
+/**
+ * Подпись источника в шапке. Имени нет, пока расширения грузятся или расширение удалено: тогда
+ * лучше «Mihon», чем `mihon:2499283573021220255`.
+ */
+private fun sourceLabel(name: String?, sourceId: String): String =
+    name ?: if (sourceId.startsWith(MihonSourceAdapter.ID_PREFIX)) "Mihon" else sourceId
 
 private fun chapterPlural(count: Int): String {
     val mod100 = count % 100

@@ -54,6 +54,9 @@ class MangaSourceEngine(
             ?: japaneseSources.firstOrNull { it.id == id }
             ?: runSuspendCatching { extensionSources() }.getOrDefault(emptyList()).firstOrNull { it.id == id }
 
+    /** Название источника для подписи; null — такого источника сейчас нет (расширение удалили). */
+    suspend fun sourceName(id: MangaSourceId): String? = sourceById(id)?.name
+
     /**
      * Поиск по всем источникам параллельно — для экрана привязки тайтл↔источник (§8 плана). Как в
      * поиске по каталогам: после первого непустого ответа остальным даётся [SEARCH_GRACE_MS], и

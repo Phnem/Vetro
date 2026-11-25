@@ -198,6 +198,9 @@ fun DetailsScreen(
     // Значки статус-бара белые, пока под ним арт страницы «Детали»; на странице серий и когда
     // лист наехал на арт — по теме.
     var heroUnderStatusBar by remember { mutableStateOf(true) }
+    // Шторка, открытая внутри страницы пейджера (расширения Mihon), лежит слоем ниже кнопок и дока
+    // этого экрана: на время её показа они прячутся.
+    var pageSheetOpen by remember { mutableStateOf(false) }
     val statusBarOverArt by remember {
         derivedStateOf { pagerState.currentPage == 0 && heroUnderStatusBar }
     }
@@ -315,6 +318,7 @@ fun DetailsScreen(
                             )
 
                             else -> if (isManga) MangaChaptersPage(
+                                onSheetOpenChange = { pageSheetOpen = it },
                                 animeId = current.id,
                                 animeTitle = displayTitle,
                                 animeTitleEn = current.titleEn,
@@ -345,68 +349,88 @@ fun DetailsScreen(
                     }
                 }
 
-                DetailsGlassBackButton(
-                    backdrop = backdrop,
-                    isDark = isDark,
-                    onClick = { navController.popBackStack() },
-                    modifier = Modifier
-                        .align(Alignment.TopStart)
-                        .statusBarsPadding()
-                        .padding(top = 12.dp, start = 16.dp)
-                        .zIndex(4f),
-                )
+                AnimatedVisibility(
+                    visible = !pageSheetOpen,
+                    enter = fadeIn(),
+                    exit = fadeOut(),
+                    modifier = Modifier.fillMaxSize().zIndex(4f),
+                ) {
+                    Box(Modifier.fillMaxSize()) {
+                        DetailsGlassBackButton(
+                            backdrop = backdrop,
+                            isDark = isDark,
+                            onClick = { navController.popBackStack() },
+                            modifier = Modifier
+                                .align(Alignment.TopStart)
+                                .statusBarsPadding()
+                                .padding(top = 12.dp, start = 16.dp)
+                                .zIndex(4f),
+                        )
 
-                // Каталоги аниме (обложки, id, «просмотрено» по сериям) манге не нужны: у неё в меню
-                // остаётся только секретная папка.
-                val isSecret by viewModel.isSecret.collectAsStateWithLifecycle()
-                DetailsOverflowMenu(
-                    backdrop = backdrop,
-                    isDark = isDark,
-                    ru = language == AppLanguage.RU,
-                    onMarkWatched = viewModel::markWatched,
-                    onChangeCover = viewModel::openCoverPicker,
-                    onWrongSource = viewModel::openSourcePicker,
-                    isSecret = isSecret,
-                    onToggleSecret = viewModel::toggleSecret,
-                    showCatalogActions = !isManga,
-                    showAnimeCatalogActions = current.mediaType == MediaType.ANIME,
-                )
+                        // Каталоги аниме (обложки, id, «просмотрено» по сериям) манге не нужны: у неё в меню
+                        // остаётся только секретная папка.
+                        val isSecret by viewModel.isSecret.collectAsStateWithLifecycle()
+                        DetailsOverflowMenu(
+                            backdrop = backdrop,
+                            isDark = isDark,
+                            ru = language == AppLanguage.RU,
+                            onMarkWatched = viewModel::markWatched,
+                            onChangeCover = viewModel::openCoverPicker,
+                            onWrongSource = viewModel::openSourcePicker,
+                            isSecret = isSecret,
+                            onToggleSecret = viewModel::toggleSecret,
+                            showCatalogActions = !isManga,
+                            showAnimeCatalogActions = current.mediaType == MediaType.ANIME,
+                        )
 
-                // Отдельный пузырь левее «⋯»: карточка «Что я сейчас смотрю» картинкой для друзей и соцсетей.
-                DetailsGlassBackButton(
-                    backdrop = backdrop,
-                    isDark = isDark,
-                    onClick = {
-                        performHaptic(view, Haptic.Light)
-                        showCardSheet = true
-                    },
-                    icon = Icons.Rounded.IosShare,
-                    contentDescription = if (language == AppLanguage.RU) "Поделиться" else "Share",
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .statusBarsPadding()
-                        // Правее «⋯»: 16 отступ + 48 кнопка + 8 зазор.
-                        .padding(top = 12.dp, end = 16.dp + 48.dp + 8.dp)
-                        .zIndex(4f),
-                )
-                // Ещё левее: «комментарий с плюсиком» — добавить комментарий пузырём на карточку.
-                DetailsGlassBackButton(
-                    backdrop = backdrop,
-                    isDark = isDark,
-                    onClick = {
-                        performHaptic(view, Haptic.Light)
-                        commentReturnsToCard = true
-                        showCommentSheet = true
-                    },
-                    icon = if (cardComment.isEmpty()) Icons.Rounded.AddComment else Icons.Rounded.Comment,
-                    contentDescription = if (language == AppLanguage.RU) "Добавить комментарий" else "Add comment",
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .statusBarsPadding()
-                        // Правее «⋯» и «Поделиться»: 16 отступ + 2 × (48 кнопка + 8 зазор).
-                        .padding(top = 12.dp, end = 16.dp + (48.dp + 8.dp) * 2)
-                        .zIndex(4f),
-                )
+                        // «Поделиться» и комментарий — действия самого тайтла: на странице глав и серий им
+                        // нечего отправлять и комментировать, там остаются «назад» и «⋯».
+                        AnimatedVisibility(
+                            visible = pagerState.targetPage == 0,
+                            enter = fadeIn(),
+                            exit = fadeOut(),
+                            modifier = Modifier.fillMaxSize().zIndex(4f),
+                        ) {
+                            Box(Modifier.fillMaxSize()) {
+                                // Отдельный пузырь левее «⋯»: карточка «Что я сейчас смотрю» картинкой для друзей и соцсетей.
+                                DetailsGlassBackButton(
+                                    backdrop = backdrop,
+                                    isDark = isDark,
+                                    onClick = {
+                                        performHaptic(view, Haptic.Light)
+                                        showCardSheet = true
+                                    },
+                                    icon = Icons.Rounded.IosShare,
+                                    contentDescription = if (language == AppLanguage.RU) "Поделиться" else "Share",
+                                    modifier = Modifier
+                                        .align(Alignment.TopEnd)
+                                        .statusBarsPadding()
+                                        // Правее «⋯»: 16 отступ + 48 кнопка + 8 зазор.
+                                        .padding(top = 12.dp, end = 16.dp + 48.dp + 8.dp)
+                                        .zIndex(4f),
+                                )
+                                // Ещё левее: «комментарий с плюсиком» — добавить комментарий пузырём на карточку.
+                                DetailsGlassBackButton(
+                                    backdrop = backdrop,
+                                    isDark = isDark,
+                                    onClick = {
+                                        performHaptic(view, Haptic.Light)
+                                        commentReturnsToCard = true
+                                        showCommentSheet = true
+                                    },
+                                    icon = if (cardComment.isEmpty()) Icons.Rounded.AddComment else Icons.Rounded.Comment,
+                                    contentDescription = if (language == AppLanguage.RU) "Добавить комментарий" else "Add comment",
+                                    modifier = Modifier
+                                        .align(Alignment.TopEnd)
+                                        .statusBarsPadding()
+                                        // Правее «⋯» и «Поделиться»: 16 отступ + 2 × (48 кнопка + 8 зазор).
+                                        .padding(top = 12.dp, end = 16.dp + (48.dp + 8.dp) * 2)
+                                        .zIndex(4f),
+                                )
+                            }
+                        }
+                    }
+                }
                 Box(Modifier.fillMaxSize().zIndex(10f)) {
                     com.example.myapplication.ui.details.share.WatchingCardSheet(
                         visible = showCardSheet,
@@ -452,61 +476,70 @@ fun DetailsScreen(
                 SideEffect { MiniPlayerClearance.set(miniClearanceOwner, 72.dp) }
                 DisposableEffect(miniClearanceOwner) { onDispose { MiniPlayerClearance.clear(miniClearanceOwner) } }
 
-                DetailsMiniDock(
-                    backdrop = backdrop,
-                    isDark = isDark,
-                    language = language,
-                    isManga = isManga,
-                    activePage = pagerState.targetPage,
-                    onSelect = { page ->
-                        performHaptic(view, Haptic.Light)
-                        scope.launch {
-                            pagerState.animateScrollToPage(page, animationSpec = MotionTokens.sheetPresent())
-                        }
-                    },
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .navigationBarsPadding()
-                        .padding(bottom = 16.dp)
-                        .zIndex(4f),
-                )
-
-                // Кнопка «продолжить» относится к списку серий/глав, поэтому живёт только на второй
-                // странице. У манги она делает то же самое, что у аниме, — открывает то, на чём читатель
-                // остановился; у манги вдобавок может быть нечего открывать (источник ещё не привязан),
-                // и тогда кнопки просто нет.
-                if (pagerState.targetPage == 1) {
-                    val startButtonModifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .navigationBarsPadding()
-                        .padding(bottom = 16.dp)
-                        .offset(x = 124.dp)
-                        .zIndex(4f)
-                    if (isManga) {
-                        val continueReading = rememberMangaContinueReading(
-                            animeId = current.id,
-                            animeTitle = displayTitle,
-                            animeTitleEn = current.titleEn,
-                        )
-                        if (continueReading != null) {
-                            DetailsGlassStartButton(
-                                backdrop = backdrop,
-                                onClick = {
-                                    performHaptic(view, Haptic.Light)
-                                    continueReading()
-                                },
-                                modifier = startButtonModifier,
-                            )
-                        }
-                    } else {
-                        DetailsGlassStartButton(
+                AnimatedVisibility(
+                    visible = !pageSheetOpen,
+                    enter = fadeIn(),
+                    exit = fadeOut(),
+                    modifier = Modifier.fillMaxSize().zIndex(4f),
+                ) {
+                    Box(Modifier.fillMaxSize()) {
+                        DetailsMiniDock(
                             backdrop = backdrop,
-                            onClick = {
+                            isDark = isDark,
+                            language = language,
+                            isManga = isManga,
+                            activePage = pagerState.targetPage,
+                            onSelect = { page ->
                                 performHaptic(view, Haptic.Light)
-                                episodeMenuViewModel?.startWatching()
+                                scope.launch {
+                                    pagerState.animateScrollToPage(page, animationSpec = MotionTokens.sheetPresent())
+                                }
                             },
-                            modifier = startButtonModifier,
+                            modifier = Modifier
+                                .align(Alignment.BottomCenter)
+                                .navigationBarsPadding()
+                                .padding(bottom = 16.dp)
+                                .zIndex(4f),
                         )
+
+                        // Кнопка «продолжить» относится к списку серий/глав, поэтому живёт только на второй
+                        // странице. У манги она делает то же самое, что у аниме, — открывает то, на чём читатель
+                        // остановился; у манги вдобавок может быть нечего открывать (источник ещё не привязан),
+                        // и тогда кнопки просто нет.
+                        if (pagerState.targetPage == 1) {
+                            val startButtonModifier = Modifier
+                                .align(Alignment.BottomCenter)
+                                .navigationBarsPadding()
+                                .padding(bottom = 16.dp)
+                                .offset(x = 124.dp)
+                                .zIndex(4f)
+                            if (isManga) {
+                                val continueReading = rememberMangaContinueReading(
+                                    animeId = current.id,
+                                    animeTitle = displayTitle,
+                                    animeTitleEn = current.titleEn,
+                                )
+                                if (continueReading != null) {
+                                    DetailsGlassStartButton(
+                                        backdrop = backdrop,
+                                        onClick = {
+                                            performHaptic(view, Haptic.Light)
+                                            continueReading()
+                                        },
+                                        modifier = startButtonModifier,
+                                    )
+                                }
+                            } else {
+                                DetailsGlassStartButton(
+                                    backdrop = backdrop,
+                                    onClick = {
+                                        performHaptic(view, Haptic.Light)
+                                        episodeMenuViewModel?.startWatching()
+                                    },
+                                    modifier = startButtonModifier,
+                                )
+                            }
+                        }
                     }
                 }
 
