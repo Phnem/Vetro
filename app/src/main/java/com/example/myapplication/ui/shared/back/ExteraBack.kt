@@ -1,3 +1,5 @@
+@file:android.annotation.SuppressLint("RestrictedApi") // нужен весь стек: публичного аналога нет
+
 package com.example.myapplication.ui.shared.back
 
 import android.annotation.SuppressLint

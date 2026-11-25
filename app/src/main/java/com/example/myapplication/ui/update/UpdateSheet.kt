@@ -177,8 +177,13 @@ fun UpdateSheet(language: AppLanguage, manual: Boolean, onDismiss: () -> Unit) {
 
         ProgressRing(fraction = face.fraction, tone = face.tone, modifier = Modifier.padding(vertical = 6.dp)) {
             // Переход по ВИДУ содержимого, а не по значению: иначе при каждом новом проценте цифры накладывались бы друг на друга.
-            Crossfade(targetState = face.center::class, animationSpec = MotionTokens.tweenFast(), label = "ringCenter") {
-                when (val c = face.center) {
+            AnimatedContent(
+                targetState = face.center,
+                contentKey = { it::class },
+                transitionSpec = { fadeIn(MotionTokens.tweenFast()) togetherWith fadeOut(MotionTokens.tweenFast()) },
+                label = "ringCenter",
+            ) { center ->
+                when (val c = center) {
                     is Center.Percent -> Text(
                         text = "${c.value}%",
                         fontFamily = SnProFamily,
@@ -213,9 +218,14 @@ fun UpdateSheet(language: AppLanguage, manual: Boolean, onDismiss: () -> Unit) {
         if (release != null) WhatsNew(strings = strings, markdown = release.changelogMarkdown)
         if (manual && manager.mode == UpdateMode.Auto) SecurityCard(strings = strings, fingerprint = installedFingerprint)
 
-        Crossfade(targetState = state::class, animationSpec = MotionTokens.tweenStandard(), label = "updateActions") {
+        AnimatedContent(
+            targetState = state,
+            contentKey = { it::class },
+            transitionSpec = { fadeIn(MotionTokens.tweenStandard()) togetherWith fadeOut(MotionTokens.tweenStandard()) },
+            label = "updateActions",
+        ) { shownState ->
             Actions(
-                state = state,
+                state = shownState,
                 strings = strings,
                 onDismiss = onDismiss,
                 onUpdate = { performHaptic(view, Haptic.Light); manager.download() },
