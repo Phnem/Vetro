@@ -13,15 +13,12 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.BlurEffect
 import androidx.compose.ui.graphics.TileMode
 import androidx.compose.ui.graphics.asComposeRenderEffect
 import androidx.compose.ui.graphics.graphicsLayer
-import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.launch
 import kotlin.math.PI
 import kotlin.math.sin
 
@@ -63,13 +60,13 @@ class NameDropState {
         running = true
         try {
             time.snapTo(0f)
-            coroutineScope {
-                launch {
-                    snapshotFlow { time.value }.first { it >= NameDropTiming.SWAP_MS }
-                    onPeak()
-                }
-                time.animateTo(NameDropTiming.TOTAL_MS, tween(NameDropTiming.TOTAL_MS.toInt(), easing = LinearEasing))
-            }
+            time.animateTo(NameDropTiming.SWAP_MS, tween(NameDropTiming.SWAP_MS.toInt(), easing = LinearEasing))
+            onPeak()
+            // Часы стоят, пока новый экран не соберётся и не нарисуется: иначе тяжёлый первый кадр
+            // (главная после входа) съедал почти всю волну, и под ней нечего было проявлять.
+            repeat(3) { withFrameNanos { } }
+            val rest = NameDropTiming.TOTAL_MS - NameDropTiming.SWAP_MS
+            time.animateTo(NameDropTiming.TOTAL_MS, tween(rest.toInt(), easing = LinearEasing))
         } finally {
             running = false
         }

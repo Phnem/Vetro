@@ -277,6 +277,8 @@ fun AppNavGraph(
 
             composable<BiometricOfferRoute>(
                 enterTransition = { fadeIn(animationSpec = MotionTokens.tweenEmphasized()) },
+                // Под линзой экраны меняются мгновенно: переход изображает сама волна.
+                exitTransition = { if (loginLens.running) ExitTransition.None else null },
             ) {
                 val context = LocalContext.current
                 LaunchedEffect(Unit) { BiometricOffer.clear(context) }
@@ -293,7 +295,9 @@ fun AppNavGraph(
             }
 
             composable<HomeRoute>(
-                enterTransition = { fadeIn(animationSpec = MotionTokens.tweenEmphasized()) },
+                enterTransition = {
+                    if (loginLens.running) EnterTransition.None else fadeIn(animationSpec = MotionTokens.tweenEmphasized())
+                },
                 // «Вдавливание» под деталями (физика IosSheetScaffold): фон уезжает назад
                 // и слегка гаснет, при закрытии деталей — физично возвращается. Predictive
                 // back сикает popEnter — возврат следует за пальцем.
