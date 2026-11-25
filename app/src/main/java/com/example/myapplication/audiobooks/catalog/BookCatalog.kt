@@ -95,7 +95,10 @@ class BookCatalog(
 
     suspend fun search(query: String, limit: Int = 20): List<CatalogBook> {
         warmUp()
-        val local = store.query()?.let { runCatching { BookIndexSearch(it).search(query, MAX_LOCAL) }.getOrNull() }.orEmpty()
+        // SQL и ранжирование — не на потоке вызывающего: поиск зовут из главной.
+        val local = store.query()?.let { index ->
+            withContext(Dispatchers.IO) { runCatching { BookIndexSearch(index).search(query, MAX_LOCAL) }.getOrNull() }
+        }.orEmpty()
         if (strong(query, local) >= ENOUGH_LOCAL) return local.take(limit)
         val remote = withTimeoutOrNull(API_TIMEOUT_MS) { api.search(query, limit) }.orEmpty()
         if (remote.isEmpty()) return local.take(limit)

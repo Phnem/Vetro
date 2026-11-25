@@ -53,10 +53,11 @@ class LegacyCollectionSafMigrator(
 
     suspend fun copyFromSavedTreeUri(): Int = withContext(Dispatchers.IO) {
         val uri = getSavedTreeUri() ?: return@withContext 0
-        copyFromTreeUri(uri, persist = false)
+        copyFromTreeUri(uri, persist = false) ?: 0
     }
 
-    suspend fun saveTreeUriAndCopy(uri: Uri): Int = withContext(Dispatchers.IO) {
+    /** null — в выбранной папке нет Vetro/collection или она недоступна: выбор нужно повторить. */
+    suspend fun saveTreeUriAndCopy(uri: Uri): Int? = withContext(Dispatchers.IO) {
         copyFromTreeUri(uri, persist = true)
     }
 
@@ -75,7 +76,14 @@ class LegacyCollectionSafMigrator(
         return intent
     }
 
-    private suspend fun copyFromTreeUri(uri: Uri, persist: Boolean): Int {
+    private suspend fun copyFromTreeUri(uri: Uri, persist: Boolean): Int? {
+        val tree = DocumentFile.fromTreeUri(context, uri) ?: return null
+        val collectionFolder = resolveCollectionFolder(tree) ?: run {
+            Log.w(TAG, "Selected folder does not contain a Vetro/collection directory")
+            return null
+        }
+
+        // Запоминаем только проверенную папку.
         if (persist) {
             runCatching {
                 context.contentResolver.takePersistableUriPermission(
@@ -86,12 +94,6 @@ class LegacyCollectionSafMigrator(
                 Log.w(TAG, "Could not persist URI permission for legacy folder", error)
             }
             saveTreeUri(uri)
-        }
-
-        val tree = DocumentFile.fromTreeUri(context, uri) ?: return 0
-        val collectionFolder = resolveCollectionFolder(tree) ?: run {
-            Log.w(TAG, "Selected folder does not contain a Vetro/collection directory")
-            return 0
         }
 
         val copied = copyAllFilesFromDocumentFolder(collectionFolder, storagePaths.collectionDir)
@@ -131,14 +133,7 @@ class LegacyCollectionSafMigrator(
                     MediaStore.Files.getContentUri("external"),
                     id.toString(),
                 )
-                runCatching {
-                    context.contentResolver.openInputStream(contentUri)?.use { input ->
-                        target.outputStream().use { output -> input.copyTo(output) }
-                    }
-                    copied++
-                }.onFailure { error ->
-                    Log.w(TAG, "MediaStore copy failed for $name", error)
-                }
+                if (copyAtomically(contentUri, target, "MediaStore")) copied++
             }
         }
 
@@ -171,17 +166,25 @@ class LegacyCollectionSafMigrator(
             val name = entry.name ?: return@forEach
             val target = File(targetDir, name)
             if (target.exists()) return@forEach
-            runCatching {
-                // Copy only — source files in the user-selected folder stay untouched.
-                context.contentResolver.openInputStream(entry.uri)?.use { input ->
-                    target.outputStream().use { output -> input.copyTo(output) }
-                }
-                copied++
-            }.onFailure { error ->
-                Log.w(TAG, "Failed to copy $name from SAF folder", error)
-            }
+            if (copyAtomically(entry.uri, target, "SAF folder")) copied++
         }
         return copied
+    }
+
+    /**
+     * Через временный файл: оборванное чтение не должно оставить обрезанную обложку, которую повторный
+     * импорт пропустил бы как уже скопированную. Исходник только читается.
+     */
+    private fun copyAtomically(source: Uri, target: File, origin: String): Boolean {
+        val part = File(target.parentFile, target.name + ".part")
+        return runCatching {
+            val input = context.contentResolver.openInputStream(source) ?: return false
+            input.use { part.outputStream().use { output -> it.copyTo(output) } }
+            check(part.renameTo(target)) { "rename failed" }
+        }.onFailure { error ->
+            part.delete()
+            Log.w(TAG, "Failed to copy ${target.name} from $origin", error)
+        }.isSuccess
     }
 
     private suspend fun getSavedTreeUri(): Uri? {

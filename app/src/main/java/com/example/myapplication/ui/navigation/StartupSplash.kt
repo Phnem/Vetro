@@ -66,6 +66,12 @@ internal fun StartupSplashOverlay(
     val splashViewModel: SplashViewModel = koinViewModel()
     val splashState by splashViewModel.uiState.collectAsStateWithLifecycle()
     val splashStrings = getStrings(systemAppLanguage())
+    val folderRejected by splashViewModel.folderRejected.collectAsStateWithLifecycle()
+    val rejectedSubtitle = if (systemAppLanguage() == com.example.myapplication.network.AppLanguage.RU) {
+        "В этой папке нет Vetro/collection. Выберите другую папку."
+    } else {
+        "There is no Vetro/collection in that folder. Please choose another one."
+    }
     val legacyFolderLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocumentTree(),
     ) { uri ->
@@ -93,7 +99,7 @@ internal fun StartupSplashOverlay(
         jsonMigrationTitle = splashStrings.splashJsonMigrationTitle,
         jsonMigrationSubtitle = splashStrings.splashJsonMigrationSubtitle,
         legacyFolderTitle = splashStrings.splashLegacyFolderTitle,
-        legacyFolderSubtitle = splashStrings.splashLegacyFolderSubtitle,
+        legacyFolderSubtitle = if (folderRejected) rejectedSubtitle else splashStrings.splashLegacyFolderSubtitle,
         legacyFolderAction = splashStrings.splashLegacyFolderAction,
         legacyFolderSkip = splashStrings.splashLegacyFolderSkip,
         cloudRestoreTitle = splashStrings.cloudRestoreTitle,

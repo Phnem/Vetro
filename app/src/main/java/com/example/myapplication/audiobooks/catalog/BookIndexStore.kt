@@ -4,6 +4,8 @@ import android.database.sqlite.SQLiteDatabase
 import android.util.Log
 import com.squareup.zstd.okio.zstdDecompress
 import java.io.File
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
@@ -54,8 +56,11 @@ class BookIndexStore(
 
     /** Запросы к индексу или null, пока индекса на устройстве ещё нет. */
     suspend fun query(): IndexQuery? = withContext(Dispatchers.IO) {
-        val open = synchronized(dbLock) { openReadable() } ?: return@withContext null
+        synchronized(dbLock) { openReadable() } ?: return@withContext null
         IndexQuery { sql, args ->
+            // База берётся и читается под одной блокировкой: обновление не закроет её между этими шагами.
+            synchronized(dbLock) {
+            val open = openReadable() ?: return@synchronized emptyList()
             open.rawQuery(sql, args.toTypedArray()).use { c ->
                 buildList {
                     while (c.moveToNext()) {
@@ -71,6 +76,7 @@ class BookIndexStore(
                         )
                     }
                 }
+            }
             }
         }
     }
@@ -91,9 +97,14 @@ class BookIndexStore(
                 if (!force && local != null && nowMs() - state.checkedAtMs < CHECK_INTERVAL_MS) return@withLock Outcome.SKIPPED
                 val manifest = fetchManifest(state.etag)
                     ?: return@withLock Outcome.FAILED
-                writeState(State(nowMs(), manifest.second))
-                val m = manifest.first ?: return@withLock if (local != null) Outcome.UP_TO_DATE else Outcome.FAILED
-                when (val plan = BookIndexPlanner.plan(local, m)) {
+                // ETag запоминаем только вместе с версией, которая действительно встала на диск:
+                // иначе после сбоя установки сервер отвечал бы 304, и старый индекс остался бы надолго.
+                val m = manifest.first ?: run {
+                    if (local == null) return@withLock Outcome.FAILED
+                    writeState(State(nowMs(), manifest.second))
+                    return@withLock Outcome.UP_TO_DATE
+                }
+                val outcome = when (val plan = BookIndexPlanner.plan(local, m)) {
                     BookIndexPlan.UpToDate -> Outcome.UP_TO_DATE
                     BookIndexPlan.Unsupported -> Outcome.UNSUPPORTED
                     is BookIndexPlan.FullBase -> { installBase(plan.base); Outcome.UPDATED }
@@ -110,6 +121,8 @@ class BookIndexStore(
                         Outcome.UPDATED
                     }
                 }
+                writeState(State(nowMs(), manifest.second.takeUnless { outcome == Outcome.UNSUPPORTED }))
+                outcome
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -148,8 +161,8 @@ class BookIndexStore(
         SQLiteDatabase.openDatabase(part.path, null, SQLiteDatabase.OPEN_READONLY).use { check(readVersion(it) == base.version) { "base version" } }
         synchronized(dbLock) {
             db?.close(); db = null
-            file.delete()
-            check(part.renameTo(file)) { "cannot move the new index into place" }
+            // Замена одним переименованием: если оно не удалось, прежний индекс цел.
+            Files.move(part.toPath(), file.toPath(), StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE)
         }
     }
 

@@ -40,6 +40,10 @@ class SplashViewModel(
     private val _uiState = MutableStateFlow<SplashState>(SplashState.Loading)
     val uiState = _uiState.asStateFlow()
 
+    private val _folderRejected = MutableStateFlow(false)
+    /** Выбранная папка не подошла: заставка объясняет это и предлагает выбрать другую. */
+    val folderRejected = _folderRejected.asStateFlow()
+
     // true только если в ЭТОМ запуске реально прошла миграция со старой версии (storage/JSON).
     // Плашку «Перенос обложек» показываем лишь тогда — не при обычной/облачно-наполненной БД.
     private var isLegacyUpgrade = false
@@ -57,11 +61,14 @@ class SplashViewModel(
         }
         viewModelScope.launch {
             _uiState.update { SplashState.ImportingLegacyFolder }
-            withContext(Dispatchers.IO) {
-                legacyCollectionSafMigrator.saveTreeUriAndCopy(uri)
-                imageCompressionMigrator.compressExistingImages()
+            val copied = withContext(Dispatchers.IO) { legacyCollectionSafMigrator.saveTreeUriAndCopy(uri) }
+            _folderRejected.value = copied == null
+            if (copied == null) {
+                _uiState.update { SplashState.AwaitingLegacyFolder }
+                return@launch
             }
             legacyCollectionSafMigrator.markCoverImportResolved()
+            completeSweeps()
             finishStartup(legacyFolderPromptDismissed = true)
         }
     }
@@ -69,6 +76,7 @@ class SplashViewModel(
     fun skipLegacyFolderMigration() {
         viewModelScope.launch {
             legacyCollectionSafMigrator.markCoverImportResolved()
+            completeSweeps()
             finishStartup(forceWithoutImages = true)
         }
     }
@@ -120,9 +128,16 @@ class SplashViewModel(
             return
         }
 
-        imageCompressionMigrator.compressExistingImages()
-        startupSweeps.markDone()
+        completeSweeps()
         finishStartup()
+    }
+
+    /** Конец полного прохода, общий для обычного старта и для ответа на запрос папки. */
+    private suspend fun completeSweeps() {
+        withContext(Dispatchers.IO) {
+            imageCompressionMigrator.compressExistingImages()
+            startupSweeps.markDone()
+        }
     }
 
     /**
