@@ -1,5 +1,6 @@
 package com.example.myapplication.ui.login
 
+import com.example.myapplication.ui.shared.centeredContent
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.SizeTransform
@@ -118,6 +119,7 @@ fun LoginScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .verticalScroll(rememberScrollState())
+                    .centeredContent(480.dp)
                     .heightIn(min = full)
                     .padding(horizontal = 24.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,

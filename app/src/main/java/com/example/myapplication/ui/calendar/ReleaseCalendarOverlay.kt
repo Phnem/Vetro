@@ -1,5 +1,6 @@
 package com.example.myapplication.ui.calendar
 
+import com.example.myapplication.ui.shared.centeredContent
 import com.example.myapplication.ui.shared.components.extendUnderGrabber
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
@@ -643,7 +644,8 @@ internal fun MonthGrid(
     // Понедельник первой колонкой; шесть строк всегда, чтобы шторка не прыгала по высоте между месяцами.
     val first = month.atDay(1)
     val start = first.minusDays((first.dayOfWeek.value - 1).toLong())
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+    // На широком экране ячейки росли вместе с шириной, и сетка не помещалась по высоте.
+    Column(Modifier.centeredContent(520.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         for (week in 0 until 6) {
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 for (d in 0 until 7) {
