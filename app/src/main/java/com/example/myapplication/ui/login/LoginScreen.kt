@@ -4,6 +4,8 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.Canvas
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
@@ -47,10 +49,16 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.onFocusChanged
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.core.content.res.ResourcesCompat
 import androidx.compose.ui.platform.LocalFocusManager
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -65,7 +73,6 @@ import com.example.myapplication.ui.shared.fluidClickable
 import com.example.myapplication.ui.shared.mascot.LoginMascot
 import com.example.myapplication.ui.shared.mascot.PeekAspect
 import com.example.myapplication.ui.shared.mascot.PeekSeatFraction
-import com.example.myapplication.ui.shared.theme.AsgrikeFamily
 import com.example.myapplication.ui.shared.theme.BrandOrange
 import com.example.myapplication.ui.shared.theme.SnProFamily
 import com.example.myapplication.ui.shared.theme.isAppInDarkTheme
@@ -119,6 +126,7 @@ fun LoginScreen(
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Spacer(Modifier.height(top))
                     TitleWithMascot(covered = emailMode && passwordFocused, isDark = isDark, compact = emailMode)
+                    Spacer(Modifier.height(14.dp))
                     Text(
                         text = strings.appSubtitle,
                         color = ink.copy(alpha = 0.62f),
@@ -240,56 +248,78 @@ fun LoginScreen(
     }
 }
 
-/** Название в две строки и маскот, сидящий на верхней кромке букв (ноги свисают поверх них). */
+/** Цвета заголовка: чернильный на светлом фоне, жжёный оранжевый на тёмном. */
+private val MidnightInk = Color(0xFF04061B)
+private val BurntOrange = Color(0xFFFF7100)
+
+private const val TitleTop = "VETRO"
+private const val TitleBottom = "COLLECTION"
+
+/** Крупное название и маскот, сидящий на верхней кромке букв (ноги свисают поверх них). */
 @Composable
 private fun TitleWithMascot(covered: Boolean, isDark: Boolean, compact: Boolean) {
     val mascotWidth: Dp by animateDpAsState(if (compact) 200.dp else 244.dp, label = "loginMascot")
-    val titleSize: Dp by animateDpAsState(if (compact) 58.dp else 76.dp, label = "loginTitle")
+    val titleFraction by animateFloatAsState(if (compact) 0.78f else 1f, label = "loginTitle")
     val mascotHeight = mascotWidth / PeekAspect
     // Сиденье — линия внутри холста маскота; всё, что ниже неё (ноги), ложится поверх букв.
-    // Плюс пустое поле строки над прописными, чтобы корпус опирался на сами буквы.
-    val overlap = mascotHeight * (1f - PeekSeatFraction) + titleSize * 0.07f
-    val brush = Brush.verticalGradient(
-        if (isDark) {
-            listOf(Color(0xFFFFF4EE), Color(0xFFFFB593))
-        } else {
-            listOf(Color(0xFF430B05), Color(0xFFC84202))
-        },
-    )
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Column(
-            Modifier,
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(-overlap),
+    // Холст названия начинается точно по верху прописных, поэтому корпус садится прямо на них.
+    val overlap = mascotHeight * (1f - PeekSeatFraction) + 2.dp
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(-overlap),
+    ) {
+        LoginMascot(
+            covered = covered,
+            isDark = isDark,
+            modifier = Modifier.width(mascotWidth).offset(x = 24.dp).zIndex(1f),
+        )
+        HeavyTitle(
+            color = if (isDark) BurntOrange else MidnightInk,
+            modifier = Modifier.fillMaxWidth(titleFraction),
+        )
+    }
+}
+
+/**
+ * Две строки капсом, жирные и плотные: кегль подбирается так, чтобы длинная строка заняла всю
+ * ширину. Рисуется напрямую по глифам — верх букв совпадает с верхом холста, а межстрочный
+ * просвет не зависит от метрик шрифта.
+ */
+@Composable
+private fun HeavyTitle(color: Color, modifier: Modifier = Modifier) {
+    val context = LocalContext.current
+    val paint = remember {
+        android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+            typeface = ResourcesCompat.getFont(context, R.font.russo_one)
+            textAlign = android.graphics.Paint.Align.CENTER
+        }
+    }
+    BoxWithConstraints(modifier) {
+        val widthPx = constraints.maxWidth.toFloat()
+        val metrics = remember(widthPx) {
+            paint.textSize = 100f
+            val size = 100f * widthPx / paint.measureText(TitleBottom)
+            paint.textSize = size
+            val bounds = android.graphics.Rect()
+            paint.getTextBounds(TitleTop, 0, TitleTop.length, bounds)
+            size to -bounds.top.toFloat()
+        }
+        val (textSize, capHeight) = metrics
+        val gap = capHeight * 0.18f
+        val height = with(LocalDensity.current) { (capHeight * 2f + gap + capHeight * 0.06f).toDp() }
+        Canvas(
+            Modifier
+                .fillMaxWidth()
+                .height(height)
+                .semantics { contentDescription = "Vetro Collection" },
         ) {
-            LoginMascot(
-                covered = covered,
-                isDark = isDark,
-                modifier = Modifier.width(mascotWidth).offset(x = 20.dp).zIndex(1f),
-            )
-            val size = titleSize.value
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(
-                    text = "Vetro",
-                    style = TextStyle(brush = brush, fontFamily = AsgrikeFamily, fontSize = size.sp, lineHeight = size.sp),
-                    maxLines = 1,
-                    softWrap = false,
-                )
-                Text(
-                    text = "Collection",
-                    style = TextStyle(
-                        brush = brush,
-                        fontFamily = AsgrikeFamily,
-                        fontSize = (size * 0.54f).sp,
-                        lineHeight = (size * 0.62f).sp,
-                        letterSpacing = 1.sp,
-                    ),
-                    maxLines = 1,
-                    softWrap = false,
-                )
+            paint.textSize = textSize
+            paint.color = color.toArgb()
+            drawIntoCanvas { canvas ->
+                canvas.nativeCanvas.drawText(TitleTop, size.width / 2f, capHeight, paint)
+                canvas.nativeCanvas.drawText(TitleBottom, size.width / 2f, capHeight * 2f + gap, paint)
             }
         }
-        Spacer(Modifier.height(8.dp))
     }
 }
 
