@@ -7,6 +7,8 @@ import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
 import androidx.media3.datasource.DefaultDataSource
+import androidx.media3.datasource.cache.Cache
+import androidx.media3.datasource.cache.CacheDataSource
 import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
@@ -32,10 +34,14 @@ object StreamingPlaybackSessionFactory {
         client: OkHttpClient,
         video: VetroVideo,
         tuning: StreamingPlayerTuning = StreamingPlayerTuning.DEFAULT,
+        /** Пилот [14]: дисковый кэш прочитанных диапазонов. null — как в приложении сейчас. */
+        cache: Cache? = null,
+        cacheListener: CacheDataSource.EventListener? = null,
     ): StreamingPlaybackSession {
         val transferMonitor = StreamingTransferMonitor(SystemClock::elapsedRealtime)
         val allocator = DefaultAllocator(true, C.DEFAULT_BUFFER_SEGMENT_SIZE)
-        val mediaSourceFactory = createMediaSourceFactory(context, client, video, transferMonitor)
+        val mediaSourceFactory =
+            createMediaSourceFactory(context, client, video, transferMonitor, cache, cacheListener)
         val adaptiveFactory = StallAwareAdaptiveTrackSelectionFactory(
             tuning = tuning,
             transferMonitor = transferMonitor,
@@ -120,6 +126,8 @@ object StreamingPlaybackSessionFactory {
         client: OkHttpClient,
         video: VetroVideo,
         transferMonitor: StreamingTransferMonitor,
+        cache: Cache? = null,
+        cacheListener: CacheDataSource.EventListener? = null,
     ): DefaultMediaSourceFactory {
         val headers = SanitizeHeaders.sanitize(video.headers)
         val okHttpFactory = OkHttpDataSource.Factory(client.forPlaybackCandidate(video))
@@ -127,7 +135,15 @@ object StreamingPlaybackSessionFactory {
             .setTransferListener(transferMonitor)
         // http(s) — через OkHttp с заголовками источника; file:// — субтитры, подгруженные
         // пользователем в кэш приложения (OkHttp такие адреса не открывает).
-        return DefaultMediaSourceFactory(DefaultDataSource.Factory(context, okHttpFactory))
+        val upstream = DefaultDataSource.Factory(context, okHttpFactory)
+        if (cache == null) return DefaultMediaSourceFactory(upstream)
+        return DefaultMediaSourceFactory(
+            CacheDataSource.Factory()
+                .setCache(cache)
+                .setUpstreamDataSourceFactory(upstream)
+                .setEventListener(cacheListener)
+                .setFlags(CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR),
+        )
     }
 
     private fun buildTrackMediaItem(track: VetroSubtitleTrack): MediaItem {
