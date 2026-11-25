@@ -248,7 +248,7 @@ private fun TitleWithMascot(covered: Boolean, isDark: Boolean, compact: Boolean)
     val mascotHeight = mascotWidth / PeekAspect
     // Сиденье — линия внутри холста маскота; всё, что ниже неё (ноги), ложится поверх букв.
     // Плюс пустое поле строки над прописными, чтобы корпус опирался на сами буквы.
-    val overlap = mascotHeight * (1f - PeekSeatFraction) + titleSize * 0.22f
+    val overlap = mascotHeight * (1f - PeekSeatFraction) + titleSize * 0.07f
     val brush = Brush.verticalGradient(
         if (isDark) {
             listOf(Color(0xFFFFF4EE), Color(0xFFFFB593))
