@@ -94,7 +94,15 @@ fun AddEditScreen(
      */
     onSaved: (() -> Unit)? = null,
 ) {
-    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val formSession = rememberSaveable(animeId) { java.util.UUID.randomUUID().toString() }
+    val storedState = viewModel.uiState.collectAsStateWithLifecycle()
+    // ViewModel общая на всю Activity: пока форму не загрузили, в ней лежит прошлое открытие. Рисовать
+    // его нельзя: поле комментария запомнило бы оттуда брошенный черновик и вернуло его в новую форму.
+    val uiState by remember(formSession) {
+        derivedStateOf {
+            storedState.value.takeIf { it.session == formSession } ?: AddEditUiState(isLoading = animeId != null)
+        }
+    }
     val currentLanguage by viewModel.uiLanguage.collectAsStateWithLifecycle()
     val strings = getStrings(currentLanguage)
     val commentStrings = getAddEditCommentStrings(currentLanguage)
@@ -124,7 +132,6 @@ fun AddEditScreen(
         }
     }
 
-    val formSession = rememberSaveable(animeId) { java.util.UUID.randomUUID().toString() }
     LaunchedEffect(formSession) {
         viewModel.loadAnime(animeId, formSession)
         collisionState.triggerCollision(

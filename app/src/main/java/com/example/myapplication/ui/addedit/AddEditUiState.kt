@@ -9,6 +9,8 @@ enum class CommentMode { AddButton, Editing, Saved }
  * Immutable UI state для AddEditScreen
  */
 data class AddEditUiState(
+    /** Открытие экрана, которому принадлежит это состояние (см. AddEditViewModel.loadAnime). */
+    val session: String? = null,
     val animeId: String? = null,
     val title: String = "",
     /** Английское название (вариация). Пустая строка = не задано. */

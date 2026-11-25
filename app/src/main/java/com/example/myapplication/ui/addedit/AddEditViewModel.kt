@@ -54,7 +54,7 @@ class AddEditViewModel(
         if (session == loadedSession) return
         loadedSession = session
         loadJob?.cancel()
-        _uiState.value = AddEditUiState(isLoading = animeId != null)
+        _uiState.value = AddEditUiState(session = session, isLoading = animeId != null)
         if (animeId == null) return
 
         loadJob = viewModelScope.launch {
