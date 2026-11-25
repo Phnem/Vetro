@@ -12,7 +12,7 @@ object StremioLink {
 
     /** `null` — введено не похоже на ссылку (пусто, пробелы внутри, чужая схема). */
     fun normalize(input: String): String? {
-        var text = input.trim().removePrefix("﻿")
+        var text = input.trim().removePrefix("\uFEFF")
         if (text.isEmpty() || text.any { it.isWhitespace() }) return null
         text = when {
             text.startsWith("stremio://", ignoreCase = true) -> "https://" + text.substring("stremio://".length)
