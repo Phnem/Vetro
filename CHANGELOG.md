@@ -1,9 +1,9 @@
 # Vetro changelog
 
-## v3.6.4-Alpha — November 25, 2026
+## v3.6.4-Beta — November 25, 2026
 
-App version: `v3.6.4-Alpha`. Android version code: `364`.
-Changes since 3.6.3-Alpha. This is a pre-release: the in-app updater ignores Alpha tags, install it by hand.
+App version: `v3.6.4-Beta`. Android version code: `364`.
+Changes since 3.6.0-Beta. This build rolls up the Alphas 3.6.1 to 3.6.3 (the in-app updater ignores Alpha tags, so this is the first update that carries them) and adds the new sign-in screen.
 
 ### New sign-in screen
 
@@ -13,12 +13,22 @@ Changes since 3.6.3-Alpha. This is a pre-release: the in-app updater ignores Alp
 
 ### Fingerprint offer after sign-in
 
-- After signing in to an account the app now offers to open by fingerprint or face, with the mascot showing a thumb with a fingerprint. It appears only if the phone has biometrics set up and the app lock is off. Guests and people already signed in are not asked.
-- "Add fingerprint sign-in" opens the system prompt; on success the button turns into a check mark and the home screen opens through the lens transition. "Not now" goes straight to the home screen. The lock can be turned on or off later in Settings.
+- After signing in to an account the app offers to open by fingerprint or face, with the mascot showing a thumb with a fingerprint. It appears only if the phone has biometrics set up and the app lock is off. Guests and people already signed in are not asked.
+- "Add fingerprint sign-in" opens the system prompt; on success the button turns into a check mark and the home screen opens through a lens transition. "Not now" goes straight to the home screen. The lock can be turned on or off later in Settings.
 
-### Details from search and new bookshelves are on for everyone
+### Details from search
 
-- The two experiments from 3.6.1-3.6.3 are no longer experiments: their switches in "For developers" are gone and the old shelves are removed.
+- Tapping a result in search opens a title page with the poster, name, chips, genres and description taken from the search result. There is no Watch, Download or timers there: first add the title, then work with it. Audiobook results behave as before.
+- The "+ Add" pill glints now and then; on tap the plus slides to the centre and spins while the title is being saved, then turns into a check mark.
+- Right after the check a NameDrop-style effect plays: the screen is pulled up and blurred, a lens wave runs down from the top, and under its cover the page is replaced by the usual title page. A mini notification says that the title was added to your collection. A title that is already in the collection opens the usual page at once.
+- The lens is a shader and runs on Android 13 and newer. On Android 12 it is a simple pull with blur, and on older versions a plain pull. The same applies to the transition after the fingerprint offer.
+
+### New bookshelves
+
+- The audiobook shelves are redrawn. Books are thin boxes: the cover and the spine are separate planes drawn with true perspective, with a hinge, a page edge and a contact shadow.
+- A shelf with up to 3 books shows them thin and slightly turned. A shelf with more shows every book spine out, standing on the shelf line, and a row that does not fit scrolls sideways.
+- Opening a shelf turns the books to nearly flat and flies them one after another into their places in a two-column grid; closing flies them back.
+- The old shelves are gone, and there is no switch.
 
 ## v3.6.3-Alpha — November 25, 2026
 
