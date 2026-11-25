@@ -55,6 +55,7 @@ import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import com.example.myapplication.ui.shared.components.pulltorefresh.PullRefreshIndicator
 import com.example.myapplication.ui.shared.components.pulltorefresh.rememberPullRefreshController
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.key
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.platform.testTag
 import androidx.compose.runtime.DisposableEffect
@@ -84,6 +85,7 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.boundsInRoot
 import com.example.myapplication.ui.shared.PlacedCoordinates
 import com.example.myapplication.ui.shared.trackPlacement
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
@@ -152,6 +154,9 @@ import kotlinx.collections.immutable.persistentListOf
 import kotlinx.coroutines.launch
 import org.koin.androidx.compose.koinViewModel
 import org.koin.compose.koinInject
+
+/** С этой ширины экрана список коллекции раскладывается в две колонки. */
+private const val WIDE_SCREEN_DP = 600
 
 @OptIn(ExperimentalSharedTransitionApi::class, ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
@@ -848,6 +853,10 @@ fun HomeScreen(
                             indicator = {},
                             modifier = Modifier.fillMaxSize()
                         ) {
+                            // Широкий экран (раскрытый складной, планшет): карточки в две колонки. В одну
+                            // они растягивались на всю ширину, и от обложки оставалась узкая полоса.
+                            val columns = if (LocalConfiguration.current.screenWidthDp >= WIDE_SCREEN_DP) 2 else 1
+                            val emptyMinHeight = (LocalConfiguration.current.screenHeightDp / 2).dp
                             LazyColumn(
                                 flingBehavior = IosScroll.flingBehavior(),
                                 state = listState,
@@ -974,11 +983,7 @@ fun HomeScreen(
                                             }
                                         }
                                     }
-                                    items(
-                                        items = collection,
-                                        key = { it.id },
-                                        contentType = { "anime_card" }
-                                    ) { anime ->
+                                    val cardCell: @Composable (Anime, Modifier) -> Unit = { anime, rowModifier ->
                                         val cardState = rememberCollectionCardState(anime)
 
                                         // Тап по карточке — полноэкранные детали; кнопка справа-внизу — редактирование.
@@ -991,7 +996,6 @@ fun HomeScreen(
                                             performHaptic(view, Haptic.Light)
                                             navController.navigateToAddEdit(anime.id)
                                         }
-                                        val rowModifier = Modifier.padding(horizontal = 16.dp)
                                         // .animateItem() не добавляем: конфликт с SharedTransition при возврате.
 
                                         if (hostedInWorkspace) {
@@ -1056,6 +1060,31 @@ fun HomeScreen(
                                             }
                                         }
                                     }
+                                    if (columns == 1) {
+                                        items(
+                                            items = collection,
+                                            key = { it.id },
+                                            contentType = { "anime_card" }
+                                        ) { anime ->
+                                            cardCell(anime, Modifier.padding(horizontal = 16.dp))
+                                        }
+                                    } else {
+                                        items(
+                                            items = collection.chunked(columns),
+                                            key = { row -> row.first().id },
+                                            contentType = { "anime_card_row" }
+                                        ) { row ->
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                                                horizontalArrangement = Arrangement.spacedBy(16.dp),
+                                            ) {
+                                                row.forEach { anime ->
+                                                    key(anime.id) { Box(Modifier.weight(1f)) { cardCell(anime, Modifier) } }
+                                                }
+                                                repeat(columns - row.size) { Spacer(Modifier.weight(1f)) }
+                                            }
+                                        }
+                                    }
                                     if (uiState.searchQuery.isNotEmpty()) {
                                         apiSearchResultsSection(
                                             strings = strings,
@@ -1071,10 +1100,12 @@ fun HomeScreen(
                                     }
                                 } else {
                                     item {
+                                        // Не во весь экран: блок стоит под шапкой и рекомендациями, и центр
+                                        // полной высоты уезжал под док.
                                         Box(
                                             modifier = Modifier
-                                                .fillParentMaxSize()
-                                                .padding(bottom = 120.dp),
+                                                .fillParentMaxWidth()
+                                                .heightIn(min = emptyMinHeight),
                                             contentAlignment = Alignment.Center
                                         ) {
                                             // Первый запуск — маскот здоровается; пустая папка или фильтр — пустая коробка.
