@@ -95,7 +95,7 @@ internal fun MacrobenchmarkScope.openBooksAndPlay() {
 private val SHELF_COUNT: Pattern = Pattern.compile("\\d+ (books?|книг.*)", Pattern.UNICODE_CASE)
 
 private val LISTEN_LABEL: Pattern =
-    Pattern.compile("(Listen|Continue|Слушать|Продолжить).*", Pattern.UNICODE_CASE)
+    Pattern.compile("(Listen|Resume|Continue|Слушать|Продолжить).*", Pattern.UNICODE_CASE)
 
 internal fun MacrobenchmarkScope.openFirstTitleAndBack() {
     val w = device.displayWidth
