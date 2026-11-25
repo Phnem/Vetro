@@ -118,6 +118,14 @@ class HomeViewModel(
             .distinctUntilChanged()
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
+    /** Пути обложек для плашек обновлений: раньше это был запрос в базу прямо из композиции. */
+    val coverPaths: StateFlow<Map<String, String>> = localDataSource.observeAllAnime()
+        .map { list ->
+            list.mapNotNull { anime -> anime.imageFileName?.let(imageStorage::getImageFilePath)?.let { anime.id to it } }.toMap()
+        }
+        .flowOn(Dispatchers.IO)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
+
     val watchedMarks: StateFlow<Map<String, com.example.myapplication.media.progress.PlaybackEpisodeKey>> =
         localDataSource.observeAllAnime()
             .map { list -> list.map { anime -> anime.id } }
@@ -330,7 +338,8 @@ class HomeViewModel(
         // поднял наверх, здесь достаточно не сломать это и поднять выходящие под ним.
         if (airing.isEmpty()) list
         else list.sortedWith(
-            compareByDescending<Anime> { it.isFavorite }.thenByDescending { it.id in airing }
+            // Внутри избранного порядок пользователя не трогаем: выходящие поднимаются только под ним.
+            compareByDescending<Anime> { it.isFavorite }.thenByDescending { !it.isFavorite && it.id in airing }
         )
     }.flowOn(Dispatchers.Default)
      .map { it.toImmutableList() }
@@ -518,7 +527,10 @@ class HomeViewModel(
                 throw e
             } catch (e: Exception) {
                 if (_uiState.value.searchQuery.trim() == trimmed) {
-                    _uiState.update { it.copy(apiSearchLoading = false, apiSearchError = e.message ?: "Search failed") }
+                    _uiState.update {
+                        // Выдача прежнего запроса под сообщением об ошибке выглядела бы ответом на новый.
+                        it.copy(apiSearchLoading = false, apiSearchError = e.message ?: "Search failed", apiSearchResults = persistentListOf())
+                    }
                 }
             }
         }
@@ -675,7 +687,11 @@ class HomeViewModel(
     }
 
     fun setSearchMediaTypeFilter(filter: com.example.myapplication.data.models.MediaType) {
-        _uiState.update { it.copy(searchMediaTypeFilter = filter, searchBooks = false) }
+        _uiState.update {
+            if (!it.searchBooks && it.searchMediaTypeFilter == filter) return
+            // Другой раздел поиска: прежняя выдача к нему не относится.
+            it.copy(searchMediaTypeFilter = filter, searchBooks = false, apiSearchResults = persistentListOf(), apiSearchError = null)
+        }
         updateSearchQuery(_uiState.value.searchQuery)
     }
 

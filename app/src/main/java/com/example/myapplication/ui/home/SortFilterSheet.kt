@@ -1,5 +1,6 @@
 package com.example.myapplication.ui.home
 
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.foundation.BorderStroke
@@ -117,11 +118,18 @@ fun SortFilterOverlay(
     val onSurface = MaterialTheme.colorScheme.onSurface
 
     val yearMax = remember { LibraryFilter.currentYear() }
-    val isOpening = visibleState.targetState
+    // Черновик собирается заново на каждое открытие, но не на закрытие: иначе на первом кадре
+    // закрытия контролы прыгали к сохранённым значениям.
+    var openGeneration by remember { mutableIntStateOf(0) }
+    var wasOpening by remember { mutableStateOf(false) }
+    if (visibleState.targetState != wasOpening) {
+        wasOpening = visibleState.targetState
+        if (visibleState.targetState) openGeneration++
+    }
 
     // Черновик — один объект со своими состояниями: каждая секция читает только свои поля, поэтому драг
     // ползунка перерисовывает его секцию, а не весь лист (раньше любое движение пересобирало всё).
-    val draft = remember(sortOption, sortAscending, filter, filterSelectedTags, filterCategoryType, isOpening) {
+    val draft = remember(sortOption, sortAscending, filter, filterSelectedTags, filterCategoryType, openGeneration) {
         SortFilterDraft(sortOption, sortAscending, filter, filterSelectedTags, filterCategoryType, yearMax)
     }
 

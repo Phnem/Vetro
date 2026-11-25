@@ -1,5 +1,6 @@
 package com.example.myapplication.ui.home.recommendations
 
+import kotlinx.coroutines.flow.first
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
@@ -115,15 +116,20 @@ fun RecommendationsSheet(
     var visible by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { visible = true }
 
+    var dismissing by remember { mutableStateOf(false) }
+    val panelState = remember { androidx.compose.animation.core.MutableTransitionState(false) }
+    panelState.targetState = visible
+
     fun triggerDismiss() {
         visible = false
+        dismissing = true
     }
 
-    LaunchedEffect(visible) {
-        if (!visible) {
-            kotlinx.coroutines.delay(250)
-            onDismiss()
-        }
+    // Ждём конец анимации ухода, а не фиксированную паузу: она обрывала шторку на середине хода.
+    LaunchedEffect(dismissing) {
+        if (!dismissing) return@LaunchedEffect
+        androidx.compose.runtime.snapshotFlow { panelState.isIdle && !panelState.currentState }.first { it }
+        onDismiss()
     }
 
     BackHandler { triggerDismiss() }
@@ -153,7 +159,7 @@ fun RecommendationsSheet(
         }
 
         AnimatedVisibility(
-            visible = visible,
+            visibleState = panelState,
             enter = slideInVertically(
                 initialOffsetY = { it },
                 animationSpec = MotionTokens.sheetPresent()

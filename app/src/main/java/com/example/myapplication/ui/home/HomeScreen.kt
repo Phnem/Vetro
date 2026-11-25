@@ -1412,6 +1412,7 @@ fun HomeScreen(
                             )
                         }
                         WorkspaceSortNotificationActions(
+                            hasActiveFilter = uiState.libraryFilter.isActive,
                             strings = strings,
                             filterSelectedTags = uiState.filterTags,
                             updatesCount = uiState.updates.size,
@@ -1488,11 +1489,12 @@ fun HomeScreen(
             // iOS-стиль: пуш-стопка обновлений серий у верхней кромки главного экрана,
             // поверх всего. Пропадает, когда пользователь разобрал все карточки. В новом
             // интерфейсе — ещё и когда схлопнулась в колокольчик.
+            val coverPaths by viewModel.coverPaths.collectAsStateWithLifecycle()
             if (uiState.updates.isNotEmpty() && !(hostedInWorkspace && updateStackGone)) {
                 EpisodeUpdateStack(
                     updates = uiState.updates,
                     coverPathFor = { animeId ->
-                        viewModel.getImgPath(viewModel.getAnimeById(animeId)?.imageFileName)
+                        coverPaths[animeId]
                     },
                     episodeLabelFor = updateEpisodeLabel,
                     onOpen = { update ->
@@ -1523,7 +1525,7 @@ fun HomeScreen(
                     open = notificationCenterOpen,
                     updates = uiState.updates,
                     coverPathFor = { animeId ->
-                        viewModel.getImgPath(viewModel.getAnimeById(animeId)?.imageFileName)
+                        coverPaths[animeId]
                     },
                     episodeLabelFor = updateEpisodeLabel,
                     bellCenter = { bellAnchor.center },

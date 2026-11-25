@@ -69,6 +69,8 @@ fun WorkspaceSortNotificationActions(
      * третью кнопку, дублирующую пункт меню, значит предлагать два пути к одному экрану.
      */
     showMiddleAction: Boolean = true,
+    /** Фильтр по статусу, году, оценке или числу серий — кнопка подсвечивается и без жанров. */
+    hasActiveFilter: Boolean = false,
 ) {
     // Иконки дока — ярче/белее: чистый белый на полной непрозрачности в тёмной теме.
     val iconTint = if (isAppInDarkTheme()) Color.White else MaterialTheme.colorScheme.onSurface
@@ -89,8 +91,9 @@ fun WorkspaceSortNotificationActions(
             onClick = onOpenSort,
             modifier = sortModifier,
         ) {
-            val icon = if (filterSelectedTags.isNotEmpty()) Icons.Outlined.FilterList else Icons.AutoMirrored.Filled.Sort
-            val tint = if (filterSelectedTags.isNotEmpty()) BrandOrange else iconTint
+            val filtered = hasActiveFilter || filterSelectedTags.isNotEmpty()
+            val icon = if (filtered) Icons.Outlined.FilterList else Icons.AutoMirrored.Filled.Sort
+            val tint = if (filtered) BrandOrange else iconTint
             Icon(icon, contentDescription = strings.cdSort, tint = tint)
         }
         val notifModifier = if (useDockSizing) {
