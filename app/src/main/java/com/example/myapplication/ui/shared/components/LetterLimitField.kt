@@ -1,5 +1,6 @@
 package com.example.myapplication.ui.shared.components
 
+import com.example.myapplication.utils.takeWholeChars
 import android.os.Build
 import android.view.HapticFeedbackConstants
 import androidx.compose.animation.animateColorAsState
@@ -142,7 +143,7 @@ fun LetterLimitField(
     )
     val letterStyle = textStyle.copy(fontWeight = FontWeight.Medium)
 
-    var field by remember { mutableStateOf(TextFieldValue(value.take(limit), TextRange(min(value.length, limit)))) }
+    var field by remember { mutableStateOf(TextFieldValue(value.takeWholeChars(limit), TextRange(value.takeWholeChars(limit).length))) }
     val pile = remember { LetterPile() }
     var wake by remember { mutableIntStateOf(0) }
     var frame by remember { mutableLongStateOf(0L) }
@@ -177,9 +178,9 @@ fun LetterLimitField(
         val was = field.text.length
         var accepted = next
         if (next.text.length > limit) {
-            val kept = next.text.take(limit)
-            val extra = next.text.substring(limit)
-            val caret = min(next.selection.start, limit)
+            val kept = next.text.takeWholeChars(limit)
+            val extra = next.text.substring(kept.length)
+            val caret = min(next.selection.start, kept.length)
             accepted = TextFieldValue(kept, TextRange(caret))
             view.performHapticFeedback(
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) HapticFeedbackConstants.REJECT
@@ -400,7 +401,8 @@ private class LetterPile {
         get() = letters.any { !it.rest || it.out > 0f || it.downAge in 0f..DOWN_FADE_SEC }
 
     fun drop(chars: String, x0: Float, y0: Float) {
-        chars.forEachIndexed { i, ch ->
+        // Видно не больше MAX_PILE букв: на вставку в тысячи знаков объекты на каждый не создаём.
+        chars.takeLast(MAX_PILE).forEachIndexed { i, ch ->
             if (ch.isWhitespace()) return@forEachIndexed
             letters += FallingLetter(
                 ch = ch.toString(),
@@ -411,7 +413,14 @@ private class LetterPile {
                 vr = (Random.nextFloat() - 0.5f) * 720f,
             )
         }
-        while (letters.count { it.out == 0f } > MAX_PILE) letters.first { it.out == 0f }.let(::leave)
+        var excess = letters.count { it.out == 0f } - MAX_PILE
+        for (letter in letters.toList()) {
+            if (excess <= 0) break
+            if (letter.out == 0f) {
+                leave(letter)
+                excess--
+            }
+        }
     }
 
     /** Освободилось [n] мест — столько же самых новых букв уходят из кучки. */

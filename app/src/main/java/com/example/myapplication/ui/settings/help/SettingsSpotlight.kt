@@ -71,6 +71,7 @@ object SettingsSpotlight {
     val pageReady = MutableStateFlow(false)
 
     fun request(id: String) {
+        if (target.value == id) return
         pageReady.value = false
         target.value = id
     }

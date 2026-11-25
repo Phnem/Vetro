@@ -195,6 +195,7 @@ private val IconDeveloper = IosDesign.Category.Storage
 private val SETTINGS_ITEM_ORDER = listOf(
     "group_general",
     "group_security",
+    "group_reminders",
     "group_account",
     "group_availability",
     "group_smart_models",

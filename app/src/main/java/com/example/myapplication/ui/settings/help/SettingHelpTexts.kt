@@ -185,7 +185,7 @@ fun settingHelpText(id: String, ru: Boolean): SettingHelpText? = when (id) {
             lead = "Свой ключ нейросети для умных функций приложения.",
             points = listOf(
                 HelpPoint("Зачем", "Ключ нужен функциям, которые что-то объясняют или переводят: дубляж названий, пояснения в статистике и другим."),
-                HelpPoint("Безопасность", "Ключ хранится на устройстве и уходит только своему сервису."),
+                HelpPoint("Безопасность", "Ключ хранится на устройстве и уходит только своему сервису. Если вы вошли в аккаунт и открыли синхронизацию ключей парольной фразой, в облаке сохраняется его зашифрованная копия."),
             ),
         )
     } else {
@@ -194,7 +194,7 @@ fun settingHelpText(id: String, ru: Boolean): SettingHelpText? = when (id) {
             lead = "Your own neural-network key for the app's smart features.",
             points = listOf(
                 HelpPoint("Why", "The key is used by features that explain or translate: title dubbing, statistics explanations and others."),
-                HelpPoint("Safety", "The key is stored on the device and is sent only to its own service."),
+                HelpPoint("Safety", "The key is stored on the device and is sent only to its own service. If you are signed in and have unlocked key sync with your passphrase, an encrypted copy is kept in the cloud."),
             ),
         )
     }

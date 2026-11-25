@@ -1,5 +1,6 @@
 package com.example.myapplication.ui.details.share
 
+import com.example.myapplication.utils.takeWholeChars
 import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
@@ -145,7 +146,7 @@ class WatchingCardBuilder(
         val tags = anime.tags.filter { it.isNotBlank() }
         val year = anime.releaseYear?.takeIf { it > 0 }?.toString().orEmpty()
         // Под оранжевой строкой: своя заметка тайтла в «ёлочках», а если её нет, то описание тайтла как в Details.
-        val ownNote = anime.comment.trim().takeIf { it.isNotEmpty() }?.let { if (it.length > 240) it.take(240) else it }
+        val ownNote = anime.comment.trim().takeIf { it.isNotEmpty() }?.let { it.takeWholeChars(240) }
         val note = ownNote ?: cleanDescription(description)
         val rating = anime.rating.takeIf { it > 0f }?.let {
             val shown = if (it % 1f == 0f) it.toInt().toString() else RatingScale.format(it)
@@ -165,7 +166,7 @@ class WatchingCardBuilder(
             currentUnit = currentUnit,
             note = note,
             noteQuoted = ownNote != null,
-            comment = options.comment.trim().take(WatchingCardOptions.MAX_COMMENT_LENGTH).ifEmpty { null },
+            comment = options.comment.trim().takeWholeChars(WatchingCardOptions.MAX_COMMENT_LENGTH).ifEmpty { null },
             genres = tags.take(3).joinToString(" • ").ifEmpty { null },
             footerLeft = tags.take(2).joinToString(" • ").ifEmpty { "Vetro Collection" },
             footerRight = addedSince(anime.dateAdded, ru),
@@ -196,7 +197,7 @@ class WatchingCardBuilder(
             .replace("&nbsp;", " ")
             .replace(Regex("\\s+"), " ")
             .trim()
-        return cleaned.takeIf { it.isNotEmpty() }?.let { if (it.length > 320) it.take(320) else it }
+        return cleaned.takeIf { it.isNotEmpty() }?.let { it.takeWholeChars(320) }
     }
 
     private fun statusLabel(status: WatchStatus?, manga: Boolean, ru: Boolean): String = when {

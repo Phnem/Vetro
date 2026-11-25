@@ -1,5 +1,6 @@
 package com.example.myapplication.ui.details.share
 
+import com.example.myapplication.utils.takeWholeChars
 import android.graphics.Bitmap
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.MutableTransitionState
@@ -105,7 +106,7 @@ fun WatchingCardSheet(
     val previewData = remember(base, nickLoaded, nick, comment) {
         base?.takeIf { nickLoaded }?.copy(
             nick = nick.trim(),
-            comment = comment.trim().take(WatchingCardOptions.MAX_COMMENT_LENGTH).ifEmpty { null },
+            comment = comment.trim().takeWholeChars(WatchingCardOptions.MAX_COMMENT_LENGTH).ifEmpty { null },
         )
     }
     val bubbleShown = showComment && comment.isNotBlank()
@@ -246,7 +247,7 @@ fun WatchingCardSheet(
         ru = ru,
         isDark = isDark,
         onSubmit = { text ->
-            nick = text.take(WatchingCardOptions.MAX_NICK_LENGTH)
+            nick = text.takeWholeChars(WatchingCardOptions.MAX_NICK_LENGTH)
             showNickSheet = false
             scope.launch { settings.edit { it[NickKey] = nick.trim() } }
         },

@@ -69,7 +69,8 @@ fun FormatCategoryTilesWithGenres(
     val seriesGenres = remember { genreRepository.getGenresForCategory(GenreCategory.SERIES) }
 
     var expandedCategory by rememberSaveable(saveableStateKey) { mutableStateOf<String?>(null) }
-    var hasAutoExpanded by remember(saveableStateKey) { mutableStateOf(false) }
+    // Сохраняется вместе с категорией: после пересоздания автооткрытие не должно затирать выбор.
+    var hasAutoExpanded by rememberSaveable(saveableStateKey) { mutableStateOf(false) }
     LaunchedEffect(activeCategory, saveableStateKey) {
         if (!hasAutoExpanded && activeCategory.isNotEmpty()) {
             val match = listOf("Anime", "Movies", "Series").find {
