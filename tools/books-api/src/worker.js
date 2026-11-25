@@ -74,10 +74,11 @@ async function handle(request, env, ctx) {
       res = await serveR2(env, request, "index/" + path.match(INDEX_PATH)[1], IMMUTABLE, "application/octet-stream");
     } else if (COVER_PATH.test(path)) {
       const [, size, id] = path.match(COVER_PATH);
-      res = await cached(ctx, url.href, () => serveR2(env, request, `covers/${size}/${id}.avif`, IMMUTABLE, "image/avif"));
+      // ключ кэша без query: иначе ?x=1, ?x=2 … шли бы мимо кэша прямо в R2
+      res = await cached(ctx, url.origin + path, () => serveR2(env, request, `covers/${size}/${id}.avif`, IMMUTABLE, "image/avif"));
     } else if (MEDIA_COVER_PATH.test(path)) {
       const [, size, id] = path.match(MEDIA_COVER_PATH);
-      res = await cached(ctx, url.href, () => serveR2(env, request, `covers/media/${size}/${id}.avif`, IMMUTABLE, "image/avif"));
+      res = await cached(ctx, url.origin + path, () => serveR2(env, request, `covers/media/${size}/${id}.avif`, IMMUTABLE, "image/avif"));
     } else if (path === "/v1/find") {
       res = await find(helpers, env, ctx, request, url);
     } else if (path === "/v1/media/search") {

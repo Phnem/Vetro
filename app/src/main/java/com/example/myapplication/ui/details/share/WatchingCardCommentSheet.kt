@@ -133,7 +133,11 @@ private fun WatchingCardTextSheet(
             LetterLimitField(
                 value = text,
                 // Enter в этом поле — «Готово»: перенос строки ни в пузыре, ни в нике не нужен.
-                onValueChange = { next -> if (next.contains('\n')) onSubmit(text.trim()) else text = next },
+                onValueChange = { next ->
+                    val flat = next.replace('\n', ' ')
+                    // Голый Enter — «Готово»; вставка в несколько строк остаётся в поле одной строкой.
+                    if (next.contains('\n') && next.replace("\n", "") == text) onSubmit(text.trim()) else text = flat
+                },
                 limit = limit,
                 placeholder = placeholder,
                 actionLabel = if (ru) "Готово" else "Done",
