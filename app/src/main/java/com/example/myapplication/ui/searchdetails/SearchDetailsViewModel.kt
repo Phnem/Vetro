@@ -25,7 +25,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 
 /**
- * Экран «Детали из поиска» (dev-флаг `SEARCH_DETAILS_PREVIEW`): тайтл показан до записи в
+ * Экран «Детали из поиска»: тайтл показан до записи в
  * коллекцию, добавляется тем же [AddFromApiUseCase], что и кнопка на карточке поиска.
  */
 class SearchDetailsViewModel(

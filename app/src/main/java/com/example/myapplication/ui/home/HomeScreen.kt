@@ -139,7 +139,6 @@ import com.example.myapplication.ui.navigation.navigateToAddEdit
 import com.example.myapplication.ui.navigation.navigateToDetails
 import com.example.myapplication.ui.navigation.navigateToSearchDetails
 import com.example.myapplication.ui.searchdetails.SearchDetailsHolder
-import com.example.myapplication.ui.shared.LocalSearchDetailsPreview
 import com.example.myapplication.ui.navigation.navigateToInspect
 import com.example.myapplication.ui.navigation.navigateToWelcome
 import com.example.myapplication.ui.navigation.navigateToSettings
@@ -804,11 +803,9 @@ fun HomeScreen(
                 Box(modifier = Modifier.fillMaxSize().weight(1f).background(bgColor)) {
                     val isRefreshing by viewModel.isRefreshing.collectAsStateWithLifecycle()
                     val apiSearchModels by viewModel.apiSearchWithStatus.collectAsStateWithLifecycle()
-                    // Dev-флаг «Детали из поиска»: выключен — тап по результату ничего не открывает.
-                    val searchDetailsPreview = LocalSearchDetailsPreview.current
-                    val openSearchPreview: ((ApiSearchResult) -> Unit)? = if (searchDetailsPreview) {
+                    // Тап по результату поиска открывает страницу тайтла до записи в коллекцию.
+                    val openSearchPreview: (ApiSearchResult) -> Unit =
                         { r -> navController.navigateToSearchDetails(SearchDetailsHolder.put(r)) }
-                    } else null
 
                     val refreshPullState = rememberPullToRefreshState()
                     val refreshController = rememberPullRefreshController(refreshPullState, isRefreshing, view)

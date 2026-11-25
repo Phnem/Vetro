@@ -119,107 +119,10 @@ internal fun BookCover(
     }
 }
 
-/** Поза обложки в веере: крайние слегка наклонены, средняя крупнее и поверх (spec/08). */
-internal data class FanPose(val dx: Dp, val dy: Dp, val rotation: Float, val width: Dp, val height: Dp)
-
-internal val FanPoses = listOf(
-    FanPose(dx = (-96).dp, dy = 3.dp, rotation = -1f, width = 94.dp, height = 120.dp),
-    FanPose(dx = 96.dp, dy = 3.dp, rotation = 1f, width = 94.dp, height = 120.dp),
-    FanPose(dx = 0.dp, dy = (-3).dp, rotation = 0f, width = 104.dp, height = 132.dp),
-)
-
-/** Книга в веере полки: «пухлее» обложки 2:3 — так модель читается как предмет, а не как картинка. */
-private val FanBookHeight = FanPoses.maxOf { it.height }
-
-/** Порядок в веере → индекс книги: средняя (третья по отрисовке) — первая книга полки. */
-internal val FanBookIndex = listOf(1, 2, 0)
-
-/**
- * Карточка-полка с веером из трёх обложек, как «коллекции» из видео: «обновлено…» и счётчик
- * сверху, название по центру, веер обрезан нижним краем карточки.
- *
- * @param coverModifier модификатор каждой обложки веера по индексу книги — через него морф
- *   узнаёт стартовые позиции и прячет оригиналы на время полёта.
- */
-@Composable
-internal fun FanShelfCard(
-    title: String,
-    subtitle: String,
-    topStart: String,
-    topEnd: String,
-    books: List<CachedBook>,
-    isDark: Boolean,
-    modifier: Modifier = Modifier,
-    coverModifier: (bookIndex: Int) -> Modifier = { Modifier },
-) {
-    val ink = if (isDark) Color.White else Color(0xFF111111)
-    val shape = RoundedCornerShape(24.dp)
-    Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .clip(shape)
-            .background(IosDesign.groupRowBackground(isDark))
-            .border(Dp.Hairline, ink.copy(alpha = 0.08f), shape)
-            .padding(top = 14.dp, start = 16.dp, end = 16.dp),
-    ) {
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text(topStart, color = ink.copy(alpha = 0.45f), fontSize = 12.sp, fontFamily = SnProFamily)
-            Spacer(Modifier.weight(1f))
-            Text(topEnd, color = ink.copy(alpha = 0.45f), fontSize = 12.sp, fontFamily = SnProFamily)
-        }
-        Spacer(Modifier.height(8.dp))
-        Text(
-            text = title,
-            color = ink,
-            fontFamily = SnProFamily,
-            fontWeight = FontWeight.Bold,
-            fontSize = 20.sp,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.fillMaxWidth(),
-        )
-        Text(
-            text = subtitle,
-            color = ink.copy(alpha = 0.55f),
-            fontFamily = SnProFamily,
-            fontSize = 13.sp,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.fillMaxWidth(),
-        )
-        Spacer(Modifier.height(16.dp))
-        // Книги-модельки стоят целиком, с тенью под собой; снизу — небольшой воздух до края карточки.
-        Box(Modifier.fillMaxWidth().height(FanBookHeight + 22.dp), contentAlignment = Alignment.TopCenter) {
-            FanPoses.forEachIndexed { slot, pose ->
-                val bookIndex = FanBookIndex[slot]
-                val book = books.getOrNull(bookIndex)
-                if (book == null) {
-                    // Шаблон вместо пустышки: то же место и поворот, что у будущей обложки, — полка
-                    // не «прыгает», а пустой веер выглядит как три книги, а не как дырки.
-                    PlaceholderBook(
-                        style = PlaceholderStyles[slot],
-                        modifier = Modifier
-                            .offset(x = pose.dx, y = pose.dy)
-                            .size(pose.width, pose.height)
-                            .graphicsLayer { rotationZ = pose.rotation },
-                    )
-                    return@forEachIndexed
-                }
-                BookCover(
-                    book = book,
-                    modifier = Modifier
-                        .offset(x = pose.dx, y = pose.dy)
-                        .size(pose.width, pose.height)
-                        .then(coverModifier(bookIndex))
-                        .graphicsLayer { rotationZ = pose.rotation },
-                )
-            }
-        }
-    }
-}
-
 /** Три карточки с постера «Recommended»: оранжевая, кремовая, тёмная. */
 internal enum class PlaceholderStyle { ORANGE, CREAM, DARK }
 
-/** По слотам [FanPoses]: слева оранжевая, справа тёмная, посередине (сверху) кремовая. */
+/** Три цвета заглушек: ими же рисуются пустые книги, пока полка грузится. */
 internal val PlaceholderStyles = listOf(PlaceholderStyle.ORANGE, PlaceholderStyle.DARK, PlaceholderStyle.CREAM)
 
 private val PlaceholderCream = Color(0xFFF5ECDC)
@@ -303,45 +206,6 @@ private fun androidx.compose.foundation.layout.BoxScope.PlaceholderArt(style: Pl
             )
         }
     }
-}
-
-/**
- * Планка полки: полоса 6 dp, тёплый оранжевый на низкой альфе, светлая кромка в 1 физ. пиксель
- * сверху и мягкая тень вниз (spec/08 «Страница полки»). Книги стоят на ней без зазора.
- */
-@Composable
-internal fun ShelfPlank(isDark: Boolean, modifier: Modifier = Modifier) {
-    Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .height(14.dp)
-            .drawBehind {
-                val plank = 6.dp.toPx()
-                drawRect(
-                    brush = Brush.verticalGradient(
-                        0f to Color.Black.copy(alpha = if (isDark) 0.45f else 0.14f),
-                        1f to Color.Transparent,
-                        startY = plank,
-                        endY = size.height,
-                    ),
-                    topLeft = Offset(0f, plank),
-                )
-                drawRect(BrandOrange.copy(alpha = if (isDark) 0.22f else 0.30f), size = size.copy(height = plank))
-                drawRect(Color.White.copy(alpha = 0.08f), size = size.copy(height = 1f))
-            },
-    )
-}
-
-@Composable
-internal fun SectionLabel(text: String, isDark: Boolean, modifier: Modifier = Modifier) {
-    Text(
-        text = text,
-        color = (if (isDark) Color.White else Color(0xFF111111)).copy(alpha = 0.6f),
-        fontFamily = SnProFamily,
-        fontWeight = FontWeight.SemiBold,
-        fontSize = 13.sp,
-        modifier = modifier,
-    )
 }
 
 @Composable

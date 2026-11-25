@@ -26,8 +26,6 @@ object SettingHelpIds {
     const val DEV_MINI_NOTIF = "dev_mini_notif"
     const val DEV_EXPERIMENTAL_GRID = "dev_experimental_grid"
     const val DEV_LEGACY_SPLASH = "dev_legacy_splash"
-    const val DEV_SEARCH_DETAILS = "dev_search_details"
-    const val DEV_NEW_SHELVES = "dev_new_shelves"
     const val DEV_FPS = "dev_fps"
     const val DEV_EXPORT_LOGS = "dev_export_logs"
     const val DEV_EXPORT_PDF = "dev_export_pdf"
@@ -461,50 +459,6 @@ fun settingHelpText(id: String, ru: Boolean): SettingHelpText? = when (id) {
             lead = "Favorites appear as a horizontal strip above the collection.",
             points = listOf(
                 HelpPoint("If you turn it off", "Favorites stay in the main list, raised to the top."),
-            ),
-        )
-    }
-
-    SettingHelpIds.DEV_SEARCH_DETAILS -> if (ru) {
-        SettingHelpText(
-            title = "Детали из поиска",
-            lead = "Тап по результату поиска открывает страницу тайтла, пока он не в коллекции.",
-            points = listOf(
-                HelpPoint("Как это работает", "Сначала «Добавить»: плюс уезжает в центр кнопки, крутится и становится галочкой, потом страница проявляет «Смотреть», «Скачать» и уведомления."),
-                HelpPoint("Если выключить", "Тап по карточке ничего не открывает, добавляет только кнопка на ней."),
-            ),
-        )
-    } else {
-        SettingHelpText(
-            title = "Details from search",
-            lead = "Tapping a search result opens the title page while it's not yet in your collection.",
-            points = listOf(
-                HelpPoint("How it works", "Add first: the plus glides to the center of the button, spins and turns into a check, then the page reveals Watch, Download and notifications."),
-                HelpPoint("If you turn it off", "Tapping the card opens nothing; only the button on it adds."),
-            ),
-        )
-    }
-
-    SettingHelpIds.DEV_NEW_SHELVES -> if (ru) {
-        SettingHelpText(
-            title = "Новые книжные полки",
-            lead = "Полки книг показываются так, как стоят на настоящей полке.",
-            points = listOf(
-                HelpPoint("До 3 книг", "Тонкие книги стоят под углом."),
-                HelpPoint("Больше 3 книг", "Полка превращается в настоящую: все книги корешками вперёд."),
-                HelpPoint("Внутри полки", "Книги лежат почти плоско, лицом к вам."),
-                HelpPoint("Если выключить", "Возвращается полка-веер из трёх обложек."),
-            ),
-        )
-    } else {
-        SettingHelpText(
-            title = "New bookshelves",
-            lead = "Book shelves look the way books sit on a real shelf.",
-            points = listOf(
-                HelpPoint("Up to 3 books", "Slim books stand at an angle."),
-                HelpPoint("More than 3 books", "The shelf becomes a real one: every book spine-out."),
-                HelpPoint("Inside a shelf", "Books lie almost flat, facing you."),
-                HelpPoint("If you turn it off", "The three-cover fan shelf comes back."),
             ),
         )
     }

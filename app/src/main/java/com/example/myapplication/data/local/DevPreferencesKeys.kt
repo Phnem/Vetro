@@ -45,20 +45,6 @@ object DevPreferencesKeys {
     val LEGACY_SPLASH = booleanPreferencesKey("dev_legacy_splash")
 
     /**
-     * Тап по результату поиска открывает «Детали» без записи в коллекцию: сначала «Добавить»,
-     * потом всё остальное, переход — NameDrop-шейдер. Отсутствие ключа = ВЫКЛ (тап по карточке
-     * ничего не делает, добавляет только кнопка). См. `ui/searchdetails`.
-     */
-    val SEARCH_DETAILS_PREVIEW = booleanPreferencesKey("dev_search_details_preview")
-
-    /**
-     * Новые книжные полки: до 3 книг — тонкие книги под углом, больше 3 — настоящая полка
-     * корешками вперёд, внутри открытой полки — почти плоские книги. Отсутствие ключа = ВЫКЛ
-     * (полка-веер из трёх обложек). См. `audiobooks/ui/home/NewShelves.kt`.
-     */
-    val NEW_SHELVES = booleanPreferencesKey("dev_new_shelves")
-
-    /**
      * versionCode, с которым заставка последний раз стартовала. Совпадает с текущим — это повторный
      * запуск той же сборки, и заставка идёт вдвое быстрее; нет ключа или другая сборка — первый
      * запуск после установки или обновления, заставка целиком. См. `ui/navigation/StartupSplash.kt`.
@@ -85,5 +71,8 @@ object DevPreferencesKeys {
         // v3.4.9: новый интерфейс и анимация «назад» влиты в основу, их dev-переключатели убраны.
         booleanPreferencesKey("dev_legacy_ui"),
         booleanPreferencesKey("dev_extera_back"),
+        // v3.7: «Детали из поиска» и новые книжные полки включены всегда, переключатели убраны.
+        booleanPreferencesKey("dev_search_details_preview"),
+        booleanPreferencesKey("dev_new_shelves"),
     )
 }

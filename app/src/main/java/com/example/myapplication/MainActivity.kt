@@ -61,8 +61,6 @@ import com.example.myapplication.ui.debug.FpsOverlay
 import com.example.myapplication.ui.shared.LocalAdaptiveGlassEnabled
 import com.example.myapplication.ui.shared.LocalModernUi
 import com.example.myapplication.ui.shared.LocalFullBleedCards
-import com.example.myapplication.ui.shared.LocalNewShelves
-import com.example.myapplication.ui.shared.LocalSearchDetailsPreview
 import com.example.myapplication.ui.shared.mininotif.MiniNotif
 import com.example.myapplication.ui.shared.mininotif.MiniNotifHost
 import com.example.myapplication.ui.shared.back.LocalExteraBackEnabled
@@ -243,8 +241,6 @@ class MainActivity : FragmentActivity() {
                     LocalAdaptiveGlassEnabled provides settingsState.devAdaptiveGlassScroll,
                     LocalModernUi provides settingsState.modernUi,
                     LocalFullBleedCards provides settingsState.devFullBleedCards,
-                    LocalSearchDetailsPreview provides settingsState.devSearchDetailsPreview,
-                    LocalNewShelves provides settingsState.devNewShelves,
                     LocalExteraBackEnabled provides settingsState.devExteraBack,
                     LocalWorkspaceSearch provides workspaceSearch,
                     // iOS-«резинка» на краю всех списков и скроллов приложения (IosScroll.kt).

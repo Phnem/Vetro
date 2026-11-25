@@ -188,7 +188,6 @@ fun BooksHomeScreen(
             key to label
         }.toMap()
     }
-    val newShelvesFlag = com.example.myapplication.ui.shared.LocalNewShelves.current
     CompositionLocalProvider(LocalBookProgress provides { book -> progressLabels["${book.source}:${book.key}"] }) {
     Box(
         modifier
@@ -209,7 +208,7 @@ fun BooksHomeScreen(
             onRetry = vm::retry,
             onOpenShelf = { shelf ->
                 openShelfKey = shelf.key
-                morph.expand(shelf, scope, reducedMotion, critical = newShelvesFlag)
+                morph.expand(shelf, scope, reducedMotion)
             },
             onAddFolder = { runCatching { folderPicker.launch(null) } },
             importing = importing > 0,
@@ -229,47 +228,19 @@ fun BooksHomeScreen(
             }
             val closeShelf: () -> Unit = {
                 openShelfKey = null
-                morph.collapse(scope, reducedMotion, critical = newShelvesFlag)
+                morph.collapse(scope, reducedMotion)
             }
-            val newShelves = com.example.myapplication.ui.shared.LocalNewShelves.current
-            if (newShelves) {
-                // Новые полки: книги (стоящие под углом или корешками) поворачиваются в плоское
-                // положение и разлетаются на свои места в сетке.
-                ShelfPageV2(
-                    shelf = shelf,
-                    strings = strings,
-                    isDark = isDark,
-                    morph = morph,
-                    onBook = openBook,
-                    onClose = closeShelf,
-                )
-                FlyingBooks(morph, shelf)
-                return@let
-            }
-            ShelfPage(
+            // Книги (стоящие под углом или корешками) поворачиваются в плоское положение и
+            // разлетаются на свои места в сетке.
+            ShelfPageV2(
                 shelf = shelf,
                 strings = strings,
                 isDark = isDark,
                 morph = morph,
-                // Книга с источником — полноценная страница книги; без источника (витрина) — лист
-                // с честным «пока не нашли».
-                onBook = { b ->
-                    val own = libraryByKey["${b.source}:${b.key}"]
-                    when {
-                        // Своя папка: страница собирается из БД и файлов, у сайта её нет.
-                        own != null && own.local && own.variantId != null ->
-                            onOpenBook(com.example.myapplication.audiobooks.data.LOCAL_SOURCE_ID, own.variantId.value, own.title, own.coverUrl)
-                        own != null && own.local -> vm.playLibrary(own)
-                        b.playable -> onOpenBook(b.source, b.key, b.title, b.coverUrl)
-                        else -> sheetBook = b
-                    }
-                },
-                onClose = {
-                    openShelfKey = null
-                    morph.collapse(scope, reducedMotion)
-                },
+                onBook = openBook,
+                onClose = closeShelf,
             )
-            FlyingCovers(morph, shelf)
+            FlyingBooks(morph, shelf)
         }
 
         BookSheet(
@@ -304,25 +275,19 @@ private fun HomeList(
     importing: Boolean = false,
 ) {
     val ink = if (isDark) Color.White else Color(0xFF111111)
-    val lift = with(LocalDensity.current) { 12.dp.toPx() }
     val now = remember(shelves) { System.currentTimeMillis() }
-    val newShelves = com.example.myapplication.ui.shared.LocalNewShelves.current
     LazyColumn(
         flingBehavior = IosScroll.flingBehavior(),
         contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = bottomInset + 24.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
         modifier = Modifier
             .fillMaxSize()
-            // Список под раскрытой полкой гаснет и чуть уходит вниз (видео, 2,0–2,6 с).
+            // Список под раскрытой полкой гаснет; при закрытии возвращается раньше (с 65% пути), чтобы
+            // к посадке книг подложка карточки и нижняя панель были уже видны. Список не сдвигается:
+            // место возврата книги измеряется на старте закрытия.
             .graphicsLayer {
-                val p = morph.progress.value
-                // Новые полки при закрытии возвращают список с 65% пути: к посадке книг подложка
-                // карточки и нижняя панель уже видны, а не проявляются вторым рывком.
-                val end = if (newShelves && morph.closing) HOME_FADE_CLOSE_END else HOME_FADE_END
-                alpha = 1f - (p / end).coerceIn(0f, 1f)
-                // Новые полки: список не сдвигается. Место возврата книги измеряется на старте закрытия, когда
-                // список уже опущен, и копия садилась бы на смещённое место, а в конце «подпрыгивала».
-                translationY = if (newShelves) 0f else lift * p
+                val end = if (morph.closing) HOME_FADE_CLOSE_END else HOME_FADE_END
+                alpha = 1f - (morph.progress.value / end).coerceIn(0f, 1f)
             },
     ) {
         item(key = "header") {
@@ -375,47 +340,23 @@ private fun HomeList(
                     indication = null,
                     enabled = shelf.books.isNotEmpty() || shelf.key in failed,
                 ) { if (shelf.books.isEmpty()) onRetry(shelf.key) else onOpenShelf(shelf) }
-            if (newShelves) {
-                // Новые полки (dev-флаг): до 3 книг под углом, больше — корешками, внутри — плоско.
-                ShelfCardV2(
-                    title = shelf.title,
-                    subtitle = shelf.subtitle,
-                    topStart = cardTopStart,
-                    topEnd = if (shelf.books.isEmpty()) "" else topEnd,
-                    books = shelf.books,
-                    isDark = isDark,
-                    stageModifier = Modifier.onPlaced { morph.fanCoords["${shelf.key}#stage"] = it },
-                    // Каждая книга сообщает морфу, откуда ей лететь, и скрывается на время полёта:
-                    // вместо неё по экрану летит её копия (FlyingBooks).
-                    bookModifier = { index ->
-                        Modifier
-                            .onPlaced { morph.fanCoords["${shelf.key}#$index"] = it }
-                            .graphicsLayer { alpha = morph.cardBookAlpha(shelf.key, index) }
-                    },
-                    onFaces = { index, faces -> morph.faceLayers["${shelf.key}#$index"] = faces },
-                    modifier = cardClick,
-                )
-                return@items
-            }
-            FanShelfCard(
+            // До 3 книг под углом, больше — корешками вперёд, внутри полки — почти плоско.
+            ShelfCardV2(
                 title = shelf.title,
                 subtitle = shelf.subtitle,
                 topStart = cardTopStart,
                 topEnd = if (shelf.books.isEmpty()) "" else topEnd,
                 books = shelf.books,
                 isDark = isDark,
-                coverModifier = { index ->
+                // Каждая книга сообщает морфу, откуда ей лететь, и скрывается на время полёта:
+                // вместо неё по экрану летит её копия (FlyingBooks).
+                bookModifier = { index ->
                     Modifier
                         .onPlaced { morph.fanCoords["${shelf.key}#$index"] = it }
-                        .graphicsLayer { alpha = if (morph.hidesFan(shelf.key)) 0f else 1f }
+                        .graphicsLayer { alpha = morph.cardBookAlpha(shelf.key, index) }
                 },
-                modifier = Modifier
-                    .onPlaced { morph.cardCoords[shelf.key] = it }
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null,
-                        enabled = shelf.books.isNotEmpty() || shelf.key in failed,
-                    ) { if (shelf.books.isEmpty()) onRetry(shelf.key) else onOpenShelf(shelf) },
+                onFaces = { index, faces -> morph.faceLayers["${shelf.key}#$index"] = faces },
+                modifier = cardClick,
             )
         }
     }
@@ -442,11 +383,6 @@ internal class ShelfMorph {
     var from by mutableStateOf<List<Rect?>>(emptyList())
     var to by mutableStateOf<List<Rect?>>(emptyList())
     var card by mutableStateOf<Rect?>(null)
-
-    /** Сцена полки на карточке (новые полки): отсюда «взлетает» лента корешков страницы. */
-    var stage by mutableStateOf<Rect?>(null)
-
-    fun hidesFan(key: String): Boolean = open?.key == key && progress.value > 0.001f
 
     /** Закрытие идёт: список возвращается раньше (с 65% пути), а не после остановки книг. */
     var closing by mutableStateOf(false)
@@ -503,15 +439,12 @@ internal class ShelfMorph {
     fun captionAlpha(index: Int): Float =
         if (flies(index)) ((bookProgress(index) - 0.8f) / 0.2f).coerceIn(0f, 1f) else 1f
 
-    /** Обложки ряда страницы, прилетевшие из веера, до конца полёта нарисованы летящей копией. */
-    fun hidesRow(index: Int): Boolean = progress.value < 0.999f && from.getOrNull(index) != null
 
-    fun expand(shelf: OpenShelf, scope: CoroutineScope, reducedMotion: Boolean, critical: Boolean = false) {
+    fun expand(shelf: OpenShelf, scope: CoroutineScope, reducedMotion: Boolean) {
         if (open != null) return
         closing = false
         from = (0 until TRACKED).map { rectOf(fanCoords["${shelf.key}#$it"]) }
         card = rectOf(cardCoords[shelf.key])
-        stage = rectOf(fanCoords["${shelf.key}#stage"])
         targetCoords.clear()
         open = shelf
         scope.launch {
@@ -528,11 +461,10 @@ internal class ShelfMorph {
                 // Новые полки: критическое затухание без отскока, книги не перелетают место посадки.
                 // Порог видимости мелкий: стандартный (0,01) обрывает пружину за ~1% до цели и
                 // последний шаг (несколько пикселей) делается одним кадром — это и есть щелчок.
-                critical -> {
+                else -> {
                     progress.animateTo(1f, androidx.compose.animation.core.spring(1f, 380f, 0.0005f))
                     settle.animateTo(1f, androidx.compose.animation.core.tween(SETTLE_MS))
                 }
-                else -> progress.animateTo(1f, MotionTokens.largeSurfaceEnter())
             }
         }
     }
@@ -542,13 +474,12 @@ internal class ShelfMorph {
         if (open != null) return
         from = emptyList()
         to = emptyList()
-        stage = null
         open = shelf
         progress.snapTo(1f)
         settle.snapTo(1f)
     }
 
-    fun collapse(scope: CoroutineScope, reducedMotion: Boolean, critical: Boolean = false) {
+    fun collapse(scope: CoroutineScope, reducedMotion: Boolean) {
         val shelf = open ?: return
         closing = true
         from = (0 until TRACKED).map { rectOf(fanCoords["${shelf.key}#$it"]) }
@@ -558,8 +489,7 @@ internal class ShelfMorph {
         scope.launch {
             when {
                 reducedMotion -> progress.snapTo(0f)
-                critical -> progress.animateTo(0f, androidx.compose.animation.core.spring(1f, 438.6f, 0.0005f))
-                else -> progress.animateTo(0f, MotionTokens.largeSurfaceExit())
+                else -> progress.animateTo(0f, androidx.compose.animation.core.spring(1f, 438.6f, 0.0005f))
             }
             open = null
         }
@@ -578,9 +508,6 @@ internal class ShelfMorph {
     }
 
     companion object {
-        /** Веер (старые полки): летят три обложки. */
-        const val FLYING = 3
-
         /** Новые полки: сколько книг полки отслеживает морф (откуда летят и куда садятся). */
         const val TRACKED = 24
 
@@ -636,205 +563,6 @@ internal fun authorShelves(books: List<com.example.myapplication.audiobooks.data
         }
 }
 
-/**
- * Три обложки веера в полёте — отдельный слой поверх дома и страницы на всё время перехода.
- * Размер — финальный (ряд полки), путь и поворот — transform, так что картинка не перемеряется.
- *
- * Порядок наложения — веерный с первого кадра (края под серединой), а не «по списку с переключением
- * в конце». Нижний край карточки работает как передняя кромка полки: у каждой обложки своя линия
- * среза, которая непрерывно съезжает к краю карточки, пока обложка садится в веер, — книга плавно
- * уходит за кромку, и в последнем кадре срез совпадает с клипом карточки пиксель в пиксель.
- */
-@Composable
-private fun BoxScope.FlyingCovers(morph: ShelfMorph, shelf: OpenShelf) {
-    val density = LocalDensity.current
-    Box(Modifier.matchParentSize()) {
-        // Порядок отрисовки = порядок веера: FanBookIndex кладёт первую книгу (середину) последней.
-        for (i in FanBookIndex) {
-            val book = shelf.books.getOrNull(i) ?: continue
-            val from = morph.from.getOrNull(i) ?: continue
-            val to = morph.to.getOrNull(i) ?: continue
-            val rotation = FanPoses[FanBookIndex.indexOf(i)].rotation
-            BookCover(
-                book = book,
-                modifier = Modifier
-                    .size(with(density) { to.width.toDp() }, with(density) { to.height.toDp() })
-                    // Срез в координатах экрана (узел стоит в начале слоя, сдвиг — в graphicsLayer ниже).
-                    .drawWithContent {
-                        val p = morph.progress.value
-                        if (p <= 0.001f || p >= 0.999f) return@drawWithContent
-                        val edge = morph.card?.bottom
-                        if (edge == null) {
-                            drawContent()
-                            return@drawWithContent
-                        }
-                        val bottom = lerp(from.center.y, to.center.y, p) + lerp(from.height, to.height, p) / 2f
-                        val overhang = (from.bottom - edge).coerceAtLeast(0f)
-                        val line = maxOf(edge, bottom - (1f - p) * overhang)
-                        clipRect(-size.width * 4f, -size.height * 8f, size.width * 16f, line) {
-                            this@drawWithContent.drawContent()
-                        }
-                    }
-                    .graphicsLayer {
-                        val p = morph.progress.value
-                        val c = lerp(from.center, to.center, p)
-                        translationX = c.x - to.width / 2f
-                        translationY = c.y - to.height / 2f
-                        val s = lerp(from.width / to.width, 1f, p)
-                        scaleX = s
-                        scaleY = s
-                        rotationZ = lerp(rotation, 0f, p)
-                    },
-            )
-        }
-    }
-}
-
-// ---------- Страница полки ----------
-
-@Composable
-private fun ShelfPage(
-    shelf: OpenShelf,
-    strings: BooksHomeStrings,
-    isDark: Boolean,
-    morph: ShelfMorph,
-    onBook: (CachedBook) -> Unit,
-    onClose: () -> Unit,
-) {
-    val ink = if (isDark) Color.White else Color(0xFF111111)
-    val density = LocalDensity.current
-    val rise = with(density) { 24.dp.toPx() }
-    var drag by remember { mutableStateOf(0f) }
-    BackHandler(onBack = onClose)
-
-    // Содержимое страницы проявляется, когда обложки уже почти на планке (spec/08, t ≥ 0,4).
-    fun contentAlpha(p: Float) = ((p - 0.4f) / 0.6f).coerceIn(0f, 1f)
-
-    Box(
-        Modifier
-            .fillMaxSize()
-            .graphicsLayer { translationY = drag }
-            // Пустые места страницы не пропускают касания к невидимому дому под ней.
-            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {},
-    ) {
-        LazyVerticalGrid(
-            columns = GridCells.Fixed(2),
-            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 32.dp),
-            horizontalArrangement = Arrangement.spacedBy(14.dp),
-            verticalArrangement = Arrangement.spacedBy(18.dp),
-            modifier = Modifier.fillMaxSize(),
-        ) {
-            item(span = { GridItemSpan(maxLineSpan) }) {
-                // Шапка — ручка листа: тянется вниз и закрывает страницу (spec/08).
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .statusBarsPadding()
-                        .draggable(
-                            orientation = Orientation.Vertical,
-                            state = rememberDraggableState { d -> drag = (drag + d).coerceAtLeast(0f) },
-                            onDragStopped = { v ->
-                                val close = MotionTokens.willDismiss(
-                                    offset = drag, containerSize = with(density) { 600.dp.toPx() },
-                                    velocity = v / density.density,
-                                )
-                                drag = 0f
-                                if (close) onClose()
-                            },
-                        )
-                        .graphicsLayer {
-                            val a = contentAlpha(morph.progress.value)
-                            alpha = a
-                            translationY = rise * (1f - a)
-                        },
-                ) {
-                    Box(
-                        Modifier
-                            .padding(top = 8.dp)
-                            .size(36.dp, 5.dp)
-                            .clip(CircleShape)
-                            .background(ink.copy(alpha = 0.25f))
-                            .clickable(onClick = onClose),
-                    )
-                    Spacer(Modifier.height(14.dp))
-                    Text(shelf.title, color = ink, fontFamily = SnProFamily, fontWeight = FontWeight.Bold, fontSize = 28.sp,
-                        textAlign = TextAlign.Center)
-                    val totalSec = shelf.books.sumOf { it.durationSec ?: 0L }
-                    val sub = listOfNotNull(
-                        strings.books(shelf.books.size),
-                        totalSec.takeIf { it > 0 }?.let { strings.duration(it) },
-                    ).joinToString(" · ")
-                    Text(sub, color = ink.copy(alpha = 0.55f), fontFamily = SnProFamily, fontSize = 14.sp)
-                }
-            }
-            item(span = { GridItemSpan(maxLineSpan) }) {
-                SectionLabel(
-                    strings.bestOnShelf, isDark,
-                    Modifier.graphicsLayer { alpha = contentAlpha(morph.progress.value) },
-                )
-            }
-            item(span = { GridItemSpan(maxLineSpan) }) {
-                Column {
-                    LazyRow(
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        verticalAlignment = Alignment.Bottom,
-                        contentPadding = PaddingValues(horizontal = 4.dp),
-                    ) {
-                        itemsIndexed(shelf.books.take(TOP_ON_SHELF)) { index, book ->
-                            BookCover(
-                                book = book,
-                                modifier = Modifier
-                                    .size(ShelfCoverWidth, ShelfCoverHeight)
-                                    .onPlaced { if (index < ShelfMorph.FLYING) morph.targetCoords[index] = it }
-                                    .graphicsLayer {
-                                        alpha = when {
-                                            morph.hidesRow(index) -> 0f
-                                            index < ShelfMorph.FLYING -> 1f
-                                            // Остальные заезжают из-за правого края каскадом (spec/08, t 0,1).
-                                            else -> contentAlpha(morph.progress.value)
-                                        }
-                                    }
-                                    .clickable { onBook(book) },
-                            )
-                        }
-                    }
-                    // Планка проявляется от центра (scaleX 0,6 → 1), книги стоят на ней без зазора.
-                    ShelfPlank(
-                        isDark,
-                        Modifier.graphicsLayer {
-                            val a = ((morph.progress.value - 0.35f) / 0.4f).coerceIn(0f, 1f)
-                            alpha = a
-                            scaleX = lerp(0.6f, 1f, a)
-                        },
-                    )
-                }
-            }
-            item(span = { GridItemSpan(maxLineSpan) }) {
-                SectionLabel(strings.all, isDark, Modifier.graphicsLayer { alpha = contentAlpha(morph.progress.value) })
-            }
-            itemsIndexed(shelf.books, key = { _, b -> "${b.source}/${b.key}/${b.title}" }) { _, book ->
-                Column(
-                    Modifier
-                        .graphicsLayer {
-                            val a = contentAlpha(morph.progress.value)
-                            alpha = a
-                            translationY = rise * (1f - a)
-                        }
-                        .clickable { onBook(book) },
-                ) {
-                    BookCover(book, Modifier.fillMaxWidth().aspectRatio(2f / 3f))
-                    Spacer(Modifier.height(8.dp))
-                    Text(book.title, color = ink, fontFamily = SnProFamily, fontWeight = FontWeight.SemiBold, fontSize = 14.sp,
-                        maxLines = 2, overflow = TextOverflow.Ellipsis)
-                    Text(book.authors.joinToString(", "), color = ink.copy(alpha = 0.55f), fontFamily = SnProFamily,
-                        fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                }
-            }
-        }
-    }
-}
-
 // ---------- Мелочи ----------
 
 @Composable
@@ -879,7 +607,6 @@ internal fun RoundIconButton(
     }
 }
 
-private const val TOP_ON_SHELF = 8
 
 /**
  * Список дома гаснет раньше, чем проявляется содержимое страницы полки (с t 0,4): у страницы нет
