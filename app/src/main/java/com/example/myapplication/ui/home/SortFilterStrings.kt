@@ -7,16 +7,13 @@ package com.example.myapplication.ui.home
  * него RELEASE падает VerifyError'ом в clinit (debug это терпит).
  */
 internal data class SortFilterStrings(
-    val sectionSort: String,
     val sectionStatus: String,
     val sectionGenres: String,
     val sectionYear: String,
     val sectionRating: String,
     val sectionEpisodes: String,
     val all: String,
-    val upToThree: String,
     val resetFilters: String,
-    val episodesOpenEnd: String,
     val watchStatusTitle: String,
     val watchStatusAuto: String,
     val watchStatusResetAuto: String,
@@ -26,16 +23,13 @@ internal data class SortFilterStrings(
 
     companion object {
         private val Ru = SortFilterStrings(
-            sectionSort = "Сортировка",
             sectionStatus = "Статус",
             sectionGenres = "Жанры",
             sectionYear = "Год релиза",
             sectionRating = "Рейтинг",
             sectionEpisodes = "Количество серий",
             all = "Все",
-            upToThree = "до 3",
             resetFilters = "Сбросить",
-            episodesOpenEnd = "и больше",
             watchStatusTitle = "Статус просмотра",
             watchStatusAuto = "Авто",
             watchStatusResetAuto = "Сбросить к автоматическому",
@@ -43,16 +37,13 @@ internal data class SortFilterStrings(
         )
 
         private val En = SortFilterStrings(
-            sectionSort = "Sort",
             sectionStatus = "Status",
             sectionGenres = "Genres",
             sectionYear = "Release year",
             sectionRating = "Rating",
             sectionEpisodes = "Episodes",
             all = "All",
-            upToThree = "up to 3",
             resetFilters = "Reset",
-            episodesOpenEnd = "and more",
             watchStatusTitle = "Watch status",
             watchStatusAuto = "Auto",
             watchStatusResetAuto = "Reset to automatic",

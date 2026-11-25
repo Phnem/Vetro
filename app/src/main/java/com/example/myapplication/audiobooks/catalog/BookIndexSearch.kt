@@ -27,7 +27,6 @@ data class CatalogBook(
 
     companion object {
         const val FLAG_COVER = 1
-        const val FLAG_RESTRICTED = 2
         const val FLAG_CORE = 4
     }
 }

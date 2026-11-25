@@ -41,7 +41,6 @@ sealed interface RecoveryState {
     /** [stage]: разметка → паузы → речь; [progress] 0..1 внутри этапа. */
     data class Running(val stage: Stage, val progress: Float) : RecoveryState
     data class Paused(val reason: PauseReason) : RecoveryState
-    data object NothingFound : RecoveryState
     data class Failed(val reason: FailReason) : RecoveryState
 
     enum class Stage { METADATA, SILENCE, SPEECH }

@@ -102,8 +102,6 @@ internal fun StartupSplashOverlay(
         legacyFolderSubtitle = if (folderRejected) rejectedSubtitle else splashStrings.splashLegacyFolderSubtitle,
         legacyFolderAction = splashStrings.splashLegacyFolderAction,
         legacyFolderSkip = splashStrings.splashLegacyFolderSkip,
-        cloudRestoreTitle = splashStrings.cloudRestoreTitle,
-        cloudRestoreSubtitle = splashStrings.cloudRestoreSubtitle,
         onPickLegacyFolder = { legacyFolderLauncher.launch(null) },
         onSkipLegacyFolder = { splashViewModel.skipLegacyFolderMigration() },
         onBuildContent = { next ->

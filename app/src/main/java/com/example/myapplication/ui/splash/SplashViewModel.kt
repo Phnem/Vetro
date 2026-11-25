@@ -24,7 +24,6 @@ sealed interface SplashState {
     data object MigratingJson : SplashState
     data object AwaitingLegacyFolder : SplashState
     data object ImportingLegacyFolder : SplashState
-    data object RestoringFromCloud : SplashState
     data class Completed(val nextRoute: String) : SplashState
 }
 

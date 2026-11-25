@@ -1,22 +1,4 @@
 <resources>
-    <string name="welcome_title">Добро пожаловать в приложение &amp; давайте начнём</string>
-    <string name="welcome_body">Вы только что скачали лучшее приложение во вселенной.\nМожете звать меня «воплощением скромности» — я не против.</string>
-    <string name="btn_login">Войти</string>
-    <string name="btn_guest">Продолжить как гость</string>
-    <string name="sync_conflict_title">Конфликт синхронизации</string>
-    <string name="sync_conflict_msg">Данные изменились на обоих устройствах. Пожалуйста, выберите версию, которую нужно сохранить.</string>
-    <string name="inspect_loading_analyzing">Анализ скриншота…</string>
-    <string name="inspect_read_image_failed">Не удалось прочитать изображение</string>
-    <string name="inspect_no_results">Совпадений не найдено</string>
-    <string name="inspect_error_generic">Произошла ошибка</string>
-    <string name="inspect_pick_screenshot">Нажмите, чтобы выбрать скриншот</string>
-    <string name="inspect_title">Поиск по кадру</string>
-    <string name="inspect_mode_anime">Аниме</string>
-    <string name="inspect_mode_movies">Фильмы / сериалы</string>
-    <string name="inspect_gemini_required_movies">Добавьте ваш Gemini API-ключ, чтобы искать фильмы и сериалы по скриншоту.</string>
-    <string name="inspect_gemini_required_ru_anime">Добавьте ваш Gemini API-ключ, чтобы использовать поиск аниме на русском (trace.moe → Gemini → Shikimori).</string>
-    <string name="inspect_back">Назад</string>
-    <string name="external_list_oauth_not_configured">Укажите client id и secret в local.properties (см. local.properties.example), затем пересоберите.</string>
     <string name="external_list_oauth_opening_registration">Открываем сайт для регистрации OAuth-приложения. Укажите redirect URI точно как в local.properties.example, добавьте ключи, пересоберите проект и повторите вход.</string>
     <string name="external_list_oauth_add_secret_rebuild">Добавьте client secret в local.properties и пересоберите проект. Затем войдите снова.</string>
     <string name="external_list_oauth_success">Вход выполнен. Запуск выбранного действия…</string>

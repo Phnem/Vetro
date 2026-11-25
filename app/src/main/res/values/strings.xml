@@ -1,22 +1,4 @@
 <resources>
-    <string name="welcome_title">Welcome to the app &amp; let\'s get started</string>
-    <string name="welcome_body">You’ve just downloaded the best app in the universe.\nYou can call me \'Modesty personified\' — I don\'t mind.</string>
-    <string name="btn_login">Log in</string>
-    <string name="btn_guest">Continue as a guest</string>
-    <string name="sync_conflict_title">Sync Conflict</string>
-    <string name="sync_conflict_msg">Data has changed on both devices. Please choose which version to keep.</string>
-    <string name="inspect_loading_analyzing">Analyzing screenshot…</string>
-    <string name="inspect_read_image_failed">Could not read image</string>
-    <string name="inspect_no_results">No matches found</string>
-    <string name="inspect_error_generic">Something went wrong</string>
-    <string name="inspect_pick_screenshot">Tap to pick a screenshot</string>
-    <string name="inspect_title">Scene search</string>
-    <string name="inspect_mode_anime">Anime</string>
-    <string name="inspect_mode_movies">Movies / TV</string>
-    <string name="inspect_gemini_required_movies">Add your Gemini API key to search movies and TV from screenshots.</string>
-    <string name="inspect_gemini_required_ru_anime">Add your Gemini API key to use Russian anime search (trace.moe → Gemini → Shikimori).</string>
-    <string name="inspect_back">Back</string>
-    <string name="external_list_oauth_not_configured">Set OAuth client id and secret in local.properties (see local.properties.example), then rebuild.</string>
     <string name="external_list_oauth_opening_registration">Opening the site to register an OAuth app. Set redirect URI exactly as in local.properties.example, add keys, rebuild, then try again.</string>
     <string name="external_list_oauth_add_secret_rebuild">Add the client secret to local.properties and rebuild. Then sign in again.</string>
     <string name="external_list_oauth_success">Signed in. Running the selected action…</string>

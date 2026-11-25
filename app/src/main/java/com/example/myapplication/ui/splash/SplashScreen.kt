@@ -83,8 +83,6 @@ fun VetroSplashScreen(
     legacyFolderSubtitle: String,
     legacyFolderAction: String,
     legacyFolderSkip: String,
-    cloudRestoreTitle: String,
-    cloudRestoreSubtitle: String,
     onPickLegacyFolder: () -> Unit,
     onSkipLegacyFolder: () -> Unit,
     onBuildContent: (String) -> Unit,
@@ -147,15 +145,13 @@ fun VetroSplashScreen(
 
     val showMigrationCard = uiState is SplashState.MigratingStorage ||
         uiState is SplashState.MigratingJson ||
-        uiState is SplashState.ImportingLegacyFolder ||
-        uiState is SplashState.RestoringFromCloud
+        uiState is SplashState.ImportingLegacyFolder
     val showFolderCard = uiState is SplashState.AwaitingLegacyFolder
 
     val cardTitle = when (uiState) {
         SplashState.MigratingStorage -> migrationTitle
         SplashState.MigratingJson -> jsonMigrationTitle
         SplashState.ImportingLegacyFolder -> migrationTitle
-        SplashState.RestoringFromCloud -> cloudRestoreTitle
         SplashState.AwaitingLegacyFolder -> legacyFolderTitle
         else -> migrationTitle
     }
@@ -163,7 +159,6 @@ fun VetroSplashScreen(
         SplashState.MigratingStorage -> migrationSubtitle
         SplashState.MigratingJson -> jsonMigrationSubtitle
         SplashState.ImportingLegacyFolder -> migrationSubtitle
-        SplashState.RestoringFromCloud -> cloudRestoreSubtitle
         SplashState.AwaitingLegacyFolder -> legacyFolderSubtitle
         else -> migrationSubtitle
     }
