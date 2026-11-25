@@ -65,6 +65,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
@@ -165,11 +166,13 @@ fun AudiobookPlayerHost(language: AppLanguage = AppLanguage.RU, modifier: Modifi
     val strings = remember(language) { playerStrings(language) }
     val scope = rememberCoroutineScope()
     val view = LocalView.current
-    val expansion = remember { Animatable(0f) }
     // Куда окно едет, а не где оно сейчас: жест назад и перетаскивание проводят value через
     // середину, и флаг «полный» не должен от этого выключать сам жест (иначе короткий бросок
     // отменялся и окно возвращалось в полный размер).
-    var expanded by remember { mutableStateOf(false) }
+    // Saveable: сворачивание складного, смена темы или шрифта пересоздают экран, а раскрытый
+    // плеер не должен от этого падать в мини.
+    var expanded by rememberSaveable { mutableStateOf(false) }
+    val expansion = remember { Animatable(if (expanded) 1f else 0f) }
     // Развёрнутый плеер — не время для ненавязчивых предложений поверх него.
     com.example.myapplication.ui.shared.BusyUiEffect(expanded)
 
