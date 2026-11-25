@@ -111,6 +111,8 @@ class MediaDownloadWorker(
 
         try {
             setForeground(getForegroundInfo())
+        } catch (cancelled: kotlin.coroutines.cancellation.CancellationException) {
+            throw cancelled
         } catch (error: Exception) {
             Log.w(TAG, "Foreground promotion rejected, continuing safely", error)
         }

@@ -192,6 +192,8 @@ class AuthRepository(
             }
             isGuest = false
             Result.success(Unit)
+        } catch (cancelled: kotlin.coroutines.cancellation.CancellationException) {
+            throw cancelled
         } catch (e: Exception) {
             Result.failure(safeSyncFailure(e))
         }
@@ -205,6 +207,8 @@ class AuthRepository(
             }
             isGuest = false
             Result.success(Unit)
+        } catch (cancelled: kotlin.coroutines.cancellation.CancellationException) {
+            throw cancelled
         } catch (e: Exception) {
             Result.failure(safeSyncFailure(e))
         }
@@ -218,6 +222,8 @@ class AuthRepository(
                 captchaToken = "",
             )
             Result.success(Unit)
+        } catch (cancelled: kotlin.coroutines.cancellation.CancellationException) {
+            throw cancelled
         } catch (e: Exception) {
             Result.failure(safeSyncFailure(e))
         }
@@ -229,6 +235,8 @@ class AuthRepository(
                 password = newPassword
             }
             Result.success(Unit)
+        } catch (cancelled: kotlin.coroutines.cancellation.CancellationException) {
+            throw cancelled
         } catch (e: Exception) {
             Result.failure(safeSyncFailure(e))
         }

@@ -175,6 +175,8 @@ class TitleDubbingWorker(
                 }
             }
             Result.success()
+        } catch (cancelled: kotlin.coroutines.cancellation.CancellationException) {
+            throw cancelled
         } catch (e: Exception) {
             Log.w(TAG, "Title dubbing worker failed", e)
             coordinator.onFinished(message = strings.resultFailed, success = false)

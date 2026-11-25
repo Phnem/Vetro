@@ -181,6 +181,8 @@ class ExternalListSyncCoordinator(
                         }
                     }
                 }
+            } catch (cancelled: kotlin.coroutines.cancellation.CancellationException) {
+                throw cancelled
             } catch (e: Exception) {
                 Log.e(TAG, "Token exchange failed", e)
                 toastMain(e.message ?: appContext.getString(R.string.external_list_oauth_error))

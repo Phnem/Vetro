@@ -78,6 +78,8 @@ class SyncPassphraseManager(
             cachedUserId = userId
             cachedKey = key
             PassphraseUnlock.Unlocked(key)
+        } catch (cancelled: kotlin.coroutines.cancellation.CancellationException) {
+            throw cancelled
         } catch (e: Exception) {
             Log.e(TAG, "Passphrase bootstrap failed: ${safeSyncError(e)}")
             PassphraseUnlock.Locked

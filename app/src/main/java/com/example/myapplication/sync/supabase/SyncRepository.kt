@@ -162,6 +162,8 @@ class SyncRepository(
 
         try {
             supabase.postgrest["anime"].upsert(dtos)
+        } catch (cancelled: kotlin.coroutines.cancellation.CancellationException) {
+            throw cancelled
         } catch (e: Exception) {
             val safeError = safeSyncError(e)
             Log.e(TAG, "Push anime failed: $safeError")
@@ -364,6 +366,8 @@ class SyncRepository(
 
             Log.i(TAG, "Pulled ${remoteChanges.size} anime row(s) from cloud")
             return@withContext PullResult(remoteChanges.size, null)
+        } catch (cancelled: kotlin.coroutines.cancellation.CancellationException) {
+            throw cancelled
         } catch (e: Exception) {
             val safeError = safeSyncError(e)
             Log.e(TAG, "Pull failed: $safeError")
@@ -447,6 +451,8 @@ class SyncRepository(
                 }
                 .decodeList<AnimeRemoteDto>()
                 .isNotEmpty()
+        } catch (cancelled: kotlin.coroutines.cancellation.CancellationException) {
+            throw cancelled
         } catch (e: Exception) {
             Log.w(TAG, "remoteHasAnime failed: ${safeSyncError(e)}")
             false

@@ -26,6 +26,8 @@ class VetroPublicDbExporter(
             internalDb.copyTo(publicDbFile, overwrite = true)
             if (internalWal.exists()) internalWal.copyTo(File(root, "$DB_NAME-wal"), overwrite = true)
             if (internalShm.exists()) internalShm.copyTo(File(root, "$DB_NAME-shm"), overwrite = true)
+        } catch (cancelled: kotlin.coroutines.cancellation.CancellationException) {
+            throw cancelled
         } catch (e: Exception) {
             Log.w(TAG, "Failed to mirror DB into app storage", e)
         }

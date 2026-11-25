@@ -51,6 +51,8 @@ class RepairDbWorker(
             }
             coordinator.onFinished(message = message, log = sessionLog.asText(), success = true)
             Result.success()
+        } catch (cancelled: kotlin.coroutines.cancellation.CancellationException) {
+            throw cancelled
         } catch (e: Exception) {
             sessionLog.error("Repair aborted", e)
             Log.w(TAG, "Repair DB worker failed", e)

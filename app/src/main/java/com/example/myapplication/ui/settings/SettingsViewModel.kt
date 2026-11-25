@@ -344,6 +344,8 @@ class SettingsViewModel(
                     addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                 }
                 context.startActivity(Intent.createChooser(sendIntent, null))
+            } catch (cancelled: kotlin.coroutines.cancellation.CancellationException) {
+                throw cancelled
             } catch (e: Exception) {
                 Log.w(LOG_TAG, "Failed to export logs", e)
             } finally {
@@ -387,6 +389,8 @@ class SettingsViewModel(
                     addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                 }
                 context.startActivity(Intent.createChooser(sendIntent, null))
+            } catch (cancelled: kotlin.coroutines.cancellation.CancellationException) {
+                throw cancelled
             } catch (e: Exception) {
                 Log.w(LOG_TAG, "Failed to export PDF", e)
             } finally {
@@ -523,6 +527,8 @@ class SettingsViewModel(
                         context.startActivity(Intent.createChooser(sendIntent, shareTitle))
                     }
                 }
+            } catch (cancelled: kotlin.coroutines.cancellation.CancellationException) {
+                throw cancelled
             } catch (e: Exception) {
                 Log.w(LOG_TAG, "Failed to export repair DB log", e)
             } finally {

@@ -63,6 +63,8 @@ class FullEnrichmentWorker(
             // Ссылки «Где смотреть» идут ОТДЕЛЬНЫМ воркером (enqueue в startFullEnrichment),
             // чтобы не умирать вместе с перезапусками этого длинного воркера.
             Result.success()
+        } catch (cancelled: kotlin.coroutines.cancellation.CancellationException) {
+            throw cancelled
         } catch (e: Exception) {
             sessionLog.error("Full enrichment (fields) aborted", e)
             Log.w(TAG, "Full enrichment worker failed", e)

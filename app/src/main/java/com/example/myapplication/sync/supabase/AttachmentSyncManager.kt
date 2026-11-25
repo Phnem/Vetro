@@ -121,6 +121,8 @@ class AttachmentSyncManager(
                 }
 
             return@withContext cloudUrl
+        } catch (cancelled: kotlin.coroutines.cancellation.CancellationException) {
+            throw cancelled
         } catch (e: Exception) {
             android.util.Log.w(TAG, "uploadAttachment failed for $animeId: ${safeSyncError(e)}")
             null
@@ -213,6 +215,8 @@ class AttachmentSyncManager(
                 } else {
                     android.util.Log.w(TAG, "Retroactive upload failed (or file not found) for ${anime.id}")
                 }
+            } catch (cancelled: kotlin.coroutines.cancellation.CancellationException) {
+                throw cancelled
             } catch (e: Exception) {
                 android.util.Log.w(TAG, "Retroactive upload error for ${anime.id}: ${safeSyncError(e)}")
             }
@@ -276,6 +280,8 @@ class AttachmentSyncManager(
 
                 db.animeQueries.updateAnimeImagePath(imagePath = fileName, id = animeId)
                 fileName
+            } catch (cancelled: kotlin.coroutines.cancellation.CancellationException) {
+                throw cancelled
             } catch (e: Exception) {
                 android.util.Log.w(TAG, "downloadAndImportToCollection failed for $animeId: ${safeSyncError(e)}")
                 null
@@ -311,6 +317,8 @@ class AttachmentSyncManager(
             
             // 2. Delete local cache
             findCachedAttachment(attachmentId)?.delete()
+        } catch (cancelled: kotlin.coroutines.cancellation.CancellationException) {
+            throw cancelled
         } catch (e: Exception) {
             android.util.Log.w(TAG, "deleteAttachment failed for id=$attachmentId: ${safeSyncError(e)}")
         }

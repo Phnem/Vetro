@@ -50,6 +50,8 @@ class RemangaRemoteDataSource(
                     mapToResult(item)
                 }
             }
+        } catch (cancelled: kotlin.coroutines.cancellation.CancellationException) {
+            throw cancelled
         } catch (e: Exception) {
             e.printStackTrace()
             emptyList()
@@ -73,6 +75,8 @@ class RemangaRemoteDataSource(
                 source = "Remanga",
                 status = dto.status?.name ?: "Unknown"
             )
+        } catch (cancelled: kotlin.coroutines.cancellation.CancellationException) {
+            throw cancelled
         } catch (e: Exception) {
             e.printStackTrace()
             null
