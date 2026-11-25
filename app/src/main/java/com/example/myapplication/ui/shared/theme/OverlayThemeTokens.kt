@@ -90,21 +90,12 @@ internal object OverlayThemeTokens {
     /** Опорная альфа для glass-edge на тёмной теме (верх/левый угол блика). */
     const val GlassEdgeAlphaDark = 0.22f
 
-    /** В light-theme внутренний glass-edge отключаем: остаётся рамка + внешняя тень. */
-    const val GlassEdgeAlphaLight = 0f
-
     /** Финальная альфа в направлении угасания градиента (тёмная тема). */
     const val GlassEdgeFadeAlphaDark = 0.04f
-
-    /** Финальная альфа в направлении угасания градиента (светлая). */
-    const val GlassEdgeFadeAlphaLight = 0f
 
     /** Лёгкий вертикальный «тонировочный» fill поверх panelBg для имитации толщины стекла. */
     const val GlassFillTopAlphaDark = 0.06f
     const val GlassFillBottomAlphaDark = 0.0f
-    /** В light-theme убираем внутренний «налив», чтобы не было тени/пятна внутри плитки. */
-    const val GlassFillTopAlphaLight = 0f
-    const val GlassFillBottomAlphaLight = 0.0f
 
     // ============================================================
     // Неоновые акценты — общая палитра для иконок/метрик/индикаторов

@@ -143,7 +143,6 @@ private class CalendarStrings(val ru: Boolean) {
             else -> (if (ru) "Серии " else "Episodes ") + "${known.first()}–${known.last()}"
         }
     }
-    val projectedNote = if (ru) "по недельному ритму" else "by weekly rhythm"
     val released = if (ru) "вышла" else "out"
     val upcoming = if (ru) "выйдет" else "airs"
     fun episode(n: Int?) = if (n == null) (if (ru) "Новая серия" else "New episode") else (if (ru) "Серия $n" else "Episode $n")

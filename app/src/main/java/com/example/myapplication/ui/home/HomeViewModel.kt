@@ -552,7 +552,6 @@ class HomeViewModel(
     /** Ключ результата поиска — тот же и для оптимистичного состояния, и для индикатора загрузки. */
     private fun searchResultKey(result: ApiSearchResult): String = result.listKey
 
-
     /** Найденные книги по ключу результата — чтобы «Добавить» открыло страницу книги у её источника. */
     private var foundBooks: Map<String, com.example.myapplication.audiobooks.domain.source.SourceBook> = emptyMap()
 
@@ -638,12 +637,6 @@ class HomeViewModel(
                         }
                     }
                 )
-        }
-    }
-
-    fun applySort(option: SortOption, isAscending: Boolean) {
-        _uiState.update { current ->
-            current.copy(sortOption = option, sortAscending = isAscending)
         }
     }
 

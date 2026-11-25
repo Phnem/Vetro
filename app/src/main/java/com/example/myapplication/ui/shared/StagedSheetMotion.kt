@@ -83,9 +83,6 @@ private object MorphSprings {
      */
     val ExpandWidth: SpringSpec<Float> = from(periodSeconds = 0.455f, damping = 0.65f)
 
-    /** Раскрытие по высоте: ζ≈0.63, T≈420 мс — перелёт вдвое меньше, чем по ширине. */
-    val ExpandHeight: SpringSpec<Float> = from(periodSeconds = 0.450f, damping = 0.63f)
-
     /**
      * Прямое раскрытие ([MorphPath.DIRECT]).
      *

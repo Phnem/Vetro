@@ -291,7 +291,7 @@ fun SettingsScreen(
     ) { uri -> uri?.let { viewModel.importDbFromFile(context, it) } }
 
     val anyOverlayVisible = activeSheet != null ||
-        uiState.showRepairDbLogDialog || uiState.showTitleDubbingNoAiDialog
+        uiState.showTitleDubbingNoAiDialog
     LaunchedEffect(anyOverlayVisible) { onOverlayVisibleChange(anyOverlayVisible) }
 
     // Автоскрытие и экономный режим стекла для дока рабочей области: он соседний узел и про
@@ -309,7 +309,6 @@ fun SettingsScreen(
     BackHandler(enabled = anyOverlayVisible) {
         when {
             uiState.showTitleDubbingNoAiDialog -> viewModel.dismissTitleDubbingNoAiDialog()
-            uiState.showRepairDbLogDialog -> viewModel.discardRepairDbLog()
             else -> activeSheet = null
         }
     }
@@ -339,13 +338,6 @@ fun SettingsScreen(
         viewModel.clearTitleDubbingMessage()
     }
 
-    if (uiState.showRepairDbLogDialog) {
-        RepairDbLogDialog(
-            devRepairStrings = devRepairStrings,
-            onCreateLog = { performHaptic(view, Haptic.Light); viewModel.exportRepairDbLog(context) },
-            onDismiss = { performHaptic(view, Haptic.Light); viewModel.discardRepairDbLog() },
-        )
-    }
     if (uiState.showTitleDubbingNoAiDialog) {
         TitleDubbingNoAiDialog(
             strings = titleDubbingStrings,
@@ -997,75 +989,6 @@ fun SettingsScreen(
     }
 }
 
-/** Строка-контейнер с сегментированным переключателем: icon + title, ниже — сам контрол. */
-@Composable
-private fun IosSegmentedRow(
-    icon: ImageVector,
-    iconBg: Color,
-    title: String,
-    isDark: Boolean,
-    optionCount: Int,
-    selectedIndex: Int,
-    onSelect: (Int) -> Unit,
-    segment: @Composable (index: Int, selected: Boolean) -> Unit,
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = IosDesign.ListHorizontalInset, vertical = 10.dp),
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            IosIconWell(icon = icon, background = iconBg)
-            Spacer(Modifier.width(IosDesign.ListIconTextGap))
-            Text(
-                text = title,
-                color = MaterialTheme.colorScheme.onSurface,
-                fontFamily = SnProFamily,
-                fontSize = 17.sp,
-                modifier = Modifier.weight(1f),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
-        Spacer(Modifier.height(10.dp))
-        IosSegmentedControl(
-            optionCount = optionCount,
-            selectedIndex = selectedIndex,
-            isDark = isDark,
-            modifier = Modifier.fillMaxWidth(),
-            onSelect = onSelect,
-            segment = segment,
-        )
-    }
-}
-
-@Composable
-private fun SegLabel(text: String, selected: Boolean, isDark: Boolean) {
-    Text(
-        text = text,
-        fontFamily = SnProFamily,
-        fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
-        fontSize = 13.sp,
-        color = if (selected) {
-            if (isDark) Color.White else Color.Black
-        } else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-        maxLines = 1,
-        overflow = TextOverflow.Ellipsis,
-    )
-}
-
-@Composable
-private fun SegIcon(icon: ImageVector, selected: Boolean, isDark: Boolean) {
-    Icon(
-        imageVector = icon,
-        contentDescription = null,
-        modifier = Modifier.size(18.dp),
-        tint = if (selected) {
-            if (isDark) Color.White else Color.Black
-        } else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-    )
-}
-
 /**
  * Локальный ИИ в разделе разработчика одним пунктом: состояние трёх пакетов моделей в подписи, по нажатию
  * окно с возвратом к предыдущей версии каждого пакета и теневыми счётчиками. Названия из коллекции не
@@ -1384,44 +1307,6 @@ private fun TitleDubbingNoAiDialog(
                     muted = muted,
                     onDismiss = onDismiss,
                     onConfirm = onConnect,
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun RepairDbLogDialog(
-    devRepairStrings: DevRepairDbStrings,
-    onCreateLog: () -> Unit,
-    onDismiss: () -> Unit,
-) {
-    val isDark = isAppInDarkTheme()
-    val accent = if (isDark) BrandOrangeBright else BrandDeepRed
-    val surface = IosDesign.rowBackground(isDark)
-    val onSurface = MaterialTheme.colorScheme.onSurface
-    val muted = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f)
-    val shape = SquircleShape(IosDesign.RadiusMd)
-
-    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
-        IosDialogAnimatedContent {
-            Surface(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 40.dp),
-                shape = shape,
-                color = surface,
-                tonalElevation = 0.dp,
-                shadowElevation = if (isDark) 0.dp else 8.dp,
-            ) {
-                DialogBody(
-                    title = devRepairStrings.logDialogTitle,
-                    body = devRepairStrings.logDialogMessage,
-                    cancel = devRepairStrings.logDialogCancel,
-                    confirm = devRepairStrings.logDialogCreate,
-                    accent = accent,
-                    onSurface = onSurface,
-                    muted = muted,
-                    onDismiss = onDismiss,
-                    onConfirm = onCreateLog,
                 )
             }
         }

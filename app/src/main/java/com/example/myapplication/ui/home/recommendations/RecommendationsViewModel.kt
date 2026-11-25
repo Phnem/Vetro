@@ -39,7 +39,6 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-
 sealed interface RecommendationsUiState {
     /** Первый пересчёт (кэша ещё нет). */
     data object Loading : RecommendationsUiState
@@ -253,9 +252,6 @@ class RecommendationsViewModel(
 
     companion object {
         const val LIBRARY_CHANGE_DEBOUNCE_MS = 3_000L
-
-        /** Сколько карточек показывается за сессию (пул каждого типа в кэше шире — 40). */
-        const val SESSION_DECK_SIZE = ContentMixResolver.TOTAL
 
         /**
          * Амплитуда джиттера на нормализованной шкале [0,1]: только перемешивает близкие по баллу карточки

@@ -70,7 +70,6 @@ import com.example.myapplication.ui.shared.back.ProvideExteraBack
 import com.example.myapplication.ui.shared.LocalWorkspaceSearch
 import com.example.myapplication.ui.shared.WorkspaceSearchState
 import com.example.myapplication.ui.shared.theme.OneUiTheme
-import com.example.myapplication.ui.settings.SettingsOverlayMotion
 import com.example.myapplication.ui.settings.SettingsViewModel
 import org.koin.androidx.compose.koinViewModel
 import org.koin.android.ext.android.inject

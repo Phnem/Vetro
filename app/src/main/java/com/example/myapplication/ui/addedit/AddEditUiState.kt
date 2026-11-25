@@ -49,17 +49,6 @@ data class AddEditUiState(
     val commentDraft: String? = null,
 ) {
     /**
-     * Проверка наличия изменений
-     */
-    val hasChanges: Boolean
-        get() = if (animeId == null) {
-            title.isNotBlank()
-        } else {
-            // Для редактирования проверяем изменения относительно оригинала
-            true // Упрощенно, в реальности сравниваем с оригиналом
-        }
-    
-    /**
      * Валидация формы. Пустое episodes трактуется как 0.
      */
     val isValid: Boolean

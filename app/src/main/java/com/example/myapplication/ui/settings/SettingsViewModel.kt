@@ -72,8 +72,6 @@ private data class SettingsTransientState(
     val importDbMessage: String? = null,
     val isRepairingDb: Boolean = false,
     val repairDbMessage: String? = null,
-    val showRepairDbLogDialog: Boolean = false,
-    val pendingRepairDbLog: String? = null,
     val isTitleDubbing: Boolean = false,
     val titleDubbingProcessed: Int = 0,
     val titleDubbingTotal: Int = 0,
@@ -107,7 +105,6 @@ private fun mergeSettingsUi(
         importDbMessage = t.importDbMessage,
         isRepairingDb = t.isRepairingDb,
         repairDbMessage = t.repairDbMessage,
-        showRepairDbLogDialog = t.showRepairDbLogDialog,
         isTitleDubbing = t.isTitleDubbing,
         titleDubbingProcessed = t.titleDubbingProcessed,
         titleDubbingTotal = t.titleDubbingTotal,
@@ -444,13 +441,6 @@ class SettingsViewModel(
         )
     }
 
-    fun discardRepairDbLog() {
-        repairDbCoordinator.acknowledgeResult()
-        _transient.update {
-            it.copy(showRepairDbLogDialog = false, pendingRepairDbLog = null)
-        }
-    }
-
     /**
      * «Дубляж названий»: полный перескан. Помечает фичу как включённую (для авто-дубляжа новых
      * тайтлов), затем запускает фоновый проход. Если нет подключённого AI — показываем диалог,
@@ -497,44 +487,6 @@ class SettingsViewModel(
     fun cancelFullEnrichmentPrompt() {
         _transient.update { it.copy(fullEnrichmentPromptGapCount = null) }
         enrichmentCoordinator.dismissFullEnrichmentPrompt()
-    }
-
-    fun exportRepairDbLog(context: Context) {
-        val logText = _transient.value.pendingRepairDbLog ?: run {
-            discardRepairDbLog()
-            return
-        }
-        val shareTitle = getDevRepairDbStrings(uiState.value.language).logShareTitle
-        viewModelScope.launch {
-            try {
-                withContext(Dispatchers.IO) {
-                    val exportDir = File(context.cacheDir, "share").apply { mkdirs() }
-                    val exportFile = File(exportDir, REPAIR_DB_LOG_NAME)
-                    exportFile.writeText(logText)
-                    val uri = FileProvider.getUriForFile(
-                        context,
-                        "${context.packageName}.fileprovider",
-                        exportFile,
-                    )
-                    val sendIntent = Intent().apply {
-                        action = Intent.ACTION_SEND
-                        putExtra(Intent.EXTRA_STREAM, uri)
-                        putExtra(Intent.EXTRA_TEXT, shareTitle)
-                        type = "text/plain"
-                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                    }
-                    withContext(Dispatchers.Main) {
-                        context.startActivity(Intent.createChooser(sendIntent, shareTitle))
-                    }
-                }
-            } catch (cancelled: kotlin.coroutines.cancellation.CancellationException) {
-                throw cancelled
-            } catch (e: Exception) {
-                Log.w(LOG_TAG, "Failed to export repair DB log", e)
-            } finally {
-                discardRepairDbLog()
-            }
-        }
     }
 
     fun clearRepairDbMessage() {

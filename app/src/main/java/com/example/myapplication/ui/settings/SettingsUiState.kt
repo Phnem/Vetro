@@ -37,7 +37,6 @@ data class SettingsUiState(
     val importDbMessage: String? = null,
     val isRepairingDb: Boolean = false,
     val repairDbMessage: String? = null,
-    val showRepairDbLogDialog: Boolean = false,
     val isTitleDubbing: Boolean = false,
     val titleDubbingProcessed: Int = 0,
     val titleDubbingTotal: Int = 0,

@@ -256,18 +256,6 @@ internal fun PanelButton(
     }
 }
 
-/** Цвета текстовых полей внутри карточек: оранжевый акцент вместо неонового, фон — как у карточки. */
-@Composable
-internal fun panelFieldColors() = OutlinedTextFieldDefaults.colors(
-    focusedBorderColor = MaterialTheme.colorScheme.primary,
-    unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.45f),
-    focusedContainerColor = Color.Transparent,
-    unfocusedContainerColor = Color.Transparent,
-    focusedTextColor = MaterialTheme.colorScheme.onSurface,
-    unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
-    cursorColor = MaterialTheme.colorScheme.primary,
-)
-
 /** Приподнятый «пузырь» полей и кнопок: мягкий градиент, тонкий блик по контуру и лёгкая тень. */
 @Composable
 private fun Modifier.raisedBubble(shape: Shape): Modifier {
