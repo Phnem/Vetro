@@ -68,7 +68,7 @@ class MangaDexSource(
                 parameter("includes[]", "cover_art")
                 contentRatings()
             }
-            response.data.firstOrNull { it.attributes.links["al"] == wanted }?.let { return it.toItem() }
+            response.data.firstOrNull { it.attributes.links?.get("al") == wanted }?.let { return it.toItem() }
         }
         return null
     }
@@ -224,7 +224,8 @@ private data class MangaAttributesDto(
     val tags: List<TagDto> = emptyList(),
     val availableTranslatedLanguages: List<String?> = emptyList(),
     /** Ссылки на другие каталоги: `al` - номер в AniList, `mal` - в MyAnimeList. */
-    val links: Map<String, String> = emptyMap(),
+    /** У тайтла без ссылок приходит `null`, а не пустой объект. */
+    val links: Map<String, String>? = null,
 )
 
 @Serializable
