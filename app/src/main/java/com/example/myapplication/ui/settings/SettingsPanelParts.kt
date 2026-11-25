@@ -1,5 +1,6 @@
 package com.example.myapplication.ui.settings
 
+import androidx.compose.foundation.layout.imePadding
 import com.example.myapplication.ui.shared.components.SpringyBasicTextField
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -77,7 +78,8 @@ internal fun SettingsPanelColumn(
                 .fillMaxWidth()
                 .verticalScroll(rememberScrollState(), flingBehavior = IosScroll.flingBehavior())
                 .padding(horizontal = 20.dp, vertical = 12.dp)
-                .navigationBarsPadding(),
+                // Нижнюю панель отступает сама шторка; здесь нужен только отступ под клавиатуру.
+                .imePadding(),
             verticalArrangement = Arrangement.spacedBy(14.dp),
             content = content,
         )

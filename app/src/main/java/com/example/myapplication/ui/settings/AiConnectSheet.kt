@@ -50,6 +50,7 @@ fun AiConnectSheet(
     val strings = getAiConnectStrings(settingsState.language)
 
     val viewModel: AiConnectViewModel = koinViewModel()
+    androidx.compose.runtime.DisposableEffect(viewModel) { onDispose { viewModel.discardDraft() } }
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val uriHandler = LocalUriHandler.current
     val muted = MaterialTheme.colorScheme.onSurfaceVariant

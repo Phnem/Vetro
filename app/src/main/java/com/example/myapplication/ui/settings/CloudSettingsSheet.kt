@@ -209,17 +209,19 @@ fun CloudSettingsSheet(
             PasswordCard(
                 ru = ru,
                 onSave = { password ->
-                    scope.launch {
-                        val result = authRepository.setPassword(password)
-                        if (result.isSuccess) {
-                            toast(
-                                if (ru) "Пароль сохранён — теперь можно входить по email"
-                                else "Password saved — you can now sign in with email",
-                            )
-                        } else {
-                            toast(result.exceptionOrNull()?.message ?: "Unknown error")
-                        }
+                    val result = authRepository.setPassword(password)
+                    if (result.isSuccess) {
+                        toast(
+                            if (ru) "Пароль сохранён — теперь можно входить по email"
+                            else "Password saved — you can now sign in with email",
+                        )
+                    } else {
+                        toast(
+                            result.exceptionOrNull()?.message
+                                ?: if (ru) "Не удалось сохранить пароль" else "Could not save the password",
+                        )
                     }
+                    result.isSuccess
                 },
             )
         } else {
@@ -277,12 +279,14 @@ private fun ProviderCard(
 }
 
 @Composable
-private fun PasswordCard(ru: Boolean, onSave: (String) -> Unit) {
+private fun PasswordCard(ru: Boolean, onSave: suspend (String) -> Boolean) {
+    val scope = rememberCoroutineScope()
+    var saving by remember { mutableStateOf(false) }
     var password by remember { mutableStateOf("") }
     var confirmPassword by remember { mutableStateOf("") }
     var fieldsVisible by remember { mutableStateOf(true) }
     var revealed by remember { mutableStateOf(false) }
-    val canSave = password.length >= 6 && password == confirmPassword
+    val canSave = !saving && password.length >= 6 && password == confirmPassword
 
     PanelCard {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -334,11 +338,20 @@ private fun PasswordCard(ru: Boolean, onSave: (String) -> Unit) {
                 PanelButton(
                     text = if (ru) "Сохранить пароль" else "Save password",
                     enabled = canSave,
+                    busy = saving,
                     modifier = Modifier.fillMaxWidth(),
                     onClick = {
-                        onSave(password)
-                        password = ""
-                        confirmPassword = ""
+                        saving = true
+                        scope.launch {
+                            try {
+                                if (onSave(password)) {
+                                    password = ""
+                                    confirmPassword = ""
+                                }
+                            } finally {
+                                saving = false
+                            }
+                        }
                     },
                 )
             }

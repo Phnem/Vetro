@@ -68,6 +68,9 @@ class AiConnectViewModel(
 
     fun toggleShowKey() = local.update { it.copy(showKey = !it.showKey) }
 
+    /** Шторку закрыли: набранный и не подключённый ключ не должен дожидаться следующего открытия. */
+    fun discardDraft() = local.update { it.copy(input = "", showKey = false, status = AiConnectStatus.Idle) }
+
     /**
      * Ссылка «Получить ключ» ведёт на OpenRouter: один ключ открывает модели разных провайдеров, и
      * новичку не нужно выбирать, у кого заводить аккаунт. Ключи остальных провайдеров вводятся как раньше.

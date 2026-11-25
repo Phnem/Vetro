@@ -262,12 +262,17 @@ private fun DownloadRing(fraction: Float, phase: Phase, modifier: Modifier = Mod
         animationSpec = MotionTokens.tweenEmphasized(),
         label = "ringColor",
     )
-    val glint = rememberInfiniteTransition(label = "glint").animateFloat(
-        initialValue = 0f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(tween(1900, easing = LinearEasing), RepeatMode.Restart),
-        label = "glintPos",
-    )
+    // Бегущий блик есть только при скачивании: в остальных фазах бесконечная анимация крутилась впустую.
+    val glint = if (phase == Phase.Downloading) {
+        rememberInfiniteTransition(label = "glint").animateFloat(
+            initialValue = 0f,
+            targetValue = 1f,
+            animationSpec = infiniteRepeatable(tween(1900, easing = LinearEasing), RepeatMode.Restart),
+            label = "glintPos",
+        )
+    } else {
+        remember { mutableFloatStateOf(0f) }
+    }
     val bump = remember { Animatable(1f) }
     val check = remember { Animatable(0f) }
     LaunchedEffect(phase) {

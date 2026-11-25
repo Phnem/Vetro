@@ -505,7 +505,7 @@ private fun SecretContent(
                 contentPadding = PaddingValues(top = 8.dp, bottom = 32.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
-                items(titles, key = { it.id }) { anime ->
+                items(titles, key = { it.id }, contentType = { "secret_title" }) { anime ->
                     val typeLabel = when (anime.mediaType) {
                         MediaType.ANIME -> strings.typeAnime
                         MediaType.MANGA -> strings.typeManga

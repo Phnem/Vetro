@@ -120,6 +120,11 @@ private fun homeDepressPopEnter() =
 /** См. [SwipeBackGesture.LINEAR_MS]. */
 private const val SWIPE_BACK_LINEAR_MS = SwipeBackGesture.LINEAR_MS
 
+/** «Назад» только с экрана, который ещё на переднем плане: двойной тап иначе опустошал стек. */
+private fun androidx.navigation.NavController.popFrom(entry: androidx.navigation.NavBackStackEntry) {
+    if (entry.lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED)) popBackStack()
+}
+
 /** Действия экрана входа: одни и те же для нового и прежнего вида. */
 private class WelcomeActions(
     val onGoogle: () -> Unit,
@@ -479,7 +484,7 @@ fun AppNavGraph(
                     title = route.title,
                     cover = route.cover,
                     language = bookLanguage,
-                    onBack = { navController.popBackStack() },
+                    onBack = { navController.popFrom(backStackEntry) },
                     onOpenBook = { b -> navController.navigateToBook(b.ref.source.value, b.ref.key, b.title, b.coverUrl) },
                     modifier = if (extera) {
                         Modifier.exteraClosingPage(transition, backStackEntry, navController)
@@ -507,6 +512,7 @@ fun AppNavGraph(
             }
 
             composable<SettingsRoute> {
+                val backEntry = it
                 SettingsScreen(
                     navController = navController,
                     viewModel = settingsViewModel,
@@ -514,7 +520,7 @@ fun AppNavGraph(
                     animatedVisibilityScope = this,
                     // Маршрут — значит есть куда возвращаться, и кнопка «назад» в шапке нужна.
                     // На странице рабочей области onBack не передают, и кнопки нет (TICKET-07).
-                    onBack = { navController.popBackStack() },
+                    onBack = { navController.popFrom(backEntry) },
                 )
             }
 
@@ -522,12 +528,13 @@ fun AppNavGraph(
                 enterTransition = { if (workspaceModal(targetState)) workspaceModalEnter() else null },
                 popExitTransition = { if (workspaceModal(initialState)) workspaceModalExit() else null },
             ) {
+                val backEntry = it
                 InspectScreen(
                     navController = navController,
                     viewModel = koinViewModel<InspectViewModel>(viewModelStoreOwner = activityViewModelOwner),
                     sharedTransitionScope = this@SharedTransitionLayout,
                     animatedVisibilityScope = this,
-                    onBack = { navController.popBackStack() },
+                    onBack = { navController.popFrom(backEntry) },
                 )
             }
 

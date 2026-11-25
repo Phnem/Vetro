@@ -207,7 +207,7 @@ fun ActionMenuOverlay(
             }
 
             // —— Ряд действий —— //
-            val actionsRestTop = cardLocalTop + grow + scaledHeight + gapPx
+            val actionsRestTop = cardLocalTop - grow + scaledHeight + gapPx
             // Все кнопки обязаны уместиться, даже если выделенная строка уже ряда.
             val actionsWidth = maxOf(cardWidth, ACTION_SIZE * actions.size + ACTION_SPACING * (actions.size - 1))
                 .coerceAtMost(maxWidth - 32.dp)
