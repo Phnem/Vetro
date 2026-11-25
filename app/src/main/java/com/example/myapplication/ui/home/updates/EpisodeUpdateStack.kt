@@ -510,7 +510,7 @@ fun EpisodeUpdateStack(
                     return (target - cardCenter) * p
                 }
                 fun alpha(): Float {
-                    val appear = (enter.value * 2.5f).coerceIn(0f, 1f) * collapseLight.value
+                    val appear = (enter.value * 2.5f).coerceIn(0f, 1f) * (1f - collapseProgress() * 0.85f)
                     return if (departure != null) {
                         appear * (1f + departure.y.value / flyUpPx).coerceIn(0f, 1f)
                     } else {
@@ -568,6 +568,7 @@ fun EpisodeUpdateStack(
                             dim = { BACK_DIM * slot().coerceIn(0f, 1f) },
                             clickEnabled = isTop && !collapsing,
                             onClick = { openAndFlyUp(update) },
+                            contentAlpha = { collapseLight.value },
                         )
                     }
                 }

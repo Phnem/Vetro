@@ -120,6 +120,7 @@ fun NotificationCenter(
     }
     // Узел живёт, пока доигрывает закрытие: иначе обратный ход обрывался бы на первом кадре.
     val animating by remember { derivedStateOf { progress.value > 0.001f } }
+    com.example.myapplication.ui.shared.SheetGateEffect(open || animating)
     if (!open && !animating) return
 
     BackHandler(enabled = open, onBack = onClose)

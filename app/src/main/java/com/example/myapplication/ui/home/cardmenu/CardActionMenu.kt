@@ -70,25 +70,25 @@ fun CardActionMenuOverlay(
         ActionMenuItem(
             icon = if (target.isFavorite) Icons.Rounded.Star else Icons.Rounded.StarBorder,
             tint = OverlayThemeTokens.FavoriteGold,
-            contentDescription = null,
+            contentDescription = if (target.state.language == com.example.myapplication.network.AppLanguage.RU) "Избранное" else "Favorite",
             onClick = onToggleFavorite,
         ),
         ActionMenuItem(
             icon = Icons.Rounded.Delete,
             tint = Color(0xFFE5382B),
-            contentDescription = null,
+            contentDescription = if (target.state.language == com.example.myapplication.network.AppLanguage.RU) "Удалить" else "Delete",
             onClick = onDelete,
         ),
         ActionMenuItem(
             icon = Icons.Filled.Edit,
             tint = neutralTint,
-            contentDescription = null,
+            contentDescription = if (target.state.language == com.example.myapplication.network.AppLanguage.RU) "Редактировать" else "Edit",
             onClick = onEdit,
         ),
         ActionMenuItem(
             icon = Icons.Outlined.Info,
             tint = neutralTint,
-            contentDescription = null,
+            contentDescription = if (target.state.language == com.example.myapplication.network.AppLanguage.RU) "Подробнее" else "Details",
             onClick = onDetails,
         ),
     )

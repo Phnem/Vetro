@@ -39,14 +39,16 @@ class EpisodeNotificationTray {
  */
 @Stable
 class NotificationBellAnchor {
-    var bounds: Rect? by mutableStateOf(null)
-        internal set
+    internal var coordinates: androidx.compose.ui.layout.LayoutCoordinates? = null
+
+    val bounds: Rect?
+        get() = coordinates?.takeIf { it.isAttached }?.boundsInRoot()
 
     val center: Offset? get() = bounds?.center
 }
 
 fun Modifier.notificationBellAnchor(anchor: NotificationBellAnchor): Modifier =
-    this.onGloballyPositioned { if (it.isAttached) anchor.bounds = it.boundsInRoot() }
+    this.onGloballyPositioned { anchor.coordinates = it }
 
 /** Строки центра уведомлений. В `UiStrings` места нет (252 из 254 полей). */
 data class NotificationStrings(
