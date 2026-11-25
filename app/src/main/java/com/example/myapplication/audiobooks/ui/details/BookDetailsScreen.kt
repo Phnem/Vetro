@@ -469,7 +469,7 @@ private fun InfoPage(
                         if (state.authorBooks.isNotEmpty()) {
                             SectionHeader(strings.moreByAuthor, onBg)
                             Spacer(Modifier.height(12.dp))
-                            LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            LazyRow(flingBehavior = com.example.myapplication.ui.shared.theme.IosScroll.flingBehavior(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                                 items(state.authorBooks, key = { it.ref.key }) { b ->
                                     Column(Modifier.width(112.dp).clickable { onOpenBook(b) }) {
                                         BookCoverImage(b.coverUrl, b.title, Modifier.size(112.dp, 168.dp), radius = 12.dp)

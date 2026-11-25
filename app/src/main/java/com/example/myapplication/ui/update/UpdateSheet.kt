@@ -136,7 +136,7 @@ fun UpdateSheet(language: AppLanguage, manual: Boolean, onDismiss: () -> Unit) {
         modifier = Modifier
             .fillMaxWidth()
             .heightIn(max = (LocalConfiguration.current.screenHeightDp * 0.88f).dp)
-            .verticalScroll(rememberScrollState())
+            .verticalScroll(rememberScrollState(), flingBehavior = com.example.myapplication.ui.shared.theme.IosScroll.flingBehavior())
             .padding(horizontal = 20.dp)
             .padding(top = IosDesign.SheetContentTop)
             .navigationBarsPadding()

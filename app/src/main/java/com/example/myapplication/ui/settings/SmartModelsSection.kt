@@ -196,7 +196,7 @@ internal fun ContributionPreviewBlock(ru: Boolean) {
                     .clip(RoundedCornerShape(12.dp))
                     .background(onSurface.copy(alpha = 0.06f))
                     .padding(12.dp)
-                    .verticalScroll(rememberScrollState()),
+                    .verticalScroll(rememberScrollState(), flingBehavior = com.example.myapplication.ui.shared.theme.IosScroll.flingBehavior()),
             )
         }
     }

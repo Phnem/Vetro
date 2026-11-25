@@ -499,6 +499,7 @@ private fun SecretContent(
             SecretEmptyState(palette, ru, Modifier.weight(1f))
         } else {
             LazyColumn(
+                flingBehavior = com.example.myapplication.ui.shared.theme.IosScroll.flingBehavior(),
                 modifier = Modifier.weight(1f),
                 contentPadding = PaddingValues(top = 8.dp, bottom = 32.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp),

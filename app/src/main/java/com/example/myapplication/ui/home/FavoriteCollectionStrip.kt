@@ -71,6 +71,7 @@ internal fun FavoriteCollectionStrip(
             // On phones the next cover peeks out; tablets show more cards at the same size.
             val cardWidth = (maxWidth * 0.55f).coerceIn(160.dp, 240.dp)
             LazyRow(
+                flingBehavior = com.example.myapplication.ui.shared.theme.IosScroll.flingBehavior(),
                 modifier = Modifier.fillMaxWidth().testTag("favorite_collection_strip"),
                 contentPadding = PaddingValues(horizontal = 16.dp),
                 horizontalArrangement = Arrangement.spacedBy(12.dp),

@@ -170,6 +170,7 @@ private fun SavingVeil() {
 private fun CoversGrid(state: DetailsPickerState.Covers, onPick: (PosterCandidate) -> Unit) {
     Box {
         LazyVerticalGrid(
+            flingBehavior = com.example.myapplication.ui.shared.theme.IosScroll.flingBehavior(),
             columns = GridCells.Fixed(3),
             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -261,6 +262,7 @@ private fun androidx.compose.foundation.layout.ColumnScope.StatusContent(
     )
     val neutral = MaterialTheme.colorScheme.onSurfaceVariant
     LazyColumn(
+        flingBehavior = com.example.myapplication.ui.shared.theme.IosScroll.flingBehavior(),
         modifier = Modifier.weight(1f, fill = false),
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -406,6 +408,7 @@ private fun androidx.compose.foundation.layout.ColumnScope.SourcesContent(
             Centered { CircularProgressIndicator(color = BrandOrangeBright, strokeWidth = 2.5.dp) }
         } else {
             LazyColumn(
+                flingBehavior = com.example.myapplication.ui.shared.theme.IosScroll.flingBehavior(),
                 contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {

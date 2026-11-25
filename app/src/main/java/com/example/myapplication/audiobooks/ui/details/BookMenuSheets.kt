@@ -203,6 +203,7 @@ internal fun BookCoverSheet(
                         modifier = Modifier.padding(horizontal = 20.dp, vertical = 24.dp),
                     )
                     else -> LazyVerticalGrid(
+                        flingBehavior = com.example.myapplication.ui.shared.theme.IosScroll.flingBehavior(),
                         columns = GridCells.Fixed(3),
                         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
                         horizontalArrangement = Arrangement.spacedBy(10.dp),

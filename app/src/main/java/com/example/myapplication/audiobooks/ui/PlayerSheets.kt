@@ -251,7 +251,7 @@ internal fun ColumnScope.SleepTimerSheetContent(
     TickRuler(count = MAX_SLEEP_MINUTES, selected = minutes - 1, majorEvery = 5, onSelected = { minutes = it + 1 })
     Spacer(Modifier.height(16.dp))
     Row(
-        Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+        Modifier.fillMaxWidth().horizontalScroll(rememberScrollState(), flingBehavior = com.example.myapplication.ui.shared.theme.IosScroll.flingBehavior()),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         // До конца главы — пересчитываем остаток главы в минуты прослушивания с учётом скорости.
@@ -419,6 +419,7 @@ internal fun ColumnScope.ChaptersSheetContent(
     }
     val listState = rememberLazyListState(initialFirstVisibleItemIndex = (current.index - 2).coerceAtLeast(0))
     LazyColumn(
+        flingBehavior = com.example.myapplication.ui.shared.theme.IosScroll.flingBehavior(),
         state = listState,
         verticalArrangement = Arrangement.spacedBy(3.dp),
         modifier = Modifier.heightIn(max = 460.dp),
@@ -552,7 +553,7 @@ internal fun ColumnScope.NarrationSheetContent(
     }
     if (model.options.isNotEmpty()) {
         Spacer(Modifier.height(8.dp))
-        LazyColumn(verticalArrangement = Arrangement.spacedBy(3.dp), modifier = Modifier.heightIn(max = 460.dp)) {
+        LazyColumn(flingBehavior = com.example.myapplication.ui.shared.theme.IosScroll.flingBehavior(), verticalArrangement = Arrangement.spacedBy(3.dp), modifier = Modifier.heightIn(max = 460.dp)) {
             itemsIndexed(model.options, key = { _, o -> o.key }) { i, option ->
                 Row(
                     Modifier
@@ -703,7 +704,7 @@ internal fun ColumnScope.MarkersSheetContent(
     SheetTitle(strings.markersTitle, trailing = markers.size.toString())
     Spacer(Modifier.height(14.dp))
     val timeline = state.timeline
-    LazyColumn(verticalArrangement = Arrangement.spacedBy(3.dp), modifier = Modifier.heightIn(max = 460.dp)) {
+    LazyColumn(flingBehavior = com.example.myapplication.ui.shared.theme.IosScroll.flingBehavior(), verticalArrangement = Arrangement.spacedBy(3.dp), modifier = Modifier.heightIn(max = 460.dp)) {
         itemsIndexed(markers, key = { _, m -> m.id }) { i, marker ->
             val chapter = timeline?.chapterAt(marker.globalMs)
             Row(

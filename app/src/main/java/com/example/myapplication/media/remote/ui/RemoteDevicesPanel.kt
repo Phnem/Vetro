@@ -140,6 +140,7 @@ fun RemoteDevicesPanel(
                     modifier = Modifier.padding(start = 6.dp, bottom = 10.dp),
                 )
                 LazyColumn(
+                    flingBehavior = com.example.myapplication.ui.shared.theme.IosScroll.flingBehavior(),
                     modifier = Modifier.heightIn(max = 460.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
