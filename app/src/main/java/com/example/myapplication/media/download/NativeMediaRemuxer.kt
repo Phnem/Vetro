@@ -85,6 +85,13 @@ object NativeMediaRemuxer {
                     val inputTrack = extractor.sampleTrackIndex
                     val outputTrack = outputTracks[inputTrack]
                     val sampleTime = extractor.sampleTime.coerceAtLeast(0L)
+                    // Флаги MediaExtractor и MediaCodec — разные наборы с пересекающимися числами:
+                    // «частичный кадр» читался бы муксером как конец потока и обрезал файл.
+                    val keyFrame = if (extractor.sampleFlags and MediaExtractor.SAMPLE_FLAG_SYNC != 0) {
+                        MediaCodec.BUFFER_FLAG_KEY_FRAME
+                    } else {
+                        0
+                    }
                     val aacSampleRate = aacSampleRates[inputTrack]
                     val adts = if (aacSampleRate != null) AdtsFrames.split(buffer, 0, size) else emptyList()
                     if (outputTrack != null && adts.isNotEmpty()) {
@@ -99,12 +106,12 @@ object NativeMediaRemuxer {
                                 frame.payloadOffset,
                                 frame.payloadSize,
                                 start + index * frameUs,
-                                extractor.sampleFlags,
+                                MediaCodec.BUFFER_FLAG_KEY_FRAME, // каждый кадр AAC самостоятелен
                             )
                             muxer.writeSampleData(outputTrack, buffer, info)
                         }
                     } else if (outputTrack != null) {
-                        info.set(0, size, sampleTime, extractor.sampleFlags)
+                        info.set(0, size, sampleTime, keyFrame)
                         muxer.writeSampleData(outputTrack, buffer, info)
                     }
                     extractor.advance()

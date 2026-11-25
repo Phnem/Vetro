@@ -593,13 +593,15 @@ class AudiobookPlaybackService : MediaLibraryService() {
                 }
             }
             if (controller.packageName != packageName) {
-                return Futures.immediateFuture(SessionResult(SessionResult.RESULT_ERROR_PERMISSION_DENIED))
+                return Futures.immediateFuture(
+                    SessionResult(SessionError(SessionError.ERROR_PERMISSION_DENIED, "Only the app may send this command")),
+                )
             }
             when (customCommand.customAction) {
                 AudiobookSessionCommands.setSleepTimer.customAction -> {
                     val minutes = args.getInt(AudiobookSessionCommands.MINUTES)
                     if (minutes !in 1..240) {
-                        return Futures.immediateFuture(SessionResult(SessionResult.RESULT_ERROR_BAD_VALUE))
+                        return Futures.immediateFuture(SessionResult(SessionError(SessionError.ERROR_BAD_VALUE, "Minutes out of range")))
                     }
                     sleepTimer.start(minutes)
                 }

@@ -89,10 +89,13 @@ class PlaybackSourcesSettingsViewModel(
         _uiState.update { state ->
             state.editor?.let { current ->
                 val updated = transform(current)
+                // Сверяем с сохранённым, а не с предыдущим вводом: вернув прежний адрес, пароль
+                // заново набирать не нужно.
+                val stored = service.draft(current.kind).toEditor()
                 state.copy(
                     editor = updated.copy(
-                        hasStoredSecret = current.hasStoredSecret && !current.scopeChanged(updated),
-                        hasStoredApiKey = current.hasStoredApiKey && !current.scopeChanged(updated),
+                        hasStoredSecret = stored.hasStoredSecret && !stored.scopeChanged(updated),
+                        hasStoredApiKey = stored.hasStoredApiKey && !stored.scopeChanged(updated),
                     ),
                     message = null,
                 )
@@ -113,10 +116,15 @@ class PlaybackSourcesSettingsViewModel(
         }
         val saved = service.save(editor.toDraft(), editor.secret, editor.apiKey)
         if (saved) {
-            _uiState.value = PlaybackSourcesSettingsUiState(
-                sources = service.summaries(),
-                message = PlaybackSourceSettingsMessage.SAVED,
-            )
+            // Только свои поля: установленные аддоны и пакеты остаются в состоянии.
+            _uiState.update {
+                it.copy(
+                    sources = service.summaries(),
+                    editor = null,
+                    isTesting = false,
+                    message = PlaybackSourceSettingsMessage.SAVED,
+                )
+            }
         } else {
             _uiState.update { it.copy(message = PlaybackSourceSettingsMessage.INVALID_CONFIGURATION) }
         }
@@ -126,10 +134,14 @@ class PlaybackSourcesSettingsViewModel(
     fun remove(kind: PlaybackSourceKind) {
         cancelProbe()
         service.remove(kind)
-        _uiState.value = PlaybackSourcesSettingsUiState(
-            sources = service.summaries(),
-            message = PlaybackSourceSettingsMessage.REMOVED,
-        )
+        _uiState.update {
+            it.copy(
+                sources = service.summaries(),
+                editor = null,
+                isTesting = false,
+                message = PlaybackSourceSettingsMessage.REMOVED,
+            )
+        }
     }
 
     fun testEditorConnection() {
