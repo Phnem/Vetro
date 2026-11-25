@@ -76,3 +76,7 @@ data class ApiSearchResult(
     /** Число голосов за рейтинг (TMDB vote_count). null = источник не сообщил; нужно для Bayesian-сглаживания. */
     val voteCount: Int? = null,
 )
+
+/** Ключ результата в списках: без categoryType фильм и сериал TMDB с одним id совпадали. */
+val ApiSearchResult.listKey: String
+    get() = "${source}_${categoryType}_${externalId ?: title}"

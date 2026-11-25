@@ -402,17 +402,18 @@ fun ModernDetailsEpisodesPage(
                     onDismiss = viewModel::dismissQualityPicker,
                 )
             } else {
-                qualityAnchor?.let { anchor ->
-                    EpisodeQualityPopover(
-                        state = picker,
-                        selectedQuality = state.selectedQuality,
-                        anchor = anchor,
-                        ru = ru,
-                        isDark = isDark,
-                        onSelect = viewModel::selectQuality,
-                        onDismiss = viewModel::dismissQualityPicker,
-                    )
-                }
+                // Шапка с чипом могла уехать за край списка: тогда меню встаёт у середины экрана.
+                val anchor = qualityAnchor?.takeIf { it.bottom > 0f && it.top < view.height }
+                    ?: Rect(view.width / 2f - 40f, view.height * 0.35f, view.width / 2f + 40f, view.height * 0.35f)
+                EpisodeQualityPopover(
+                    state = picker,
+                    selectedQuality = state.selectedQuality,
+                    anchor = anchor,
+                    ru = ru,
+                    isDark = isDark,
+                    onSelect = viewModel::selectQuality,
+                    onDismiss = viewModel::dismissQualityPicker,
+                )
             }
         }
     }

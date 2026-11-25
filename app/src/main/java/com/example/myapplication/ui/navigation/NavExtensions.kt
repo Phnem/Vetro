@@ -5,13 +5,16 @@ import androidx.navigation.NavController
 /** Type-safe навигация (маршруты из Routes.kt). */
 fun NavController.navigateToWelcome() {
     navigate(WelcomeRoute) {
-        popUpTo(graph.startDestinationId) { inclusive = true }
+        // Весь стек: стартовый экран к этому моменту мог уже быть снят, и popUpTo на него ничего не делал.
+        popUpTo(graph.id) { inclusive = true }
+        launchSingleTop = true
     }
 }
 
 fun NavController.navigateToHome() {
     navigate(HomeRoute) {
-        popUpTo(WelcomeRoute) { inclusive = true }
+        popUpTo(graph.id) { inclusive = true }
+        launchSingleTop = true
     }
 }
 

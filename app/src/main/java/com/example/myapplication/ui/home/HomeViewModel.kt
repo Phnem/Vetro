@@ -1,5 +1,7 @@
 package com.example.myapplication.ui.home
 
+import com.example.myapplication.domain.search.isInCollection
+import com.example.myapplication.network.listKey
 import com.example.myapplication.domain.BackgroundSchedule
 import kotlinx.coroutines.flow.collectLatest
 import com.example.myapplication.data.local.AppLanguagePrefs
@@ -360,7 +362,7 @@ class HomeViewModel(
             val inDb = if (result.categoryType == BOOK_CATEGORY) {
                 bookSearch?.key(result.title) in bookTitles
             } else {
-                isAddedInMemory(result, localList)
+                result.isInCollection(localList)
             }
             ApiSearchUiModel(
                 result = result,
@@ -369,7 +371,7 @@ class HomeViewModel(
                 isAdded = searchResultKey(result) in optimisticKeys || inDb
             )
         }.toImmutableList()
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), persistentListOf())
+    }.flowOn(Dispatchers.Default).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), persistentListOf())
 
     private var hasCheckedForUpdatesThisSession = false
 
@@ -534,29 +536,8 @@ class HomeViewModel(
     }
 
     /** Ключ результата поиска — тот же и для оптимистичного состояния, и для индикатора загрузки. */
-    private fun searchResultKey(result: ApiSearchResult): String =
-        "${result.source}_${result.externalId ?: result.title}"
+    private fun searchResultKey(result: ApiSearchResult): String = result.listKey
 
-    private fun isAddedInMemory(
-        result: ApiSearchResult,
-        localList: List<Anime>
-    ): Boolean {
-        val q = result.title.normalizeForSearch()
-        if (q.isEmpty()) return false
-        // Раздел поиска штампуется в categoryType (см. ApiService.searchApi), запись хранит тот же
-        // факт в mediaType — сравниваем их одним общим правилом, а не строками: у «Фильмов» и
-        // «Сериалов» тип записи один (TV_SERIES), и посимвольное сравнение их не сводило.
-        val resultType = com.example.myapplication.data.models.MediaType.fromCategoryType(result.categoryType)
-        return localList.any { anime ->
-            if (resultType != null && anime.mediaType != resultType) return@any false
-
-
-            val keys = listOfNotNull(anime.title, anime.titleEn, anime.titleRu)
-                .map { it.normalizeForSearch() }
-                .filter { it.isNotEmpty() }
-            keys.any { t -> t.contains(q) || q.contains(t) }
-        }
-    }
 
     /** Найденные книги по ключу результата — чтобы «Добавить» открыло страницу книги у её источника. */
     private var foundBooks: Map<String, com.example.myapplication.audiobooks.domain.source.SourceBook> = emptyMap()
@@ -627,7 +608,7 @@ class HomeViewModel(
                         // Ключ нужен, только пока запись не видна в БД; дальше кнопку ведёт сама
                         // коллекция — иначе после удаления тайтла остался бы «Added».
                         val confirmed = kotlinx.coroutines.withTimeoutOrNull(3_000) {
-                            localDataSource.observeAllAnime(null).first { isAddedInMemory(result, it) }
+                            localDataSource.observeAllAnime(null).first { result.isInCollection(it) }
                         } != null
                         if (confirmed) _uiState.update { it.copy(optimisticallyAddedKeys = it.optimisticallyAddedKeys.remove(key)) }
                     },

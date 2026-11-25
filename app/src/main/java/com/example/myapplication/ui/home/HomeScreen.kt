@@ -1,5 +1,6 @@
 package com.example.myapplication.ui.home
 
+import com.example.myapplication.network.listKey
 import com.example.myapplication.ui.shared.components.SpringyBasicTextField
 import com.example.myapplication.ui.shared.mininotif.MiniNotif
 import com.example.myapplication.ui.shared.theme.BrandOrange
@@ -1262,7 +1263,11 @@ fun HomeScreen(
                 }
             }
 
-            if (shouldBlur && animeToDelete == null && animeToFavorite == null && !showNotificationsOverlay && !showSortOverlay && !uiState.isGenreFilterVisible) {
+            // Скрим только для пустого поиска: у остальных оверлеев из shouldBlur есть свой.
+            if (isSearchVisible && uiState.searchQuery.isBlank() && animeToDelete == null && animeToFavorite == null &&
+                !showNotificationsOverlay && !showSortOverlay && !uiState.isGenreFilterVisible && !showCSheet &&
+                !showMediaTypeFilterOverlay && !listSyncUi.isRunning && cardMenuTarget == null && !notificationCenterOpen
+            ) {
                 Box(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.5f)).clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {
                     focusManager.clearFocus()
                     if (isSearchVisible) {
@@ -1741,12 +1746,13 @@ private fun LazyListScope.apiSearchResultsSection(
         }
     }
     items(
-        items = apiSearchModels,
-        key = { "${it.result.source}_${it.result.externalId ?: it.result.title}" },
+        // Повторный ключ роняет LazyColumn: фильм и сериал TMDB могут делить числовой id.
+        items = apiSearchModels.distinctBy { it.result.listKey },
+        key = { it.result.listKey },
         contentType = { "api_card" }
     ) { uiModel ->
         val result = uiModel.result
-        val key = "${result.source}_${result.externalId ?: result.title}"
+        val key = result.listKey
         val isLoading = uiState.addingFromApiId == key
         val apiGenres = remember(result.genres, currentLanguage) {
             persistentListOf(

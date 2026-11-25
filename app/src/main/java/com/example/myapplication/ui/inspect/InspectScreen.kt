@@ -1,5 +1,6 @@
 package com.example.myapplication.ui.inspect
 
+import com.example.myapplication.network.listKey
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
@@ -608,10 +609,10 @@ private fun InspectStateContent(
                 }
                 items(
                     items = s.results,
-                    key = { m -> "${m.result.source}_${m.result.externalId ?: m.result.title}" },
+                    key = { m -> m.result.listKey },
                 ) { uiModel ->
                     val r = uiModel.result
-                    val addKey = "${r.source}_${r.externalId ?: r.title}"
+                    val addKey = r.listKey
                     InspectResultCard(
                         result = r,
                         isAdded = uiModel.isAdded,

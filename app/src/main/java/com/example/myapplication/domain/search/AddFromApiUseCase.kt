@@ -1,5 +1,6 @@
 package com.example.myapplication.domain.search
 
+import com.example.myapplication.domain.normalizeForSearch
 import com.example.myapplication.data.models.Anime
 import com.example.myapplication.data.models.MediaType
 import com.example.myapplication.data.models.RatingScale
@@ -119,6 +120,19 @@ internal fun ApiSearchResult.toDuplicateProbe(): Anime? {
         kinopoiskId = identity.kinopoiskId,
         mediaType = mediaType,
     )
+}
+
+/**
+ * Есть ли результат поиска уже в коллекции — тем же правилом, что и перед сохранением. Сравнение по
+ * вхождению названий здесь не годится: тайтл «K» помечал бы добавленными десятки чужих.
+ */
+internal fun ApiSearchResult.isInCollection(collection: List<Anime>): Boolean {
+    toDuplicateProbe()?.let { probe -> return collection.any { isDuplicate(probe, it) } }
+    val wanted = title.normalizeForSearch()
+    if (wanted.isEmpty()) return false
+    return collection.any { anime ->
+        listOfNotNull(anime.title, anime.titleEn, anime.titleRu).any { it.normalizeForSearch() == wanted }
+    }
 }
 
 /**

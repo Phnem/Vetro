@@ -383,11 +383,24 @@ class EpisodeMenuViewModel(
      */
     fun selectSourceStream(video: VetroVideo) {
         val picker = _state.value.qualityPicker ?: return
+        val resolution = video.resolutionValue()
         _state.update {
-            it.copy(qualityPicker = null, streaming = null, resolvingQuality = false)
+            it.copy(
+                selectedQuality = resolution ?: it.selectedQuality,
+                qualityChipVersion = if (resolution != null) it.qualityChipVersion + 1 else it.qualityChipVersion,
+                qualityPicker = null,
+                streaming = null,
+                resolvingQuality = false,
+            )
+        }
+        // Из чипа «Качество» намерение — только сменить; выбрав конкретный поток, ждут воспроизведения.
+        val intent = when (val asked = picker.intent) {
+            is EpisodeQualityIntent.ChangeOnly -> EpisodeQualityIntent.Watch(asked.season, asked.episode)
+            else -> asked
         }
         viewModelScope.launch {
-            executeResolvedIntent(picker.intent, listOf(video), video.resolutionValue() ?: 0)
+            if (resolution != null) playbackStore.savePreferredQuality(anime.id, resolution)
+            executeResolvedIntent(intent, listOf(video), resolution ?: 0)
         }
     }
 

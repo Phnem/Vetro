@@ -1,5 +1,7 @@
 package com.example.myapplication.ui.inspect
 
+import com.example.myapplication.domain.search.isInCollection
+import com.example.myapplication.network.listKey
 import com.example.myapplication.data.local.AppLanguagePrefs
 import android.content.Context
 import android.net.Uri
@@ -32,6 +34,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -91,12 +95,12 @@ class InspectViewModel(
                 raw.map { r ->
                     ApiSearchUiModel(
                         result = r,
-                        isAdded = isAddedInMemory(r, localList)
+                        isAdded = r.isInCollection(localList)
                     )
                 }.toImmutableList()
             )
         }
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), InspectUiState.Idle)
+    }.flowOn(Dispatchers.Default).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), InspectUiState.Idle)
 
     init {
         viewModelScope.launch {
@@ -165,7 +169,7 @@ class InspectViewModel(
     }
 
     fun addFromApi(result: ApiSearchResult) {
-        val key = "${result.source}_${result.externalId ?: result.title}"
+        val key = result.listKey
         viewModelScope.launch {
             _addingFromApiId.value = key
             addFromApiUseCase(result)
@@ -185,16 +189,6 @@ class InspectViewModel(
         clearResults()
     }
 
-    private fun isAddedInMemory(result: ApiSearchResult, localList: List<Anime>): Boolean {
-        val q = result.title.normalizeForSearch()
-        if (q.isEmpty()) return false
-        return localList.any { anime ->
-            val keys = listOfNotNull(anime.title, anime.titleEn, anime.titleRu)
-                .map { it.normalizeForSearch() }
-                .filter { it.isNotEmpty() }
-            keys.any { t -> t.contains(q) || q.contains(t) }
-        }
-    }
 }
 
 private fun mimeToKtorContentType(mime: String): ContentType = when {
