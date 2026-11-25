@@ -43,8 +43,8 @@ android {
         applicationId = "com.phnem.vetro"
         minSdk = 26
         targetSdk = 36
-        versionCode = 364
-        versionName = "v3.6.4-Beta"
+        versionCode = 365
+        versionName = "v3.6.5-Stable"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         // Whisper (whisper.cpp) — только arm64: там есть dotprod/fp16, на остальных ABI меню честно
@@ -166,11 +166,13 @@ android {
             if (providers.gradleProperty("microMlSmokeBuild").orNull == "true") applicationIdSuffix = ".micromlsmoke"
         }
         release {
-            // Нативные библиотеки есть только под arm64. Чужие папки ABI из зависимостей (zstd,
-            // datastore, graphics-path) заставляли x86_64-устройства с трансляцией выбрать
-            // x86_64 и падать с UnsatisfiedLinkError.
+            // Свои нативные библиотеки есть только под arm64. Папки x86 и x86_64 из зависимостей (zstd,
+            // datastore, graphics-path) заставляли x86_64-устройства с трансляцией выбрать x86_64 и падать
+            // с UnsatisfiedLinkError. armeabi-v7a остаётся: без неё 32-битные телефоны не могут обновиться
+            // (движков распознавания, перевода и торрентов на них нет, как и раньше).
             ndk {
                 abiFilters += "arm64-v8a"
+                abiFilters += "armeabi-v7a"
             }
             if (audiobookSmokeBuild) {
                 applicationIdSuffix = ".ab07smoke"

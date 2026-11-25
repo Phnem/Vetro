@@ -1,5 +1,64 @@
 # Vetro changelog
 
+## v3.6.5-Stable — November 26, 2026
+
+App version: `v3.6.5-Stable`. Android version code: `365`.
+Changes since 3.6.4-Beta. This release is about fixes and performance, following a deep review of the whole app.
+
+### Downloads
+
+- `app-release.apk` is the universal build (arm64-v8a and armeabi-v7a). The in-app updater takes this one.
+- `vetro-arm64-v8a.apk` is for 64-bit ARM phones and `vetro-armeabi-v7a.apk` for 32-bit ones. On-device subtitles, manga translation and torrent audiobook sources need arm64, as before.
+- x86 and x86_64 libraries are no longer shipped: their partial set made x86_64 devices with ARM translation crash.
+
+### Privacy and data safety
+
+- "Share" no longer attaches the whole collection database; it sends the link only.
+- Covers from private servers whose address carries access parameters (Audiobookshelf, Subsonic) are no longer synced or contributed.
+- Deleting a title is now sent to the cloud, so a sync no longer brings it back, and its update alerts go with it.
+- The edit form no longer loses data: the IMDb id survives, a new form does not inherit the previous cover, typed text survives a screen rebuild, and an abandoned comment draft does not come back.
+- Saving a playback source no longer wipes installed add-ons.
+
+### Crashes and stability
+
+- Fixed calls that crashed on Android 8 to 13.
+- Playback no longer hangs when a provider dies without answering.
+- Cancelled work is no longer reported as a failure, and cleanup runs when work is cancelled.
+- Downloaded episodes are no longer truncated, and TS to MP4 conversion and audiobook playback errors are handled correctly.
+- Offline book index, cover import and chapter recovery are safer: a failed update keeps the old index, large files are read with a limit, and restarts do not race.
+- Fixed duplicate-key crashes and false "already added" results in search.
+
+### Manga extensions
+
+- Mihon extensions install and load again in release builds (checked with MangaDex).
+- The built-in MangaDex search no longer fails when a title has no external links.
+- The chapters header shows the source name instead of its internal id.
+
+### Foldables and wide screens
+
+- The collection is shown in two columns from 600 dp.
+- Sign-in, the edit form, the calendar and author shelves keep a comfortable width.
+- The expanded audiobook player and the open search bar survive folding, unfolding and theme changes.
+
+### Interface
+
+- "Share" and "comment" are on the title page only, not on the chapters and episodes page.
+- The extensions sheet is no longer covered by the page buttons.
+- Back closes the card menu instead of leaving the app, and a double Back no longer leaves an empty screen.
+- The empty collection text is no longer hidden behind the dock.
+- Sort, filters, favourites order, quality selection, notifications and the share card got a series of smaller fixes.
+
+### Accessibility
+
+- Switches, range sliders and rating work with TalkBack, and the card menu buttons are labelled.
+- A setting applies on a completed tap, not on touch.
+
+### Performance
+
+- A new baseline profile: the app starts faster and the first swipes are smoother.
+- Less work on the main thread: downloaded episode checks, file reads and animations that ran while idle.
+- Tighter code shrinking rules and removed dead code and resources.
+
 ## v3.6.4-Beta — November 25, 2026
 
 App version: `v3.6.4-Beta`. Android version code: `364`.

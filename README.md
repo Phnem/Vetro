@@ -33,7 +33,7 @@ Vetro is an Android media library. Build a personal collection, follow new episo
 
 Vetro does not host any media. It connects to catalogues and sources that you choose, including your own servers.
 
-> **Latest release:** [`v3.6.0-Beta`](https://github.com/Phnem/Vetro/releases/tag/v3.6.0-Beta), which rolls up the Alpha builds 3.5.0 to 3.5.9. The last stable release is [`v3.4.9-Stable`](https://github.com/Phnem/Vetro/releases/tag/v3.4.9-Stable). The app is actively evolving; source availability can vary by region.
+> **Latest release:** [`v3.6.5-Stable`](https://github.com/Phnem/Vetro/releases/tag/v3.6.5-Stable), a fix and performance release on top of 3.6.4. Download `app-release.apk` (works on any ARM phone); `vetro-arm64-v8a.apk` and `vetro-armeabi-v7a.apk` are smaller or single-architecture builds. The app is actively evolving; source availability can vary by region.
 
 <p align="center"><img src="images/readme/divider.svg" alt="" width="880" /></p>
 
