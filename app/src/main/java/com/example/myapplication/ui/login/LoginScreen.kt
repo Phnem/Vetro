@@ -263,15 +263,16 @@ private fun TitleWithMascot(covered: Boolean, isDark: Boolean, compact: Boolean)
     val mascotHeight = mascotWidth / PeekAspect
     // Сиденье — линия внутри холста маскота; всё, что ниже неё (ноги), ложится поверх букв.
     // Холст названия начинается точно по верху прописных, поэтому корпус садится прямо на них.
-    val overlap = mascotHeight * (1f - PeekSeatFraction) + 2.dp
+    val overlap = mascotHeight * (1f - PeekSeatFraction) - 4.dp
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(-overlap),
     ) {
+        // Сдвиг вправо: маскот сидит на конце слова, и свешенные ноги не закрывают «O».
         LoginMascot(
             covered = covered,
             isDark = isDark,
-            modifier = Modifier.width(mascotWidth).offset(x = 24.dp).zIndex(1f),
+            modifier = Modifier.width(mascotWidth).offset(x = mascotWidth * 0.34f).zIndex(1f),
         )
         HeavyTitle(
             color = if (isDark) BurntOrange else MidnightInk,
