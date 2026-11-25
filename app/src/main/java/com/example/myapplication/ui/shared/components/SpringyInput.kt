@@ -1,5 +1,6 @@
 package com.example.myapplication.ui.shared.components
 
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.Easing
@@ -362,7 +363,7 @@ fun SpringyBasicTextField(
     val caretX = remember { Animatable(0f) }
     val caretY = remember { Animatable(0f) }
     var caretTarget by remember { mutableStateOf(Offset.Zero) }
-    var caretHeight by remember { mutableStateOf(0f) }
+    var caretHeight by remember { mutableFloatStateOf(0f) }
     var caretReady by remember { mutableStateOf(false) }
 
     fun refreshCaret() {

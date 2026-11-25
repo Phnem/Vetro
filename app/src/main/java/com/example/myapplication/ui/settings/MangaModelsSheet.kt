@@ -1,5 +1,6 @@
 package com.example.myapplication.ui.settings
 
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.animateColorAsState
@@ -119,7 +120,7 @@ fun MangaModelsSheet(language: AppLanguage, onDismiss: () -> Unit) {
     val downloading = models as? ModelsState.Downloading
 
     // Ход при ошибке не хранится в состоянии: кольцо замирает на последнем показанном значении.
-    var lastFraction by remember { mutableStateOf(0f) }
+    var lastFraction by remember { mutableFloatStateOf(0f) }
     if (downloading != null) lastFraction = downloading.fraction
     val fraction = when (phase) {
         Phase.Ready -> 1f

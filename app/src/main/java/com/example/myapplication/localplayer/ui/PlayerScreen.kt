@@ -135,7 +135,7 @@ fun PlayerScreen(
     // одним плейлистом в одном ExoPlayer, см. класс-комментарий), поэтому запоминаем её здесь, а
     // не в EpisodePlaybackStore: до кросс-сессионного хранения это не требование тикета.
     var preferredAudioLabel by remember { mutableStateOf<String?>(null) }
-    var speed by remember { mutableStateOf(1f) }
+    var speed by remember { mutableFloatStateOf(1f) }
     // Положение кадра переживает переключение серии: сезон смотрят одним подряд, и разворачивать
     // кадр заново на каждой серии — работа, которую пользователь уже сделал. Пересчёт под новое
     // соотношение сторон делает cropScale ниже, так что перенос выбора безопасен и для серий с

@@ -1,5 +1,6 @@
 package com.example.myapplication.ui.shared.components
 
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.semantics.progressBarRangeInfo
 import androidx.compose.ui.semantics.setProgress
@@ -87,7 +88,7 @@ fun GlassRangeSlider(
     val currentOnChange by rememberUpdatedState(onValueChange)
     val currentOnFinished by rememberUpdatedState(onValueChangeFinished)
     // Какой бегунок двигали последним — он рисуется сверху, когда они сошлись в одной точке.
-    var lastActive by remember { mutableStateOf(1) }
+    var lastActive by remember { mutableIntStateOf(1) }
 
     val span = (valueRange.endInclusive - valueRange.start).coerceAtLeast(1e-6f)
     val startFraction = ((value.start - valueRange.start) / span).coerceIn(0f, 1f)

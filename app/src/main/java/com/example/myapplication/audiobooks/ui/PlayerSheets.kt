@@ -1,5 +1,6 @@
 package com.example.myapplication.audiobooks.ui
 
+import androidx.compose.runtime.mutableIntStateOf
 import android.os.Bundle
 import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.foundation.background
@@ -235,7 +236,7 @@ internal fun ColumnScope.SleepTimerSheetContent(
     onDismiss: () -> Unit,
 ) {
     val controller = state.controller ?: return
-    var minutes by remember { mutableStateOf(DEFAULT_SLEEP_MINUTES) }
+    var minutes by remember { mutableIntStateOf(DEFAULT_SLEEP_MINUTES) }
     val remaining = state.sleepRemainingMs
     SheetTitle(strings.sleepTitle, if (remaining >= 0) strings.stopsIn(formatClock(remaining)) else null)
     Spacer(Modifier.height(18.dp))

@@ -1,5 +1,6 @@
 package com.example.myapplication.ui.shared
 
+import androidx.compose.runtime.mutableFloatStateOf
 import android.provider.Settings
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.SpringSpec
@@ -105,14 +106,14 @@ private object MorphSprings {
 @Stable
 class StagedMorphState internal constructor() {
     /** 0 — кнопка, 1 — панель. Ведёт геометрию оболочки. */
-    var shell by mutableStateOf(0f)
+    var shell by mutableFloatStateOf(0f)
         internal set
 
     /**
      * Прозрачность содержимого. Отдельной дорожкой от геометрии: если ждать хвоста пружины,
      * читать панель можно будет только к концу анимации.
      */
-    var contentAlpha by mutableStateOf(0f)
+    var contentAlpha by mutableFloatStateOf(0f)
         internal set
 
     /** Раскрылась ли оболочка настолько, чтобы содержимое в неё поместилось. */

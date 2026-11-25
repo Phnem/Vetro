@@ -232,7 +232,7 @@ fun PlayerControlsOverlay(
     var menuKind by remember { mutableStateOf<PlayerMenu?>(null) }
     val menuState = remember { MutableTransitionState(false) }
     var isScrubbing by remember { mutableStateOf(false) }
-    var unlockHintNonce by remember { mutableStateOf(0) }
+    var unlockHintNonce by remember { mutableIntStateOf(0) }
     var showUnlockHint by remember { mutableStateOf(false) }
 
     // Жесты по видео: превью перемотки (свайп вбок) + накапливающаяся перемотка дабл-тапом.

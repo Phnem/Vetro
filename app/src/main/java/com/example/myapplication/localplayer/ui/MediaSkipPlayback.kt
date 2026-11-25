@@ -1,5 +1,6 @@
 package com.example.myapplication.localplayer.ui
 
+import androidx.compose.runtime.mutableIntStateOf
 import android.util.Log
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -188,7 +189,7 @@ fun rememberMediaSkipPlayback(
     // Куда возвращаться и что именно вернуть. Отдельно от счётчика секунд: счётчик тикает
     // каждую секунду, а это не меняется всё окно отмены.
     var undoTarget by remember(mediaKey) { mutableStateOf<Pair<Long, SkipSegment>?>(null) }
-    var undoSecondsLeft by remember(mediaKey) { mutableStateOf(0) }
+    var undoSecondsLeft by remember(mediaKey) { mutableIntStateOf(0) }
 
     // Один подписчик на позицию на всю серию вместо перезапуска эффекта на каждом тике.
     LaunchedEffect(mediaKey, currentResolution, autoSkipEnabled) {

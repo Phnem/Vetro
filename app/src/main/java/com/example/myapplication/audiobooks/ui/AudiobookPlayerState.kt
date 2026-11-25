@@ -33,7 +33,7 @@ class AudiobookPlayerState {
     var sleepRemainingMs by mutableLongStateOf(-1L)
         internal set
     /** Уровень пропуска тишины (ordinal `SilenceLevel`); 0 — выключен. */
-    var skipSilenceLevel by mutableStateOf(0)
+    var skipSilenceLevel by mutableIntStateOf(0)
         internal set
     val skipSilence: Boolean get() = skipSilenceLevel != 0
 

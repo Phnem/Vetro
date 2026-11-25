@@ -1,5 +1,6 @@
 package com.example.myapplication.ui.secret
 
+import androidx.compose.runtime.mutableFloatStateOf
 import com.example.myapplication.ui.shared.mascot.MascotEmptyState
 import com.example.myapplication.ui.shared.mascot.MascotScene
 import androidx.compose.ui.graphics.luminance
@@ -261,7 +262,7 @@ fun SecretFolderOverlay(
     }
 
     val closeThreshold = with(LocalDensity.current) { 72.dp.toPx() }
-    var dragged by remember { mutableStateOf(0f) }
+    var dragged by remember { mutableFloatStateOf(0f) }
 
     Box(modifier.fillMaxSize().onSizeChanged { host.updateSize(it.width.toFloat(), it.height.toFloat()) }) {
         // Мягкий шлейф за кромкой: три штриха разной ширины вместо дорогого размытия.

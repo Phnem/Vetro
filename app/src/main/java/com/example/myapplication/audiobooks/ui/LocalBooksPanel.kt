@@ -1,5 +1,6 @@
 package com.example.myapplication.audiobooks.ui
 
+import androidx.compose.runtime.mutableIntStateOf
 import com.example.myapplication.ui.shared.mascot.MascotIllustration
 import com.example.myapplication.ui.shared.mascot.MascotScene
 import com.example.myapplication.ui.shared.theme.IosScroll
@@ -97,7 +98,7 @@ fun LocalBooksPanel(
     val playerState: AudiobookPlayerState = koinInject()
     val scope = rememberCoroutineScope()
     var books by remember { mutableStateOf<List<LocalBook>>(emptyList()) }
-    var unavailableFolders by remember { mutableStateOf(0) }
+    var unavailableFolders by remember { mutableIntStateOf(0) }
     var message by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
     var expandedShelf by remember { mutableStateOf(false) }

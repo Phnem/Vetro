@@ -136,7 +136,7 @@ fun StreamPlayerSurface(
         mutableStateOf<List<AudioTrackOption>>(emptyList())
     }
     var tracksSnapshot by remember(player) { mutableStateOf(player.currentTracks) }
-    var speed by remember(player) { mutableStateOf(1f) }
+    var speed by remember(player) { mutableFloatStateOf(1f) }
     // Не привязано к player: источник меняется пересозданием плеера (озвучка, фолбэк, обновление
     // ссылки), и развёрнутый на весь экран кадр не должен сбрасываться вместе с ним. Под новое
     // соотношение сторон cropScale пересчитывается сам.
