@@ -1,5 +1,6 @@
 package com.example.myapplication.domain.recommendations
 
+import com.example.myapplication.utils.runSuspendCatching
 import android.util.Log
 import com.example.myapplication.network.ApiService
 import com.example.myapplication.network.AppLanguage
@@ -70,9 +71,9 @@ class AnimeGraphProvider(private val apiService: ApiService) : CandidateProvider
             }
 
             val pool = mutableListOf<PoolEntry>()
-            pool += runCatching { anilistDeferred.await() }.getOrElse { emptyList() }
-            shikimoriDeferred.forEach { d -> pool += runCatching { d.await() }.getOrElse { emptyList() } }
-            malDeferred.forEach { d -> pool += runCatching { d.await() }.getOrElse { emptyList() } }
+            pool += runSuspendCatching { anilistDeferred.await() }.getOrElse { emptyList() }
+            shikimoriDeferred.forEach { d -> pool += runSuspendCatching { d.await() }.getOrElse { emptyList() } }
+            malDeferred.forEach { d -> pool += runSuspendCatching { d.await() }.getOrElse { emptyList() } }
             pool
         }
     }

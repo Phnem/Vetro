@@ -1,5 +1,6 @@
 package com.example.myapplication.media.source.vfmodule
 
+import com.example.myapplication.utils.runSuspendCatching
 import android.util.Log
 import com.example.myapplication.media.source.VetroVideo
 import io.ktor.client.HttpClient
@@ -21,7 +22,7 @@ class VeoVeoExtractor(
         val normalizedIframe = VfConstants.normalizeUrl(iframeUrl)
         val domainOrigin = VfConstants.originFor(normalizedIframe)
 
-        val html = runCatching {
+        val html = runSuspendCatching {
             client.get(normalizedIframe) {
                 header("User-Agent", VfConstants.CHROME_USER_AGENT)
                 header("Referer", domainOrigin)

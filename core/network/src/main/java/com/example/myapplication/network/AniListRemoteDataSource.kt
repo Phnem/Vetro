@@ -1,5 +1,6 @@
 package com.example.myapplication.network
 
+import com.example.myapplication.utils.runSuspendCatching
 import android.util.Log
 import com.apollographql.apollo.ApolloClient
 import com.apollographql.apollo.api.ApolloResponse
@@ -36,7 +37,7 @@ class AniListRemoteDataSource(
     private val apolloClient: ApolloClient,
     private val rateLimiter: TokenBucketRateLimiter
 ) {
-    suspend fun fetchAnimeDetails(query: String): Result<AnimeDetails?> = runCatching {
+    suspend fun fetchAnimeDetails(query: String): Result<AnimeDetails?> = runSuspendCatching {
         withContext(Dispatchers.IO) {
             rateLimiter.acquire()
             val response = apolloClient.query(SearchMediaQuery(q = Optional.presentIfNotNull(query))).execute()
@@ -87,7 +88,7 @@ class AniListRemoteDataSource(
         }
     }
 
-    suspend fun searchAnime(query: String, limit: Int = 20, language: AppLanguage = AppLanguage.EN, isManga: Boolean = false): Result<List<ApiSearchResult>> = runCatching {
+    suspend fun searchAnime(query: String, limit: Int = 20, language: AppLanguage = AppLanguage.EN, isManga: Boolean = false): Result<List<ApiSearchResult>> = runSuspendCatching {
         withContext(Dispatchers.IO) {
             rateLimiter.acquire()
             val response = apolloClient.query(
@@ -125,7 +126,7 @@ class AniListRemoteDataSource(
         }
     }
 
-    suspend fun mediaByAnilistId(id: Int): Result<ApiSearchResult?> = runCatching {
+    suspend fun mediaByAnilistId(id: Int): Result<ApiSearchResult?> = runSuspendCatching {
         withContext(Dispatchers.IO) {
             rateLimiter.acquire()
             val response = apolloClient.query(MediaByIdQuery(id = Optional.present(id))).execute()
@@ -163,8 +164,8 @@ class AniListRemoteDataSource(
      * Батч-проверка серий: до 50 тайтлов на HTTP-запрос через id_in.
      * Возвращает все найденные Media (порядок не гарантирован).
      */
-    suspend fun episodeCheckByAnilistIds(ids: List<Int>): Result<List<EpisodeCheckMedia>> = runCatching {
-        if (ids.isEmpty()) return@runCatching emptyList()
+    suspend fun episodeCheckByAnilistIds(ids: List<Int>): Result<List<EpisodeCheckMedia>> = runSuspendCatching {
+        if (ids.isEmpty()) return@runSuspendCatching emptyList()
         withContext(Dispatchers.IO) {
             ids.distinct().chunked(EPISODE_CHECK_CHUNK).flatMap { chunk ->
                 rateLimiter.acquire()
@@ -184,8 +185,8 @@ class AniListRemoteDataSource(
     }
 
     /** То же, но по MAL id (idMal_in) — для записей без anilistId. */
-    suspend fun episodeCheckByMalIds(malIds: List<Int>): Result<List<EpisodeCheckMedia>> = runCatching {
-        if (malIds.isEmpty()) return@runCatching emptyList()
+    suspend fun episodeCheckByMalIds(malIds: List<Int>): Result<List<EpisodeCheckMedia>> = runSuspendCatching {
+        if (malIds.isEmpty()) return@runSuspendCatching emptyList()
         withContext(Dispatchers.IO) {
             malIds.distinct().chunked(EPISODE_CHECK_CHUNK).flatMap { chunk ->
                 rateLimiter.acquire()
@@ -205,8 +206,8 @@ class AniListRemoteDataSource(
     }
 
     /** Связи франшизы по AniList id (до 50 тайтлов на запрос): для отсева рекомендаций из уже имеющихся франшиз. */
-    suspend fun franchiseLinksByAnilistIds(ids: List<Int>): Result<List<FranchiseLinks>> = runCatching {
-        if (ids.isEmpty()) return@runCatching emptyList()
+    suspend fun franchiseLinksByAnilistIds(ids: List<Int>): Result<List<FranchiseLinks>> = runSuspendCatching {
+        if (ids.isEmpty()) return@runSuspendCatching emptyList()
         withContext(Dispatchers.IO) {
             ids.distinct().chunked(EPISODE_CHECK_CHUNK).flatMap { chunk ->
                 rateLimiter.acquire()
@@ -226,8 +227,8 @@ class AniListRemoteDataSource(
     }
 
     /** То же по MAL id: id Shikimori и MAL совпадают, а у их кандидатов AniList id нет. */
-    suspend fun franchiseLinksByMalIds(malIds: List<Int>): Result<List<FranchiseLinks>> = runCatching {
-        if (malIds.isEmpty()) return@runCatching emptyList()
+    suspend fun franchiseLinksByMalIds(malIds: List<Int>): Result<List<FranchiseLinks>> = runSuspendCatching {
+        if (malIds.isEmpty()) return@runSuspendCatching emptyList()
         withContext(Dispatchers.IO) {
             malIds.distinct().chunked(EPISODE_CHECK_CHUNK).flatMap { chunk ->
                 rateLimiter.acquire()
@@ -304,8 +305,8 @@ class AniListRemoteDataSource(
      * Явные названия по AniList id и/или MAL id (idMal) — для обогащения EN-названий.
      * Передай хотя бы один id; AniList игнорирует null-переменную.
      */
-    suspend fun enrichTitlesByIds(anilistId: Int?, malId: Int?): Result<EnrichedTitles?> = runCatching {
-        if (anilistId == null && malId == null) return@runCatching null
+    suspend fun enrichTitlesByIds(anilistId: Int?, malId: Int?): Result<EnrichedTitles?> = runSuspendCatching {
+        if (anilistId == null && malId == null) return@runSuspendCatching null
         withContext(Dispatchers.IO) {
             rateLimiter.acquire()
             val response = apolloClient.query(
@@ -327,8 +328,8 @@ class AniListRemoteDataSource(
     }
 
     /** Явные названия по поиску (для сопоставления, когда id нет). */
-    suspend fun enrichTitlesBySearch(query: String, limit: Int = 8): Result<List<EnrichedTitles>> = runCatching {
-        if (query.isBlank()) return@runCatching emptyList()
+    suspend fun enrichTitlesBySearch(query: String, limit: Int = 8): Result<List<EnrichedTitles>> = runSuspendCatching {
+        if (query.isBlank()) return@runSuspendCatching emptyList()
         withContext(Dispatchers.IO) {
             rateLimiter.acquire()
             val response = apolloClient.query(
@@ -350,7 +351,7 @@ class AniListRemoteDataSource(
         }
     }
 
-    suspend fun findTotalEpisodes(query: String): Result<Pair<Int, String>?> = runCatching {
+    suspend fun findTotalEpisodes(query: String): Result<Pair<Int, String>?> = runSuspendCatching {
         withContext(Dispatchers.IO) {
             rateLimiter.acquire()
             val response = apolloClient.query(SearchMediaQuery(q = Optional.presentIfNotNull(query))).execute()
@@ -368,7 +369,7 @@ class AniListRemoteDataSource(
     }
 
     suspend fun getViewerId(accessToken: String): Result<Int> = withContext(Dispatchers.IO) {
-        runCatching {
+        runSuspendCatching {
             rateLimiter.acquire()
             val response = apolloClient.query(ViewerIdQuery())
                 .addHttpHeader("Authorization", "Bearer $accessToken")
@@ -385,7 +386,7 @@ class AniListRemoteDataSource(
      */
     suspend fun fetchAllAnimeListEntries(accessToken: String, userId: Int): Result<List<AniListFlatListEntry>> =
         withContext(Dispatchers.IO) {
-            runCatching {
+            runSuspendCatching {
                 val all = mutableListOf<AniListFlatListEntry>()
                 var chunk = 1
                 val perChunk = 50
@@ -433,7 +434,7 @@ class AniListRemoteDataSource(
         status: MediaListStatus,
         progress: Int
     ): Result<Unit> = withContext(Dispatchers.IO) {
-        runCatching {
+        runSuspendCatching {
             rateLimiter.acquire()
             val response = apolloClient.mutation(
                 SaveMediaListEntryMutation(
@@ -455,8 +456,8 @@ class AniListRemoteDataSource(
      * Related-рекомендации для всех сидов ОДНИМ запросом (id_in батч).
      * Возвращает map: anilistId сида → его рекомендации.
      */
-    suspend fun recommendationsForIds(ids: List<Int>, perSeed: Int = 12): Result<Map<Int, List<ApiSearchResult>>> = runCatching {
-        if (ids.isEmpty()) return@runCatching emptyMap()
+    suspend fun recommendationsForIds(ids: List<Int>, perSeed: Int = 12): Result<Map<Int, List<ApiSearchResult>>> = runSuspendCatching {
+        if (ids.isEmpty()) return@runSuspendCatching emptyMap()
         withContext(Dispatchers.IO) {
             rateLimiter.acquire()
             val response = apolloClient.query(
@@ -481,7 +482,7 @@ class AniListRemoteDataSource(
     }
 
     /** Глобальный тренд для cold-start — один запрос. */
-    suspend fun trendingAnime(limit: Int = 20): Result<List<ApiSearchResult>> = runCatching {
+    suspend fun trendingAnime(limit: Int = 20): Result<List<ApiSearchResult>> = runSuspendCatching {
         withContext(Dispatchers.IO) {
             rateLimiter.acquire()
             val response = apolloClient.query(
@@ -536,7 +537,7 @@ class AniListRemoteDataSource(
     }
 
     /** Обогащение аниме: точное время следующей серии, официальный трейлер, id MAL. */
-    suspend fun titleEnrichment(id: Int): Result<AniListTitleEnrichment?> = runCatching {
+    suspend fun titleEnrichment(id: Int): Result<AniListTitleEnrichment?> = runSuspendCatching {
         withContext(Dispatchers.IO) {
             rateLimiter.acquire()
             val response = apolloClient.query(TitleEnrichmentQuery(id = Optional.present(id))).execute()

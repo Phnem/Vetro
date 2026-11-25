@@ -1,5 +1,6 @@
 package com.example.myapplication.updates.availability
 
+import com.example.myapplication.utils.runSuspendCatching
 import com.example.myapplication.data.local.AnimeLocalDataSource
 import com.example.myapplication.data.local.ReleaseObservationStore
 import com.example.myapplication.data.local.SeasonEpisodesStore
@@ -29,7 +30,7 @@ class EpisodeSourceAuditor(
         val anime = withContext(Dispatchers.IO) { localDataSource.getAnimeById(update.animeId) } ?: return null
         seasonEpisodesStore.ensureLoaded()
         val layout = seasonEpisodesStore.entryFor(anime.id)
-        val airing = runCatching { withContext(Dispatchers.IO) { localDataSource.getAiringProgressSnapshot() } }
+        val airing = runSuspendCatching { withContext(Dispatchers.IO) { localDataSource.getAiringProgressSnapshot() } }
             .getOrElse { emptyMap() }
         val latest = latestSeasonEpisode(layout, airing[anime.id])
         val seasonInfo = latest?.let { position -> layout?.seasons?.firstOrNull { it.seasonNumber == position.season } }

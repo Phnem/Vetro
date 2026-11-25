@@ -1,5 +1,6 @@
 package com.example.myapplication.media.subtitles.whisper
 
+import com.example.myapplication.utils.runSuspendCatching
 import java.io.File
 import java.io.RandomAccessFile
 import java.security.MessageDigest
@@ -75,7 +76,7 @@ class WhisperModelStore(
     fun download(model: WhisperModel) {
         if (jobs[model]?.isActive == true || states.value[model] is ModelState.Ready) return
         jobs[model] = scope.launch(Dispatchers.IO) {
-            val result = runCatching { fetch(model) }
+            val result = runSuspendCatching { fetch(model) }
             val state = result.fold({ it }, { e ->
                 if (e is CancellationException) ModelState.Absent else ModelState.Failed(ModelFailure.NETWORK)
             })

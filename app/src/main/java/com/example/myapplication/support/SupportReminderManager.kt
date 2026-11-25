@@ -1,5 +1,6 @@
 package com.example.myapplication.support
 
+import com.example.myapplication.utils.runSuspendCatching
 import android.content.Context
 import android.os.SystemClock
 import android.provider.Settings
@@ -70,7 +71,7 @@ class SupportReminderStore(private val store: DataStore<Preferences>) {
     suspend fun load(): SupportReminderState = runCatching { decode(store.data.first()) }.getOrDefault(SupportReminderState())
 
     suspend fun save(s: SupportReminderState) {
-        runCatching { store.edit { encode(it, s) } }
+        runSuspendCatching { store.edit { encode(it, s) } }
     }
 
     private fun decode(p: Preferences): SupportReminderState {

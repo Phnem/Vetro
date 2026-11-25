@@ -1,5 +1,6 @@
 package com.example.myapplication.media.source.vfmodule
 
+import com.example.myapplication.utils.runSuspendCatching
 import android.net.Uri
 import android.util.Base64
 import android.util.Log
@@ -188,7 +189,7 @@ object VfConstants {
         headers: Map<String, String> = emptyMap(),
         providerKey: String? = null,
     ): List<VetroVideo> {
-        return runCatching {
+        return runSuspendCatching {
             val content = client.get(masterUrl) {
                 headers.forEach { (k, v) -> header(k, v) }
             }.bodyAsText()

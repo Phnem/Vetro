@@ -1,5 +1,6 @@
 package com.example.myapplication.manga.ui
 
+import com.example.myapplication.utils.runSuspendCatching
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.runtime.Composable
@@ -67,7 +68,7 @@ fun rememberReaderAmbient(
     LaunchedEffect(active, revision) {
         if (!active) return@LaunchedEffect
         delay(SampleDelayMs)
-        val bitmap = runCatching { layer.toImageBitmap() }.getOrNull() ?: return@LaunchedEffect
+        val bitmap = runSuspendCatching { layer.toImageBitmap() }.getOrNull() ?: return@LaunchedEffect
         val luminance = withContext(Dispatchers.Default) { bitmap.dockBandLuminance(buffer) }
             ?: return@LaunchedEffect
         pageIsLight = contentIsLight(luminance, pageIsLight)

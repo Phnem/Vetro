@@ -1,5 +1,6 @@
 package com.example.myapplication.audiobooks.ui
 
+import com.example.myapplication.utils.runSuspendCatching
 import com.example.myapplication.ui.shared.mininotif.MiniNotif
 import com.example.myapplication.ui.shared.mininotif.MiniNotifKind
 import com.example.myapplication.ui.shared.mininotif.MiniNotifCardStrings
@@ -243,12 +244,12 @@ fun AudiobookPlayerHost(language: AppLanguage = AppLanguage.RU, modifier: Modifi
     }
     LaunchedEffect(variant, recoveredEntry?.applied) {
         state.timeline = variant?.let { v ->
-            runCatching { resolver.manifest(v).let { BookTimeline(it.tracks, it.chapters) } }.getOrNull()
+            runSuspendCatching { resolver.manifest(v).let { BookTimeline(it.tracks, it.chapters) } }.getOrNull()
         }
         // Своя книга без разметки — главы ищутся сами, в фоне; результат ждёт согласия в «Главах».
         // С сайта — только по кнопке: книгу пришлось бы скачать целиком.
         if (variant != null && variant.value.startsWith("local:") && recoveredStore.get(variant) == null) {
-            val raw = runCatching { resolver.rawManifest(variant) }.getOrNull()
+            val raw = runSuspendCatching { resolver.rawManifest(variant) }.getOrNull()
             if (raw != null && com.example.myapplication.audiobooks.chapters.ChapterRecoveryManager.needsRecovery(raw)) {
                 chapterRecovery.start(variant, strings.russian)
             }

@@ -1,5 +1,6 @@
 package com.example.myapplication
 
+import com.example.myapplication.utils.runSuspendCatching
 import com.example.myapplication.ui.shared.theme.iosOverscrollFactory
 import androidx.compose.foundation.LocalOverscrollFactory
 import android.content.Intent
@@ -151,7 +152,7 @@ class MainActivity : FragmentActivity() {
                     if (splashVisible || !destination.isDeepLinkReady()) return@LaunchedEffect
                     pendingAnimeId.value = null
                     // Пуш открыт — прочитано и в колокольчике приложения.
-                    runCatching { animeLocalData.removeUpdate(animeId) }
+                    runSuspendCatching { animeLocalData.removeUpdate(animeId) }
                     // Из плеера «Выйти» зовёт сюда же: если Details этого тайтла уже под плеером, второй не кладём.
                     val shown = navEntry
                     val alreadyOnTitle = shown?.destination?.hasRoute<com.example.myapplication.ui.navigation.DetailsRoute>() == true &&

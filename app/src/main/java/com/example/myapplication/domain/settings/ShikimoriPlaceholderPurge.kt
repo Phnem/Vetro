@@ -1,5 +1,6 @@
 package com.example.myapplication.domain.settings
 
+import com.example.myapplication.utils.runSuspendCatching
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Color
@@ -56,7 +57,7 @@ class ShikimoriPlaceholderPurge(
     /** Эталонные хеши заглушки (все размеры — одна картинка, но хешируем каждый URL). */
     private suspend fun referenceHashes(sessionLog: RepairDbSessionLog): List<Long> =
         PLACEHOLDER_URLS.mapNotNull { url ->
-            runCatching {
+            runSuspendCatching {
                 val bytes = httpClient.get(url).bodyAsBytes()
                 val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
                     ?: error("decode failed")

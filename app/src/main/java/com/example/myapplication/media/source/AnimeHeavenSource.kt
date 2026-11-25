@@ -1,5 +1,6 @@
 package com.example.myapplication.media.source
 
+import com.example.myapplication.utils.runSuspendCatching
 import android.util.Log
 import com.example.myapplication.data.models.Anime
 import com.example.myapplication.domain.seasons.DiscoveredSeason
@@ -80,7 +81,7 @@ class AnimeHeavenSource(
         val siblings = if (seasonTitle == null) {
             emptyList()
         } else {
-            runCatching { seasonTitles(anime.id) }.getOrElse { emptyList() }
+            runSuspendCatching { seasonTitles(anime.id) }.getOrElse { emptyList() }
                 .filter { it.isNotBlank() && !it.equals(seasonTitle, ignoreCase = true) }
         }
         val cacheKey = "${titles.joinToString("|") { it.lowercase() }}#$targetSeason"
@@ -253,7 +254,7 @@ class AnimeHeavenSource(
         return picked.entry
     }
 
-    private suspend fun search(query: String): List<Entry> = runCatching {
+    private suspend fun search(query: String): List<Entry> = runSuspendCatching {
         val html = getText(
             "$baseUrl/search.php?s=${URLEncoder.encode(query, "UTF-8")}",
             extraHeaders = mapOf("Referer" to "$baseUrl/"),
@@ -273,7 +274,7 @@ class AnimeHeavenSource(
     // ==========================================================
 
     /** Episode number → gate key, for every episode the site actually has (ongoing = aired only). */
-    private suspend fun episodeKeys(animeId: String): Map<Int, String> = runCatching {
+    private suspend fun episodeKeys(animeId: String): Map<Int, String> = runSuspendCatching {
         val html = getText(
             "$baseUrl/anime.php?$animeId",
             extraHeaders = mapOf("Referer" to "$baseUrl/search.php"),
@@ -300,7 +301,7 @@ class AnimeHeavenSource(
     // Gate → direct MP4 mirrors
     // ==========================================================
 
-    private suspend fun scrapeGate(animeId: String, episodeKey: String): List<VetroVideo> = runCatching {
+    private suspend fun scrapeGate(animeId: String, episodeKey: String): List<VetroVideo> = runSuspendCatching {
         val pageUrl = "$baseUrl/anime.php?$animeId"
         val html = getText(
             "$baseUrl/gate.php",

@@ -1,5 +1,6 @@
 package com.example.myapplication.network
 
+import com.example.myapplication.utils.runSuspendCatching
 import io.ktor.client.HttpClient
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
@@ -30,7 +31,7 @@ class TraceMoeRemoteDataSource(
         contentType: ContentType,
         withAnilistInfo: Boolean
     ): Result<TraceMoeSearchResult> = withContext(Dispatchers.IO) {
-        runCatching {
+        runSuspendCatching {
             val url = if (withAnilistInfo) {
                 "https://api.trace.moe/search?anilistInfo"
             } else {

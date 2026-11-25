@@ -1,5 +1,6 @@
 package com.example.myapplication.updates
 
+import com.example.myapplication.utils.runSuspendCatching
 import com.example.myapplication.data.local.AnimeLocalDataSource
 import com.example.myapplication.data.local.SeriesSeasonsStore
 import com.example.myapplication.data.models.Anime
@@ -126,7 +127,7 @@ class SeriesEpisodeCheckUseCase internal constructor(
             detected = detected,
             getExisting = store::getUpdates,
             applyEpisodes = { update -> store.applyEpisodes(update.animeId, update.newEpisodes) },
-            silenced = runCatching { mutedTitles() }.getOrDefault(emptySet()),
+            silenced = runSuspendCatching { mutedTitles() }.getOrDefault(emptySet()),
             setUpdates = store::setUpdates,
         )
     }

@@ -1,5 +1,6 @@
 package com.example.myapplication.data.remote
 
+import com.example.myapplication.utils.runSuspendCatching
 import com.example.myapplication.network.AppJson
 import com.example.myapplication.network.AppContentType
 import io.ktor.client.HttpClient
@@ -29,7 +30,7 @@ import kotlinx.serialization.json.put
 class GeminiStructuredClient(
     private val httpClient: HttpClient
 ) {
-    suspend fun validateApiKey(apiKey: String): Result<Unit> = runCatching {
+    suspend fun validateApiKey(apiKey: String): Result<Unit> = runSuspendCatching {
         requireConfigured(apiKey)
         val body = buildGeminiJsonRequest(
             textPrompt = "Reply with {\"ok\": true}.",
@@ -50,7 +51,7 @@ class GeminiStructuredClient(
         romaji: String,
         english: String,
         apiKey: String
-    ): Result<String> = runCatching {
+    ): Result<String> = runSuspendCatching {
         requireConfigured(apiKey)
         val prompt =
             "You are helping a Russian anime database search. Given official titles: romaji=\"$romaji\", english=\"$english\". " +
@@ -71,7 +72,7 @@ class GeminiStructuredClient(
         imageBase64: String,
         mimeType: String,
         apiKey: String
-    ): Result<Pair<String, AppContentType>> = runCatching {
+    ): Result<Pair<String, AppContentType>> = runSuspendCatching {
         requireConfigured(apiKey)
         val prompt =
             "Identify the movie, TV series, or anime from this screenshot. " +

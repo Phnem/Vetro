@@ -1,5 +1,6 @@
 package com.example.myapplication.media.source.vftmodule
 
+import com.example.myapplication.utils.runSuspendCatching
 import com.example.myapplication.data.models.MediaType
 import com.example.myapplication.media.source.vftmodule.clients.JackettClient
 import com.example.myapplication.media.source.vftmodule.scrapers.NyaaScraper
@@ -77,7 +78,7 @@ class VftTorrentSearcher(
         // Запуск параллельного сбора результатов
         val deferredList = searchTasks.map { task ->
             async {
-                runCatching { task() }.getOrDefault(emptyList())
+                runSuspendCatching { task() }.getOrDefault(emptyList())
             }
         }
 

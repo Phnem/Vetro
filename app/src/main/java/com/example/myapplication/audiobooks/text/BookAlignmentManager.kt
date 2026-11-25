@@ -1,5 +1,6 @@
 package com.example.myapplication.audiobooks.text
 
+import com.example.myapplication.utils.runSuspendCatching
 import android.content.Context
 import android.net.Uri
 import android.os.BatteryManager
@@ -239,7 +240,7 @@ class BookAlignmentManager(
             sourceKey = link?.key,
         )
         val candidates = sources.flatMap { s ->
-            runCatching { s.find(query) }
+            runSuspendCatching { s.find(query) }
                 .onFailure { Log.w(TAG, "find ${s.id}: ${it.message}") }
                 .getOrDefault(emptyList())
                 .also { found -> Log.i(TAG, "find ${s.id}: ${found.size} (${found.take(3).joinToString { "${it.title}/${TextMatch.score(query, it)}" }})") }
@@ -253,7 +254,7 @@ class BookAlignmentManager(
 
         var sawText = false
         for ((source, candidate, _) in candidates) {
-            val text = runCatching { source.load(candidate) }.onFailure { Log.w(TAG, "load ${source.id}: ${it.message}") }.getOrNull() ?: continue
+            val text = runSuspendCatching { source.load(candidate) }.onFailure { Log.w(TAG, "load ${source.id}: ${it.message}") }.getOrNull() ?: continue
             if (query.language != null && text.language != null && text.language.take(2) != query.language) continue
             sawText = true
             val model = modelFile() ?: run { set(variant, BookTextState.NeedsModel(source.displayName)); return null }

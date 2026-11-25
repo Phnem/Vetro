@@ -1,5 +1,6 @@
 package com.example.myapplication.sync
 
+import com.example.myapplication.utils.runSuspendCatching
 import com.example.myapplication.AppScope
 import com.example.myapplication.network.AppJson
 import android.app.Activity
@@ -426,7 +427,7 @@ class ExternalListSyncCoordinator(
                 } else errors++
             } else {
                 if (remote.episodes > local.episodes) {
-                    runCatching {
+                    runSuspendCatching {
                         animeLocalDataSource.updateAnime(local.copy(episodes = remote.episodes))
                     }.onSuccess { updated++ }
                         .onFailure {
@@ -456,8 +457,8 @@ class ExternalListSyncCoordinator(
             val remote = pickBestRemoteForLocal(local, snapshot.rates, usedRemoteRateIds)
             if (remote != null) usedRemoteRateIds.add(remote.rateId)
             if (remote == null) {
-                val ok = runCatching {
-                    val animeId = findShikimoriAnimeIdByTitle(local.title) ?: return@runCatching false
+                val ok = runSuspendCatching {
+                    val animeId = findShikimoriAnimeIdByTitle(local.title) ?: return@runSuspendCatching false
                     updateMessage("Отправка данных...")
                     createShikiRate(
                         userId = snapshot.userId,
@@ -473,7 +474,7 @@ class ExternalListSyncCoordinator(
                 }
                 if (ok) pushed++ else errors++
             } else if (local.episodes > remote.episodes) {
-                val ok = runCatching {
+                val ok = runSuspendCatching {
                     updateMessage("Отправка данных...")
                     patchShikiRate(
                         rateId = remote.rateId,
@@ -523,7 +524,7 @@ class ExternalListSyncCoordinator(
                 usedLocalIds.add(local.id)
                 val nextEpisodes = maxOf(local.episodes, remote.episodes)
                 if (nextEpisodes > local.episodes) {
-                    runCatching {
+                    runSuspendCatching {
                         animeLocalDataSource.updateAnime(local.copy(episodes = nextEpisodes))
                     }.onSuccess { updated++ }
                         .onFailure {
@@ -546,8 +547,8 @@ class ExternalListSyncCoordinator(
             val remote = pickBestRemoteForLocal(local, remoteAfterPull, usedRemoteRateIds)
             if (remote != null) usedRemoteRateIds.add(remote.rateId)
             if (remote == null) {
-                val ok = runCatching {
-                    val animeId = findShikimoriAnimeIdByTitle(local.title) ?: return@runCatching false
+                val ok = runSuspendCatching {
+                    val animeId = findShikimoriAnimeIdByTitle(local.title) ?: return@runSuspendCatching false
                     updateMessage("Отправка данных...")
                     createShikiRate(
                         userId = snapshot.userId,
@@ -563,7 +564,7 @@ class ExternalListSyncCoordinator(
                 }
                 if (ok) pushed++ else errors++
             } else if (local.episodes > remote.episodes) {
-                val ok = runCatching {
+                val ok = runSuspendCatching {
                     updateMessage("Отправка данных...")
                     patchShikiRate(
                         rateId = remote.rateId,
@@ -652,7 +653,7 @@ class ExternalListSyncCoordinator(
                 val inserted = animeLocalDataSource.getAllAnimeList()
                     .firstOrNull { local -> TitleMatcher.isMatch(local.title, candidates) }
                 if (inserted != null && progress > inserted.episodes) {
-                    runCatching { animeLocalDataSource.updateAnime(inserted.copy(episodes = progress)) }
+                    runSuspendCatching { animeLocalDataSource.updateAnime(inserted.copy(episodes = progress)) }
                         .onFailure { e -> Log.w(TAG, "Failed to apply AniList progress for $mediaId", e) }
                 }
                 true
@@ -700,7 +701,7 @@ class ExternalListSyncCoordinator(
             else -> AppContentType.ANIME
         }
 
-        val total = runCatching {
+        val total = runSuspendCatching {
             animeRepository.findTotalEpisodes(local.title, local.categoryType, contentType).getOrNull()?.first
         }.getOrNull()?.takeIf { it > 0 }
 
@@ -746,7 +747,7 @@ class ExternalListSyncCoordinator(
                 } else errors++
             } else {
                 if (remote.progress > local.episodes) {
-                    runCatching {
+                    runSuspendCatching {
                         animeLocalDataSource.updateAnime(local.copy(episodes = remote.progress))
                     }.onSuccess { updated++ }
                         .onFailure {
@@ -816,7 +817,7 @@ class ExternalListSyncCoordinator(
                 usedLocalIds.add(local.id)
                 val nextEpisodes = maxOf(local.episodes, remote.progress)
                 if (nextEpisodes > local.episodes) {
-                    runCatching {
+                    runSuspendCatching {
                         animeLocalDataSource.updateAnime(local.copy(episodes = nextEpisodes))
                     }.onSuccess { updated++ }
                         .onFailure {
@@ -948,7 +949,7 @@ class ExternalListSyncCoordinator(
     private suspend fun importMissingFromRemote(remote: RemoteRate): Boolean {
         val query = remote.titleRu?.takeIf { it.isNotBlank() } ?: remote.titleEn
         updateMessage("Получение данных с сервера...")
-        val result = runCatching {
+        val result = runSuspendCatching {
             animeRepository.searchAnimeShikimoriOnly(query, AppLanguage.RU, allowZeroEpisodes = true)
                 .getOrElse { emptyList() }
                 .firstOrNull()
@@ -967,7 +968,7 @@ class ExternalListSyncCoordinator(
                     TitleMatcher.isMatch(local.title, listOfNotNull(remote.titleRu, remote.titleEn))
                 }
                 if (inserted != null && remote.episodes > inserted.episodes) {
-                    runCatching {
+                    runSuspendCatching {
                         animeLocalDataSource.updateAnime(inserted.copy(episodes = remote.episodes))
                     }.onFailure { Log.w(TAG, "Failed to apply remote progress for $query", it) }
                 }
@@ -1062,7 +1063,7 @@ class ExternalListSyncCoordinator(
             else -> AppContentType.ANIME
         }
 
-        val total = runCatching {
+        val total = runSuspendCatching {
             animeRepository.findTotalEpisodes(local.title, local.categoryType, contentType).getOrNull()?.first
         }.getOrNull()?.takeIf { it > 0 }
 

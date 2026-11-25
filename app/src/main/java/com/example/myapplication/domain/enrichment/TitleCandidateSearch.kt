@@ -1,5 +1,6 @@
 package com.example.myapplication.domain.enrichment
 
+import com.example.myapplication.utils.runSuspendCatching
 import com.example.myapplication.data.models.Anime
 import com.example.myapplication.data.repository.AnimeRepository
 import com.example.myapplication.domain.normalizeForSearch
@@ -121,10 +122,10 @@ class TitleCandidateSearch(private val repository: AnimeRepository,
     }
 
     private suspend fun single(source: String, block: suspend () -> ApiSearchResult?): List<Hit> =
-        listOfNotNull(withTimeoutOrNull(TIMEOUT_MS) { runCatching { block() }.getOrNull() }?.let { source to it })
+        listOfNotNull(withTimeoutOrNull(TIMEOUT_MS) { runSuspendCatching { block() }.getOrNull() }?.let { source to it })
 
     private suspend fun many(source: String, block: suspend () -> List<ApiSearchResult>?): List<Hit> =
-        withTimeoutOrNull(TIMEOUT_MS) { runCatching { block() }.getOrNull() }.orEmpty().map { source to it }
+        withTimeoutOrNull(TIMEOUT_MS) { runSuspendCatching { block() }.getOrNull() }.orEmpty().map { source to it }
 
     private fun defaultQueries(anime: Anime): List<String> =
         listOfNotNull(anime.titleRu, anime.title, anime.titleEn)

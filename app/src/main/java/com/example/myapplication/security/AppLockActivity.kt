@@ -1,5 +1,6 @@
 package com.example.myapplication.security
 
+import com.example.myapplication.utils.runSuspendCatching
 import android.content.Context
 import android.content.Intent
 import android.os.Build
@@ -104,7 +105,7 @@ class AppLockActivity : FragmentActivity() {
             }
         }
         lifecycleScope.launch {
-            val preferences = runCatching {
+            val preferences = runSuspendCatching {
                 GlobalContext.get().get<DataStore<Preferences>>(named("settings")).data.first()
             }.getOrNull()
             if (preferences != null) {

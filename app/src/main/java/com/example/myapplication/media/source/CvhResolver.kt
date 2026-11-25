@@ -1,5 +1,6 @@
 package com.example.myapplication.media.source
 
+import com.example.myapplication.utils.runSuspendCatching
 import com.example.myapplication.network.AppJson
 import android.util.Log
 import io.ktor.client.HttpClient
@@ -41,7 +42,7 @@ class CvhResolver(
      * Пустой список означает «CVH не отдал ничего»: вызывающая сторона обязана продолжить
      * без него, поэтому исключения гасим здесь и наружу не пускаем.
      */
-    suspend fun fetchPlaylist(cvhId: String): List<PlaylistItem> = runCatching {
+    suspend fun fetchPlaylist(cvhId: String): List<PlaylistItem> = runSuspendCatching {
         val body = client.get("$API_BASE/playlist") {
             parameter("pub", PUB)
             parameter("aggr", AGGR)
@@ -50,7 +51,7 @@ class CvhResolver(
         }.bodyAsText()
 
         val items = json.parseToJsonElement(body).jsonObject["items"]?.jsonArray
-            ?: return@runCatching emptyList<PlaylistItem>()
+            ?: return@runSuspendCatching emptyList<PlaylistItem>()
 
         items.mapNotNull { element ->
             val item = element as? JsonObject ?: return@mapNotNull null
@@ -89,13 +90,13 @@ class CvhResolver(
      * [VetroVideo] с разрешением, разобранным из имени поля (`url720` → 720). Адаптивные
      * манифесты добавляем рядом: они одни умеют переключать битрейт на лету.
      */
-    suspend fun fetchStreams(vkId: String): List<VetroVideo> = runCatching {
+    suspend fun fetchStreams(vkId: String): List<VetroVideo> = runSuspendCatching {
         val body = client.get("$API_BASE/video/$vkId") {
             CVH_HEADERS.forEach { (key, value) -> header(key, value) }
         }.bodyAsText()
 
         val sources = json.parseToJsonElement(body).jsonObject["sources"] as? JsonObject
-            ?: return@runCatching emptyList<VetroVideo>()
+            ?: return@runSuspendCatching emptyList<VetroVideo>()
 
         fun url(key: String): String? = sources.text(key)
             ?.takeIf { it.startsWith("http://") || it.startsWith("https://") }

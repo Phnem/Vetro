@@ -1,5 +1,6 @@
 package com.example.myapplication.domain.settings
 
+import com.example.myapplication.utils.runSuspendCatching
 import com.example.myapplication.data.models.Anime
 import com.example.myapplication.data.models.MediaType
 import com.example.myapplication.domain.enrichment.TitleInfoEnricher
@@ -64,7 +65,7 @@ class RepairAnimeDbUseCase(
     ): RepairAnimeDbResult {
         // Сначала снять чужую привязку (id/обложка от постороннего тайтла), иначе дальнейшие проходы
         // будут «чинить» запись по чужим id.
-        runCatching { purgeForeignMatches(repository.getAllAnimeSnapshot(), language, sessionLog) }
+        runSuspendCatching { purgeForeignMatches(repository.getAllAnimeSnapshot(), language, sessionLog) }
             .onFailure { e -> sessionLog.warn("Foreign match audit failed", e) }
 
         // Отдельный проход: сверить и починить malId по настоящему myanimelist_id из Shikimori
@@ -73,7 +74,7 @@ class RepairAnimeDbUseCase(
 
         // Чистка старых постеров-заглушек Shikimori: файл удаляется, запись падает
         // в missingImage-пробел и в этом же проходе получает нормальный постер.
-        runCatching { placeholderPurge.purge(repository.getAllAnimeSnapshot(), sessionLog) }
+        runSuspendCatching { placeholderPurge.purge(repository.getAllAnimeSnapshot(), sessionLog) }
             .onFailure { e -> sessionLog.warn("Placeholder purge failed", e) }
 
         val all = repository.getAllAnimeSnapshot() // перечитываем: malId мог измениться после реконсиляции
@@ -131,7 +132,7 @@ class RepairAnimeDbUseCase(
                 realMalId == null -> sessionLog.debug(
                     "No myanimelist_id for \"${anime.title}\" (shikimori=$shikiId); malId=${anime.malId} оставлен",
                 )
-                realMalId != anime.malId -> runCatching { repository.setMalId(anime.id, realMalId) }
+                realMalId != anime.malId -> runSuspendCatching { repository.setMalId(anime.id, realMalId) }
                     .onSuccess {
                         fixed++
                         sessionLog.info(
@@ -162,7 +163,7 @@ class RepairAnimeDbUseCase(
      * сети — не проверена), и повторять проход не нужно.
      */
     suspend fun auditForeignMatches(language: AppLanguage, sessionLog: RepairDbSessionLog): Boolean =
-        runCatching { purgeForeignMatches(repository.getAllAnimeSnapshot(), language, sessionLog) }
+        runSuspendCatching { purgeForeignMatches(repository.getAllAnimeSnapshot(), language, sessionLog) }
             .onFailure { e -> sessionLog.warn("Foreign match audit failed", e) }
             .getOrDefault(false)
 
@@ -189,7 +190,7 @@ class RepairAnimeDbUseCase(
             when {
                 remote == null -> unverified++
                 isForeignMatch(russianNamesOf(anime), remote) ->
-                    runCatching { purgeForeignMatch(anime, lookupId, language, sessionLog) }
+                    runSuspendCatching { purgeForeignMatch(anime, lookupId, language, sessionLog) }
                         .onSuccess { purged++ }
                         .onFailure { e ->
                             unverified++
@@ -333,7 +334,7 @@ class RepairAnimeDbUseCase(
                 candidates.joinToString { "\"${it.title}\" via ${it.source}" },
         )
 
-        val changed = runCatching { applyRepair(repairAnime, candidates, gaps, sessionLog) }
+        val changed = runSuspendCatching { applyRepair(repairAnime, candidates, gaps, sessionLog) }
             .onFailure { e -> sessionLog.warn("Repair error for \"${anime.title}\"", e) }
             .getOrDefault(false)
         if (movieLookup != null) persistProviderNoMatches(repairAnime, gaps, movieLookup)

@@ -1,5 +1,6 @@
 package com.example.myapplication.ui.home.recommendations
 
+import com.example.myapplication.utils.runSuspendCatching
 import com.example.myapplication.data.local.AppLanguagePrefs
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
@@ -127,7 +128,7 @@ class RecommendationsViewModel(
     }
 
     /** Язык — прямым чтением DataStore: StateFlow при первом запуске может ещё держать дефолт. */
-    private suspend fun readLanguage(): AppLanguage = runCatching {
+    private suspend fun readLanguage(): AppLanguage = runSuspendCatching {
         AppLanguagePrefs.current(settingsDataStore)
     }.getOrElse { AppLanguage.EN }
 

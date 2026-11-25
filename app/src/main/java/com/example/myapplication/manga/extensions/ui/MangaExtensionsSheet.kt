@@ -1,5 +1,6 @@
 package com.example.myapplication.manga.extensions.ui
 
+import com.example.myapplication.utils.runSuspendCatching
 import com.example.myapplication.ui.shared.components.SpringyBasicTextField
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -95,7 +96,7 @@ fun MangaExtensionsSheet(
     LaunchedEffect(reloadKey) {
         catalogFailed = false
         manager.ensureLoaded()
-        runCatching { manager.catalog(forceRefresh = reloadKey > 0) }
+        runSuspendCatching { manager.catalog(forceRefresh = reloadKey > 0) }
             .onSuccess { catalog = it }
             .onFailure { catalogFailed = true }
     }

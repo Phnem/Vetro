@@ -1,5 +1,6 @@
 package com.example.myapplication.media.remote
 
+import com.example.myapplication.utils.runSuspendCatching
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -28,7 +29,7 @@ class RemotePlaybackService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_STOP) {
-            appScope.launch { runCatching { manager.disconnect(stopPlayback = true) } }
+            appScope.launch { runSuspendCatching { manager.disconnect(stopPlayback = true) } }
             stopSelf()
             return START_NOT_STICKY
         }

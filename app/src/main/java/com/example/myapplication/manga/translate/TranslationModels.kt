@@ -1,5 +1,6 @@
 package com.example.myapplication.manga.translate
 
+import com.example.myapplication.utils.runSuspendCatching
 import android.content.Context
 import android.util.Log
 import kotlinx.coroutines.CancellationException
@@ -135,7 +136,7 @@ class TranslationModelStore(
         withContext(Dispatchers.IO) {
             val total = TranslationModels.TOTAL_BYTES
             val speed = SpeedMeter()
-            runCatching {
+            runSuspendCatching {
                 directory.mkdirs()
                 var doneBytes = 0L
                 for (spec in TranslationModels.SPECS) {

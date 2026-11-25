@@ -1,7 +1,7 @@
 package com.example.myapplication.audiobooks.data.remote.web
 
 import com.example.myapplication.media.source.await
-import com.example.myapplication.utils.runSuspendCatching
+import com.example.myapplication.media.source.runCatchingCancellable
 import kotlin.coroutines.cancellation.CancellationException
 import com.example.myapplication.audiobooks.domain.source.Availability
 import com.example.myapplication.audiobooks.domain.source.FailureKind
@@ -143,7 +143,7 @@ class SourceHttp(
 
 /** Преобразование удачного ответа; исключение парсера — сбой разбора, а не падение. */
 internal inline fun <T, R> SourceResult<T>.mapOk(transform: (T) -> R): SourceResult<R> = when (this) {
-    is SourceResult.Ok -> runSuspendCatching { SourceResult.Ok(transform(value)) }
+    is SourceResult.Ok -> runCatchingCancellable { SourceResult.Ok(transform(value)) }
         .getOrElse { SourceResult.Failed(FailureKind.PARSE, it) }
     is SourceResult.Restricted -> this
     is SourceResult.Failed -> this
@@ -151,7 +151,7 @@ internal inline fun <T, R> SourceResult<T>.mapOk(transform: (T) -> R): SourceRes
 
 /** Как [mapOk], но разбор сам решает, что страница — не книга (null → сбой разбора). */
 internal inline fun <T, R : Any> SourceResult<T>.parseOk(transform: (T) -> SourceResult<R>): SourceResult<R> = when (this) {
-    is SourceResult.Ok -> runSuspendCatching { transform(value) }.getOrElse { SourceResult.Failed(FailureKind.PARSE, it) }
+    is SourceResult.Ok -> runCatchingCancellable { transform(value) }.getOrElse { SourceResult.Failed(FailureKind.PARSE, it) }
     is SourceResult.Restricted -> this
     is SourceResult.Failed -> this
 }

@@ -1,5 +1,6 @@
 package com.example.myapplication.domain.enrichment
 
+import com.example.myapplication.utils.runSuspendCatching
 import com.example.myapplication.domain.BackgroundSchedule
 import com.example.myapplication.AppScope
 import android.content.Context
@@ -58,7 +59,7 @@ class CollectionEnrichmentCoordinator(
 
     init {
         scope.launch {
-            val prefs = runCatching { settingsDataStore.data.first() }.getOrNull() ?: return@launch
+            val prefs = runSuspendCatching { settingsDataStore.data.first() }.getOrNull() ?: return@launch
             if (prefs[DevPreferencesKeys.PENDING_FULL_ENRICHMENT_PROMPT] == true) {
                 _prompt.value = FullEnrichmentPrompt(
                     prefs[DevPreferencesKeys.PENDING_FULL_ENRICHMENT_GAP_COUNT] ?: 0,
@@ -79,7 +80,7 @@ class CollectionEnrichmentCoordinator(
     }
 
     private suspend fun isForeignMatchAuditDone(): Boolean {
-        val prefs = runCatching { settingsDataStore.data.first() }.getOrNull() ?: return true
+        val prefs = runSuspendCatching { settingsDataStore.data.first() }.getOrNull() ?: return true
         return prefs[DevPreferencesKeys.FOREIGN_MATCH_AUDIT_DONE] == true
     }
 

@@ -1,5 +1,6 @@
 package com.example.myapplication.audiobooks.ui.home
 
+import com.example.myapplication.utils.runSuspendCatching
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.media3.common.util.UnstableApi
@@ -33,7 +34,7 @@ class BooksHomeViewModel(
 
     init {
         // Книги из каталога, добавленные без озвучки: пока раздел открыт, ищем им озвучку у источников.
-        viewModelScope.launch { runCatching { adder.attachPending() } }
+        viewModelScope.launch { runSuspendCatching { adder.attachPending() } }
     }
 
     /**
@@ -100,9 +101,9 @@ class BooksHomeViewModel(
     init {
         // Папки, добавленные раньше отдельной страницей, — в библиотеку (один раз на папку).
         viewModelScope.launch {
-            runCatching { importer.syncExisting() }
+            runSuspendCatching { importer.syncExisting() }
             // Потом — обложки книгам, у которых их нет (каталоги и английские названия).
-            runCatching { importer.backfillCovers() }
+            runSuspendCatching { importer.backfillCovers() }
         }
         viewModelScope.launch {
             _weekListenedMs.value = repository.listenedSince(System.currentTimeMillis() - WEEK_MS)
@@ -155,7 +156,7 @@ class BooksHomeViewModel(
     private fun start(key: String, block: suspend () -> AudiobookLauncher.Result) {
         _launch.value = LaunchState.Starting(key)
         viewModelScope.launch {
-            _launch.value = when (runCatching { block() }.getOrNull()) {
+            _launch.value = when (runSuspendCatching { block() }.getOrNull()) {
                 AudiobookLauncher.Result.Started -> LaunchState.Started
                 AudiobookLauncher.Result.Restricted -> LaunchState.Restricted
                 else -> LaunchState.Unavailable

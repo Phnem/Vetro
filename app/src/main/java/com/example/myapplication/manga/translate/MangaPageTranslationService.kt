@@ -1,5 +1,6 @@
 package com.example.myapplication.manga.translate
 
+import com.example.myapplication.utils.runSuspendCatching
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
@@ -232,7 +233,7 @@ class MangaPageTranslationService(
         val numberedPage = if (ctx.sourceLanguage == JAPANESE) null else withContext(Dispatchers.Default) { numberedJpeg(bitmap, page) }
         repeat(MODEL_ATTEMPTS) {
             if (remaining.isEmpty()) return@repeat
-            val work = runCatching { ctx.work() }.getOrDefault(TranslationPrompt.WorkContext("", null))
+            val work = runSuspendCatching { ctx.work() }.getOrDefault(TranslationPrompt.WorkContext("", null))
             val reply = if (numberedPage == null) {
                 askModel { router.completeText(userPrompt = TranslationPrompt.userMessage(work, ctx.target, remaining), systemPrompt = TranslationPrompt.SYSTEM, jsonMode = false) }
             } else {
@@ -326,7 +327,7 @@ class MangaPageTranslationService(
     // ---- картинка ----
 
     private suspend fun loadBitmap(page: MangaPage): Bitmap? = withContext(Dispatchers.IO) {
-        val bytes = runCatching {
+        val bytes = runSuspendCatching {
             if (page.isLocal) File(requireNotNull(Uri.parse(page.url).path)).readBytes() else download(page)
         }.getOrNull() ?: return@withContext null
         decodeCapped(bytes)

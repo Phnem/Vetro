@@ -1,5 +1,6 @@
 package com.example.myapplication.domain.calendar
 
+import com.example.myapplication.utils.runSuspendCatching
 import com.example.myapplication.data.local.AnimeLocalDataSource
 import com.example.myapplication.data.local.ReleaseObservationStore
 import com.example.myapplication.data.local.SeasonEpisodesStore
@@ -88,7 +89,7 @@ class ReleaseCalendarRepository(
                 async {
                     val ref = seasonRef(anime)
                     val next = gate.withPermit {
-                        runCatching { enrichment.nextRelease(anime, language, ref) }.getOrNull()
+                        runSuspendCatching { enrichment.nextRelease(anime, language, ref) }.getOrNull()
                     }
                     val progress = airing[anime.id]
                     ReleaseProjection.forTitle(

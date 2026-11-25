@@ -1,5 +1,6 @@
 package com.example.myapplication.media.source.vfmodule
 
+import com.example.myapplication.utils.runSuspendCatching
 import android.util.Log
 import com.example.myapplication.media.source.VetroVideo
 import io.ktor.client.HttpClient
@@ -23,7 +24,7 @@ class SibnetExtractor(
             "https://video.sibnet.ru/shell.php?videoid=$videoId"
         }
 
-        val html = runCatching {
+        val html = runSuspendCatching {
             client.get(embedUrl) {
                 header("User-Agent", VfConstants.CHROME_USER_AGENT)
                 header("Referer", "https://video.sibnet.ru/")

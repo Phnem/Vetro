@@ -1,5 +1,6 @@
 package com.example.myapplication.sync.supabase
 
+import com.example.myapplication.utils.runSuspendCatching
 import com.example.myapplication.audiobooks.data.remote.PrivateSources
 import android.content.Context
 import android.util.Log
@@ -51,18 +52,18 @@ class AudiobookSyncRepository(
             if (authRepository.isGuest) return@runCatching
             val pushed = context.getSharedPreferences("audiobook_sync_$userId", Context.MODE_PRIVATE)
 
-            runCatching { pushWorks(userId, pushed) }
+            runSuspendCatching { pushWorks(userId, pushed) }
                 .onFailure { Log.w(TAG, "Push audiobooks failed: ${safeSyncError(it)}") }
-            runCatching { pushProgress(userId, pushed) }
+            runSuspendCatching { pushProgress(userId, pushed) }
                 .onFailure { Log.w(TAG, "Push audiobook progress failed: ${safeSyncError(it)}") }
-            runCatching { pushBookmarks(userId, pushed) }
+            runSuspendCatching { pushBookmarks(userId, pushed) }
                 .onFailure { Log.w(TAG, "Push audiobook bookmarks failed: ${safeSyncError(it)}") }
             // Книги — первыми: прогресс и закладки ссылаются на их озвучки.
-            runCatching { pullWorks(userId, pushed) }
+            runSuspendCatching { pullWorks(userId, pushed) }
                 .onFailure { Log.w(TAG, "Pull audiobooks failed: ${safeSyncError(it)}") }
-            runCatching { pullProgress(userId) }
+            runSuspendCatching { pullProgress(userId) }
                 .onFailure { Log.w(TAG, "Pull audiobook progress failed: ${safeSyncError(it)}") }
-            runCatching { pullBookmarks(userId, pushed) }
+            runSuspendCatching { pullBookmarks(userId, pushed) }
                 .onFailure { Log.w(TAG, "Pull audiobook bookmarks failed: ${safeSyncError(it)}") }
         }.onFailure { Log.e(TAG, "Audiobook sync failed: ${safeSyncError(it)}") }
     }

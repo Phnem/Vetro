@@ -1,5 +1,6 @@
 package com.example.myapplication.audiobooks.ui
 
+import com.example.myapplication.utils.runSuspendCatching
 import androidx.compose.runtime.mutableIntStateOf
 import com.example.myapplication.ui.shared.mascot.MascotIllustration
 import com.example.myapplication.ui.shared.mascot.MascotScene
@@ -115,7 +116,7 @@ fun LocalBooksPanel(
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri: Uri? ->
         if (uri != null) scope.launch {
             busy = true
-            runCatching { source.addTree(uri) }.onSuccess {
+            runSuspendCatching { source.addTree(uri) }.onSuccess {
                 books = source.books()
                 unavailableFolders = source.unavailableFolderCount()
                 message = null
@@ -137,7 +138,7 @@ fun LocalBooksPanel(
     fun playBook(book: LocalBook) {
         scope.launch {
             busy = true
-            runCatching {
+            runSuspendCatching {
                 val manifest = source.refresh(book.variant)
                 resolver.put(manifest)
                 val author = withContext(Dispatchers.IO) { source.author(manifest) }.orEmpty()

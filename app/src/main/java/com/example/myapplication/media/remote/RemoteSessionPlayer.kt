@@ -1,5 +1,6 @@
 package com.example.myapplication.media.remote
 
+import com.example.myapplication.utils.runSuspendCatching
 import android.os.Looper
 import android.os.SystemClock
 import androidx.media3.common.C
@@ -71,18 +72,18 @@ class RemoteSessionPlayer(
     }
 
     override fun handleSetPlayWhenReady(playWhenReady: Boolean): ListenableFuture<*> {
-        scope.launch { runCatching { if (playWhenReady) manager.play() else manager.pause() } }
+        scope.launch { runSuspendCatching { if (playWhenReady) manager.play() else manager.pause() } }
         return Futures.immediateVoidFuture()
     }
 
     override fun handleSeek(mediaItemIndex: Int, positionMs: Long, seekCommand: Int): ListenableFuture<*> {
         val target = if (positionMs == C.TIME_UNSET) 0L else positionMs.coerceAtLeast(0L)
-        scope.launch { runCatching { manager.seek(target) } }
+        scope.launch { runSuspendCatching { manager.seek(target) } }
         return Futures.immediateVoidFuture()
     }
 
     override fun handleStop(): ListenableFuture<*> {
-        scope.launch { runCatching { manager.pause() } }
+        scope.launch { runSuspendCatching { manager.pause() } }
         return Futures.immediateVoidFuture()
     }
 

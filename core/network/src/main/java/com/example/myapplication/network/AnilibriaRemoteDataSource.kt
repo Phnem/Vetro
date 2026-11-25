@@ -1,5 +1,6 @@
 package com.example.myapplication.network
 
+import com.example.myapplication.utils.runSuspendCatching
 import android.util.Log
 import io.ktor.client.HttpClient
 import io.ktor.client.request.get
@@ -30,24 +31,24 @@ class AnilibriaRemoteDataSource(
 ) {
     private val json = AppJson
 
-    suspend fun searchAnime(query: String, limit: Int = 10): Result<List<ApiSearchResult>> = runCatching {
+    suspend fun searchAnime(query: String, limit: Int = 10): Result<List<ApiSearchResult>> = runSuspendCatching {
         val q = query.trim()
-        if (q.isEmpty()) return@runCatching emptyList()
+        if (q.isEmpty()) return@runSuspendCatching emptyList()
         burstRate.acquire()
         val items = searchV1(q, limit) ?: searchV3(q, limit) ?: emptyList()
         items.mapNotNull { it.toApiSearchResult() }
     }
 
     /** Детали (RU-описание) по названию: первый релиз с совпадающим именем. */
-    suspend fun fetchAnimeDetails(query: String): Result<AnimeDetails?> = runCatching {
+    suspend fun fetchAnimeDetails(query: String): Result<AnimeDetails?> = runSuspendCatching {
         val q = query.trim()
-        if (q.isEmpty()) return@runCatching null
+        if (q.isEmpty()) return@runSuspendCatching null
         burstRate.acquire()
-        val items = searchV1(q, 5) ?: searchV3(q, 5) ?: return@runCatching null
+        val items = searchV1(q, 5) ?: searchV3(q, 5) ?: return@runSuspendCatching null
         val matched = items.firstOrNull { obj ->
             val (main, english) = obj.titles()
             isTitleSimilar(q, main ?: "", english ?: "")
-        } ?: return@runCatching null
+        } ?: return@runSuspendCatching null
 
         // v1-поиск может не отдавать description — дотягиваем полный релиз по alias/id.
         val enriched = if (matched.descriptionText().isNullOrBlank()) {
@@ -55,7 +56,7 @@ class AnilibriaRemoteDataSource(
         } else {
             matched
         }
-        val result = enriched.toApiSearchResult() ?: return@runCatching null
+        val result = enriched.toApiSearchResult() ?: return@runSuspendCatching null
         AnimeDetails(
             title = result.title,
             altTitle = result.altTitle,
@@ -75,16 +76,16 @@ class AnilibriaRemoteDataSource(
 
     // ---- HTTP ----
 
-    private suspend fun searchV1(query: String, limit: Int): List<JsonObject>? = runCatching {
+    private suspend fun searchV1(query: String, limit: Int): List<JsonObject>? = runSuspendCatching {
         val body = client.get("https://anilibria.top/api/v1/app/search/releases") {
             parameter("query", query)
         }.bodyAsText()
         val root = json.parseToJsonElement(body)
-        val arr = (root as? JsonArray) ?: (root as? JsonObject)?.get("data")?.jsonArray ?: return@runCatching null
+        val arr = (root as? JsonArray) ?: (root as? JsonObject)?.get("data")?.jsonArray ?: return@runSuspendCatching null
         arr.mapNotNull { it as? JsonObject }.take(limit)
     }.onFailure { Log.w(TAG, "v1 search failed: ${it.message}") }.getOrNull()
 
-    private suspend fun searchV3(query: String, limit: Int): List<JsonObject>? = runCatching {
+    private suspend fun searchV3(query: String, limit: Int): List<JsonObject>? = runSuspendCatching {
         val body = client.get("https://api.anilibria.tv/v3/title/search") {
             parameter("search", query)
             parameter("limit", limit)
@@ -93,10 +94,10 @@ class AnilibriaRemoteDataSource(
         root["list"]?.jsonArray?.mapNotNull { it as? JsonObject }
     }.onFailure { Log.w(TAG, "v3 search failed: ${it.message}") }.getOrNull()
 
-    private suspend fun fetchFullReleaseV1(item: JsonObject): JsonObject? = runCatching {
+    private suspend fun fetchFullReleaseV1(item: JsonObject): JsonObject? = runSuspendCatching {
         val key = item["alias"]?.jsonPrimitive?.contentOrNull
             ?: item["id"]?.jsonPrimitive?.intOrNull?.toString()
-            ?: return@runCatching null
+            ?: return@runSuspendCatching null
         burstRate.acquire()
         val body = client.get("https://anilibria.top/api/v1/anime/releases/$key").bodyAsText()
         json.parseToJsonElement(body) as? JsonObject

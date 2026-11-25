@@ -1,5 +1,6 @@
 package com.example.myapplication.localplayer.domain
 
+import com.example.myapplication.utils.runSuspendCatching
 import com.example.myapplication.network.seasonNeighbors
 import com.example.myapplication.network.orderByRelations
 import android.util.Log
@@ -102,7 +103,7 @@ class FranchiseEpisodeMapper(
 
     private suspend fun storedChain(anilistId: Int?, malId: Int?): StoredChain? {
         if (anilistId == null && malId == null) return null
-        runCatching { seasonStore.ensureLoaded() }.getOrElse { return null }
+        runSuspendCatching { seasonStore.ensureLoaded() }.getOrElse { return null }
         return seasonStore.flow.value.values.firstNotNullOfOrNull { entry ->
             chainFromLayout(entry.seasons, anilistId, malId)
         }

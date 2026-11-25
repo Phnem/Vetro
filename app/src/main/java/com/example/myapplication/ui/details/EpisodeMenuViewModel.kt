@@ -1,5 +1,6 @@
 package com.example.myapplication.ui.details
 
+import com.example.myapplication.utils.runSuspendCatching
 import com.example.myapplication.media.download.DownloadQuality
 import android.app.Application
 import android.os.Environment
@@ -219,7 +220,7 @@ class EpisodeMenuViewModel(
     /** Оценка серии из бабла со смайликом. [rating] — десятибалльная, 0 снимает оценку. */
     fun rateEpisode(season: Int, episode: Int, rating: Float) {
         viewModelScope.launch {
-            runCatching { ratingStore.setRating(anime.id, season, episode, rating) }
+            runSuspendCatching { ratingStore.setRating(anime.id, season, episode, rating) }
                 .onFailure { Log.w(TAG, "Saving episode rating failed", it) }
         }
     }
@@ -228,7 +229,7 @@ class EpisodeMenuViewModel(
     fun rateSeason(season: SeasonInfo, rating: Float) {
         val episodes = (1..season.episodes.coerceAtLeast(0)).toList()
         viewModelScope.launch {
-            runCatching { ratingStore.setRatings(anime.id, season.seasonNumber, episodes, rating) }
+            runSuspendCatching { ratingStore.setRatings(anime.id, season.seasonNumber, episodes, rating) }
                 .onFailure { Log.w(TAG, "Saving season rating failed", it) }
         }
     }
@@ -241,7 +242,7 @@ class EpisodeMenuViewModel(
         val numbers = episode?.let(::listOf) ?: (1..season.episodes.coerceAtLeast(0)).toList()
         val keys = numbers.map { PlaybackEpisodeKey(season.seasonNumber, it) }
         viewModelScope.launch {
-            runCatching {
+            runSuspendCatching {
                 if (watched) playbackStore.markWatched(anime.id, keys) else playbackStore.markUnwatched(anime.id, keys)
             }.onSuccess {
                 // Сезон закрыт — очки активности для напоминания о поддержке (повтор не засчитывается).
@@ -265,7 +266,7 @@ class EpisodeMenuViewModel(
         seasonDiscoveryRequested = true
         _state.update { it.copy(discoveringSeasons = true) }
         viewModelScope.launch {
-            val outcome = runCatching {
+            val outcome = runSuspendCatching {
                 seasonDiscovery.discover(anime.id, forceRefresh = forceRefresh)
             }
                 .onFailure { Log.w(TAG, "Season discovery failed", it) }
@@ -492,7 +493,7 @@ class EpisodeMenuViewModel(
         }
 
         viewModelScope.launch {
-            runCatching {
+            runSuspendCatching {
                 val seasonAnime = anime.forSeason(season)
                 val resolution = mediaGateway.resolvePlayback(seasonAnime, episodeNumber, season)
                 val hosters = when (resolution) {
@@ -630,7 +631,7 @@ class EpisodeMenuViewModel(
         setAction(key, EpisodeActionState.Resolving)
         episodeJobs[key] = viewModelScope.launch {
             downloadSlots.withPermit {
-                runCatching {
+                runSuspendCatching {
                     val videos = alreadyResolved ?: run {
                         val resolution = mediaGateway.resolvePlayback(
                             anime.forSeason(season),

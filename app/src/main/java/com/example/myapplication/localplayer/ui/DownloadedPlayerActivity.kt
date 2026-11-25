@@ -1,5 +1,6 @@
 package com.example.myapplication.localplayer.ui
 
+import com.example.myapplication.utils.runSuspendCatching
 import com.example.myapplication.network.AppStoreJson
 import com.example.myapplication.media.progress.runPlaybackProgressSaver
 import androidx.compose.runtime.CompositionLocalProvider
@@ -77,7 +78,7 @@ class DownloadedPlayerActivity : ComponentActivity(), PipHostActivity {
         val episode = item.episodeNumber ?: return
         val season = item.season?.coerceAtLeast(1) ?: 1
         progressScope.launch {
-            runCatching { titleTrackingRecorder.opened(animeId, season, episode) }
+            runSuspendCatching { titleTrackingRecorder.opened(animeId, season, episode) }
                 .onFailure { android.util.Log.w("WatchDates", "Could not record downloaded episode open", it) }
         }
     }

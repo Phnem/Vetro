@@ -1,5 +1,6 @@
 package com.example.myapplication.audiobooks.playback
 
+import com.example.myapplication.utils.runSuspendCatching
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.CoroutineScope
@@ -92,15 +93,15 @@ class AudiobookLauncher(
             is SourceResult.Failed -> return Result.Unavailable
         }
         val opened = repository.saveOpened(source, details)
-        val manifest = runCatching { resolver.manifest(opened.variantId) }.getOrElse { return Result.Unavailable }
+        val manifest = runSuspendCatching { resolver.manifest(opened.variantId) }.getOrElse { return Result.Unavailable }
         // Автор и чтец — как их поправил пользователь, а не как написал сайт.
         val d = repository.withPeople(opened, details.book)
-        return runCatching {
+        return runSuspendCatching {
             start(opened, manifest, d.title, d.authors.joinToString(", "), d.narrators.joinToString(", "), d.coverUrl,
                 startFraction, startGlobalMs, startChapter)
             // Пока книга играет, находим её копии на других сайтах: если сайт отвалится посреди
             // прослушивания, плеер перейдёт на следующее звено сразу, без поиска.
-            background.launch { runCatching { chain.discover(opened.narrationId) } }
+            background.launch { runSuspendCatching { chain.discover(opened.narrationId) } }
             Result.Started
         }.getOrElse { if (it is kotlinx.coroutines.CancellationException) throw it else Result.Unavailable }
     }
@@ -110,9 +111,9 @@ class AudiobookLauncher(
      * название, автор и обложка — из базы. Страницы у источника у неё нет, поэтому сразу играем.
      */
     suspend fun playLocal(opened: OpenedBook, expand: Boolean = true, startChapter: Int? = null): Result {
-        val manifest = runCatching { resolver.manifest(opened.variantId) }.getOrElse { return Result.Unavailable }
+        val manifest = runSuspendCatching { resolver.manifest(opened.variantId) }.getOrElse { return Result.Unavailable }
         val meta = repository.bookOf(opened.narrationId)
-        return runCatching {
+        return runSuspendCatching {
             start(
                 opened, manifest,
                 meta?.title.orEmpty(), meta?.authors.orEmpty().joinToString(", "),

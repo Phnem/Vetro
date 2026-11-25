@@ -1,5 +1,6 @@
 package com.example.myapplication.media.remote.dlna
 
+import com.example.myapplication.utils.runSuspendCatching
 import android.content.Context
 import android.os.SystemClock
 import android.util.Log
@@ -295,7 +296,7 @@ class DlnaAdapter(
                         val start = pendingStartMs
                         if (start != null && status == RemoteStatus.PLAYING) {
                             pendingStartMs = null
-                            runCatching { seek(start) }
+                            runSuspendCatching { seek(start) }
                         }
                     } catch (e: Exception) {
                         if (++failures >= 4) {

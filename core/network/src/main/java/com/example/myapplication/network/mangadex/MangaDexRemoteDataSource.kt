@@ -1,5 +1,6 @@
 package com.example.myapplication.network.mangadex
 
+import com.example.myapplication.utils.runSuspendCatching
 import com.example.myapplication.network.ApiSearchResult
 import com.example.myapplication.network.AppLanguage
 import com.example.myapplication.network.TokenBucketRateLimiter
@@ -31,7 +32,7 @@ class MangaDexRemoteDataSource(
         query: String,
         limit: Int = SEARCH_LIMIT,
         language: AppLanguage = AppLanguage.EN,
-    ): List<ApiSearchResult> = runCatching {
+    ): List<ApiSearchResult> = runSuspendCatching {
         rateLimiter.acquire()
         val response: MangaListResponse = client.get("$API/manga") {
             parameter("title", query.trim())

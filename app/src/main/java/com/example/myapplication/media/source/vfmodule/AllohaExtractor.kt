@@ -1,5 +1,6 @@
 package com.example.myapplication.media.source.vfmodule
 
+import com.example.myapplication.utils.runSuspendCatching
 import android.util.Log
 import com.example.myapplication.media.source.VetroVideo
 import com.example.myapplication.network.AppJson
@@ -38,7 +39,7 @@ class AllohaExtractor(
         }
         val domainOrigin = VfConstants.originFor(targetIframe)
 
-        val html = runCatching {
+        val html = runSuspendCatching {
             client.get(targetIframe) {
                 header("User-Agent", VfConstants.CHROME_USER_AGENT)
                 header("Referer", "$domainOrigin/")
@@ -85,7 +86,7 @@ class AllohaExtractor(
         val borth = computeBorth(viewporti)
         val postUrl = "$domainOrigin/bnsi/movies/$actId"
 
-        val bnsiBody = runCatching {
+        val bnsiBody = runSuspendCatching {
             client.post(postUrl) {
                 header("User-Agent", VfConstants.CHROME_USER_AGENT)
                 header("Accept", "*/*")
@@ -149,7 +150,7 @@ class AllohaExtractor(
         kinopoiskId: Int? = null,
         imdbId: String? = null,
         title: String? = null,
-    ): JsonObject? = runCatching {
+    ): JsonObject? = runSuspendCatching {
         val hasIds = kinopoiskId != null || !imdbId.isNullOrBlank()
         val response = if (hasIds) {
             client.get("$API_V2_BASE/movies/search") {
@@ -167,13 +168,13 @@ class AllohaExtractor(
                 header("Accept", "application/json")
             }.bodyAsText()
         } else {
-            return@runCatching null
+            return@runSuspendCatching null
         }
 
-        val parsed = json.parseToJsonElement(response) as? JsonObject ?: return@runCatching null
+        val parsed = json.parseToJsonElement(response) as? JsonObject ?: return@runSuspendCatching null
         val dataElem = parsed["data"]
         if (dataElem is JsonArray && dataElem.isNotEmpty()) {
-            val firstObj = dataElem.firstOrNull() as? JsonObject ?: return@runCatching parsed
+            val firstObj = dataElem.firstOrNull() as? JsonObject ?: return@runSuspendCatching parsed
             JsonObject(parsed + ("data" to firstObj))
         } else {
             parsed

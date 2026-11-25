@@ -1,5 +1,6 @@
 package com.example.myapplication.media.source.vfmodule
 
+import com.example.myapplication.utils.runSuspendCatching
 import android.util.Log
 import com.example.myapplication.media.source.VetroVideo
 import com.example.myapplication.network.AppJson
@@ -45,7 +46,7 @@ class HdvbExtractor(
         val domainOrigin = VfConstants.originFor(normalizedIframe)
 
         // 1. Загружаем HTML iframe
-        val html = runCatching {
+        val html = runSuspendCatching {
             client.get(normalizedIframe) {
                 header("User-Agent", VfConstants.CHROME_USER_AGENT)
                 header("Referer", DEFAULT_REFERER)
@@ -105,7 +106,7 @@ class HdvbExtractor(
         params: IframeParams,
         csrfToken: String,
         domainOrigin: String,
-    ): String? = runCatching {
+    ): String? = runSuspendCatching {
         if (url.contains("/playlist/") && url.endsWith(".txt")) {
             client.post(url) {
                 header("User-Agent", VfConstants.CHROME_USER_AGENT)

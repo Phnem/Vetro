@@ -1,5 +1,6 @@
 package com.example.myapplication.media.source.vfmodule
 
+import com.example.myapplication.utils.runSuspendCatching
 import android.util.Log
 import com.example.myapplication.network.AppJson
 import io.ktor.client.HttpClient
@@ -73,7 +74,7 @@ class KinoboxPlayersClient(
         // 1. Пробуем зеркала агрегатора (если они ещё не помечены как упавшие по SSL/протоколу)
         for (mirror in MIRRORS) {
             if (mirror in deadMirrors) continue
-            val hits = runCatching {
+            val hits = runSuspendCatching {
                 val response = client.get(mirror) {
                     kinopoiskId?.let { parameter("kinopoisk", it) }
                     imdbId?.let { parameter("imdb", it) }
@@ -100,7 +101,7 @@ class KinoboxPlayersClient(
         var resolvedImdb = imdbId?.takeIf { it.isNotBlank() }
 
         // 2a. Alloha / Aladin API (также возвращает связку kp + imdb по одному из ID или названию)
-        runCatching {
+        runSuspendCatching {
             val allohaUrl = if (resolvedKp != null || resolvedImdb != null) {
                 "${AllohaExtractor.API_V2_BASE}/movies/search"
             } else if (!title.isNullOrBlank()) {
@@ -158,7 +159,7 @@ class KinoboxPlayersClient(
         }
 
         // 2b. HDVB Direct API (apivb.com)
-        runCatching {
+        runSuspendCatching {
             if (resolvedKp != null || !title.isNullOrBlank()) {
                 val hdvbBody = client.get(HDVB_API_URL) {
                     parameter("token", HDVB_TOKEN)
@@ -215,7 +216,7 @@ class KinoboxPlayersClient(
                 )
             }
             !title.isNullOrBlank() -> {
-                runCatching {
+                runSuspendCatching {
                     val collapsBody = client.get(COLLAPS_LIST_API) {
                         parameter("token", COLLAPS_TOKEN)
                         parameter("name", title)

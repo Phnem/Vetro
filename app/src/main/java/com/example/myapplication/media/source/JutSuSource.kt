@@ -1,5 +1,6 @@
 package com.example.myapplication.media.source
 
+import com.example.myapplication.utils.runSuspendCatching
 import android.util.Log
 import com.example.myapplication.data.models.Anime
 import com.example.myapplication.domain.seasons.DiscoveredSeason
@@ -49,7 +50,7 @@ class JutSuSource(
 
     /** Домен, на который реально уходят запросы прямо сейчас. */
     private suspend fun activeBaseUrl(): String =
-        normalizeMirror(runCatching { mirrorProvider() }.getOrNull()) ?: DEFAULT_BASE_URL
+        normalizeMirror(runSuspendCatching { mirrorProvider() }.getOrNull()) ?: DEFAULT_BASE_URL
 
     suspend fun resolveEpisode(
         anime: Anime,
@@ -99,7 +100,7 @@ class JutSuSource(
      * (у первого сезона префикс сезона опускается). Номера серий сплошные с единицы, поэтому
      * максимальный номер в сезоне и есть число серий; отдельный запрос на каждую серию не нужен.
      */
-    suspend fun findSeasons(anime: Anime): List<DiscoveredSeason> = runCatching {
+    suspend fun findSeasons(anime: Anime): List<DiscoveredSeason> = runSuspendCatching {
         val base = activeBaseUrl()
         val titleUrl = resolveTitleUrl(anime, base) ?: return emptyList()
         val slug = titleUrl.trimEnd('/').substringAfterLast('/')
@@ -124,7 +125,7 @@ class JutSuSource(
         val aliases = orderedJutSuAliases(anime.titleRu, anime.title, anime.titleEn)
         val localTitles = aliases.ifEmpty { return null }
         for (query in jutSuSearchQueries(aliases)) {
-            val selected = runCatching {
+            val selected = runSuspendCatching {
                 val enc = URLEncoder.encode(query, "UTF-8")
                 val resp = client.get("$base/lookfor/$enc") {
                     header(HttpHeaders.UserAgent, DEFAULT_UA)
@@ -168,7 +169,7 @@ class JutSuSource(
         }
     }
 
-    private suspend fun scrapeEpisode(pageUrl: String): ScrapedJutSuEpisode = runCatching {
+    private suspend fun scrapeEpisode(pageUrl: String): ScrapedJutSuEpisode = runSuspendCatching {
         val html = getText(
             pageUrl,
             extraHeaders = mapOf(

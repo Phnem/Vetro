@@ -1,5 +1,6 @@
 package com.example.myapplication.media.source.vfmodule
 
+import com.example.myapplication.utils.runSuspendCatching
 import android.util.Log
 import com.example.myapplication.media.source.VetroVideo
 import com.example.myapplication.network.AppJson
@@ -24,7 +25,7 @@ class AniboomExtractor(
     suspend fun extract(embedUrl: String): List<VetroVideo> {
         val normalizedUrl = VfConstants.normalizeUrl(embedUrl)
 
-        val html = runCatching {
+        val html = runSuspendCatching {
             client.get(normalizedUrl) {
                 header("User-Agent", VfConstants.CHROME_USER_AGENT)
                 header("Referer", "https://aniboom.one/")

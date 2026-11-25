@@ -1,5 +1,6 @@
 package com.example.myapplication.domain.seasons
 
+import com.example.myapplication.utils.runSuspendCatching
 import com.example.myapplication.network.seasonNeighbors
 import com.example.myapplication.network.orderByRelations
 import com.example.myapplication.network.retryOn429
@@ -54,7 +55,7 @@ class SeasonEpisodesResolver(
     suspend fun refreshStale(budget: Int = DEFAULT_BUDGET) {
         store.ensureLoaded()
         val animeOnly = localDataSource.getAllAnimeList().filter { it.mediaType == MediaType.ANIME }
-        runCatching { store.retainOnly(animeOnly.map { it.id }.toSet()) }
+        runSuspendCatching { store.retainOnly(animeOnly.map { it.id }.toSet()) }
 
         // Бюджет — это ПОПЫТКИ, а не успехи. Раньше неудачный резолв бюджет не тратил: тайтл,
         // которого нет в каталогах, стоил полный каскад запросов на каждом прогоне, и прогон мог
@@ -68,7 +69,7 @@ class SeasonEpisodesResolver(
             val failedAt = recentFailures[anime.id]
             if (failedAt != null && now - failedAt < FAILURE_COOLDOWN_MILLIS) continue
             attempts++
-            val entry = runCatching { resolve(anime) }
+            val entry = runSuspendCatching { resolve(anime) }
                 .onFailure { Log.w(TAG, "resolve failed for \"${anime.title}\": ${it.message}") }
                 .getOrNull()
             if (entry == null) {
@@ -97,7 +98,7 @@ class SeasonEpisodesResolver(
         if (store.isFresh(animeId)) return@withContext
         val anime = localDataSource.getAnimeById(animeId) ?: return@withContext
         if (anime.mediaType != MediaType.ANIME) return@withContext
-        runCatching { resolve(anime) }
+        runSuspendCatching { resolve(anime) }
             .onFailure { Log.w(TAG, "on-demand resolve failed for \"${anime.title}\": ${it.message}") }
             .getOrNull()
             ?.let { store.put(it) }
@@ -490,7 +491,7 @@ class SeasonEpisodesResolver(
 
     /** Найденные id — в БД: остальные фичи (проверка серий, AniSkip) пойдут быстрой веткой. */
     private suspend fun persistIds(anime: Anime, media: EpisodeCheckMedia) {
-        runCatching {
+        runSuspendCatching {
             if (anime.anilistId == null) localDataSource.setAnilistId(anime.id, media.anilistId)
             val mal = media.malId
             if (anime.malId == null && mal != null) localDataSource.setMalId(anime.id, mal)

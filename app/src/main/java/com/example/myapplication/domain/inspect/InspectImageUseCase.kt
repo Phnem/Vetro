@@ -1,5 +1,6 @@
 package com.example.myapplication.domain.inspect
 
+import com.example.myapplication.utils.runSuspendCatching
 import com.example.myapplication.network.AppJson
 import com.example.myapplication.data.ai.AiCredentialsStore
 import com.example.myapplication.data.ai.AiLlmEndpoint
@@ -47,7 +48,7 @@ class InspectImageUseCase(
         contentMode: InspectContentMode,
         appLanguage: AppLanguage,
     ): Result<List<ApiSearchResult>> = withContext(Dispatchers.IO) {
-        runCatching {
+        runSuspendCatching {
             when (contentMode) {
                 InspectContentMode.Anime ->
                     inspectAnime(imageBytes, mimeTypeForTrace, appLanguage)

@@ -1,5 +1,6 @@
 package com.example.myapplication.ui.details
 
+import com.example.myapplication.utils.runSuspendCatching
 import com.example.myapplication.domain.enrichment.title.TitleEnrichmentRepository
 import com.example.myapplication.domain.enrichment.title.TitleEnrichment
 import com.example.myapplication.data.local.AppLanguagePrefs
@@ -99,7 +100,7 @@ class DetailsViewModel(
     /** Нажатие колокольчика: выключить уведомления тайтла или включить их обратно. */
     fun setNotificationsOn(on: Boolean) {
         viewModelScope.launch {
-            runCatching { mutedStore.setMuted(animeId, !on) }
+            runSuspendCatching { mutedStore.setMuted(animeId, !on) }
                 .onFailure {
                     if (it is kotlinx.coroutines.CancellationException) throw it
                     say("Не удалось сохранить", "Couldn't save")
@@ -115,7 +116,7 @@ class DetailsViewModel(
 
     fun setCardComment(text: String) {
         viewModelScope.launch {
-            runCatching { commentStore.set(animeId, text) }
+            runSuspendCatching { commentStore.set(animeId, text) }
                 .onFailure {
                     if (it is kotlinx.coroutines.CancellationException) throw it
                     say("Не удалось сохранить", "Couldn't save")
@@ -129,7 +130,7 @@ class DetailsViewModel(
     fun toggleSecret() {
         val toSecret = !isSecret.value
         viewModelScope.launch {
-            runCatching { secretStore.setSecret(animeId, toSecret) }
+            runSuspendCatching { secretStore.setSecret(animeId, toSecret) }
                 .onSuccess {
                     if (toSecret) say("Тайтл перемещён в секретную папку", "Moved to the secret folder")
                     else say("Тайтл возвращён в ленту", "Moved back to your collection")
@@ -200,14 +201,14 @@ class DetailsViewModel(
         // повторное открытие бесплатным.
         viewModelScope.launch {
             val anime = _currentAnime.value ?: return@launch
-            val outcome = runCatching { titleInfoEnricher.enrich(anime) }
+            val outcome = runSuspendCatching { titleInfoEnricher.enrich(anime) }
                 .onFailure { if (it is kotlinx.coroutines.CancellationException) throw it }
                 .getOrNull() ?: return@launch
             if (outcome.changedFields.isNotEmpty()) {
                 _currentAnime.value = outcome.anime
             }
             if (outcome.anime.mediaType == MediaType.SERIES) {
-                runCatching { seriesEpisodeCheck?.ensureSeasonsResolved(outcome.anime) }
+                runSuspendCatching { seriesEpisodeCheck?.ensureSeasonsResolved(outcome.anime) }
                     .onFailure { if (it is kotlinx.coroutines.CancellationException) throw it }
             }
         }
@@ -218,14 +219,14 @@ class DetailsViewModel(
             seriesSeasonsStore?.ensureLoaded()
             val anime = _currentAnime.value
             if (anime?.mediaType == MediaType.SERIES) {
-                runCatching { seriesEpisodeCheck?.ensureSeasonsResolved(anime) }
+                runSuspendCatching { seriesEpisodeCheck?.ensureSeasonsResolved(anime) }
             } else {
-                runCatching { seasonEpisodesResolver.ensureResolved(animeId) }
+                runSuspendCatching { seasonEpisodesResolver.ensureResolved(animeId) }
                 // Пуш сказал «5-я серия 3-го сезона», а в раскладе два сезона — значит он отстал, и
                 // пользователю нечего доказывать это кнопкой «Найти ещё». Проверка дешёвая: сверка
                 // с уже посчитанным прогрессом выходящего сезона, сеть трогается только при
                 // доказанном расхождении.
-                runCatching { seasonCatchUp.catchUp(animeId) }
+                runSuspendCatching { seasonCatchUp.catchUp(animeId) }
             }
         }
         enrichmentJob = viewModelScope.launch {
@@ -263,7 +264,7 @@ class DetailsViewModel(
         val airing = seasonEpisodesStore.entryFor(animeId).ongoingSeason()?.let {
             com.example.myapplication.domain.enrichment.title.AiringSeasonRef(it.anilistId, it.malId)
         }
-        _enrichment.value = runCatching { titleEnrichment.load(anime, _currentLanguage.value, refresh, airing) }
+        _enrichment.value = runSuspendCatching { titleEnrichment.load(anime, _currentLanguage.value, refresh, airing) }
             .onFailure { if (it is kotlinx.coroutines.CancellationException) throw it }
             .getOrNull()?.takeUnless { it.isEmpty && it.russianDubs.isEmpty() && !it.incomplete }
     }
@@ -300,7 +301,7 @@ class DetailsViewModel(
 
     fun setWatchStatus(status: WatchStatus?) {
         viewModelScope.launch {
-            runCatching { localDataSource.setWatchStatus(animeId, status) }
+            runSuspendCatching { localDataSource.setWatchStatus(animeId, status) }
                 .onSuccess { _currentAnime.value = _currentAnime.value?.copy(watchStatus = status) }
                 .onFailure {
                     if (it is kotlinx.coroutines.CancellationException) throw it
@@ -339,7 +340,7 @@ class DetailsViewModel(
 
     fun pickRatingMode(manual: Boolean) {
         viewModelScope.launch {
-            runCatching { titleTrackingStore.setManualRating(animeId, manual) }
+            runSuspendCatching { titleTrackingStore.setManualRating(animeId, manual) }
                 .onSuccess { accepted ->
                     if (accepted) dismissPicker() else say(
                         "Нет оценок эпизодов: среднее пока посчитать нельзя. Manual rating недоступен",
@@ -363,7 +364,7 @@ class DetailsViewModel(
                 LocalDate.ofEpochDay(prefs.manualStartedOn), prefs.manualFinishedOn?.let(LocalDate::ofEpochDay),
             ) else DetailsPickerState.WatchDates(prefs.startedOn, prefs.finishedOn)
         } else viewModelScope.launch {
-            runCatching { titleTrackingStore.useAutoDates(animeId) }
+            runSuspendCatching { titleTrackingStore.useAutoDates(animeId) }
                 .onSuccess { dismissPicker() }
                 .onFailure {
                     if (it is kotlinx.coroutines.CancellationException) throw it
@@ -378,7 +379,7 @@ class DetailsViewModel(
             return
         }
         viewModelScope.launch {
-            runCatching {
+            runSuspendCatching {
                 titleTrackingStore.saveManualDates(animeId, start, finish)
                 if (finish != null) {
                     localDataSource.setWatchStatus(animeId, WatchStatus.COMPLETED)
@@ -412,7 +413,7 @@ class DetailsViewModel(
             val keys = regular.flatMap { season ->
                 (1..season.episodes).map { PlaybackEpisodeKey(season.seasonNumber, it) }
             }
-            runCatching {
+            runSuspendCatching {
                 playbackStore.markWatched(animeId, keys)
                 val total = regular.sumOf { it.episodes }
                 if (anime.mediaType == MediaType.ANIME && total > anime.episodes) {
@@ -449,7 +450,7 @@ class DetailsViewModel(
         pickerJob?.cancel()
         _picker.value = DetailsPickerState.Covers(loading = true)
         pickerJob = viewModelScope.launch {
-            val items = runCatching { titleCandidates.posters(anime) }
+            val items = runSuspendCatching { titleCandidates.posters(anime) }
                 .onFailure { if (it is kotlinx.coroutines.CancellationException) throw it }
                 .getOrDefault(emptyList())
             _picker.value = DetailsPickerState.Covers(items = items)
@@ -474,7 +475,7 @@ class DetailsViewModel(
                 return@launch
             }
             val updated = latest(anime).copy(imageFileName = saved)
-            runCatching { localDataSource.updateAnime(updated) }
+            runSuspendCatching { localDataSource.updateAnime(updated) }
                 .onSuccess {
                     _currentAnime.value = updated
                     _picker.value = DetailsPickerState.None
@@ -502,7 +503,7 @@ class DetailsViewModel(
         pickerJob?.cancel()
         _picker.value = DetailsPickerState.Sources(query = query, loading = true)
         pickerJob = viewModelScope.launch {
-            val items = runCatching { titleCandidates.titles(anime, query) }
+            val items = runSuspendCatching { titleCandidates.titles(anime, query) }
                 .onFailure { if (it is kotlinx.coroutines.CancellationException) throw it }
                 .getOrDefault(emptyList())
             _picker.value = DetailsPickerState.Sources(query = query, items = items)
@@ -531,19 +532,19 @@ class DetailsViewModel(
                 shikimoriNotFoundAt = null,
                 imageFileName = poster ?: stored.imageFileName,
             )
-            runCatching {
+            runSuspendCatching {
                 localDataSource.updateAnime(updated)
                 seasonEpisodesStore.remove(animeId)
             }.onSuccess {
                 // Метка «та же сущность» для Identity (по согласию): в очередь уходит вектор сходства, не названия.
-                launch { runCatching { contribution?.recordPickerChoice(anime, candidate, current.items) } }
+                launch { runSuspendCatching { contribution?.recordPickerChoice(anime, candidate, current.items) } }
                 _currentAnime.value = updated
                 _picker.value = DetailsPickerState.None
                 _enrichment.value = null
                 loadDetails(updated, _currentLanguage.value)
                 enrichmentJob?.cancel()
                 enrichmentJob = viewModelScope.launch { loadEnrichment(refresh = true) }
-                launch { runCatching { seasonEpisodesResolver.ensureResolved(animeId) } }
+                launch { runSuspendCatching { seasonEpisodesResolver.ensureResolved(animeId) } }
                 say("Источник: ${candidate.titleEn}", "Source: ${candidate.titleEn}")
             }.onFailure {
                 if (it is kotlinx.coroutines.CancellationException) throw it
@@ -564,8 +565,8 @@ class DetailsViewModel(
             val anime = _currentAnime.value ?: return@launch
             val cleared = latest(anime).withRejectedSource().copy(imageFileName = null)
             // Метка «разные сущности» для Identity (по согласию); привязка читается до того, как её сняли.
-            launch { runCatching { contribution?.recordRejected(anime) } }
-            runCatching {
+            launch { runSuspendCatching { contribution?.recordRejected(anime) } }
+            runSuspendCatching {
                 localDataSource.updateAnime(cleared)
                 seasonEpisodesStore.remove(animeId)
             }.onSuccess {
@@ -587,7 +588,7 @@ class DetailsViewModel(
     /** Год релиза из открытой карточки уходит в запись: по нему работает фильтр года в шторке сортировки. */
     private suspend fun rememberReleaseYear(year: Int?) {
         if (year == null || _currentAnime.value?.releaseYear == year) return
-        runCatching { localDataSource.setReleaseYear(animeId, year) }
+        runSuspendCatching { localDataSource.setReleaseYear(animeId, year) }
             .onSuccess { _currentAnime.value = _currentAnime.value?.copy(releaseYear = year) }
     }
 

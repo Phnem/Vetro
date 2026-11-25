@@ -1,5 +1,6 @@
 package com.example.myapplication.media.remote
 
+import com.example.myapplication.utils.runSuspendCatching
 import android.content.Context
 import android.os.SystemClock
 import android.util.Log
@@ -138,12 +139,12 @@ class RemotePlaybackManager(
             } catch (e: RemotePlaybackException) {
                 Log.w(TAG, "load via ${service.protocol} failed: ${e.error}")
                 lastError = e.error
-                runCatching { remote.disconnect(stopPlayback = false) }
+                runSuspendCatching { remote.disconnect(stopPlayback = false) }
                 preparer.closeActive()
             } catch (e: Exception) {
                 Log.w(TAG, "load via ${service.protocol} failed: ${e.javaClass.simpleName}")
                 lastError = RemoteError.StreamFailed
-                runCatching { remote.disconnect(stopPlayback = false) }
+                runSuspendCatching { remote.disconnect(stopPlayback = false) }
                 preparer.closeActive()
             }
         }
@@ -222,7 +223,7 @@ class RemotePlaybackManager(
     private suspend fun closeSessionLocked(stopPlayback: Boolean) {
         stateJob?.cancel()
         stateJob = null
-        session?.let { runCatching { it.disconnect(stopPlayback) } }
+        session?.let { runSuspendCatching { it.disconnect(stopPlayback) } }
         session = null
         prepared = null
         _media.value = null

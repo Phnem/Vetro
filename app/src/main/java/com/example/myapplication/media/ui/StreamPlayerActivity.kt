@@ -1,5 +1,6 @@
 package com.example.myapplication.media.ui
 
+import com.example.myapplication.utils.runSuspendCatching
 import androidx.compose.animation.core.MutableTransitionState
 import com.example.myapplication.media.remote.RemoteConnection
 import com.example.myapplication.media.remote.RemoteDevice
@@ -326,7 +327,7 @@ class StreamPlayerActivity : ComponentActivity(), PipHostActivity {
                         if (!externalSubtitles.isAvailable) return@LaunchedEffect
                         openSubtitlesSearching = true
                         val languages = listOf(if (uiLanguage == AppLanguage.RU) "ru" else "en", "en").distinct()
-                        subtitleOffers = runCatching {
+                        subtitleOffers = runSuspendCatching {
                             externalSubtitles.offers(playbackIdentity, season, episode, languages)
                         }.getOrDefault(emptyList())
                         openSubtitlesSearching = false
@@ -354,7 +355,7 @@ class StreamPlayerActivity : ComponentActivity(), PipHostActivity {
                         activeEpisode = episode
                         val openedEpisode = episode
                         appScope.launch {
-                            runCatching { titleTrackingRecorder.opened(animeId, season, openedEpisode) }
+                            runSuspendCatching { titleTrackingRecorder.opened(animeId, season, openedEpisode) }
                                 .onFailure { android.util.Log.w("WatchDates", "Could not record episode open", it) }
                         }
                     }
@@ -395,7 +396,7 @@ class StreamPlayerActivity : ComponentActivity(), PipHostActivity {
                         mutableStateOf<com.example.myapplication.media.prefs.PlaybackChoice?>(null)
                     }
                     LaunchedEffect(Unit) {
-                        val choice = runCatching { playbackPrefs.choiceFor(animeId, contentType) }.getOrNull()
+                        val choice = runSuspendCatching { playbackPrefs.choiceFor(animeId, contentType) }.getOrNull()
                             ?: return@LaunchedEffect
                         playbackChoice = choice
                         val studio = choice.sourceName ?: return@LaunchedEffect
@@ -485,7 +486,7 @@ class StreamPlayerActivity : ComponentActivity(), PipHostActivity {
                     /** Источник отозвал ссылку посреди показа — та же озвучка заново (для прокси). */
                     fun refreshUpstreamFor(video: VetroVideo): () -> ProxyUpstream? = {
                         kotlinx.coroutines.runBlocking {
-                            runCatching { resolveReplacement(episodeResolver, episode, video, emptySet()) }.getOrNull()
+                            runSuspendCatching { resolveReplacement(episodeResolver, episode, video, emptySet()) }.getOrNull()
                         }?.let { fresh -> ProxyUpstream(fresh.url, SanitizeHeaders.sanitize(fresh.headers)) }
                     }
 
@@ -558,7 +559,7 @@ class StreamPlayerActivity : ComponentActivity(), PipHostActivity {
                         val sameEpisode = loaded?.key == mediaKey
                         val start = if (sameEpisode) remote.currentPositionMs()
                             else stored?.takeIf { !it.watched }?.positionMs ?: 0L
-                        runCatching { remote.replaceMedia(remoteMediaFor(current, start), refreshUpstreamFor(current)) }
+                        runSuspendCatching { remote.replaceMedia(remoteMediaFor(current, start), refreshUpstreamFor(current)) }
                         remoteLoadedFor = id
                     }
 
@@ -792,7 +793,7 @@ class StreamPlayerActivity : ComponentActivity(), PipHostActivity {
                                     durationMs = leavingDuration,
                                 )
                             }
-                            val resolved = runCatching {
+                            val resolved = runSuspendCatching {
                                 episodeResolver.resolve(target, preferredResolution)
                             }.getOrDefault(emptyList())
                             val best = selectPreferredVideo(resolved, preferredSourceName)
@@ -1102,7 +1103,7 @@ class StreamPlayerActivity : ComponentActivity(), PipHostActivity {
                             onSelectRendition = { rendition ->
                                 preferredSourceName = rendition.sourceName ?: preferredSourceName
                                 rendition.sourceName?.let { studio ->
-                                    scope.launch { runCatching { playbackPrefs.rememberSource(animeId, contentType, studio) } }
+                                    scope.launch { runSuspendCatching { playbackPrefs.rememberSource(animeId, contentType, studio) } }
                                 }
                                 if (rendition.url != current.url) {
                                     cancelRecoveryResolve()
@@ -1199,10 +1200,10 @@ class StreamPlayerActivity : ComponentActivity(), PipHostActivity {
                                 }
                             },
                             onAudioLanguageChosen = { language ->
-                                scope.launch { runCatching { playbackPrefs.rememberAudio(animeId, contentType, language) } }
+                                scope.launch { runSuspendCatching { playbackPrefs.rememberAudio(animeId, contentType, language) } }
                             },
                             onSubtitlesChosen = { language, off ->
-                                scope.launch { runCatching { playbackPrefs.rememberSubtitles(animeId, contentType, language, off) } }
+                                scope.launch { runSuspendCatching { playbackPrefs.rememberSubtitles(animeId, contentType, language, off) } }
                             },
                             onLoadSubtitle = { offer ->
                                 if (!subtitleLoading) {
@@ -1456,7 +1457,7 @@ class StreamPlayerActivity : ComponentActivity(), PipHostActivity {
         if (connected && (keyCode == android.view.KeyEvent.KEYCODE_VOLUME_UP || keyCode == android.view.KeyEvent.KEYCODE_VOLUME_DOWN)) {
             val step = if (keyCode == android.view.KeyEvent.KEYCODE_VOLUME_UP) 0.05f else -0.05f
             val volume = ((remote.playback.value.volume ?: 0.5f) + step).coerceIn(0f, 1f)
-            lifecycleScope.launch { runCatching { remote.setVolume(volume) } }
+            lifecycleScope.launch { runSuspendCatching { remote.setVolume(volume) } }
             return true
         }
         return super.onKeyDown(keyCode, event)

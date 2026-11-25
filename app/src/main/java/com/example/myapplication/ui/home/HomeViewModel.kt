@@ -1,5 +1,6 @@
 package com.example.myapplication.ui.home
 
+import com.example.myapplication.utils.runSuspendCatching
 import com.example.myapplication.domain.search.isInCollection
 import com.example.myapplication.network.listKey
 import com.example.myapplication.domain.BackgroundSchedule
@@ -255,7 +256,7 @@ class HomeViewModel(
 
     init {
         viewModelScope.launch {
-            airingOrder.value = runCatching { airingNowIds() }.getOrElse { emptySet() }
+            airingOrder.value = runSuspendCatching { airingNowIds() }.getOrElse { emptySet() }
             // Новые серии, найденные уже в этой сессии (проверка при входе, фоновый воркер).
             localDataSource.observeUpdates().collect { list ->
                 growAiringOrder(list.mapTo(HashSet()) { it.animeId })
@@ -399,7 +400,7 @@ class HomeViewModel(
             checkForUpdates()
         }
         viewModelScope.launch(Dispatchers.IO) {
-            runCatching { statsFooterPhraseUseCase.warmCatalog() }
+            runSuspendCatching { statsFooterPhraseUseCase.warmCatalog() }
         }
     }
 
@@ -466,7 +467,7 @@ class HomeViewModel(
             if (_uiState.value.searchQuery.trim() != trimmed) return@launch
             _uiState.update { it.copy(apiSearchLoading = true, apiSearchError = null) }
             if (_uiState.value.searchBooks && bookSearch != null) {
-                val books = runCatching { bookSearch.search(trimmed) }.getOrElse { if (it is kotlinx.coroutines.CancellationException) throw it else emptyList() }
+                val books = runSuspendCatching { bookSearch.search(trimmed) }.getOrElse { if (it is kotlinx.coroutines.CancellationException) throw it else emptyList() }
                 if (_uiState.value.searchQuery.trim() != trimmed) return@launch
                 val ru = uiLanguage.value == com.example.myapplication.network.AppLanguage.RU
                 foundBooks = books.associateBy { "${it.ref.source.value}:${it.ref.key}" }
@@ -574,7 +575,7 @@ class HomeViewModel(
         val adder = bookSearch ?: return
         _uiState.update { it.copy(optimisticallyAddedKeys = it.optimisticallyAddedKeys.add(key), addingFromApiId = key) }
         viewModelScope.launch {
-            val ok = runCatching { adder.add(book) }.getOrElse { if (it is kotlinx.coroutines.CancellationException) throw it else false }
+            val ok = runSuspendCatching { adder.add(book) }.getOrElse { if (it is kotlinx.coroutines.CancellationException) throw it else false }
             // Ключ нужен, только пока книга не видна в библиотеке: дальше правда — в самой библиотеке,
             // иначе после удаления кнопка осталась бы «Added».
             val confirmed = ok && kotlinx.coroutines.withTimeoutOrNull(3_000) {
@@ -706,7 +707,7 @@ class HomeViewModel(
 
     fun deleteAnime(id: String) {
         viewModelScope.launch(Dispatchers.IO) {
-            runCatching {
+            runSuspendCatching {
                 val anime = localDataSource.getAnimeById(id) ?: return@launch
                 anime.imageFileName?.let { imageStorage.deleteImage(it) }
                 localDataSource.deleteAnime(id)
@@ -720,7 +721,7 @@ class HomeViewModel(
 
     fun toggleFavorite(id: String) {
         viewModelScope.launch(Dispatchers.IO) {
-            runCatching {
+            runSuspendCatching {
                 val anime = localDataSource.getAnimeById(id) ?: return@launch
                 localDataSource.updateAnime(anime.copy(isFavorite = !anime.isFavorite))
             }.onFailure { it.printStackTrace() }
@@ -736,7 +737,7 @@ class HomeViewModel(
 
     fun setRating(id: String, rating: Float) {
         viewModelScope.launch(Dispatchers.IO) {
-            runCatching {
+            runSuspendCatching {
                 if (usesEpisodeRating(id)) return@launch
                 val anime = localDataSource.getAnimeById(id) ?: return@launch
                 localDataSource.updateAnime(
@@ -765,7 +766,7 @@ class HomeViewModel(
                 _uiState.update { it.copy(isCheckingUpdates = false) }
                 // Полная пересборка порядка — только по явному обновлению или если его ещё не было;
                 // иначе лишь дополняем тем, что проверка нашла выходящим сейчас.
-                val fresh = runCatching { airingNowIds() }.getOrNull()
+                val fresh = runSuspendCatching { airingNowIds() }.getOrNull()
                 if (force || airingOrder.value.isNullOrEmpty()) {
                     airingOrder.value = fresh ?: airingOrder.value.orEmpty()
                 } else if (fresh != null) {

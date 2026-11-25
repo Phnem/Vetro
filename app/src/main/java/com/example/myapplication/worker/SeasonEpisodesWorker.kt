@@ -1,5 +1,6 @@
 package com.example.myapplication.worker
 
+import com.example.myapplication.utils.runSuspendCatching
 import android.content.Context
 import androidx.work.Constraints
 import androidx.work.CoroutineWorker
@@ -27,7 +28,7 @@ class SeasonEpisodesWorker(
     private val resolver: SeasonEpisodesResolver by inject()
 
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
-        runCatching { resolver.refreshStale(budget = STARTUP_BUDGET) }
+        runSuspendCatching { resolver.refreshStale(budget = STARTUP_BUDGET) }
             .onFailure { it.printStackTrace() }
         Result.success()
     }

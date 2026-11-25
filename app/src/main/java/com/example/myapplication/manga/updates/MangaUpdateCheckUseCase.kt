@@ -1,5 +1,6 @@
 package com.example.myapplication.manga.updates
 
+import com.example.myapplication.utils.runSuspendCatching
 import android.util.Log
 import com.example.myapplication.manga.data.MangaBindingStore
 import com.example.myapplication.manga.data.MangaChapterCacheStore
@@ -95,7 +96,7 @@ class MangaUpdateCheckUseCase(
             // Пауза до запроса, а не после находки: без неё 25 привязок уходили бы в источник
             // очередью без единого зазора в самом частом случае — когда нового ничего нет.
             if (checked > 1) delay(ITEM_DELAY_MS)
-            val fromSource = runCatching { sourceEngine.chapters(binding.toItem()) }
+            val fromSource = runSuspendCatching { sourceEngine.chapters(binding.toItem()) }
                 .onFailure { Log.w(TAG, "chapters failed for \"${binding.title}\": ${it.message}") }
                 .getOrNull()
                 .orEmpty()

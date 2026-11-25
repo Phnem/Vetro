@@ -1,5 +1,6 @@
 package com.example.myapplication.audiobooks.ui.details
 
+import com.example.myapplication.utils.runSuspendCatching
 import com.example.myapplication.network.AppLanguage
 import kotlinx.coroutines.CancellationException
 import com.example.myapplication.audiobooks.domain.enrichment.BookCoverFinder
@@ -295,7 +296,7 @@ class BookDetailsViewModel(
                 return@launch
             }
             // Папку могли убрать или отозвать доступ: тогда остаются итоги из БД без списка глав.
-            val manifest = resolver?.let { r -> runCatching { r.manifest(variant) }.getOrNull() }
+            val manifest = resolver?.let { r -> runSuspendCatching { r.manifest(variant) }.getOrNull() }
             val chapters = manifest?.chapters.orEmpty()
             val durations: List<Long?> = when {
                 chapters.isNotEmpty() -> chapters.map { it.durationMs?.div(1000) }
@@ -347,14 +348,14 @@ class BookDetailsViewModel(
         // Обложки нет — ищем в каталогах; находка ложится в произведение и видна на полках.
         if (coverFinder != null && repository.coverInfo(opened.workId)?.coverUrl.isNullOrBlank()) {
             launch {
-                runCatching { coverFinder.first(details.book.title, details.book.authors) }.getOrNull()
-                    ?.let { runCatching { repository.setCover(opened.workId, it) } }
+                runSuspendCatching { coverFinder.first(details.book.title, details.book.authors) }.getOrNull()
+                    ?.let { runSuspendCatching { repository.setCover(opened.workId, it) } }
             }
         }
         val narrations = async { narrationsOf(details) }
         val work = async {
             workEnrichment?.let { enrichment ->
-                runCatching {
+                runSuspendCatching {
                     enrichment.lookup(details.book.title, details.book.authors, details.description, language())
                 }.getOrNull()
             }

@@ -1,5 +1,6 @@
 package com.example.myapplication.domain.enrichment
 
+import com.example.myapplication.utils.runSuspendCatching
 import com.example.myapplication.data.local.AppLanguagePrefs
 import android.content.Context
 import android.util.Log
@@ -127,7 +128,7 @@ class LiveMaintenanceWorker(
         try {
             collectReleaseYears(batch, language, found)
         } finally {
-            runCatching { localDataSource.setReleaseYears(found) }
+            runSuspendCatching { localDataSource.setReleaseYears(found) }
         }
     }
 
@@ -160,7 +161,7 @@ class LiveMaintenanceWorker(
             val before = beforeGaps.fieldKinds()
             if (before.isEmpty()) continue
 
-            runCatching { repairUseCase.repairOne(anime, language, AppContentType.ANIME, sessionLog) }
+            runSuspendCatching { repairUseCase.repairOne(anime, language, AppContentType.ANIME, sessionLog) }
                 .onFailure { Log.w(TAG, "repairOne failed for ${anime.title}", it) }
 
             val reloaded = localDataSource.getAnimeById(gap.animeId) ?: anime

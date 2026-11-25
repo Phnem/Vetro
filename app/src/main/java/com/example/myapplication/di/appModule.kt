@@ -1,5 +1,6 @@
 package com.example.myapplication.di
 
+import com.example.myapplication.utils.runSuspendCatching
 import io.ktor.client.call.body
 import io.ktor.client.request.get
 import com.example.myapplication.data.ai.AiLlmEndpoint
@@ -496,7 +497,7 @@ val appModule = module {
             accounts = get(),
             dir = java.io.File(androidContext().cacheDir, "subtitles"),
             fetchBytes = { url ->
-                runCatching {
+                runSuspendCatching {
                     val response = http.get(url)
                     if (response.status.value in 200..299) response.body<ByteArray>() else null
                 }.getOrNull()

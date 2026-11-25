@@ -1,5 +1,6 @@
 package com.example.myapplication.updates
 
+import com.example.myapplication.utils.runSuspendCatching
 import com.example.myapplication.domain.BackgroundSchedule
 import android.os.SystemClock
 import com.example.myapplication.data.models.AnimeUpdate
@@ -51,7 +52,7 @@ class EpisodeUpdateCheckCoordinator(
         }
         val catchUp = seasonCatchUp
         if (catchUpSeasons && catchUp != null && found.isNotEmpty()) {
-            appScope?.launch { runCatching { catchUp.catchUpAll(found.map { it.animeId }) } }
+            appScope?.launch { runSuspendCatching { catchUp.catchUpAll(found.map { it.animeId }) } }
         }
         return found
     }

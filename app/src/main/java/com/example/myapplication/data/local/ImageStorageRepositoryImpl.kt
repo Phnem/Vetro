@@ -1,5 +1,6 @@
 package com.example.myapplication.data.local
 
+import com.example.myapplication.utils.runSuspendCatching
 import android.content.Context
 import android.net.Uri
 import com.example.myapplication.data.repository.ImageStorageRepository
@@ -68,7 +69,7 @@ class ImageStorageRepositoryImpl(
     }
 
     override suspend fun saveImageFromUrl(url: String, animeId: String): Result<String> = withContext(Dispatchers.IO) {
-        runCatching {
+        runSuspendCatching {
             if (!url.startsWith("http")) error("Invalid URL: $url")
             val name = "img_${animeId}_${System.currentTimeMillis()}.webp"
             val bytes = httpClient.get(url).bodyAsBytes()

@@ -1,5 +1,6 @@
 package com.example.myapplication.domain.recommendations
 
+import com.example.myapplication.utils.runSuspendCatching
 import android.util.Log
 import com.example.myapplication.data.local.AnimeLocalDataSource
 import com.example.myapplication.data.local.RecommendationCacheStore
@@ -70,7 +71,7 @@ class RecommendationEngine(
     suspend fun recordFeedback(item: RecommendationItem, verdict: FeedbackVerdict) {
         feedbackStore.record(item.toFeedbackEntry(verdict, System.currentTimeMillis()))
         // Обучаемый ранжировщик MicroML учится на свайпе на устройстве; сбой обучения оценку не затрагивает.
-        runCatching { MicroMlBridge.learn(microMl, item, verdict == FeedbackVerdict.APPROVED) }
+        runSuspendCatching { MicroMlBridge.learn(microMl, item, verdict == FeedbackVerdict.APPROVED) }
             .onFailure { if (it is CancellationException) throw it }
     }
 
@@ -105,7 +106,7 @@ class RecommendationEngine(
                 existing.sourceFlags == flagsSignature(flags)
             ) return@withLock existing
 
-            val computed = runCatching { compute(library, language, feedback, flags) }
+            val computed = runSuspendCatching { compute(library, language, feedback, flags) }
                 .onFailure { Log.w(TAG, "Recommendations compute failed", it) }
                 .getOrNull()
 
@@ -134,7 +135,7 @@ class RecommendationEngine(
         val now = System.currentTimeMillis()
         // Найденные id уже записаны в базу; подпись библиотеки от tmdbId не зависит, кэш из-за них не инвалидируется.
         val library = if (flags.tmdbRec) {
-            idBackfill?.let { runCatching { it.run(storedLibrary) }.getOrNull() } ?: storedLibrary
+            idBackfill?.let { runSuspendCatching { it.run(storedLibrary) }.getOrNull() } ?: storedLibrary
         } else {
             storedLibrary
         }
@@ -243,14 +244,14 @@ class RecommendationEngine(
         // Каталог Vetro: у кандидата узнаётся Vetro id, и тайтл из коллекции под другими id и названием не пройдёт.
         // Сбой каталога выдачу не прячет: остаётся то, что пропустили прежние фильтры.
         val unowned = vetroFilter?.let { vetro ->
-            runCatching { vetro.apply(byIds, library) }
+            runSuspendCatching { vetro.apply(byIds, library) }
                 .onFailure { if (it is CancellationException) throw it else Log.w(TAG, "Vetro filter failed", it) }
                 .getOrDefault(byIds)
         } ?: byIds
         // Сбой сети не должен прятать рекомендации: при ошибке фильтр франшиз пропускается.
         val franchise = franchiseFilter
         val filtered = if (type == ContentType.ANIME && franchise != null) {
-            runCatching { franchise.dropOwned(unowned, library) }
+            runSuspendCatching { franchise.dropOwned(unowned, library) }
                 .onFailure { if (it is CancellationException) throw it else Log.w(TAG, "Franchise filter failed", it) }
                 .getOrDefault(unowned)
         } else {
@@ -277,7 +278,7 @@ class RecommendationEngine(
         // BALSE-style визуальный сигнал — только для cold start аниме, где остальные сигналы почти
         // отсутствуют; при любой проблеме (нет BYOK-провайдера, сеть, рейт-лимит) возвращаем items как есть.
         val ranked = if (type == ContentType.ANIME && !hadSeeds) {
-            runCatching { applyVisualColdStart(items, library) }.getOrElse { items }
+            runSuspendCatching { applyVisualColdStart(items, library) }.getOrElse { items }
         } else {
             items
         }

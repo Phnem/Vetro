@@ -1,5 +1,6 @@
 package com.example.myapplication.media.source
 
+import com.example.myapplication.utils.runSuspendCatching
 import android.util.Log
 import com.example.myapplication.data.local.WebLinksStore
 import com.example.myapplication.data.models.Anime
@@ -56,7 +57,7 @@ class SourceEngine(
         if (route == PlaybackRoute.None) return PlaybackResolution.NotConfigured(request.mediaType)
         if (route.movieSeriesLanguage != null) return resolveMovieSeries(request)
 
-        runCatching { intelligence?.ensureLoaded() }
+        runSuspendCatching { intelligence?.ensureLoaded() }
         val batch = when (route) {
             PlaybackRoute.AnimeRu -> resolveRu(request.anime, request.episodeNumber, request.seasonInfo)
             PlaybackRoute.AnimeEn -> resolveEn(request.anime, request.episodeNumber, request.seasonInfo)
@@ -296,8 +297,8 @@ class SourceEngine(
         val hosters = attempt.value.orEmpty()
         val playable = hosters.hasPlayableVideo()
         when {
-            playable -> runCatching { intelligence?.recordResolve(provider, language, ok = true, latencyMs = attempt.elapsedMs) }
-            attempt.failed -> runCatching { intelligence?.recordResolve(provider, language, ok = false, latencyMs = attempt.elapsedMs) }
+            playable -> runSuspendCatching { intelligence?.recordResolve(provider, language, ok = true, latencyMs = attempt.elapsedMs) }
+            attempt.failed -> runSuspendCatching { intelligence?.recordResolve(provider, language, ok = false, latencyMs = attempt.elapsedMs) }
         }
         if (!playable) return attempt
         val tagged = hosters.map { hoster ->

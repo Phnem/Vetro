@@ -1,5 +1,6 @@
 package com.example.myapplication.audiobooks.data
 
+import com.example.myapplication.utils.runSuspendCatching
 import android.content.Context
 import android.graphics.BitmapFactory
 import android.net.Uri
@@ -49,7 +50,7 @@ class BookCoverManager(
         val seen = shown.getOrPut(workId.value) { mutableSetOf() }
         info.coverUrl?.let { seen += it }
 
-        val candidates = runCatching { finder.candidates(info.title, info.authors) }
+        val candidates = runSuspendCatching { finder.candidates(info.title, info.authors) }
             .onFailure { Log.w(TAG, "cover search failed: ${it.message}") }.getOrDefault(emptyList())
 
         val next = pickNextCover(candidates, seen, MAX_CHECKS) { url ->
@@ -73,7 +74,7 @@ class BookCoverManager(
      */
     suspend fun options(workId: WorkId, query: String? = null): List<CoverOption> = withContext(Dispatchers.IO) {
         val info = repository.coverInfo(workId) ?: return@withContext emptyList()
-        runCatching { finder.options(info.title, info.authors, query) }
+        runSuspendCatching { finder.options(info.title, info.authors, query) }
             .onFailure { Log.w(TAG, "cover options failed: ${it.message}") }
             .getOrDefault(emptyList())
     }
@@ -118,7 +119,7 @@ class BookCoverManager(
     private suspend fun release(previous: String?, keep: String? = null) {
         if (previous == null || previous == keep) return
         when {
-            previous.startsWith(CLOUD_PREFIX) -> runCatching { attachments.deleteAttachment(previous) }
+            previous.startsWith(CLOUD_PREFIX) -> runSuspendCatching { attachments.deleteAttachment(previous) }
             previous.startsWith("file:") -> runCatching {
                 val file = File(requireNotNull(Uri.parse(previous).path))
                 if (file.parentFile?.name == File(LOCAL_DIR).name) file.delete()

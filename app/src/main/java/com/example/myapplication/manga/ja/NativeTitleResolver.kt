@@ -1,5 +1,6 @@
 package com.example.myapplication.manga.ja
 
+import com.example.myapplication.utils.runSuspendCatching
 import com.example.myapplication.data.local.JsonMapFileStore
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonArray
@@ -56,7 +57,7 @@ class NativeTitleResolver(
 
     private suspend fun lookup(queries: List<String>): NativeEntry? {
         for (query in queries) {
-            val media = runCatching { search(query) }
+            val media = runSuspendCatching { search(query) }
                 .onFailure { android.util.Log.w("JaTail", "anilist search for '$query' failed: ${it.message}") }
                 .getOrNull() ?: continue
             val match = media.firstOrNull { m -> m.names.any { JaTitles.same(it, query) } } ?: continue

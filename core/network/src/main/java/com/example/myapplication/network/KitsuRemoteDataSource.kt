@@ -1,5 +1,6 @@
 package com.example.myapplication.network
 
+import com.example.myapplication.utils.runSuspendCatching
 import android.util.Log
 import io.ktor.client.HttpClient
 import io.ktor.client.request.get
@@ -27,9 +28,9 @@ class KitsuRemoteDataSource(
 ) {
     private val json = AppJson
 
-    suspend fun searchAnime(query: String, limit: Int = 10): Result<List<ApiSearchResult>> = runCatching {
+    suspend fun searchAnime(query: String, limit: Int = 10): Result<List<ApiSearchResult>> = runSuspendCatching {
         val q = query.trim()
-        if (q.isEmpty()) return@runCatching emptyList()
+        if (q.isEmpty()) return@runSuspendCatching emptyList()
         burstRate.acquire()
         val body = client.get("https://kitsu.io/api/edge/anime") {
             parameter("filter[text]", q)
@@ -42,16 +43,16 @@ class KitsuRemoteDataSource(
     }
 
     /** Детали по названию: первый результат с совпадающим именем, EN synopsis. */
-    suspend fun fetchAnimeDetails(query: String): Result<AnimeDetails?> = runCatching {
+    suspend fun fetchAnimeDetails(query: String): Result<AnimeDetails?> = runSuspendCatching {
         val q = query.trim()
-        if (q.isEmpty()) return@runCatching null
+        if (q.isEmpty()) return@runSuspendCatching null
         val results = searchAnime(q, 5).getOrThrow()
         results.firstOrNull { isTitleSimilar(q, it.title, it.altTitle ?: "") }
             ?.toAnimeDetails()
             ?.copy(source = SOURCE)
     }
 
-    suspend fun animeById(id: Int): Result<ApiSearchResult?> = runCatching {
+    suspend fun animeById(id: Int): Result<ApiSearchResult?> = runSuspendCatching {
         burstRate.acquire()
         val body = client.get("https://kitsu.io/api/edge/anime/$id") {
             parameter("include", "categories")
@@ -59,7 +60,7 @@ class KitsuRemoteDataSource(
             header("Accept", "application/vnd.api+json")
         }.bodyAsText()
         val root = json.parseToJsonElement(body).jsonObject
-        val data = root["data"] as? JsonObject ?: return@runCatching null
+        val data = root["data"] as? JsonObject ?: return@runSuspendCatching null
         val categories = categoryTitlesById(root)
         data.toApiSearchResult(categories)
     }.onFailure { Log.w(TAG, "animeById failed: ${it.message}") }

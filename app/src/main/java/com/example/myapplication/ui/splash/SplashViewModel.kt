@@ -1,5 +1,6 @@
 package com.example.myapplication.ui.splash
 
+import com.example.myapplication.utils.runSuspendCatching
 import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -163,7 +164,7 @@ class SplashViewModel(
         }
 
         viewModelScope.launch(Dispatchers.IO) {
-            runCatching {
+            runSuspendCatching {
                 appUpdateManager.check(
                     force = false,
                     maxAgeMs = com.example.myapplication.update.AppUpdateManager.LAUNCH_CHECK_MAX_AGE_MS,

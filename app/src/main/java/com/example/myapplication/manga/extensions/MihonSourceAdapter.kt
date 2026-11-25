@@ -1,5 +1,6 @@
 package com.example.myapplication.manga.extensions
 
+import com.example.myapplication.utils.runSuspendCatching
 import com.example.myapplication.manga.domain.MangaChapter
 import com.example.myapplication.manga.domain.MangaDetails
 import com.example.myapplication.manga.domain.MangaItem
@@ -77,7 +78,7 @@ internal class MihonSourceAdapter(
         }
         val http = source as? HttpSource
         source.getPageList(sChapter).mapIndexedNotNull { position, page ->
-            runCatching {
+            runSuspendCatching {
                 if (page.imageUrl.isNullOrBlank() && http != null && page.url.isNotBlank()) {
                     page.imageUrl = http.getImageUrl(page)
                 }

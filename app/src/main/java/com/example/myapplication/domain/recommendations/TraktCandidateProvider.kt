@@ -1,5 +1,6 @@
 package com.example.myapplication.domain.recommendations
 
+import com.example.myapplication.utils.runSuspendCatching
 import com.example.myapplication.network.ApiSearchResult
 import com.example.myapplication.network.AppLanguage
 import com.example.myapplication.network.ExternalIds
@@ -47,7 +48,7 @@ class TraktCandidateProvider(
             usable.map { seed ->
                 async {
                     gate.withPermit {
-                        runCatching { related(isShow, seed) }.getOrElse { SeedRelated(seed, emptyList(), failed = true) }
+                        runSuspendCatching { related(isShow, seed) }.getOrElse { SeedRelated(seed, emptyList(), failed = true) }
                     }
                 }
             }.awaitAll()
@@ -97,7 +98,7 @@ class TraktCandidateProvider(
         return supervisorScope {
             popular.map { tmdbId ->
                 async {
-                    gate.withPermit { tmdbId to runCatching { detail(isShow, tmdbId) }.getOrNull() }
+                    gate.withPermit { tmdbId to runSuspendCatching { detail(isShow, tmdbId) }.getOrNull() }
                 }
             }.awaitAll()
         }.mapNotNull { (id, d) -> d?.let { id to it } }.toMap()

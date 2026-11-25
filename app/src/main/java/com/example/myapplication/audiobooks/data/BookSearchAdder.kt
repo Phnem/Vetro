@@ -1,5 +1,6 @@
 package com.example.myapplication.audiobooks.data
 
+import com.example.myapplication.utils.runSuspendCatching
 import com.example.myapplication.audiobooks.catalog.BookCatalog
 import com.example.myapplication.audiobooks.catalog.BookNorm
 import com.example.myapplication.audiobooks.catalog.CatalogBook
@@ -70,7 +71,7 @@ class BookSearchAdder(
         val cat = catalog ?: return searchAudio(query)
         return coroutineScope {
             val audioJob = async { searchAudio(query) }
-            val books = runCatching { cat.search(query, CATALOG_LIMIT) }.getOrElse { if (it is CancellationException) throw it else emptyList() }
+            val books = runSuspendCatching { cat.search(query, CATALOG_LIMIT) }.getOrElse { if (it is CancellationException) throw it else emptyList() }
             // Каталог уверенно нашёл книги — сайты нужны лишь как подсказка «озвучка есть», ждём их недолго.
             val audio = if (books.size >= CONFIDENT) {
                 withTimeoutOrNull(AUDIO_HINT_WAIT_MS) { audioJob.await() }.also { if (it == null) audioJob.cancel() }.orEmpty()

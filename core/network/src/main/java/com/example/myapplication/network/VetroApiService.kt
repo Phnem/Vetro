@@ -1,5 +1,6 @@
 package com.example.myapplication.network
 
+import com.example.myapplication.utils.runSuspendCatching
 import com.example.myapplication.network.movie.MovieSeriesRepository
 import io.ktor.client.HttpClient
 import io.ktor.client.request.get
@@ -46,10 +47,10 @@ class VetroApiService(
     private val json = AppJson
 
     override suspend fun fetchDetails(request: DetailsLookupRequest): Result<AnimeDetails?> {
-        return runCatching {
+        return runSuspendCatching {
             heavyRate.acquire()
             if (request.appContentType == AppContentType.MOVIE || request.appContentType == AppContentType.SERIES) {
-                return@runCatching movieSeriesRepository.fetchDetails(
+                return@runSuspendCatching movieSeriesRepository.fetchDetails(
                     contentType = request.appContentType,
                     language = request.language,
                     externalIds = request.externalIds,
@@ -59,7 +60,7 @@ class VetroApiService(
             if (request.isManga) {
                 if (request.remangaId != null) {
                     val remangaDetails = remanga.getMangaDetails(request.remangaId)
-                    if (remangaDetails != null) return@runCatching remangaDetails
+                    if (remangaDetails != null) return@runSuspendCatching remangaDetails
                 }
                 val query = request.title.trim()
                 when (request.language) {
@@ -158,7 +159,7 @@ class VetroApiService(
         categoryType: String,
         appContentType: AppContentType
     ): Result<Pair<Int, String>?> {
-        return runCatching {
+        return runSuspendCatching {
             heavyRate.acquire()
             when (appContentType) {
                 AppContentType.ANIME -> {
@@ -177,7 +178,7 @@ class VetroApiService(
     }
 
     override suspend fun searchApi(query: String, contentType: AppContentType, language: AppLanguage): Result<List<ApiSearchResult>> {
-        return runCatching { searchApiProgressive(query, contentType, language).lastOrNull().orEmpty() }
+        return runSuspendCatching { searchApiProgressive(query, contentType, language).lastOrNull().orEmpty() }
     }
 
     /**
@@ -226,19 +227,19 @@ class VetroApiService(
         language: AppLanguage,
         allowZeroEpisodes: Boolean
     ): Result<List<ApiSearchResult>> {
-        return runCatching {
+        return runSuspendCatching {
             searchRate.acquire()
             val q = query.trim()
-            if (q.isEmpty()) return@runCatching emptyList()
+            if (q.isEmpty()) return@runSuspendCatching emptyList()
             val raw = shikimori.searchAnime(q, 20, language).getOrThrow()
             // Inspect: обычно убираем 0 эпизодов; AI — оставляем, иначе пусто у анонсов/некоторых записей
             val pool = if (allowZeroEpisodes) raw else raw.filter { it.episodes > 0 }
-            if (pool.isEmpty()) return@runCatching emptyList()
+            if (pool.isEmpty()) return@runSuspendCatching emptyList()
 
             // Для Inspect RU-аниме нам критично "не получить пусто" из-за слишком строгого fuzzy:
             // Gemini часто даёт близкое, но не 1:1 совпадение. Поэтому делаем мягкую фильтрацию.
             val normQuery = normalizeForSearch(q)
-            if (normQuery.isEmpty()) return@runCatching pool
+            if (normQuery.isEmpty()) return@runSuspendCatching pool
 
             fun searchableKey(r: ApiSearchResult): String {
                 val both = (r.title + " " + (r.altTitle ?: "")).trim()
@@ -266,7 +267,7 @@ class VetroApiService(
     }
 
     override suspend fun mediaByAnilistId(id: Int): Result<ApiSearchResult?> {
-        return runCatching {
+        return runSuspendCatching {
             searchRate.acquire()
             aniList.mediaByAnilistId(id).getOrThrow()
         }
@@ -276,37 +277,37 @@ class VetroApiService(
         query: String,
         language: AppLanguage,
         limit: Int
-    ): Result<List<ApiSearchResult>> = runCatching {
+    ): Result<List<ApiSearchResult>> = runSuspendCatching {
         searchRate.acquire()
         aniList.searchAnime(query.trim(), limit, language).getOrThrow()
     }
 
-    override suspend fun shikimoriById(id: Int, language: AppLanguage): Result<ApiSearchResult?> = runCatching {
+    override suspend fun shikimoriById(id: Int, language: AppLanguage): Result<ApiSearchResult?> = runSuspendCatching {
         searchRate.acquire()
         shikimori.getAnimeById(id, language).getOrThrow()
     }
 
-    override suspend fun malById(id: Int, language: AppLanguage): Result<ApiSearchResult?> = runCatching {
+    override suspend fun malById(id: Int, language: AppLanguage): Result<ApiSearchResult?> = runSuspendCatching {
         searchRate.acquire()
         fetchJikanById(id, language)
     }
 
-    override suspend fun episodeCheckByAnilistIds(ids: List<Int>): Result<List<EpisodeCheckMedia>> = runCatching {
+    override suspend fun episodeCheckByAnilistIds(ids: List<Int>): Result<List<EpisodeCheckMedia>> = runSuspendCatching {
         searchRate.acquire()
         aniList.episodeCheckByAnilistIds(ids).getOrThrow()
     }
 
-    override suspend fun episodeCheckByMalIds(malIds: List<Int>): Result<List<EpisodeCheckMedia>> = runCatching {
+    override suspend fun episodeCheckByMalIds(malIds: List<Int>): Result<List<EpisodeCheckMedia>> = runSuspendCatching {
         searchRate.acquire()
         aniList.episodeCheckByMalIds(malIds).getOrThrow()
     }
 
-    override suspend fun franchiseLinksByAnilistIds(ids: List<Int>): Result<List<FranchiseLinks>> = runCatching {
+    override suspend fun franchiseLinksByAnilistIds(ids: List<Int>): Result<List<FranchiseLinks>> = runSuspendCatching {
         searchRate.acquire()
         aniList.franchiseLinksByAnilistIds(ids).getOrThrow()
     }
 
-    override suspend fun franchiseLinksByMalIds(malIds: List<Int>): Result<List<FranchiseLinks>> = runCatching {
+    override suspend fun franchiseLinksByMalIds(malIds: List<Int>): Result<List<FranchiseLinks>> = runSuspendCatching {
         searchRate.acquire()
         aniList.franchiseLinksByMalIds(malIds).getOrThrow()
     }
@@ -315,47 +316,47 @@ class VetroApiService(
         query: String,
         language: AppLanguage,
         limit: Int
-    ): Result<List<ApiSearchResult>> = runCatching {
+    ): Result<List<ApiSearchResult>> = runSuspendCatching {
         searchRate.acquire()
         searchJikan(query.trim(), language).take(limit)
     }
 
-    override suspend fun searchAnimeKitsuOnly(query: String, limit: Int): Result<List<ApiSearchResult>> = runCatching {
+    override suspend fun searchAnimeKitsuOnly(query: String, limit: Int): Result<List<ApiSearchResult>> = runSuspendCatching {
         searchRate.acquire()
         kitsu.searchAnime(query.trim(), limit).getOrThrow()
     }
 
-    override suspend fun searchAnimeAnilibriaOnly(query: String, limit: Int): Result<List<ApiSearchResult>> = runCatching {
+    override suspend fun searchAnimeAnilibriaOnly(query: String, limit: Int): Result<List<ApiSearchResult>> = runSuspendCatching {
         searchRate.acquire()
         anilibria.searchAnime(query.trim(), limit).getOrThrow()
     }
 
-    override suspend fun enrichTitlesByIds(anilistId: Int?, malId: Int?): Result<EnrichedTitles?> = runCatching {
+    override suspend fun enrichTitlesByIds(anilistId: Int?, malId: Int?): Result<EnrichedTitles?> = runSuspendCatching {
         searchRate.acquire()
         aniList.enrichTitlesByIds(anilistId, malId).getOrThrow()
     }
 
-    override suspend fun enrichTitlesBySearch(query: String, limit: Int): Result<List<EnrichedTitles>> = runCatching {
+    override suspend fun enrichTitlesBySearch(query: String, limit: Int): Result<List<EnrichedTitles>> = runSuspendCatching {
         searchRate.acquire()
         aniList.enrichTitlesBySearch(query.trim(), limit).getOrThrow()
     }
 
-    override suspend fun malTitlesById(id: Int): Result<EnrichedTitles?> = runCatching {
+    override suspend fun malTitlesById(id: Int): Result<EnrichedTitles?> = runSuspendCatching {
         searchRate.acquire()
         fetchJikanTitlesById(id)
     }
 
-    override suspend fun malTitlesBySearch(query: String, limit: Int): Result<List<EnrichedTitles>> = runCatching {
+    override suspend fun malTitlesBySearch(query: String, limit: Int): Result<List<EnrichedTitles>> = runSuspendCatching {
         searchRate.acquire()
         searchJikanTitles(query.trim(), limit)
     }
 
-    override suspend fun russianTitleByShikimoriId(id: Int): Result<EnrichedTitles?> = runCatching {
+    override suspend fun russianTitleByShikimoriId(id: Int): Result<EnrichedTitles?> = runSuspendCatching {
         searchRate.acquire()
         shikimori.enrichRussianById(id).getOrThrow()
     }
 
-    override suspend fun russianTitlesBySearch(query: String, limit: Int): Result<List<EnrichedTitles>> = runCatching {
+    override suspend fun russianTitlesBySearch(query: String, limit: Int): Result<List<EnrichedTitles>> = runSuspendCatching {
         searchRate.acquire()
         shikimori.enrichRussianBySearch(query.trim(), limit).getOrThrow()
     }
@@ -363,21 +364,21 @@ class VetroApiService(
     override suspend fun anilistRecommendationsBatch(
         anilistIds: List<Int>,
         perSeed: Int
-    ): Result<Map<Int, List<ApiSearchResult>>> = runCatching {
-        if (anilistIds.isEmpty()) return@runCatching emptyMap()
+    ): Result<Map<Int, List<ApiSearchResult>>> = runSuspendCatching {
+        if (anilistIds.isEmpty()) return@runSuspendCatching emptyMap()
         searchRate.acquire()
         aniList.recommendationsForIds(anilistIds, perSeed).getOrThrow()
     }
 
-    override suspend fun shikimoriSimilar(id: Int, language: AppLanguage): Result<List<ApiSearchResult>> = runCatching {
+    override suspend fun shikimoriSimilar(id: Int, language: AppLanguage): Result<List<ApiSearchResult>> = runSuspendCatching {
         searchRate.acquire()
         shikimori.getSimilarAnime(id, language).getOrThrow()
     }
 
-    override suspend fun malRecommendations(id: Int): Result<List<ApiSearchResult>>  = runCatching {
+    override suspend fun malRecommendations(id: Int): Result<List<ApiSearchResult>>  = runSuspendCatching {
         searchRate.acquire()
         val root = jikan.get(listOf("anime", id.toString(), "recommendations")) ?: error("Jikan unavailable")
-        val data = root["data"]?.jsonArray ?: return@runCatching emptyList()
+        val data = root["data"]?.jsonArray ?: return@runSuspendCatching emptyList()
         data.mapNotNull { el ->
             val entry = el.jsonObject["entry"]?.jsonObject ?: return@mapNotNull null
             val title = entry["title"]?.jsonPrimitive?.content ?: return@mapNotNull null
@@ -402,7 +403,7 @@ class VetroApiService(
         }
     }
 
-    override suspend fun anilistTrending(limit: Int): Result<List<ApiSearchResult>> = runCatching {
+    override suspend fun anilistTrending(limit: Int): Result<List<ApiSearchResult>> = runSuspendCatching {
         searchRate.acquire()
         aniList.trendingAnime(limit).getOrThrow()
     }
@@ -622,9 +623,9 @@ class VetroApiService(
         return (shikiExtra + ranked).distinctBy { resultDedupKey(it) }.take(20)
     }
 
-    private suspend fun searchJikan(query: String, language: AppLanguage): List<ApiSearchResult> = runCatching {
+    private suspend fun searchJikan(query: String, language: AppLanguage): List<ApiSearchResult> = runSuspendCatching {
         val root = jikan.get(listOf("anime"), mapOf("q" to query, "limit" to "20")) ?: error("Jikan unavailable")
-        val data = root["data"]?.jsonArray ?: return@runCatching emptyList()
+        val data = root["data"]?.jsonArray ?: return@runSuspendCatching emptyList()
         data.mapNotNull { el ->
             val obj = el.jsonObject
             val titleJp = obj["title"]?.jsonPrimitive?.content ?: return@mapNotNull null
@@ -715,9 +716,9 @@ class VetroApiService(
         return StagedSearch(mergeManga(query, gathered.results), gathered.complete)
     }
 
-    private suspend fun searchJikanManga(query: String, language: AppLanguage): List<ApiSearchResult> = runCatching {
+    private suspend fun searchJikanManga(query: String, language: AppLanguage): List<ApiSearchResult> = runSuspendCatching {
         val root = jikan.get(listOf("manga"), mapOf("q" to query, "limit" to "20")) ?: error("Jikan unavailable")
-        val data = root["data"]?.jsonArray ?: return@runCatching emptyList()
+        val data = root["data"]?.jsonArray ?: return@runSuspendCatching emptyList()
         data.mapNotNull { el ->
             val obj = el.jsonObject
             val titleJp = obj["title"]?.jsonPrimitive?.content ?: return@mapNotNull null
@@ -752,10 +753,10 @@ class VetroApiService(
         }
     }.getOrElse { emptyList() }
 
-    private suspend fun fetchJikanById(id: Int, language: AppLanguage): ApiSearchResult? = runCatching {
+    private suspend fun fetchJikanById(id: Int, language: AppLanguage): ApiSearchResult? = runSuspendCatching {
         val root = jikan.get(listOf("anime", id.toString())) ?: error("Jikan unavailable")
-        val obj = root["data"]?.jsonObject ?: return@runCatching null
-        val titleJp = obj["title"]?.jsonPrimitive?.content ?: return@runCatching null
+        val obj = root["data"]?.jsonObject ?: return@runSuspendCatching null
+        val titleJp = obj["title"]?.jsonPrimitive?.content ?: return@runSuspendCatching null
         val titleEng = obj["title_english"]?.jsonPrimitive?.content ?: ""
         val (displayTitle, altTitle) = when {
             language == AppLanguage.RU && titleJp.isNotBlank() -> titleJp to titleEng.takeIf { it.isNotBlank() && it != titleJp }
@@ -826,14 +827,14 @@ class VetroApiService(
         )
     }
 
-    private suspend fun fetchJikanTitlesById(id: Int): EnrichedTitles? = runCatching {
+    private suspend fun fetchJikanTitlesById(id: Int): EnrichedTitles? = runSuspendCatching {
         val root = jikan.get(listOf("anime", id.toString())) ?: error("Jikan unavailable")
-        val obj = root["data"]?.jsonObject ?: return@runCatching null
+        val obj = root["data"]?.jsonObject ?: return@runSuspendCatching null
         parseJikanTitles(obj)
     }.getOrNull()
 
-    private suspend fun searchJikanTitles(query: String, limit: Int): List<EnrichedTitles> = runCatching {
-        if (query.isBlank()) return@runCatching emptyList()
+    private suspend fun searchJikanTitles(query: String, limit: Int): List<EnrichedTitles> = runSuspendCatching {
+        if (query.isBlank()) return@runSuspendCatching emptyList()
         val root = jikan.get(listOf("anime"), mapOf("q" to query, "limit" to limit.toString())) ?: error("Jikan unavailable")
         root["data"]?.jsonArray
             ?.mapNotNull { parseJikanTitles(it.jsonObject) }
@@ -841,20 +842,20 @@ class VetroApiService(
     }.getOrElse { emptyList() }
 
     override suspend fun checkGithubUpdate(owner: String, repo: String): Result<GithubReleaseInfo?> {
-        return runCatching {
+        return runSuspendCatching {
             val response = httpClient.get("https://api.github.com/repos/$owner/$repo/releases").bodyAsText()
             GithubReleaseParser.parse(response)
         }
     }
 
     private suspend fun checkJikan(query: String): Pair<Int, String>? {
-        return runCatching {
+        return runSuspendCatching {
             val root = jikan.get(listOf("anime"), mapOf("q" to query, "limit" to "1")) ?: error("Jikan unavailable")
-            val data = root["data"]?.jsonArray ?: return@runCatching null
-            val first = data.firstOrNull()?.jsonObject ?: return@runCatching null
-            val title = first["title"]?.jsonPrimitive?.content ?: return@runCatching null
+            val data = root["data"]?.jsonArray ?: return@runSuspendCatching null
+            val first = data.firstOrNull()?.jsonObject ?: return@runSuspendCatching null
+            val title = first["title"]?.jsonPrimitive?.content ?: return@runSuspendCatching null
             val titleEng = first["title_english"]?.jsonPrimitive?.content ?: ""
-            if (!isTitleSimilar(query, title, titleEng)) return@runCatching null
+            if (!isTitleSimilar(query, title, titleEng)) return@runSuspendCatching null
             val episodes = first["episodes"]?.jsonPrimitive?.intOrNull ?: 0
             if (episodes > 0) episodes to "Jikan" else null
         }.getOrNull()

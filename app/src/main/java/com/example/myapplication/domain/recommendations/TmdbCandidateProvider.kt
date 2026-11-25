@@ -1,5 +1,6 @@
 package com.example.myapplication.domain.recommendations
 
+import com.example.myapplication.utils.runSuspendCatching
 import com.example.myapplication.network.ApiSearchResult
 import com.example.myapplication.network.AppLanguage
 import com.example.myapplication.network.LookupResult
@@ -36,7 +37,7 @@ class TmdbCandidateProvider(private val tmdb: TmdbRemoteDataSource) : CandidateP
             usable.map { seed ->
                 async {
                     gate.withPermit {
-                        runCatching { fetchSeed(isTv, type, seed, language) }.getOrElse { SeedFetch(emptyList(), failed = true) }
+                        runSuspendCatching { fetchSeed(isTv, type, seed, language) }.getOrElse { SeedFetch(emptyList(), failed = true) }
                     }
                 }
             }.awaitAll()

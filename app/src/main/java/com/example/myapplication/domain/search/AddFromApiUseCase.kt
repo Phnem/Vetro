@@ -1,5 +1,6 @@
 package com.example.myapplication.domain.search
 
+import com.example.myapplication.utils.runSuspendCatching
 import com.example.myapplication.domain.normalizeForSearch
 import com.example.myapplication.data.models.Anime
 import com.example.myapplication.data.models.MediaType
@@ -160,13 +161,13 @@ class AddFromApiUseCase(
 ) {
     suspend operator fun invoke(
         result: ApiSearchResult
-    ): Result<AddFromApiOutcome> = runCatching {
+    ): Result<AddFromApiOutcome> = runSuspendCatching {
         // Проверка дубликата — до всякой работы. Раньше её не было вовсе, и каждый вызов начинался
         // с генерации нового UUID: N нажатий давали N записей. Проверять надо именно здесь, а не в
         // UI: между нажатием и сохранением проходит скачивание постера, и за это время успевает
         // прилететь второй вызов.
         if (findExistingDuplicate(result) != null) {
-            return@runCatching AddFromApiOutcome.ALREADY_IN_COLLECTION
+            return@runSuspendCatching AddFromApiOutcome.ALREADY_IN_COLLECTION
         }
 
         val animeId = idGenerator.generateUuid()

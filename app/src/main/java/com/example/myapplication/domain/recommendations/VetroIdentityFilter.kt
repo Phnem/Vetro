@@ -1,5 +1,6 @@
 package com.example.myapplication.domain.recommendations
 
+import com.example.myapplication.utils.runSuspendCatching
 import com.example.myapplication.data.local.VetroLinks
 import com.example.myapplication.data.models.Anime
 import com.example.myapplication.mediacatalog.HttpVetroCatalog
@@ -34,7 +35,7 @@ class VetroIdentityFilter(
         if (pool.isEmpty()) return pool
         return try {
             // Свежедобавленные тайтлы коллекции тоже получают Vetro id (быстро: по id, пачками); часть остатка — по названию.
-            runCatching { linker.linkQuick(titleLimit = QUICK_TITLES) }.onFailure { if (it is CancellationException) throw it }
+            runSuspendCatching { linker.linkQuick(titleLimit = QUICK_TITLES) }.onFailure { if (it is CancellationException) throw it }
             val libraryIds = library.mapTo(HashSet()) { it.id }
             val owned = store.all().filter { it.animeId in libraryIds }.mapNotNullTo(HashSet()) { it.vetroId }
 

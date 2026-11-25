@@ -1,5 +1,6 @@
 package com.example.myapplication.audiobooks.domain.source
 
+import com.example.myapplication.utils.runSuspendCatching
 import com.example.myapplication.audiobooks.domain.model.AudioTrack
 import com.example.myapplication.audiobooks.domain.model.Chapter
 import com.example.myapplication.audiobooks.domain.model.MediaManifest
@@ -71,7 +72,7 @@ class ManifestResolver(
     }
 
     private suspend fun overlay(manifest: MediaManifest): MediaManifest {
-        val chapters = chapterOverride?.let { runCatching { it.chapters(manifest) }.getOrNull() } ?: return manifest
+        val chapters = chapterOverride?.let { runSuspendCatching { it.chapters(manifest) }.getOrNull() } ?: return manifest
         return manifest.copy(chapters = chapters)
     }
 

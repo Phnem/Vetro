@@ -1,5 +1,6 @@
 package com.example.myapplication.media.source.vfmodule
 
+import com.example.myapplication.utils.runSuspendCatching
 import android.util.Log
 import com.example.myapplication.media.source.VetroVideo
 import com.example.myapplication.network.AppJson
@@ -30,7 +31,7 @@ class CvhStreamResolver(
         kinopoiskId: Int,
         season: Int? = null,
         episode: Int? = null,
-    ): String? = runCatching {
+    ): String? = runSuspendCatching {
         val response = client.get("$PLAPI_BASE/playlist") {
             parameter("pub", 12)
             parameter("aggr", "kp")
@@ -40,8 +41,8 @@ class CvhStreamResolver(
             header("Referer", "http://lostfilm5.org")
         }.bodyAsText()
 
-        val root = json.parseToJsonElement(response) as? JsonObject ?: return@runCatching null
-        val items = root["items"] as? JsonArray ?: return@runCatching null
+        val root = json.parseToJsonElement(response) as? JsonObject ?: return@runSuspendCatching null
+        val items = root["items"] as? JsonArray ?: return@runSuspendCatching null
         val objects = items.mapNotNull { it as? JsonObject }
         val matched = if (season != null && episode != null) {
             objects.firstOrNull { item ->
@@ -79,7 +80,7 @@ class CvhStreamResolver(
             .sortedByDescending { it.resolutionValue() }
     }
 
-    private suspend fun queryPlapi(vkId: String): List<VetroVideo> = runCatching {
+    private suspend fun queryPlapi(vkId: String): List<VetroVideo> = runSuspendCatching {
         val url = "$PLAPI_BASE/video/$vkId"
         val response = client.get(url) {
             header("User-Agent", VfConstants.CHROME_USER_AGENT)
@@ -97,7 +98,7 @@ class CvhStreamResolver(
         return runCatching {
             for (base in STREAMS_VK_BASES) {
                 val url = "$base/streams/vk?vkId=$vkId"
-                val response = runCatching {
+                val response = runSuspendCatching {
                     client.get(url) {
                         header("User-Agent", VfConstants.CHROME_USER_AGENT)
                         header("Accept", "application/json, text/plain, */*")

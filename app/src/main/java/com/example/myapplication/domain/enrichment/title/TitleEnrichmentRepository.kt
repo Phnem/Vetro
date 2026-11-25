@@ -1,5 +1,6 @@
 package com.example.myapplication.domain.enrichment.title
 
+import com.example.myapplication.utils.runSuspendCatching
 import android.util.Log
 import com.example.myapplication.data.local.ReleaseObservationStore
 import com.example.myapplication.data.models.Anime
@@ -206,7 +207,7 @@ class TitleEnrichmentRepository(
         val episode = item.lastEpisode
         val at = item.lastReleasedAt
         if (episode != null && at != null) {
-            runCatching { observations?.record(anime.id, episode, at.toEpochMilli(), exact = true) }
+            runSuspendCatching { observations?.record(anime.id, episode, at.toEpochMilli(), exact = true) }
         }
         return item
     }

@@ -1,5 +1,6 @@
 package com.example.myapplication.ui.inspect
 
+import com.example.myapplication.utils.runSuspendCatching
 import com.example.myapplication.domain.search.isInCollection
 import com.example.myapplication.network.listKey
 import com.example.myapplication.data.local.AppLanguagePrefs
@@ -136,7 +137,7 @@ class InspectViewModel(
             _rawResults.value = emptyList()
             _loadingMessage.value = str.inspectLoadingAnalyzing
             val outcome = com.example.myapplication.utils.runSuspendCatching {
-                val bytes = runCatching { compressVisualSearchImage(context, uri) }.getOrElse {
+                val bytes = runSuspendCatching { compressVisualSearchImage(context, uri) }.getOrElse {
                     error(str.inspectReadImageFailed)
                 }
                 val mime = "image/jpeg"

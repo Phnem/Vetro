@@ -1,5 +1,6 @@
 package com.example.myapplication.ui.details.share
 
+import com.example.myapplication.utils.runSuspendCatching
 import com.example.myapplication.utils.takeWholeChars
 import android.content.ContentValues
 import android.content.Context
@@ -260,7 +261,7 @@ object WatchingCardActions {
      * FileProvider) и перезаписывается при каждой отправке, так что не копится.
      */
     suspend fun share(context: Context, bitmap: Bitmap, ru: Boolean): Boolean {
-        val uri = runCatching {
+        val uri = runSuspendCatching {
             withContext(Dispatchers.IO) {
                 val dir = File(context.cacheDir, "share").apply { mkdirs() }
                 val file = File(dir, "watching_card.png")

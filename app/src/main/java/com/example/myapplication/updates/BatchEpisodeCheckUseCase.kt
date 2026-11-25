@@ -1,5 +1,6 @@
 package com.example.myapplication.updates
 
+import com.example.myapplication.utils.runSuspendCatching
 import com.example.myapplication.network.retryOn429
 import android.util.Log
 import com.example.myapplication.data.local.AnimeLocalDataSource
@@ -69,17 +70,17 @@ class BatchEpisodeCheckUseCase(
         } else {
             detected.airing + previousAiring.values.filter { it.animeId !in scope }
         }
-        runCatching { localDataSource.setAiringProgress(airingToStore) }
+        runSuspendCatching { localDataSource.setAiringProgress(airingToStore) }
             .onFailure { Log.w(TAG, "setAiringProgress failed: ${it.message}") }
         recordReleaseObservations(previousAiring, detected.airing)
 
         // Придержанные порогом доступности серии не публикуются: ни в ленту, ни в пуш. Следующая проверка
         // найдёт их снова (их никто не подтвердил) и спросит фильтр ещё раз, не чаще раза в шесть часов.
         // Выключенные колокольчиком тайтлы отсеиваются раньше порога: ни пуша, ни аудита озвучек ради них.
-        val muted = runCatching { mutedTitles() }.getOrDefault(emptySet())
+        val muted = runSuspendCatching { mutedTitles() }.getOrDefault(emptySet())
         val audible = if (muted.isEmpty()) detected.updates else detected.updates.filterNot { it.animeId in muted }
         val publishable = availabilityGate?.let { gate ->
-            runCatching { gate.filter(audible) }
+            runSuspendCatching { gate.filter(audible) }
                 .onFailure { Log.w(TAG, "availability gate failed: ${it.message}") }
                 .getOrDefault(audible)
         } ?: audible
@@ -120,7 +121,7 @@ class BatchEpisodeCheckUseCase(
             val before = previous[item.animeId] ?: continue
             if (item.airedEpisodes <= before.airedEpisodes) continue
             if (before.seasonNumber != null && item.seasonNumber != null && before.seasonNumber != item.seasonNumber) continue
-            runCatching { store.record(item.animeId, item.airedEpisodes, now, exact = false) }
+            runSuspendCatching { store.record(item.animeId, item.airedEpisodes, now, exact = false) }
                 .onFailure { Log.w(TAG, "release observation failed: ${it.message}") }
         }
     }
@@ -376,7 +377,7 @@ class BatchEpisodeCheckUseCase(
 
     /** Дозаписываем найденные внешние id — следующий прогон пойдёт быстрой веткой. */
     private suspend fun backfillIds(anime: Anime, media: EpisodeCheckMedia) {
-        runCatching {
+        runSuspendCatching {
             if (anime.anilistId == null) localDataSource.setAnilistId(anime.id, media.anilistId)
             val mal = media.malId
             if (anime.malId == null && mal != null) localDataSource.setMalId(anime.id, mal)
@@ -514,7 +515,7 @@ class BatchEpisodeCheckUseCase(
 
     private suspend fun markNotFound(anime: Anime, source: SearchSource) {
         val now = System.currentTimeMillis()
-        runCatching {
+        runSuspendCatching {
             when (source) {
                 SearchSource.ANILIST -> localDataSource.markAnilistNotFound(anime.id, now)
                 SearchSource.SHIKIMORI -> localDataSource.markShikimoriNotFound(anime.id, now)
@@ -525,7 +526,7 @@ class BatchEpisodeCheckUseCase(
 
     private suspend fun persistDiscoveredId(anime: Anime, source: SearchSource, result: ApiSearchResult) {
         val extId = result.externalId?.toIntOrNull() ?: return
-        runCatching {
+        runSuspendCatching {
             when (source) {
                 SearchSource.ANILIST -> if (anime.anilistId == null) localDataSource.setAnilistId(anime.id, extId)
                 SearchSource.SHIKIMORI -> {

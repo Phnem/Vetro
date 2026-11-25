@@ -1,5 +1,6 @@
 package com.example.myapplication.media.source.vftmodule
 
+import com.example.myapplication.utils.runSuspendCatching
 import android.util.Log
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -149,7 +150,7 @@ class VftLocalStreamServer(
             }
 
             val info = torrentEngine.getCachedInfo(hash) ?: kotlinx.coroutines.runBlocking {
-                runCatching { torrentEngine.fetchMetadata("magnet:?xt=urn:btih:$hash") }.getOrNull()
+                runSuspendCatching { torrentEngine.fetchMetadata("magnet:?xt=urn:btih:$hash") }.getOrNull()
             }
 
             if (info == null) {

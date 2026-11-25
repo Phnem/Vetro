@@ -1,5 +1,6 @@
 package com.example.myapplication.domain.recommendations
 
+import com.example.myapplication.utils.runSuspendCatching
 import com.example.myapplication.network.AppJson
 import android.util.Log
 import com.example.myapplication.data.ai.AiCredentialsStore
@@ -59,7 +60,7 @@ class CoverDescriptorProvider(
         val provider = credentialsStore.getAllConnectedProviders().firstOrNull { it.supportsVision }
             ?: return null
         val apiKey = credentialsStore.getApiKey(provider) ?: return null
-        return runCatching {
+        return runSuspendCatching {
             val imageBase64 = Base64.getEncoder().encodeToString(loadBytes())
             val text = aiEndpoint.completeWithImage(
                 provider = provider,

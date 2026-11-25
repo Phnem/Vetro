@@ -1,5 +1,6 @@
 package com.example.myapplication.manga.ja
 
+import com.example.myapplication.utils.runSuspendCatching
 import android.util.Log
 import com.example.myapplication.data.local.JsonMapFileStore
 import com.example.myapplication.manga.domain.MangaChapter
@@ -120,7 +121,7 @@ class JaTailResolver(
         if (preferredLanguage == null) return base
         val last = base.filter { it.language == preferredLanguage && !it.paid }
             .mapNotNull { it.number }.maxOrNull() ?: return base
-        val japanese = runCatching {
+        val japanese = runSuspendCatching {
             if (allowSearch) resolve(TailRequest(animeId, queries, last)) else cached(animeId, last)
         }.onFailure { Log.w(TAG, "tail failed: ${it.message}") }.getOrDefault(emptyList())
         val englishChapters = englishTail(base, animeId, preferredLanguage, queries, last, allowSearch)
@@ -145,7 +146,7 @@ class JaTailResolver(
     ): List<MangaChapter> {
         val finder = english ?: return emptyList()
         if (preferredLanguage == "en" || base.any { it.language == "en" }) return emptyList()
-        return runCatching { finder.chaptersAfter(animeId, queries, last, allowSearch) }
+        return runSuspendCatching { finder.chaptersAfter(animeId, queries, last, allowSearch) }
             .onFailure { Log.w(TAG, "english tail failed: ${it.message}") }
             .getOrDefault(emptyList())
     }
@@ -199,7 +200,7 @@ class JaTailResolver(
         val started = clock()
         for (title in native.titles) {
             val page = withTimeoutOrNull(SEARCH_TIMEOUT_MS) {
-                runCatching { source.search(title, 1) }
+                runSuspendCatching { source.search(title, 1) }
                     .onFailure { Log.w(TAG, "${source.name}: search failed: ${it.message}") }
                     .getOrNull()
             }
@@ -241,7 +242,7 @@ class JaTailResolver(
         val all = cachedAll ?: run {
             val started = clock()
             val fetched = withTimeoutOrNull(CHAPTERS_TIMEOUT_MS) {
-                runCatching { source.chapters(MangaItem(source.id, hit.seriesKey, hit.title, languages = listOf("ja"))) }
+                runSuspendCatching { source.chapters(MangaItem(source.id, hit.seriesKey, hit.title, languages = listOf("ja"))) }
                     .onFailure { Log.w(TAG, "${source.name}: chapters failed: ${it.message}") }
                     .getOrNull()
             }
@@ -271,7 +272,7 @@ class JaTailResolver(
         val samples = listOf(tail.first(), tail.last()).distinctBy { it.key }
         val ok = samples.any { sample ->
             withTimeoutOrNull(CHAPTERS_TIMEOUT_MS) {
-                runCatching { source.pages(sample).isNotEmpty() }.getOrDefault(false)
+                runSuspendCatching { source.pages(sample).isNotEmpty() }.getOrDefault(false)
             } == true
         }
         readable[memoKey] = now to ok

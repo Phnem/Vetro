@@ -1,5 +1,6 @@
 package com.example.myapplication.worker
 
+import com.example.myapplication.utils.runSuspendCatching
 import com.example.myapplication.data.local.AppLanguagePrefs
 import com.example.myapplication.data.local.SecretFolderStore
 import android.content.Context
@@ -51,7 +52,7 @@ class AnimeUpdateWorker(
             // открывающий тайтл с одним сезоном, — это ровно та ручная работа («Найти ещё»),
             // которую пользователь делал после каждого пуша. Ошибки здесь не отменяют пуш:
             // узнать о серии важнее, чем увидеть её сразу в списке.
-            runCatching { seasonCatchUp.catchUpAll(newlyDetected.map { it.animeId }) }
+            runSuspendCatching { seasonCatchUp.catchUpAll(newlyDetected.map { it.animeId }) }
                 .onFailure { it.printStackTrace() }
             // Системные пуши шлём ТОЛЬКО когда приложение в фоне/закрыто. Если оно
             // открыто — обновления уже показываются in-app стопкой, дублировать шторкой
@@ -63,7 +64,7 @@ class AnimeUpdateWorker(
             val visibleUpdates = newlyDetected.filterNot { it.animeId in hidden }
             if (visibleUpdates.isNotEmpty() && !isAppInForeground()) {
                 // Подписи «S3 E5» — после догона расклада выше, чтобы сезон был актуальным.
-                val labels = runCatching { seasonEpisodeLocator.labelsFor(visibleUpdates) }.getOrElse { emptyMap() }
+                val labels = runSuspendCatching { seasonEpisodeLocator.labelsFor(visibleUpdates) }.getOrElse { emptyMap() }
                 notifier.showUpdateNotifications(visibleUpdates, language, labels)
             }
             // Новые главы привязанной манги. Проверка СЪЕДАЕТ состояние: сравнив оглавление с
@@ -73,7 +74,7 @@ class AnimeUpdateWorker(
             // Пользователю в этот момент ничего не теряется — вкладка «Главы» у него перед
             // глазами и грузит оглавление сама.
             if (!watchlistOnly && !isAppInForeground()) {
-                runCatching {
+                runSuspendCatching {
                     val chapters = mangaUpdateCheck.detect().filterNot { it.animeId in hidden }
                     if (chapters.isNotEmpty()) {
                         mangaNotifier.showChapterNotifications(chapters, language)
@@ -83,7 +84,7 @@ class AnimeUpdateWorker(
             // Серии по сезонам: дорезолвливаем протухшие записи тем же фоновым проходом.
             // Ошибки не роняют воркер — проверка новых серий важнее.
             if (!watchlistOnly) {
-                runCatching { seasonEpisodesResolver.refreshStale() }
+                runSuspendCatching { seasonEpisodesResolver.refreshStale() }
                     .onFailure { it.printStackTrace() }
             }
             // Напоминание о брошенном тайтле: строго после проверок выше, чтобы счётчики вышедшего были
@@ -92,7 +93,7 @@ class AnimeUpdateWorker(
             // часовом прогоне: полный проход долгий, и система может оборвать его по таймауту раньше,
             // чем он дойдёт сюда. Данные о сериях в этом случае не старше последнего полного прохода.
             if (!isAppInForeground()) {
-                runCatching { abandonedReminder.remindIfDue(language, hidden) }
+                runSuspendCatching { abandonedReminder.remindIfDue(language, hidden) }
                     .onFailure { it.printStackTrace() }
             }
             Result.success()

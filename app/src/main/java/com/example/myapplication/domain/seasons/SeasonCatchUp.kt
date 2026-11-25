@@ -1,5 +1,6 @@
 package com.example.myapplication.domain.seasons
 
+import com.example.myapplication.utils.runSuspendCatching
 import android.util.Log
 import com.example.myapplication.data.local.AnimeLocalDataSource
 import com.example.myapplication.data.local.SeasonEpisodesStore
@@ -184,7 +185,7 @@ class SeasonCatchUp(
 
         // Шаг 1: каталог. Дёшево и закрывает самый частый случай — сезон уже заведён в AniList,
         // а наша запись просто не протухла по TTL.
-        runCatching { resolver.resolve(anime) }
+        runSuspendCatching { resolver.resolve(anime) }
             .onFailure { Log.w(TAG, "catch-up resolve failed for \"${anime.title}\": ${it.message}") }
             .getOrNull()
             ?.let { store.put(it) }
@@ -195,7 +196,7 @@ class SeasonCatchUp(
 
         // Шаг 2: источники просмотра. Тот же путь, что кнопка «Найти ещё», — но нажимать её
         // пользователю больше не надо.
-        val outcome = runCatching { discovery.discover(anime.id, forceRefresh = true) }
+        val outcome = runSuspendCatching { discovery.discover(anime.id, forceRefresh = true) }
             .onFailure { Log.w(TAG, "catch-up discovery failed for \"${anime.title}\": ${it.message}") }
             .getOrNull()
         val closed = gapFor(anime, airing, franchiseEpisodes) == null

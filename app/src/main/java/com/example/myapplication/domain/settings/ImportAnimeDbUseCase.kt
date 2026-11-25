@@ -1,5 +1,6 @@
 package com.example.myapplication.domain.settings
 
+import com.example.myapplication.utils.runSuspendCatching
 import android.content.Context
 import android.database.Cursor
 import android.database.sqlite.SQLiteDatabase
@@ -20,7 +21,7 @@ class ImportAnimeDbUseCase(
     private val localDataSource: AnimeLocalDataSource
 ) {
     suspend operator fun invoke(context: Context, uri: Uri): Result<ImportDbResult> = withContext(Dispatchers.IO) {
-        runCatching {
+        runSuspendCatching {
             val importFile = copyUriToTempFile(context, uri)
             val now = System.currentTimeMillis()
             val localAnime = localDataSource.getAllAnimeList()

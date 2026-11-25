@@ -1,5 +1,6 @@
 package com.example.myapplication.domain.recommendations
 
+import com.example.myapplication.utils.runSuspendCatching
 import com.example.myapplication.domain.normalizeForSearch
 import com.example.myapplication.network.ApiSearchResult
 import com.example.myapplication.network.AppLanguage
@@ -47,7 +48,7 @@ class TasteDiveCandidateProvider(
         val gate = Semaphore(MAX_PARALLEL)
         val matched = supervisorScope {
             similar.map { item ->
-                async { gate.withPermit { runCatching { match(isTv, item.name, language) }.getOrNull() } }
+                async { gate.withPermit { runSuspendCatching { match(isTv, item.name, language) }.getOrNull() } }
             }.awaitAll()
         }
         val pseudoSeed = "multi:tastedive"

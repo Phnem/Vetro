@@ -1,5 +1,6 @@
 package com.example.myapplication.audiobooks.playback
 
+import com.example.myapplication.utils.runSuspendCatching
 import android.app.PendingIntent
 import android.content.Intent
 import android.os.Handler
@@ -513,7 +514,7 @@ class AudiobookPlaybackService : MediaLibraryService() {
             chapterVariant = ref.variant
             chapterTimeline = null
             chapterLoadJob = recoveryScope.launch {
-                val timeline = runCatching {
+                val timeline = runSuspendCatching {
                     manifestResolver.manifest(ref.variant).let { BookTimeline(it.tracks, it.chapters) }
                 }.getOrNull()
                 if (chapterVariant == ref.variant) {

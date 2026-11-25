@@ -1,5 +1,6 @@
 package com.example.myapplication.audiobooks.data.local
 
+import com.example.myapplication.utils.runSuspendCatching
 import android.net.Uri
 import android.util.Log
 import androidx.media3.common.util.UnstableApi
@@ -44,8 +45,8 @@ class LocalLibraryImporter(
             .filter { it.coverUrl.isNullOrBlank() }
             .take(limit)
             .forEach { book ->
-                val url = runCatching { coverFinder.first(book.title, book.authors) }.getOrNull() ?: return@forEach
-                runCatching { repository.setCover(book.workId, url) }
+                val url = runSuspendCatching { coverFinder.first(book.title, book.authors) }.getOrNull() ?: return@forEach
+                runSuspendCatching { repository.setCover(book.workId, url) }
             }
     }
 
@@ -70,7 +71,7 @@ class LocalLibraryImporter(
 
     private suspend fun import(book: LocalBook): Boolean {
         return try {
-            val manifest = runCatching { local.refresh(book.variant) }.getOrNull()
+            val manifest = runSuspendCatching { local.refresh(book.variant) }.getOrNull()
             manifest?.let { resolver.put(it) }
             val folder = FolderName.parse(book.title)
             MicroMlBridge.observeFolderFields(microMl, book.title, folder.title, folder.author)
@@ -83,7 +84,7 @@ class LocalLibraryImporter(
             val match = findWork(title, authors)
             val details = match?.let { m ->
                 val source = sources.firstOrNull { it.id == m.ref.source } ?: return@let null
-                (runCatching { source.details(m.ref) }.getOrNull() as? SourceResult.Ok)?.value
+                (runSuspendCatching { source.details(m.ref) }.getOrNull() as? SourceResult.Ok)?.value
             }
             val matchAuthors = WorkMatch.words(match?.authors.orEmpty())
             val narrators = folder.narrator?.let(::listOf)
@@ -98,7 +99,7 @@ class LocalLibraryImporter(
                     authors = authors.ifEmpty { match?.authors.orEmpty() },
                     narrators = narrators,
                     coverUrl = book.artworkUri?.toString() ?: match?.coverUrl
-                        ?: runCatching { coverFinder.first(title, authors.ifEmpty { match?.authors.orEmpty() }) }.getOrNull(),
+                        ?: runSuspendCatching { coverFinder.first(title, authors.ifEmpty { match?.authors.orEmpty() }) }.getOrNull(),
                     description = details?.description,
                     genres = match?.genres.orEmpty(),
                     year = match?.year,
@@ -116,7 +117,7 @@ class LocalLibraryImporter(
     }
 
     private suspend fun findWork(title: String, authors: List<String>): SourceBook? =
-        runCatching { search.sameWork(title, authors) }.getOrDefault(emptyList())
+        runSuspendCatching { search.sameWork(title, authors) }.getOrDefault(emptyList())
             .sortedWith(compareBy<SourceBook> { search.rank(it.ref.source) }.thenByDescending { it.coverUrl != null })
             .firstOrNull()
 

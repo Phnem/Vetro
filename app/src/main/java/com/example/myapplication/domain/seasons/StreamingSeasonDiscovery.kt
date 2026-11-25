@@ -1,5 +1,6 @@
 package com.example.myapplication.domain.seasons
 
+import com.example.myapplication.utils.runSuspendCatching
 import android.util.Log
 import com.example.myapplication.data.local.AnimeLocalDataSource
 import com.example.myapplication.data.local.SeasonEpisodesStore
@@ -204,7 +205,7 @@ class StreamingSeasonDiscovery(
         anime: Anime,
         previous: SeasonEpisodesEntry?,
     ): Outcome {
-        val catalogue = runCatching {
+        val catalogue = runSuspendCatching {
             seasonEpisodesResolver.resolve(anime, includeStoredStreaming = false)
         }.onFailure {
             Log.i(TAG, "Catalogue refresh failed for \"${anime.title}\": ${it.message}")

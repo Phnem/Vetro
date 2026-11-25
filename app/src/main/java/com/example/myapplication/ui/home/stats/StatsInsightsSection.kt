@@ -1,5 +1,6 @@
 package com.example.myapplication.ui.home.stats
 
+import com.example.myapplication.utils.runSuspendCatching
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -98,7 +99,7 @@ fun StatsInsightsSection(
         if (appLanguage == AppLanguage.RU) Locale.forLanguageTag("ru") else Locale.ENGLISH
     }
     val data: InsightsData? by produceState<InsightsData?>(initialValue = null, animeList) {
-        value = runCatching { loader.load(animeList) }.getOrNull()
+        value = runSuspendCatching { loader.load(animeList) }.getOrNull()
     }
     val insights = data ?: return
 
@@ -196,7 +197,7 @@ fun StatsInsightsSection(
 private fun SourceStandingsTile(strings: StatsInsightsStrings, appLanguage: AppLanguage, isDark: Boolean) {
     val intelligence: SourceIntelligence = koinInject()
     val standings: List<SourceStanding> by produceState(emptyList<SourceStanding>(), appLanguage) {
-        value = runCatching { intelligence.leaderboard() }.getOrDefault(emptyList())
+        value = runSuspendCatching { intelligence.leaderboard() }.getOrDefault(emptyList())
             .filter { it.language == appLanguage && it.stats.evidence > 0 }
     }
     InsightTile(isDark, strings.sourcesTitle, strings.sourcesDesc) {

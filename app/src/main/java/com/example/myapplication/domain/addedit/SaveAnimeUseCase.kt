@@ -1,5 +1,6 @@
 package com.example.myapplication.domain.addedit
 
+import com.example.myapplication.utils.runSuspendCatching
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import com.example.myapplication.data.local.AnimeLocalDataSource
@@ -18,7 +19,7 @@ class SaveAnimeUseCase(
     private val idGenerator: IdGenerator,
     private val enrichmentCoordinator: CollectionEnrichmentCoordinator,
 ) {
-    suspend operator fun invoke(params: SaveAnimeParams): Result<Unit> = runCatching {
+    suspend operator fun invoke(params: SaveAnimeParams): Result<Unit> = runSuspendCatching {
         val animeId = params.animeId ?: idGenerator.generateUuid()
         val imageFileName = params.imageUri?.let { uri ->
             imageStorage.saveImage(uri, animeId).getOrThrow()

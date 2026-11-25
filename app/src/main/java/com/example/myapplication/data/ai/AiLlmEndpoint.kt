@@ -1,5 +1,6 @@
 package com.example.myapplication.data.ai
 
+import com.example.myapplication.utils.runSuspendCatching
 import com.example.myapplication.network.AppJson
 import io.ktor.client.HttpClient
 import io.ktor.client.request.get
@@ -43,7 +44,7 @@ class AiLlmEndpoint(
      * Проверка работоспособности ключа «дешёвым» запросом (список моделей) — без расхода токенов.
      * 2xx => ключ рабочий; 401/403 => недействителен.
      */
-    suspend fun validateApiKey(provider: AiProvider, apiKey: String): Result<Unit> = runCatching {
+    suspend fun validateApiKey(provider: AiProvider, apiKey: String): Result<Unit> = runSuspendCatching {
         val key = apiKey.trim()
         require(key.isNotEmpty()) { "Empty API key" }
         val url = "${provider.baseUrl}${provider.modelsPath}"
@@ -60,7 +61,7 @@ class AiLlmEndpoint(
         jsonMode: Boolean = false,
         maxTokens: Int = DEFAULT_MAX_TOKENS,
         model: String = provider.defaultModel,
-    ): Result<String> = runCatching {
+    ): Result<String> = runSuspendCatching {
         val key = apiKey.trim()
         require(key.isNotEmpty()) { "Empty API key" }
         val body = buildChatBody(provider, model, systemPrompt, userPrompt, null, null, jsonMode, maxTokens)
@@ -80,7 +81,7 @@ class AiLlmEndpoint(
         systemPrompt: String? = null,
         jsonMode: Boolean = false,
         maxTokens: Int = DEFAULT_MAX_TOKENS,
-    ): Result<String> = runCatching {
+    ): Result<String> = runSuspendCatching {
         require(provider.supportsVision) { "${provider.displayName} does not support image input" }
         val key = apiKey.trim()
         require(key.isNotEmpty()) { "Empty API key" }

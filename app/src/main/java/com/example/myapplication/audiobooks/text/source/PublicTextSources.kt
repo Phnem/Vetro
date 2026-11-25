@@ -1,5 +1,6 @@
 package com.example.myapplication.audiobooks.text.source
 
+import com.example.myapplication.utils.runSuspendCatching
 import com.example.myapplication.audiobooks.text.BookText
 import java.net.URLEncoder
 import kotlinx.serialization.json.Json
@@ -35,7 +36,7 @@ class GutenbergTextSource(private val http: TextHttp) : BookTextSource {
         val out = ArrayList<TextCandidate>()
         librivoxText(query)?.let { out += it }
         val q = listOf(query.titleOriginal ?: query.title, surname(query.authors)).filter { it.isNotBlank() }.joinToString(" ")
-        val feed = runCatching { http.string("https://www.gutenberg.org/ebooks/search.opds/?query=${enc(q)}") }.getOrNull() ?: return out
+        val feed = runSuspendCatching { http.string("https://www.gutenberg.org/ebooks/search.opds/?query=${enc(q)}") }.getOrNull() ?: return out
         val doc = Jsoup.parse(feed, "", Parser.xmlParser())
         for (entry in doc.select("entry").take(8)) {
             val bookId = Regex("/ebooks/(\\d+)").find(entry.selectFirst("id")?.text().orEmpty())?.groupValues?.get(1) ?: continue
@@ -56,7 +57,7 @@ class GutenbergTextSource(private val http: TextHttp) : BookTextSource {
     /** LibriVox знает, по какому тексту читали: ссылка на Гутенберг — точный кандидат. */
     private suspend fun librivoxText(query: TextQuery): TextCandidate? {
         val key = query.sourceKey?.takeIf { query.sourceId == "archive_org" && it.contains("librivox", ignoreCase = true) } ?: return null
-        val body = runCatching {
+        val body = runSuspendCatching {
             http.string("https://librivox.org/api/feed/audiobooks/?title=${enc(query.title)}&format=json&extended=1&limit=20")
         }.getOrNull() ?: return null
         val books = runCatching { json.parseToJsonElement(body).jsonObject["books"]?.jsonArray }.getOrNull() ?: return null
@@ -79,7 +80,7 @@ class StandardEbooksTextSource(private val http: TextHttp) : BookTextSource {
     override suspend fun find(query: TextQuery): List<TextCandidate> {
         if (query.language != null && query.language.take(2) != "en") return emptyList()
         val q = listOf(query.titleOriginal ?: query.title, surname(query.authors)).filter { it.isNotBlank() }.joinToString(" ")
-        val page = runCatching { http.string("https://standardebooks.org/ebooks?query=${enc(q)}") }.getOrNull() ?: return emptyList()
+        val page = runSuspendCatching { http.string("https://standardebooks.org/ebooks?query=${enc(q)}") }.getOrNull() ?: return emptyList()
         return Jsoup.parse(page).select("li[typeof=schema:Book]").take(6).mapNotNull { li ->
             val path = li.attr("about").takeIf { it.startsWith("/ebooks/") } ?: return@mapNotNull null
             TextCandidate(
@@ -110,7 +111,7 @@ class WikisourceTextSource(private val http: TextHttp) : BookTextSource {
     override suspend fun find(query: TextQuery): List<TextCandidate> {
         val lang = query.language?.take(2)?.takeIf { it == "ru" || it == "en" } ?: "ru"
         val q = listOf(query.title, surname(query.authors)).filter { it.isNotBlank() }.joinToString(" ")
-        val body = runCatching {
+        val body = runSuspendCatching {
             http.string("https://$lang.wikisource.org/w/api.php?action=query&list=search&srnamespace=0&srlimit=10&format=json&srsearch=${enc(q)}")
         }.getOrNull() ?: return emptyList()
         val results = runCatching { json.parseToJsonElement(body).jsonObject["query"]?.jsonObject?.get("search")?.jsonArray }.getOrNull() ?: return emptyList()
@@ -143,7 +144,7 @@ class OpenLibraryTextSource(private val http: TextHttp) : BookTextSource {
         val url = "https://openlibrary.org/search.json?title=${enc(query.titleOriginal ?: query.title)}" +
             (surname(query.authors).takeIf { it.isNotBlank() }?.let { "&author=${enc(it)}" } ?: "") +
             "&fields=title,author_name,language,ebook_access,ia&limit=5"
-        val body = runCatching { http.string(url) }.getOrNull() ?: return emptyList()
+        val body = runSuspendCatching { http.string(url) }.getOrNull() ?: return emptyList()
         val docs = runCatching { json.parseToJsonElement(body).jsonObject["docs"]?.jsonArray }.getOrNull() ?: return emptyList()
         val wanted = query.language?.take(2)
         return docs.flatMap { d ->

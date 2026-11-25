@@ -1,5 +1,6 @@
 package com.example.myapplication.updates
 
+import com.example.myapplication.utils.runSuspendCatching
 import android.util.Log
 import com.example.myapplication.data.models.AnimeUpdate
 
@@ -29,7 +30,7 @@ internal suspend fun publishEpisodeUpdates(
         }
     if (applyEpisodes != null) {
         fresh.forEach { update ->
-            runCatching { applyEpisodes(update) }
+            runSuspendCatching { applyEpisodes(update) }
                 .onFailure { Log.w(TAG, "Auto-apply failed for ${update.animeId}: ${it.message}") }
         }
     }

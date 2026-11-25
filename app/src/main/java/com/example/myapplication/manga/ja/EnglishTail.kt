@@ -1,5 +1,6 @@
 package com.example.myapplication.manga.ja
 
+import com.example.myapplication.utils.runSuspendCatching
 import android.util.Log
 import com.example.myapplication.data.local.JsonMapFileStore
 import com.example.myapplication.manga.domain.MangaChapter
@@ -76,7 +77,7 @@ class MangaDexEnglishTail(
         val native = natives.resolve(animeId, queries)
         val aniListId = native?.aniListId
         val item = if (aniListId == null) null else {
-            runCatching { withTimeoutOrNull(SEARCH_TIMEOUT_MS) { catalog.findByAniList(aniListId, queries) } }
+            runSuspendCatching { withTimeoutOrNull(SEARCH_TIMEOUT_MS) { catalog.findByAniList(aniListId, queries) } }
                 .onFailure { Log.w(TAG, "mangadex lookup failed: ${it.message}") }
                 .getOrNull()
         }
@@ -90,7 +91,7 @@ class MangaDexEnglishTail(
         val now = clock()
         val all = memo[key]?.takeIf { now - it.first < MEMO_TTL_MS }?.second ?: run {
             val fetched = withTimeoutOrNull(CHAPTERS_TIMEOUT_MS) {
-                runCatching { source.chapters(MangaItem(source.id, key, match.title.orEmpty())) }
+                runSuspendCatching { source.chapters(MangaItem(source.id, key, match.title.orEmpty())) }
                     .onFailure { Log.w(TAG, "english chapters failed: ${it.message}") }
                     .getOrNull()
             }

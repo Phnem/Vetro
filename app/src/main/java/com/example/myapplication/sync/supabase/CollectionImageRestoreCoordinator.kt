@@ -1,5 +1,6 @@
 package com.example.myapplication.sync.supabase
 
+import com.example.myapplication.utils.runSuspendCatching
 import android.util.Log
 import com.example.myapplication.data.local.AnimeLocalDataSource
 import com.example.myapplication.data.repository.ImageStorageRepository
@@ -33,7 +34,7 @@ class CollectionImageRestoreCoordinator(
 
         _isRestoring.value = true
         try {
-            runCatching { syncRepository.pullRemoteChanges() }
+            runSuspendCatching { syncRepository.pullRemoteChanges() }
                 .onFailure { error ->
                     Log.w(TAG, "Pull before cloud restore failed: ${safeSyncError(error)}")
                 }

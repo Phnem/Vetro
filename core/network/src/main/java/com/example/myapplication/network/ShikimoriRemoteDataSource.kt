@@ -1,5 +1,6 @@
 package com.example.myapplication.network
 
+import com.example.myapplication.utils.runSuspendCatching
 import com.example.myapplication.network.dto.ShikimoriImageDto
 import com.example.myapplication.network.dto.ShikimoriSearchItemDto
 import io.ktor.client.HttpClient
@@ -15,7 +16,7 @@ class ShikimoriRemoteDataSource(
     private val burstRate: TokenBucketRateLimiter
 ) {
 
-    suspend fun fetchAnimeDetails(query: String): Result<AnimeDetails> = runCatching {
+    suspend fun fetchAnimeDetails(query: String): Result<AnimeDetails> = runSuspendCatching {
         val searchResponse = client.get("https://shikimori.one/api/animes") {
             parameter("search", query.trim())
             parameter("limit", "1")
@@ -33,7 +34,7 @@ class ShikimoriRemoteDataSource(
         full.toDomain()
     }
 
-    suspend fun searchAnime(query: String, limit: Int = 20, language: AppLanguage = AppLanguage.EN): Result<List<ApiSearchResult>> = runCatching {
+    suspend fun searchAnime(query: String, limit: Int = 20, language: AppLanguage = AppLanguage.EN): Result<List<ApiSearchResult>> = runSuspendCatching {
         val searchResponse = client.get("https://shikimori.one/api/animes") {
             parameter("search", query.trim())
             parameter("limit", limit)
@@ -41,7 +42,7 @@ class ShikimoriRemoteDataSource(
         searchResponse.map { it.toApiSearchResult(language) }
     }
 
-    suspend fun searchManga(query: String, limit: Int = 20, language: AppLanguage = AppLanguage.EN): Result<List<ApiSearchResult>> = runCatching {
+    suspend fun searchManga(query: String, limit: Int = 20, language: AppLanguage = AppLanguage.EN): Result<List<ApiSearchResult>> = runSuspendCatching {
         val searchResponse = client.get("https://shikimori.one/api/mangas") {
             parameter("search", query.trim())
             parameter("limit", limit)
@@ -49,27 +50,27 @@ class ShikimoriRemoteDataSource(
         searchResponse.map { it.toApiSearchResult(language) }
     }
 
-    suspend fun findTotalEpisodes(query: String): Result<Pair<Int, String>?> = runCatching {
+    suspend fun findTotalEpisodes(query: String): Result<Pair<Int, String>?> = runSuspendCatching {
         val searchResponse = client.get("https://shikimori.one/api/animes") {
             parameter("search", query.trim())
             parameter("limit", "1")
         }.body<List<ShikimoriSearchItemDto>>()
 
-        val first = searchResponse.firstOrNull() ?: return@runCatching null
-        if (!isTitleSimilar(query, first.name, first.russian)) return@runCatching null
+        val first = searchResponse.firstOrNull() ?: return@runSuspendCatching null
+        if (!isTitleSimilar(query, first.name, first.russian)) return@runSuspendCatching null
         val episodes = first.episodesAired ?: first.episodes ?: 0
         if (episodes > 0) episodes to "Shikimori" else null
     }
 
     /** Похожие тайтлы по id — источник related-кандидатов для рекомендаций. */
-    suspend fun getSimilarAnime(id: Int, language: AppLanguage = AppLanguage.EN): Result<List<ApiSearchResult>> = runCatching {
+    suspend fun getSimilarAnime(id: Int, language: AppLanguage = AppLanguage.EN): Result<List<ApiSearchResult>> = runSuspendCatching {
         burstRate.acquire()
         val response = client.get("https://shikimori.one/api/animes/$id/similar")
             .body<List<ShikimoriSearchItemDto>>()
         response.map { it.toApiSearchResult(language) }
     }
 
-    suspend fun getAnimeById(id: Int, language: AppLanguage = AppLanguage.EN): Result<ApiSearchResult?> = runCatching {
+    suspend fun getAnimeById(id: Int, language: AppLanguage = AppLanguage.EN): Result<ApiSearchResult?> = runSuspendCatching {
         burstRate.acquire()
         val full = client.get("https://shikimori.one/api/animes/$id").body<ShikimoriSearchItemDto>()
         full.toApiSearchResult(language)
@@ -80,22 +81,22 @@ class ShikimoriRemoteDataSource(
      * и сабят (RU-трек выхода), промо-ролики и русское лицензионное название. Та же ручка, что и
      * карточка, — отдельный разбор полей, которых нет в DTO поиска.
      */
-    suspend fun animeEnrichment(id: Int): Result<com.example.myapplication.network.enrichment.ShikimoriEnrichment?> = runCatching {
+    suspend fun animeEnrichment(id: Int): Result<com.example.myapplication.network.enrichment.ShikimoriEnrichment?> = runSuspendCatching {
         burstRate.acquire()
         val body = client.get("https://shikimori.one/api/animes/$id").bodyAsText()
         com.example.myapplication.network.enrichment.ShikimoriEnrichmentParser.parse(body)
     }
 
     /** Явное русское название по Shikimori id (обратное обогащение, Stage 10). */
-    suspend fun enrichRussianById(id: Int): Result<EnrichedTitles?> = runCatching {
+    suspend fun enrichRussianById(id: Int): Result<EnrichedTitles?> = runSuspendCatching {
         burstRate.acquire()
         val full = client.get("https://shikimori.one/api/animes/$id").body<ShikimoriSearchItemDto>()
         full.toEnrichedTitles()
     }
 
     /** Явные русские названия по поиску (для сопоставления, когда shikimori_id нет). */
-    suspend fun enrichRussianBySearch(query: String, limit: Int = 8): Result<List<EnrichedTitles>> = runCatching {
-        if (query.isBlank()) return@runCatching emptyList()
+    suspend fun enrichRussianBySearch(query: String, limit: Int = 8): Result<List<EnrichedTitles>> = runSuspendCatching {
+        if (query.isBlank()) return@runSuspendCatching emptyList()
         val response = client.get("https://shikimori.one/api/animes") {
             parameter("search", query.trim())
             parameter("limit", limit)

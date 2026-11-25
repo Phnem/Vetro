@@ -1,5 +1,6 @@
 package com.example.myapplication.sync.supabase
 
+import com.example.myapplication.utils.runSuspendCatching
 import android.util.Log
 import com.example.myapplication.data.local.AnimeDatabase
 import io.github.jan.supabase.SupabaseClient
@@ -90,7 +91,7 @@ class SyncRepository(
                 .filter { it.mediaType != AUDIOBOOK }
                 .map { it.id }
                 .filter { db.animeQueries.getAnimeTags(it).executeAsList().isNotEmpty() }
-            val ok = runCatching { pushTagsForAnime(userId, taggedIds) }
+            val ok = runSuspendCatching { pushTagsForAnime(userId, taggedIds) }
                 .onFailure { Log.w(TAG, "Genre resync deferred: ${safeSyncError(it)}") }
                 .isSuccess
             if (ok) syncPrefs.edit().putBoolean("tags_resync_done_v2", true).apply()
@@ -175,7 +176,7 @@ class SyncRepository(
             syncedIds.forEach { id -> db.animeQueries.markAnimeSynced(id) }
         }
         syncPrefs.edit().putBoolean(initialUploadKey(userId), true).apply()
-        runCatching { pushTagsForAnime(userId, syncedIds) }
+        runSuspendCatching { pushTagsForAnime(userId, syncedIds) }
             .onFailure { Log.w(TAG, "Push tags deferred: ${safeSyncError(it)}") }
         Log.i(TAG, "Pushed ${dtos.size} anime row(s) to cloud")
         return@withContext PushResult(dtos.size, null)
@@ -416,7 +417,7 @@ class SyncRepository(
         animeIds: List<String>,
     ): Map<String, List<String>>? {
         if (animeIds.isEmpty()) return emptyMap()
-        return runCatching {
+        return runSuspendCatching {
             val result = mutableListOf<AnimeTagRemoteDto>()
             animeIds.chunked(TAG_CHUNK_SIZE).forEach { chunk ->
                 result += supabase.postgrest["anime_tags"]

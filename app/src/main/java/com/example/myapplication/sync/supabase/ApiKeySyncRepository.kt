@@ -1,5 +1,6 @@
 package com.example.myapplication.sync.supabase
 
+import com.example.myapplication.utils.runSuspendCatching
 import android.util.Log
 import com.example.myapplication.data.ai.AiCredentialsStore
 import com.example.myapplication.data.ai.AiProvider
@@ -26,15 +27,15 @@ class ApiKeySyncRepository(
 ) {
     /** Полный цикл: подтянуть облачные ключи, затем выложить локальные. */
     suspend fun sync(): Result<Unit> = withContext(Dispatchers.IO) {
-        runCatching {
+        runSuspendCatching {
             val unlock = passphraseManager.ensureUnlocked()
             val key = when (unlock) {
                 is PassphraseUnlock.Unlocked -> unlock.key
                 PassphraseUnlock.Locked -> {
                     Log.i(TAG, "API key sync skipped: passphrase locked (recovery required)")
-                    return@runCatching
+                    return@runSuspendCatching
                 }
-                PassphraseUnlock.NoUser -> return@runCatching
+                PassphraseUnlock.NoUser -> return@runSuspendCatching
             }
             pullInternal(key)
             pushInternal(key)
@@ -43,11 +44,11 @@ class ApiKeySyncRepository(
 
     /** Точечный push одного ключа (вызывается сразу после сохранения в AI Connect). */
     suspend fun pushKey(provider: AiProvider): Result<Unit> = withContext(Dispatchers.IO) {
-        runCatching {
-            val userId = authRepository.currentUserId ?: return@runCatching
+        runSuspendCatching {
+            val userId = authRepository.currentUserId ?: return@runSuspendCatching
             val key = (passphraseManager.ensureUnlocked() as? PassphraseUnlock.Unlocked)?.key
-                ?: return@runCatching
-            val plaintext = credentialsStore.getApiKey(provider) ?: return@runCatching
+                ?: return@runSuspendCatching
+            val plaintext = credentialsStore.getApiKey(provider) ?: return@runSuspendCatching
             val blob = crypto.encrypt(key, plaintext)
             supabase.postgrest["user_api_keys"].upsert(
                 RemoteApiKeyDto(
@@ -64,8 +65,8 @@ class ApiKeySyncRepository(
 
     /** Точечное удаление ключа в облаке (tombstone). */
     suspend fun deleteKey(provider: AiProvider): Result<Unit> = withContext(Dispatchers.IO) {
-        runCatching {
-            val userId = authRepository.currentUserId ?: return@runCatching
+        runSuspendCatching {
+            val userId = authRepository.currentUserId ?: return@runSuspendCatching
             supabase.postgrest["user_api_keys"].upsert(
                 RemoteApiKeyDto(
                     user_id = userId,

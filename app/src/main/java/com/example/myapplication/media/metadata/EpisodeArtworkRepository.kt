@@ -1,5 +1,6 @@
 package com.example.myapplication.media.metadata
 
+import com.example.myapplication.utils.runSuspendCatching
 import com.apollographql.apollo.ApolloClient
 import com.apollographql.apollo.api.Optional
 import com.example.myapplication.network.EpisodeArtwork
@@ -16,8 +17,8 @@ class EpisodeArtworkRepository(
     suspend fun get(
         anilistId: Int?,
         malId: Int?,
-    ): Result<EpisodeArtworkBundle?> = runCatching {
-        if (anilistId == null && malId == null) return@runCatching null
+    ): Result<EpisodeArtworkBundle?> = runSuspendCatching {
+        if (anilistId == null && malId == null) return@runSuspendCatching null
         val response = apolloClient.query(
             EpisodeArtworkQuery(
                 id = Optional.presentIfNotNull(anilistId),
@@ -28,7 +29,7 @@ class EpisodeArtworkRepository(
         response.errors?.takeIf { it.isNotEmpty() }?.let { errors ->
             error(errors.joinToString { it.message })
         }
-        val media = response.data?.Media ?: return@runCatching null
+        val media = response.data?.Media ?: return@runSuspendCatching null
         val episodes = media.streamingEpisodes.orEmpty().mapNotNull { nullableItem ->
             val item = nullableItem ?: return@mapNotNull null
             val image = item.thumbnail?.takeIf { it.isNotBlank() } ?: return@mapNotNull null

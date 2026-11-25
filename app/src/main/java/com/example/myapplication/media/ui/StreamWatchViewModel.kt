@@ -1,5 +1,6 @@
 package com.example.myapplication.media.ui
 
+import com.example.myapplication.utils.runSuspendCatching
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.myapplication.data.models.Anime
@@ -32,7 +33,7 @@ class StreamWatchViewModel(
     fun load() {
         viewModelScope.launch {
             _state.value = StreamWatchUiState.Loading
-            runCatching {
+            runSuspendCatching {
                 mediaGateway.resolveHosters(anime, episodeNumber)
             }.onSuccess { hosters ->
                 if (hosters.isEmpty() || hosters.all { it.videos.isNullOrEmpty() }) {

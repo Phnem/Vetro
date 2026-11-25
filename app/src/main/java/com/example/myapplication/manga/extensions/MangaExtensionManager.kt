@@ -1,5 +1,6 @@
 package com.example.myapplication.manga.extensions
 
+import com.example.myapplication.utils.runSuspendCatching
 import android.app.Application
 import android.util.Log
 import androidx.datastore.core.DataStore
@@ -106,7 +107,7 @@ class MangaExtensionManager(
 
     /** Ставит (или обновляет) расширение. Ошибка — в результате, а не исключением наружу. */
     suspend fun install(extension: CatalogExtension): Result<LoadedExtension> = installMutex.withLock {
-        runCatching {
+        runSuspendCatching {
             withContext(Dispatchers.IO) {
                 ensureLoaded()
                 ExtensionRuntime.ensure(app)

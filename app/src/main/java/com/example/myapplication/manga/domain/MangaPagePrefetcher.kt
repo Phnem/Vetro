@@ -1,5 +1,6 @@
 package com.example.myapplication.manga.domain
 
+import com.example.myapplication.utils.runSuspendCatching
 import android.content.Context
 import android.graphics.Canvas
 import android.util.Log
@@ -64,7 +65,7 @@ class MangaPagePrefetcher(
         coroutineContext.ensureActive()
         // Оглавление следующей главы стоит одного запроса к источнику — но только у самого конца
         // текущей, иначе мы дёргали бы источник на каждой открытой главе впустую.
-        val nextPages = runCatching { pageResolver.pages(nextChapter) }
+        val nextPages = runSuspendCatching { pageResolver.pages(nextChapter) }
             .getOrElse { error ->
                 if (error is CancellationException) throw error
                 Log.w(TAG, "next chapter pages failed for ${nextChapter.key}", error)
@@ -95,7 +96,7 @@ class MangaPagePrefetcher(
             .memoryCachePolicy(CachePolicy.DISABLED)
             .decoderFactory(SkipDecoding)
             .build()
-        runCatching { imageLoader.execute(request) }.onFailure { error ->
+        runSuspendCatching { imageLoader.execute(request) }.onFailure { error ->
             if (error is CancellationException) throw error
             Log.w(TAG, "prefetch failed for ${page.url}", error)
         }

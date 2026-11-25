@@ -1,5 +1,6 @@
 package com.example.myapplication.manga.source
 
+import com.example.myapplication.utils.runSuspendCatching
 import android.util.Log
 import com.example.myapplication.manga.domain.MangaChapter
 import com.example.myapplication.manga.domain.MangaDetails
@@ -44,14 +45,14 @@ class MangaSourceEngine(
 
     /** Встроенные + источники расширений: всё, среди чего ищет выбор источника. */
     private suspend fun searchable(): List<VetroMangaSource> =
-        sources + runCatching { extensionSources() }
+        sources + runSuspendCatching { extensionSources() }
             .onFailure { Log.w(TAG, "Extension sources unavailable", it) }
             .getOrDefault(emptyList())
 
     private suspend fun sourceById(id: MangaSourceId): VetroMangaSource? =
         sources.firstOrNull { it.id == id }
             ?: japaneseSources.firstOrNull { it.id == id }
-            ?: runCatching { extensionSources() }.getOrDefault(emptyList()).firstOrNull { it.id == id }
+            ?: runSuspendCatching { extensionSources() }.getOrDefault(emptyList()).firstOrNull { it.id == id }
 
     /**
      * Поиск по всем источникам параллельно — для экрана привязки тайтл↔источник (§8 плана). Как в
@@ -123,7 +124,7 @@ class MangaSourceEngine(
         block: suspend () -> T,
     ): T? {
         repeat(ATTEMPTS) { attempt ->
-            val result = runCatching { withTimeoutOrNull(timeoutMs) { block() } }
+            val result = runSuspendCatching { withTimeoutOrNull(timeoutMs) { block() } }
                 .onFailure { error ->
                     Log.w(TAG, "$sourceName.$op failed (attempt ${attempt + 1})", error)
                 }

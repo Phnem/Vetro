@@ -1,5 +1,6 @@
 package com.example.myapplication.media.source
 
+import com.example.myapplication.utils.runSuspendCatching
 import com.example.myapplication.network.AppJson
 import android.util.Log
 import com.example.myapplication.sync.TitleMatcher
@@ -102,9 +103,9 @@ class AnimeGoSource(
         return hosters
     }
 
-    private suspend fun aniboomHosters(playerHtml: String): List<VetroHoster> = runCatching {
-        val embedUrl = parseAniboomEmbed(playerHtml) ?: return@runCatching emptyList<VetroHoster>()
-        val stream = scrapeAniboom(embedUrl) ?: return@runCatching emptyList<VetroHoster>()
+    private suspend fun aniboomHosters(playerHtml: String): List<VetroHoster> = runSuspendCatching {
+        val embedUrl = parseAniboomEmbed(playerHtml) ?: return@runSuspendCatching emptyList<VetroHoster>()
+        val stream = scrapeAniboom(embedUrl) ?: return@runSuspendCatching emptyList<VetroHoster>()
         val video = VetroVideo(
             url = stream,
             label = "720p",
@@ -132,9 +133,9 @@ class AnimeGoSource(
      * аудиодорожку к видео не подмешиваем и разные студии в один хостер не сваливаем.
      */
     private suspend fun cvhHosters(playerHtml: String, episode: Int): List<VetroHoster> =
-        runCatching {
+        runSuspendCatching {
             val translations = parseCvhTranslations(playerHtml)
-            if (translations.isEmpty()) return@runCatching emptyList<VetroHoster>()
+            if (translations.isEmpty()) return@runSuspendCatching emptyList<VetroHoster>()
 
             coroutineScope {
                 translations.groupBy { it.cvhId }.map { (cvhId, group) ->
@@ -177,7 +178,7 @@ class AnimeGoSource(
         }.onFailure { Log.w(TAG, "CVH path failed: ${it.message}") }
             .getOrElse { emptyList() }
 
-    private suspend fun search(query: String): List<SearchHit> = runCatching {
+    private suspend fun search(query: String): List<SearchHit> = runSuspendCatching {
         val body = client.get("$baseUrl/search/all") {
             parameter("type", "all")
             parameter("q", query)
@@ -228,7 +229,7 @@ class AnimeGoSource(
     }.getOrElse { emptyList() }
 
     /** Страница плеера общая для обеих веток, поэтому тянем её один раз. */
-    private suspend fun fetchPlayerHtml(animeId: String, episode: Int): String? = runCatching {
+    private suspend fun fetchPlayerHtml(animeId: String, episode: Int): String? = runSuspendCatching {
         client.get("$baseUrl/anime/$animeId/player") {
             parameter("episode", episode)
             header("Referer", "$baseUrl/anime/$animeId")
@@ -328,7 +329,7 @@ class AnimeGoSource(
         }
     }
 
-    private suspend fun scrapeAniboom(embedUrl: String): String? = runCatching {
+    private suspend fun scrapeAniboom(embedUrl: String): String? = runSuspendCatching {
         val html = getText(
             embedUrl,
             extraHeaders = mapOf(
@@ -337,8 +338,8 @@ class AnimeGoSource(
             ),
         )
         val video = Jsoup.parse(html, embedUrl).selectFirst("video#video")
-            ?: return@runCatching null
-        val raw = video.attr("data-parameters").ifBlank { return@runCatching null }
+            ?: return@runSuspendCatching null
+        val raw = video.attr("data-parameters").ifBlank { return@runSuspendCatching null }
         val data = json.parseToJsonElement(
             org.jsoup.parser.Parser.unescapeEntities(raw, false)
         ).jsonObject

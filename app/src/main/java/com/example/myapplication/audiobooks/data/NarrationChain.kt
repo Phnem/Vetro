@@ -1,5 +1,6 @@
 package com.example.myapplication.audiobooks.data
 
+import com.example.myapplication.utils.runSuspendCatching
 import com.example.myapplication.audiobooks.domain.model.MediaManifest
 import com.example.myapplication.audiobooks.domain.model.NarrationId
 import com.example.myapplication.audiobooks.domain.model.VariantId
@@ -81,7 +82,7 @@ class NarrationChain(
     suspend fun next(narrationId: NarrationId, tried: Set<VariantId>): Next? {
         repeat(2) { pass ->
             for (link in links(narrationId).filter { it.variant !in tried }) {
-                val manifest = runCatching { resolver.manifest(link.variant) }.getOrNull()
+                val manifest = runSuspendCatching { resolver.manifest(link.variant) }.getOrNull()
                 repository.markVariant(link.variant, manifest != null)
                 if (manifest != null) return Next(link, manifest)
             }

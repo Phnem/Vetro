@@ -1,5 +1,6 @@
 package com.example.myapplication.sync.supabase
 
+import com.example.myapplication.utils.runSuspendCatching
 import android.content.Context
 import android.util.Log
 import com.example.myapplication.data.local.AnimeDatabase
@@ -55,17 +56,17 @@ class ProgressSyncRepository(
             // DataStore нельзя перечислить тайтлы, только спросить про известный id.
             val animeIds = db.animeQueries.getAllAnime().executeAsList().map { it.id }
 
-            runCatching { pushEpisodes(userId, animeIds) }
+            runSuspendCatching { pushEpisodes(userId, animeIds) }
                 .onFailure { Log.w(TAG, "Push episode progress failed: ${safeSyncError(it)}") }
-            runCatching { pushChapters(userId, animeIds) }
+            runSuspendCatching { pushChapters(userId, animeIds) }
                 .onFailure { Log.w(TAG, "Push manga progress failed: ${safeSyncError(it)}") }
-            runCatching { pushRatings(userId, animeIds) }
+            runSuspendCatching { pushRatings(userId, animeIds) }
                 .onFailure { Log.w(TAG, "Push episode ratings failed: ${safeSyncError(it)}") }
-            runCatching { pullEpisodes(userId) }
+            runSuspendCatching { pullEpisodes(userId) }
                 .onFailure { Log.w(TAG, "Pull episode progress failed: ${safeSyncError(it)}") }
-            runCatching { pullChapters(userId) }
+            runSuspendCatching { pullChapters(userId) }
                 .onFailure { Log.w(TAG, "Pull manga progress failed: ${safeSyncError(it)}") }
-            runCatching { pullRatings(userId) }
+            runSuspendCatching { pullRatings(userId) }
                 .onFailure { Log.w(TAG, "Pull episode ratings failed: ${safeSyncError(it)}") }
         }.onFailure { Log.e(TAG, "Progress sync failed: ${safeSyncError(it)}") }
     }

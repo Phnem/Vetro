@@ -1,5 +1,6 @@
 package com.example.myapplication.sync.supabase
 
+import com.example.myapplication.utils.runSuspendCatching
 import android.util.Log
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.postgrest.postgrest
@@ -96,7 +97,7 @@ class SyncPassphraseManager(
     }
 
     private suspend fun fetchRemote(userId: String): SyncPassphraseDto? =
-        runCatching {
+        runSuspendCatching {
             supabase.postgrest["user_sync_passphrase"]
                 .select { filter { eq("user_id", userId) } }
                 .decodeList<SyncPassphraseDto>()

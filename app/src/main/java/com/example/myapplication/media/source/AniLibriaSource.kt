@@ -1,5 +1,6 @@
 package com.example.myapplication.media.source
 
+import com.example.myapplication.utils.runSuspendCatching
 import com.example.myapplication.network.titleKey
 import com.example.myapplication.network.AppJson
 import android.util.Log
@@ -165,7 +166,7 @@ class AniLibriaSource(
         return ReleaseRef(selected.alias.ifBlank { selected.id }, selected.title)
     }
 
-    private suspend fun searchTitles(query: String): List<JsonObject> = runCatching {
+    private suspend fun searchTitles(query: String): List<JsonObject> = runSuspendCatching {
         val body = client.get("$API_ORIGIN/app/search/releases") {
             parameter("query", query)
         }.bodyAsText()
@@ -177,13 +178,13 @@ class AniLibriaSource(
     }.onFailure { Log.w(TAG, "v1 search failed: ${it.message}") }
         .getOrElse { emptyList() }
 
-    private suspend fun fetchRelease(alias: String): JsonObject? = runCatching {
+    private suspend fun fetchRelease(alias: String): JsonObject? = runSuspendCatching {
         val body = client.get("$API_ORIGIN/anime/releases/$alias").bodyAsText()
         json.parseToJsonElement(body) as? JsonObject
     }.onFailure { Log.w(TAG, "v1 release '$alias' failed: ${it.message}") }
         .getOrNull()
 
-    private suspend fun fetchFranchises(releaseId: String): List<JsonObject> = runCatching {
+    private suspend fun fetchFranchises(releaseId: String): List<JsonObject> = runSuspendCatching {
         val body = client.get("$API_ORIGIN/anime/franchises/release/$releaseId").bodyAsText()
         when (val root = json.parseToJsonElement(body)) {
             is JsonArray -> root.mapNotNull { it as? JsonObject }
