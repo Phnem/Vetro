@@ -1,5 +1,6 @@
 package com.example.myapplication.ui.vetrolink
 
+import androidx.compose.runtime.remember
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -143,12 +144,16 @@ private fun ProgressBar(done: Int, total: Int, modifier: Modifier = Modifier) {
         animationSpec = MotionTokens.springSurface(),
         label = "vetroSyncProgress",
     )
-    val sweep by rememberInfiniteTransition(label = "vetroSyncSweep").animateFloat(
-        initialValue = 0f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(tween(1400, easing = LinearEasing), RepeatMode.Restart),
-        label = "sweep",
-    )
+    val sweep = if (total <= 0) {
+        rememberInfiniteTransition(label = "vetroSyncSweep").animateFloat(
+            initialValue = 0f,
+            targetValue = 1f,
+            animationSpec = infiniteRepeatable(tween(1400, easing = LinearEasing), RepeatMode.Restart),
+            label = "sweep",
+        )
+    } else {
+        remember { androidx.compose.runtime.mutableFloatStateOf(0f) }
+    }
     val track = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.10f)
     Box(
         modifier
@@ -161,8 +166,8 @@ private fun ProgressBar(done: Int, total: Int, modifier: Modifier = Modifier) {
                     drawRect(BrandOrange, Offset.Zero, Size(size.width * fraction, size.height))
                 } else {
                     val segment = size.width * 0.3f
-                    val start = ((size.width + segment) * sweep - segment).coerceAtLeast(0f)
-                    val end = ((size.width + segment) * sweep).coerceAtMost(size.width)
+                    val start = ((size.width + segment) * sweep.value - segment).coerceAtLeast(0f)
+                    val end = ((size.width + segment) * sweep.value).coerceAtMost(size.width)
                     if (end > start) drawRect(BrandOrange, Offset(start, 0f), Size(end - start, size.height))
                 }
             },

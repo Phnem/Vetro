@@ -42,6 +42,17 @@ object BubbleClusterMotion {
         Point(0.63f, 0.58f),
     )
 
+    private val contactsLeft by lazy { contactPhases(direction = -1f) }
+    private val contactsRight by lazy { contactPhases(direction = 1f) }
+
+    private fun contactPhases(direction: Float): FloatArray {
+        val startX = -direction * SATELLITE_EDGE_X
+        val endX = direction * SATELLITE_EDGE_X
+        return FloatArray(bubbleCenters.size) { i ->
+            inverseSmootherStep(((bubbleCenters[i].x - startX) / (endX - startX)).coerceIn(0f, 1f))
+        }
+    }
+
     fun frame(phase: Float): BubbleClusterFrame {
         val t = wrap(phase)
         val travellingLeft = t < 0.5f
@@ -52,10 +63,9 @@ object BubbleClusterMotion {
         val travel = smootherStep(leg)
         val satelliteX = lerp(startX, endX, travel)
 
-        val bubbles = bubbleCenters.map { center ->
-            val contactPhase = inverseSmootherStep(
-                ((center.x - startX) / (endX - startX)).coerceIn(0f, 1f)
-            )
+        val contacts = if (travellingLeft) contactsLeft else contactsRight
+        val bubbles = bubbleCenters.mapIndexed { index, center ->
+            val contactPhase = contacts[index]
             val response = springResponse(leg - contactPhase)
             val directness = 1f - 0.12f * kotlin.math.abs(center.y - SATELLITE_Y)
             val compression = response * directness.coerceIn(0.78f, 1f)

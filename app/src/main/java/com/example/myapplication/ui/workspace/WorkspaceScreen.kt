@@ -119,7 +119,8 @@ fun WorkspaceScreen(
     var settingsOverlayVisible by remember { mutableStateOf(false) }
     var booksOverlayVisible by remember { mutableStateOf(false) }
     // Автоскрытие дока (D9) живёт здесь по той же причине: страницы доку не родители.
-    var pageDockVisible by remember { mutableStateOf(true) }
+    var homeDockVisible by remember { mutableStateOf(true) }
+    var settingsDockVisible by remember { mutableStateOf(true) }
     var showSyncPanel by remember { mutableStateOf(false) }
     // Меню последнего гнезда дока раскрывается поверх страницы, поэтому его состояние живёт
     // рядом с доком, а не внутри какой-либо страницы.
@@ -138,11 +139,6 @@ fun WorkspaceScreen(
     var menuWindowKey by rememberSaveable { mutableStateOf<String?>(null) }
     val syncPanelState = remember { MutableTransitionState(false) }
     syncPanelState.targetState = showSyncPanel
-    val dockHidden = homeOverlayVisible || settingsOverlayVisible || booksOverlayVisible || showSyncPanel || !pageDockVisible
-    // Капсула мини-плеера аудиокниг стоит над доком, пока он на экране (высота капсулы дока + отступ).
-    val miniClearanceOwner = remember { Any() }
-    SideEffect { MiniPlayerClearance.set(miniClearanceOwner, if (dockHidden) 0.dp else CapsuleDockInset - 12.dp) }
-    DisposableEffect(miniClearanceOwner) { onDispose { MiniPlayerClearance.clear(miniClearanceOwner) } }
 
     // Страницы резервируют место под док сами — ровно под капсулу, без запаса на всякий случай.
     val dockInset = CapsuleDockInset
@@ -151,6 +147,16 @@ fun WorkspaceScreen(
         initialPage = WorkspacePage.Start.index,
         pageCount = { WorkspacePage.PageCount },
     )
+    val pageDockVisible = when (WorkspacePage.ofIndex(pagerState.currentPage)) {
+        WorkspacePage.HOME -> homeDockVisible
+        WorkspacePage.SETTINGS -> settingsDockVisible
+        else -> true
+    }
+    val dockHidden = homeOverlayVisible || settingsOverlayVisible || booksOverlayVisible || showSyncPanel || !pageDockVisible
+    // Капсула мини-плеера аудиокниг стоит над доком, пока он на экране (высота капсулы дока + отступ).
+    val miniClearanceOwner = remember { Any() }
+    SideEffect { MiniPlayerClearance.set(miniClearanceOwner, if (dockHidden) 0.dp else CapsuleDockInset - 12.dp) }
+    DisposableEffect(miniClearanceOwner) { onDispose { MiniPlayerClearance.clear(miniClearanceOwner) } }
 
     // Секретная папка слева от главной: сессия живёт в Activity (Details поверх неё не закрывает
     // папку), жест и анимация — в host. Подробности — ui/secret.
@@ -267,7 +273,7 @@ fun WorkspaceScreen(
                     hostedInWorkspace = true,
                     onCardSelectionChange = { cardSelectionActive = it },
                     onOverlayVisibleChange = { homeOverlayVisible = it },
-                    onDockVisibleChange = { pageDockVisible = it },
+                    onDockVisibleChange = { homeDockVisible = it },
                 )
 
                 WorkspacePage.BOOKS -> BooksScreen(
@@ -285,7 +291,7 @@ fun WorkspaceScreen(
                     bottomInset = dockInset,
                     onOpenSyncPanel = { showSyncPanel = true },
                     onOverlayVisibleChange = { settingsOverlayVisible = it },
-                    onDockVisibleChange = { pageDockVisible = it },
+                    onDockVisibleChange = { settingsDockVisible = it },
                 )
             }
             }

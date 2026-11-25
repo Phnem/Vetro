@@ -1,5 +1,6 @@
 package com.example.myapplication.ui.shared.theme
 
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -63,12 +64,7 @@ fun Modifier.glassEdge(
     cornerRadius: Dp,
     isDark: Boolean,
     width: Dp = OverlayThemeTokens.GlassEdgeWidth
-): Modifier = this.drawWithContent {
-    if (!isDark) {
-        drawContent()
-        return@drawWithContent
-    }
-    drawContent()
+): Modifier = if (!isDark) this else this.drawWithCache {
     val strokeWidth = width.toPx()
     val cornerPx = (cornerRadius.toPx() - strokeWidth / 2f).coerceAtLeast(0f)
     val topLeft = Offset(strokeWidth / 2f, strokeWidth / 2f)
@@ -82,13 +78,17 @@ fun Modifier.glassEdge(
         start = Offset(0f, 0f),
         end = Offset(size.width, size.height)
     )
-    drawRoundRect(
-        brush = edgeBrush,
-        topLeft = topLeft,
-        size = rectSize,
-        cornerRadius = CornerRadius(cornerPx),
-        style = Stroke(width = strokeWidth)
-    )
+    val stroke = Stroke(width = strokeWidth)
+    onDrawWithContent {
+        drawContent()
+        drawRoundRect(
+            brush = edgeBrush,
+            topLeft = topLeft,
+            size = rectSize,
+            cornerRadius = CornerRadius(cornerPx),
+            style = stroke
+        )
+    }
 }
 
 /**

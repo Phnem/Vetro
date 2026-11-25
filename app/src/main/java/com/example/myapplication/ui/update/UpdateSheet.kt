@@ -120,6 +120,10 @@ fun UpdateSheet(language: AppLanguage, manual: Boolean, onDismiss: () -> Unit) {
     val state by manager.state.collectAsStateWithLifecycle()
     val strings = remember(language) { updateStrings(language) }
     val context = LocalContext.current
+    // PackageManager и SHA-256 — не на каждой перекомпозиции прогресса загрузки.
+    val installedFingerprint by androidx.compose.runtime.produceState<String?>(null, verifier) {
+        value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { verifier.installedFingerprints().firstOrNull() }
+    }
     val view = LocalView.current
     val comma = language == AppLanguage.RU
 
@@ -207,7 +211,7 @@ fun UpdateSheet(language: AppLanguage, manual: Boolean, onDismiss: () -> Unit) {
             )
         }
         if (release != null) WhatsNew(strings = strings, markdown = release.changelogMarkdown)
-        if (manual && manager.mode == UpdateMode.Auto) SecurityCard(strings = strings, fingerprint = verifier.installedFingerprints().firstOrNull())
+        if (manual && manager.mode == UpdateMode.Auto) SecurityCard(strings = strings, fingerprint = installedFingerprint)
 
         Crossfade(targetState = state::class, animationSpec = MotionTokens.tweenStandard(), label = "updateActions") {
             Actions(
