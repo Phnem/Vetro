@@ -40,6 +40,10 @@ data object SettingsRoute
 @Serializable
 data object InspectRoute
 
+/** Второй шаг после входа: предложение входа по биометрии, см. `ui/login`. */
+@Serializable
+data object BiometricOfferRoute
+
 /**
  * Граф дошёл до основного экрана и на него можно push'ить [DetailsRoute]
  * (тап по пушу о новой серии). На логине навигация ещё бессмысленна; сплэш — не маршрут,
@@ -47,7 +51,7 @@ data object InspectRoute
  */
 fun NavDestination?.isDeepLinkReady(): Boolean {
     val route = this?.route ?: return false
-    return !route.contains("WelcomeRoute")
+    return !route.contains("WelcomeRoute") && !route.contains("BiometricOfferRoute")
 }
 
 /** Определяет, что destination — [DetailsRoute] (для эффекта «вдавливания» Home под деталями). */

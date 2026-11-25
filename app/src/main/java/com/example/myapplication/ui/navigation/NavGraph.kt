@@ -46,6 +46,12 @@ import androidx.navigation.compose.composable
 import androidx.navigation.toRoute
 
 import com.example.myapplication.WelcomeScreen
+import com.example.myapplication.ui.login.BiometricOffer
+import com.example.myapplication.ui.login.BiometricOfferScreen
+import com.example.myapplication.ui.login.LoginScreen
+import com.example.myapplication.ui.login.NEW_LOGIN_SCREEN
+import com.example.myapplication.ui.searchdetails.NameDropState
+import com.example.myapplication.ui.searchdetails.nameDropEffect
 import com.example.myapplication.ui.addedit.AddEditScreen
 import com.example.myapplication.ui.addedit.AddEditViewModel
 import com.example.myapplication.ui.home.HomeScreen
@@ -114,6 +120,15 @@ private fun homeDepressPopEnter() =
 /** См. [SwipeBackGesture.LINEAR_MS]. */
 private const val SWIPE_BACK_LINEAR_MS = SwipeBackGesture.LINEAR_MS
 
+/** Действия экрана входа: одни и те же для нового и прежнего вида. */
+private class WelcomeActions(
+    val onGoogle: () -> Unit,
+    val onGithub: () -> Unit,
+    val onForgotPassword: (String) -> Unit,
+    val onEmail: (String, String) -> Unit,
+    val onGuest: () -> Unit,
+)
+
 @OptIn(ExperimentalSharedTransitionApi::class)
 // UnstableApi у media3 — маркер lint, а не Kotlin @RequiresOptIn: снимается androidx-аннотацией.
 @androidx.annotation.OptIn(markerClass = [UnstableApi::class])
@@ -146,13 +161,27 @@ fun AppNavGraph(
     // отдаёт движение страниц слоям из ui/shared/back, а переходы NavHost делает пустыми.
     fun exteraBack() = settingsViewModel.uiState.value.devExteraBack
 
+    // Линзовый переход после включения биометрии: слой всего графа, чтобы под волной сменился экран.
+    val loginLens = remember { NameDropState() }
+    val lensScope = rememberCoroutineScope()
+
     SharedTransitionLayout {
-        Box(Modifier.fillMaxSize()) {
+        Box(Modifier.fillMaxSize().nameDropEffect(loginLens)) {
         // Граф появляется, когда сплэш решил, куда идти, — ещё под сплэшем (StartupSplash.kt).
         val nextRoute = startupSplash.nextRoute
         if (nextRoute != null) NavHost(
             navController = navController,
-            startDestination = if (nextRoute == StartupSplashState.HOME) HomeRoute else WelcomeRoute,
+            // Считается один раз: смена startDestination пересоздала бы граф. Вход через браузер мог
+            // выгрузить приложение — тогда сплэш ведёт на главную, а предложение биометрии ещё ждёт.
+            startDestination = remember(nextRoute) {
+                val start: Any = when {
+                    nextRoute != StartupSplashState.HOME -> WelcomeRoute
+                    NEW_LOGIN_SCREEN && BiometricOffer.isPending(context) && !authRepository.isGuest &&
+                        BiometricOffer.canOffer(context) -> BiometricOfferRoute
+                    else -> HomeRoute
+                }
+                start
+            },
         ) {
             composable<WelcomeRoute>(
                 enterTransition = { fadeIn(animationSpec = MotionTokens.tweenEmphasized()) },
@@ -165,12 +194,18 @@ fun AppNavGraph(
 
                 LaunchedEffect(isUserSignedIn) {
                     if (isUserSignedIn) {
-                        navController.navigateToHome()
+                        if (NEW_LOGIN_SCREEN && BiometricOffer.isPending(context) && BiometricOffer.canOffer(context)) {
+                            navController.navigate(BiometricOfferRoute) { popUpTo(WelcomeRoute) { inclusive = true } }
+                        } else {
+                            BiometricOffer.clear(context)
+                            navController.navigateToHome()
+                        }
                     }
                 }
-                WelcomeScreen(
-                    strings = welcomeStrings,
-                    onGoogleSignInClick = {
+                val ru = systemAppLanguage() == com.example.myapplication.network.AppLanguage.RU
+                val actions = WelcomeActions(
+                    onGoogle = {
+                        BiometricOffer.markPending(context)
                         scope.launch {
                             val result = authRepository.signInWithGoogle(context)
                             if (result.isFailure) {
@@ -179,7 +214,8 @@ fun AppNavGraph(
                             }
                         }
                     },
-                    onGithubSignInClick = {
+                    onGithub = {
+                        BiometricOffer.markPending(context)
                         scope.launch {
                             val result = authRepository.signInWithGithub()
                             if (result.isFailure) {
@@ -188,7 +224,7 @@ fun AppNavGraph(
                             }
                         }
                     },
-                    onForgotPasswordClick = { email ->
+                    onForgotPassword = { email ->
                         scope.launch {
                             val result = authRepository.resetPasswordForEmail(email)
                             if (result.isSuccess) {
@@ -199,7 +235,8 @@ fun AppNavGraph(
                             }
                         }
                     },
-                    onEmailSignInClick = { email, password ->
+                    onEmail = { email, password ->
+                        BiometricOffer.markPending(context)
                         scope.launch {
                             val result = authRepository.signInWithEmail(email, password)
                             if (result.isFailure) {
@@ -208,10 +245,50 @@ fun AppNavGraph(
                             }
                         }
                     },
-                    onGuestClick = { 
+                    onGuest = {
+                        BiometricOffer.clear(context)
                         authRepository.signInAsGuest()
-                        navController.navigateToHome() 
-                    }
+                        navController.navigateToHome()
+                    },
+                )
+                if (NEW_LOGIN_SCREEN) {
+                    LoginScreen(
+                        strings = welcomeStrings,
+                        ru = ru,
+                        onGoogle = actions.onGoogle,
+                        onGithub = actions.onGithub,
+                        onEmail = actions.onEmail,
+                        onForgotPassword = actions.onForgotPassword,
+                        onNeedEmail = { MiniNotif.show(context, welcomeStrings.enterEmailFirst) },
+                        onGuest = actions.onGuest,
+                    )
+                } else {
+                    // Прежний экран входа, оставлен для отката (NEW_LOGIN_SCREEN = false).
+                    WelcomeScreen(
+                        strings = welcomeStrings,
+                        onGoogleSignInClick = actions.onGoogle,
+                        onGithubSignInClick = actions.onGithub,
+                        onEmailSignInClick = actions.onEmail,
+                        onForgotPasswordClick = actions.onForgotPassword,
+                        onGuestClick = actions.onGuest,
+                    )
+                }
+            }
+
+            composable<BiometricOfferRoute>(
+                enterTransition = { fadeIn(animationSpec = MotionTokens.tweenEmphasized()) },
+            ) {
+                val context = LocalContext.current
+                LaunchedEffect(Unit) { BiometricOffer.clear(context) }
+                fun openHome() {
+                    navController.navigate(HomeRoute) { popUpTo(BiometricOfferRoute) { inclusive = true } }
+                }
+                BiometricOfferScreen(
+                    ru = systemAppLanguage() == com.example.myapplication.network.AppLanguage.RU,
+                    // Согласился: линза — главная проявляется на пике размытия, под волной.
+                    onAccepted = { lensScope.launch { loginLens.play(onPeak = { openHome() }) } },
+                    onSkip = { openHome() },
+                    dissolve = { loginLens.dissolve },
                 )
             }
 

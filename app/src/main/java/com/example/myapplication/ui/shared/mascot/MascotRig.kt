@@ -276,7 +276,7 @@ private fun sideEdge(p: MascotPose, side: Int): Edge {
 
 /* ───────────── руки ───────────── */
 
-private fun rotv(x: Float, y: Float, deg: Float): Offset {
+internal fun rotv(x: Float, y: Float, deg: Float): Offset {
     val a = deg * PI.toFloat() / 180f
     val c = cos(a)
     val s = sin(a)
@@ -303,22 +303,32 @@ internal class Arm(val left: List<Offset>, val right: List<Offset>, val hand: Of
     val root: Offset get() = (left[0] + right[0]) / 2f
 }
 
-private fun armGeom(side: Int, angle: Float, bend: Float, lag: Float, e: Edge): Arm {
+private fun armGeom(side: Int, angle: Float, bend: Float, lag: Float, e: Edge, reach: Float = 0f): Arm {
     val len = 60f
     val sx0 = e.x - side * 30f // корень спрятан в боку корпуса
     val sy0 = e.y
     val turn = (-side * bend - lag).coerceIn(-130f, 130f)
     val d = rotv(0f, 1f, angle)
     val chord = len * (1 - 0.2f * (abs(turn) / 130f).pow(2))
-    val hx = sx0 + 22f * side + d.x * chord
-    val hy = sy0 + 6f + d.y * chord
+    var hx = sx0 + 22f * side + d.x * chord
+    var hy = sy0 + 6f + d.y * chord
     val u = rotv(d.x, d.y, -turn / 2)
     val v = rotv(d.x, d.y, turn / 2)
     val kk = chord * 0.4f
-    val c1x = sx0 + u.x * kk
-    val c1y = sy0 + u.y * kk
-    val c2x = hx - v.x * kk
-    val c2y = hy - v.y * kk
+    var c1x = sx0 + u.x * kk
+    var c1y = sy0 + u.y * kk
+    var c2x = hx - v.x * kk
+    var c2y = hy - v.y * kk
+    // Рука тянется к зрителю (сцена «палец с отпечатком»): кисть уходит в точку у камеры,
+    // трубка к запястью расширяется.
+    if (reach > 0f) {
+        hx += (124f - hx) * reach
+        hy += (-132f - hy) * reach
+        c1x += (sx0 + 27f - c1x) * reach
+        c1y += (sy0 + 41f - c1y) * reach
+        c2x += (117f - c2x) * reach
+        c2y += (-74f - c2y) * reach
+    }
     val n = 30
     val left = ArrayList<Offset>(n + 1)
     val right = ArrayList<Offset>(n + 1)
@@ -330,21 +340,23 @@ private fun armGeom(side: Int, angle: Float, bend: Float, lag: Float, e: Edge): 
         val tx = 3 * m * m * (c1x - sx0) + 6 * m * t * (c2x - c1x) + 3 * t * t * (hx - c2x)
         val ty = 3 * m * m * (c1y - sy0) + 6 * m * t * (c2y - c1y) + 3 * t * t * (hy - c2y)
         val l = hypot(tx, ty).takeIf { it > 0f } ?: 1f
-        val w = (46f - 15f * t.pow(0.8f)) / 2f // толще у плеча, тоньше к кисти
+        val w = (46f - 15f * t.pow(0.8f)) / 2f + reach * 10f * t.pow(1.6f) // толще у плеча, тоньше к кисти
         val nx = -ty / l * w
         val ny = tx / l * w
         left += Offset(px + nx, py + ny)
         right += Offset(px - nx, py - ny)
     }
-    return Arm(left, right, Offset(hx + v.x * 3, hy + v.y * 3), angOf(v))
+    val endLen = hypot(hx - c2x, hy - c2y).takeIf { it > 0f } ?: 1f
+    val end = Offset((hx - c2x) / endLen, (hy - c2y) / endLen)
+    return Arm(left, right, Offset(hx + end.x * 3, hy + end.y * 3), angOf(end))
 }
 
 /** Рука стороны [side] с краем корпуса; inL/inR уводят корень на плечо боковой грани (рука перед телом). */
-private fun armFor(p: MascotPose, side: Int): Pair<Edge, Arm> {
+private fun armFor(p: MascotPose, side: Int, reach: Float = 0f): Pair<Edge, Arm> {
     val e = sideEdge(p, side)
     val k = clamp01(if (side < 0) p.inL else p.inR)
     if (k > 0f) e.x += (e.s3x - side * 32f - e.x) * k
-    val arm = if (side < 0) armGeom(-1, p.armL, p.bendL, p.lagL, e) else armGeom(1, p.armR, p.bendR, p.lagR, e)
+    val arm = if (side < 0) armGeom(-1, p.armL, p.bendL, p.lagL, e) else armGeom(1, p.armR, p.bendR, p.lagR, e, reach)
     return e to arm
 }
 
@@ -412,6 +424,22 @@ internal class MascotExtras(
     val pinkyAngle: Float = 0f,
     val legsBack: (DrawScope.(color: Color, style: DrawStyle) -> Unit)? = null,
     val legsFront: (DrawScope.(fill: Color, line: Color) -> Unit)? = null,
+    /** Свои руки вместо трубок с варежками (например ладони у глаз); null — обычные руки. */
+    val arms: ((left: Arm, right: Arm) -> MascotArmLayers?)? = null,
+    /** Своя кисть правой руки; [color] и [style] — те же, что у обычной варежки в этом проходе. */
+    val mittenR: (DrawScope.(arm: Arm, color: Color, style: DrawStyle) -> Unit)? = null,
+    /** 0..1 — насколько правая рука вытянута к зрителю. */
+    val reachR: Float = 0f,
+    /** Видимость глаз по отдельности и сила их свечения (когда глаза закрыты ладонями). */
+    val eyeAlphaL: Float = 1f,
+    val eyeAlphaR: Float = 1f,
+    val eyeGlow: Float = 1f,
+)
+
+/** Свои руки в два прохода: [back] — вместе с корпусом (контур и заливка), [front] — поверх лица. */
+internal class MascotArmLayers(
+    val back: DrawScope.(color: Color, style: DrawStyle) -> Unit,
+    val front: DrawScope.() -> Unit,
 )
 
 /**
@@ -427,10 +455,13 @@ internal fun DrawScope.drawMascot(
     val r = BodyRot(p)
     val sil = polyPath(silhouette(r))
     val (eL, aL) = armFor(p, -1)
-    val (eR, aR) = armFor(p, 1)
+    val (eR, aR) = armFor(p, 1, extras?.reachR ?: 0f)
+    val armLayers = extras?.arms?.invoke(aL, aR)
     val fil = Path().also {
-        fillets(aL, eL, -1, it)
-        fillets(aR, eR, 1, it)
+        if (armLayers == null) {
+            fillets(aL, eL, -1, it)
+            fillets(aR, eR, 1, it)
+        }
     }
     val ya = p.yaw * PI.toFloat() / 180f
     val totL = aL.handAngle + p.rot + p.lean
@@ -450,6 +481,11 @@ internal fun DrawScope.drawMascot(
     }
 
     fun DrawScope.mitten(a: Arm, color: Color, style: DrawStyle) {
+        val custom = extras?.mittenR
+        if (a === aR && custom != null) {
+            custom(a, color, style)
+            return
+        }
         at(a.hand.x, a.hand.y, rot = a.handAngle) { ellipse(color, 0f, 0f, 17f, 19f, style) }
         val side = if (a === aL) -1 else 1
         if (extras != null && extras.pinkySide == side) {
@@ -489,20 +525,28 @@ internal fun DrawScope.drawMascot(
             val rs = stroke(5f)
             legs(rim, rs)
             torso {
-                drawPath(aL.tube, rim, style = rs)
-                drawPath(aR.tube, rim, style = rs)
-                mitten(aL, rim, rs)
-                mitten(aR, rim, rs)
+                if (armLayers != null) {
+                    armLayers.back(this, rim, rs)
+                } else {
+                    drawPath(aL.tube, rim, style = rs)
+                    drawPath(aR.tube, rim, style = rs)
+                    mitten(aL, rim, rs)
+                    mitten(aR, rim, rs)
+                }
                 drawPath(fil, rim, style = rs)
                 drawPath(sil, rim, style = rs)
             }
         }
         legs(c.body, Fill)
         torso {
-            drawPath(aL.tube, c.body)
-            mitten(aL, c.body, Fill)
-            drawPath(aR.tube, c.body)
-            mitten(aR, c.body, Fill)
+            if (armLayers != null) {
+                armLayers.back(this, c.body, Fill)
+            } else {
+                drawPath(aL.tube, c.body)
+                mitten(aL, c.body, Fill)
+                drawPath(aR.tube, c.body)
+                mitten(aR, c.body, Fill)
+            }
             handR?.let { draw -> at(aR.hand.x, aR.hand.y, rot = aR.handAngle) { draw() } }
             drawPath(fil, c.body)
             drawPath(sil, c.body)
@@ -510,12 +554,16 @@ internal fun DrawScope.drawMascot(
             withTransform({
                 translate(p.lookX, p.lookY)
                 transform(r.facePlane())
-            }) { drawFace(p, c) }
+            }) { drawFace(p, c, extras?.eyeAlphaL ?: 1f, extras?.eyeAlphaR ?: 1f, extras?.eyeGlow ?: 1f) }
         }
         extras?.legsFront?.invoke(this, c.body, c.frontLine)
         torso {
-            frontArm(aR, p.frontR)
-            frontArm(aL, p.frontL)
+            if (armLayers != null) {
+                armLayers.front(this)
+            } else {
+                frontArm(aR, p.frontR)
+                frontArm(aL, p.frontL)
+            }
             extras?.handLFront?.let { draw -> at(aL.hand.x, aL.hand.y, rot = aL.handAngle) { draw(totL) } }
         }
     }
@@ -568,12 +616,20 @@ private fun DrawScope.drawBodyVolume(sil: Path, r: BodyRot, c: MascotPalette) {
     }
 }
 
-private fun DrawScope.drawFace(p: MascotPose, c: MascotPalette) {
+private fun DrawScope.drawFace(
+    p: MascotPose,
+    c: MascotPalette,
+    eyeAlphaL: Float,
+    eyeAlphaR: Float,
+    eyeGlow: Float,
+) {
     val open = 1 - p.happy
-    val glowAlpha = if (c.dark) 0.8f else 0.55f
+    val glowAlpha = (if (c.dark) 0.8f else 0.55f) * eyeGlow
     if (open > 0.001f) {
         listOf(-40f to -166f, 42f to -168f).forEachIndexed { i, (x, y) ->
-            at(x, y, sx = p.eyeS * p.eyeSX, sy = p.eyeS * p.eyeSY) {
+            val visible = if (i == 0) eyeAlphaL else eyeAlphaR
+            if (visible <= 0.001f) return@forEachIndexed
+            alphaLayerIf(visible) { at(x, y, sx = p.eyeS * p.eyeSX, sy = p.eyeS * p.eyeSY) {
                 val lidRot = (if (i == 0) 1 else -1) * 13f * p.lid
                 withTransform({
                     // прищур: наклонная «шторка» срезает верх глаза вместе с ореолом
@@ -601,7 +657,7 @@ private fun DrawScope.drawFace(p: MascotPose, c: MascotPalette) {
                     ellipse(MascotOrange.copy(alpha = open), 0f, 0f, 11.5f, 17.5f, Stroke(3.5f))
                     ellipse(Color.White.copy(alpha = 0.55f * open), -2f, -6f, 4f, 6f)
                 }
-            }
+            } }
         }
     }
     if (p.happy > 0.001f) {
@@ -624,6 +680,11 @@ private fun DrawScope.drawFace(p: MascotPose, c: MascotPalette) {
             drawPath(MascotPaths.grin, c.mouth.copy(alpha = g), style = s)
         }
     }
+}
+
+/** [alphaLayer] только когда он нужен: при полной видимости лишний слой не создаётся. */
+private inline fun DrawScope.alphaLayerIf(alpha: Float, block: DrawScope.() -> Unit) {
+    if (alpha >= 0.999f) block() else alphaLayer(alpha, block)
 }
 
 /** Лупа в кисти: начало — центр кисти, лупа смотрит вдоль +y. */
