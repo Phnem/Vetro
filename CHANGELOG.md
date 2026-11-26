@@ -1,5 +1,24 @@
 # Vetro changelog
 
+## v3.6.6-Stable — November 26, 2026
+
+App version: `v3.6.6-Stable`. Android version code: `366`.
+A hotfix on top of 3.6.5-Stable.
+
+### Fixed
+
+- Opening a bookshelf: each book now lands exactly on its cover and appears as a whole, with the cover and the page edge together.
+
+### Under the hood
+
+- A disk cache for streaming playback is wired into the player but switched off until it is checked against real sources, so playback behaves as before.
+- Added a device check for video enhancement support through Google Play services. There is no enhancement feature yet.
+
+### Downloads
+
+- `app-release.apk` is the universal build (arm64-v8a and armeabi-v7a). The in-app updater takes this one.
+- `vetro-arm64-v8a.apk` is for 64-bit ARM phones and `vetro-armeabi-v7a.apk` for 32-bit ones.
+
 ## v3.6.5-Stable — November 26, 2026
 
 App version: `v3.6.5-Stable`. Android version code: `365`.

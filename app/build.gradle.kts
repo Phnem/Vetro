@@ -43,8 +43,8 @@ android {
         applicationId = "com.phnem.vetro"
         minSdk = 26
         targetSdk = 36
-        versionCode = 365
-        versionName = "v3.6.5-Stable"
+        versionCode = 366
+        versionName = "v3.6.6-Stable"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         // Whisper (whisper.cpp) — только arm64: там есть dotprod/fp16, на остальных ABI меню честно
