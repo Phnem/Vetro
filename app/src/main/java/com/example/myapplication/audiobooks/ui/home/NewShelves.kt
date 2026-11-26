@@ -438,7 +438,7 @@ internal fun FlatBook(book: CachedBook, modifier: Modifier = Modifier, coverModi
 
 /**
  * Страница открытой полки: шапка и сетка плоских книг. Книги сюда прилетают с карточки
- * ([FlyingBooks]): пока идёт полёт, настоящая обложка скрыта, а её место в сетке известно морфу.
+ * ([FlyingBooks]): пока идёт полёт, книга в сетке скрыта, а место посадки измеряется по её обложке.
  */
 @Composable
 internal fun ShelfPageV2(
@@ -536,13 +536,15 @@ internal fun ShelfPageV2(
                 ) {
                     FlatBook(
                         book,
-                        Modifier.fillMaxWidth(),
-                        // Место посадки летящей книги; до конца полёта настоящая обложка скрыта.
-                        coverModifier = if (index < ShelfMorph.TRACKED) {
+                        // Обложка и кромка страниц появляются вместе при посадке.
+                        modifier = if (index < ShelfMorph.TRACKED) {
+                            Modifier.graphicsLayer { alpha = morph.gridCoverAlpha(index) }
+                        } else {
                             Modifier
-                                .onPlaced { morph.targetCoords[index] = it }
-                                // Настоящая обложка проявляется под растворяющейся копией (последние 8% пути).
-                                .graphicsLayer { alpha = morph.gridCoverAlpha(index) }
+                        },
+                        // Летящая копия совмещается именно с обложкой, без учёта кромки страниц.
+                        coverModifier = if (index < ShelfMorph.TRACKED) {
+                            Modifier.onPlaced { morph.targetCoords[index] = it }
                         } else {
                             Modifier
                         },
