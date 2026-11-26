@@ -6,6 +6,7 @@ import android.os.SystemClock
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
+import androidx.media3.datasource.DataSource
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.cache.Cache
 import androidx.media3.datasource.cache.CacheDataSource
@@ -34,7 +35,7 @@ object StreamingPlaybackSessionFactory {
         client: OkHttpClient,
         video: VetroVideo,
         tuning: StreamingPlayerTuning = StreamingPlayerTuning.DEFAULT,
-        /** Пилот [14]: дисковый кэш прочитанных диапазонов. null — как в приложении сейчас. */
+        /** Дисковый кэш прочитанных диапазонов, см. [StreamDiskCache]. null — без кэша. */
         cache: Cache? = null,
         cacheListener: CacheDataSource.EventListener? = null,
     ): StreamingPlaybackSession {
@@ -133,17 +134,19 @@ object StreamingPlaybackSessionFactory {
         val okHttpFactory = OkHttpDataSource.Factory(client.forPlaybackCandidate(video))
             .setDefaultRequestProperties(headers)
             .setTransferListener(transferMonitor)
-        // http(s) — через OkHttp с заголовками источника; file:// — субтитры, подгруженные
-        // пользователем в кэш приложения (OkHttp такие адреса не открывает).
-        val upstream = DefaultDataSource.Factory(context, okHttpFactory)
-        if (cache == null) return DefaultMediaSourceFactory(upstream)
-        return DefaultMediaSourceFactory(
+        val network: DataSource.Factory = if (cache == null) {
+            okHttpFactory
+        } else {
             CacheDataSource.Factory()
                 .setCache(cache)
-                .setUpstreamDataSourceFactory(upstream)
+                .setUpstreamDataSourceFactory(okHttpFactory)
                 .setEventListener(cacheListener)
-                .setFlags(CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR),
-        )
+                .setFlags(CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR)
+        }
+        // http(s) — через OkHttp с заголовками источника; file:// — субтитры, подгруженные
+        // пользователем в кэш приложения (OkHttp такие адреса не открывает). Дисковый кэш стоит
+        // под этим выбором: локальные файлы в него не попадают.
+        return DefaultMediaSourceFactory(DefaultDataSource.Factory(context, network))
     }
 
     private fun buildTrackMediaItem(track: VetroSubtitleTrack): MediaItem {

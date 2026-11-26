@@ -377,6 +377,9 @@ class StreamPlayerActivity : ComponentActivity(), PipHostActivity {
                             this@StreamPlayerActivity,
                             okHttpClient,
                             current,
+                            // VETRO-TAIL[stream-cache]: пока выключен и возвращает null.
+                            cache = com.example.myapplication.media.player.StreamDiskCache
+                                .forPlayback(this@StreamPlayerActivity),
                         ).also { session ->
                             session.player.apply {
                                 playWhenReady = true
