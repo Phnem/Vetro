@@ -1,6 +1,7 @@
 package com.example.myapplication.ui.details
 
 import com.example.myapplication.ui.shared.mininotif.MiniNotif
+import com.example.myapplication.ui.shared.components.RollingNumberText
 import com.example.myapplication.ui.shared.theme.StatusSuccess
 import com.example.myapplication.ui.shared.theme.IosScroll
 import androidx.compose.animation.AnimatedContent
@@ -82,6 +83,8 @@ import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -123,6 +126,7 @@ class EpisodeMenuRequest(
     val onRate: (Float) -> Unit,
     /** true — «смотрел», false — «не смотрел»; у сезона — для всех его серий. */
     val onSetWatched: (Boolean) -> Unit,
+    val episodeKey: EpisodeKey? = null,
 )
 
 /**
@@ -149,6 +153,8 @@ fun ModernDetailsEpisodesPage(
      * лишь передаёт ему описание выделенного.
      */
     onOpenRowMenu: (EpisodeMenuRequest) -> Unit,
+    selectedEpisodes: Set<EpisodeKey> = emptySet(),
+    onToggleEpisode: (EpisodeKey) -> Unit = {},
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
@@ -277,7 +283,7 @@ fun ModernDetailsEpisodesPage(
                         isDark = isDark,
                         onToggle = { viewModel.toggleSeason(season.seasonNumber) },
                         onSeasonAction = { viewModel.seasonAction(season) },
-                        onLongPress = { bounds ->
+                        onLongPress = if (selectedEpisodes.isNotEmpty()) null else { bounds ->
                             performHaptic(view, Haptic.Light)
                             val rated = state.ratings.filterKeys { it.season == season.seasonNumber }.values
                             onOpenRowMenu(
@@ -341,9 +347,13 @@ fun ModernDetailsEpisodesPage(
                                 rating = rating,
                                 ru = ru,
                                 isDark = isDark,
-                                onClick = { viewModel.play(season, episode) },
+                                onClick = {
+                                    if (selectedEpisodes.isNotEmpty()) onToggleEpisode(key)
+                                    else viewModel.play(season, episode)
+                                },
                                 onAction = { viewModel.episodeAction(season, episode) },
-                                onLongPress = { bounds ->
+                                selection = if (selectedEpisodes.isEmpty()) null else key in selectedEpisodes,
+                                onLongPress = if (selectedEpisodes.isNotEmpty()) null else { bounds ->
                                     performHaptic(view, Haptic.Light)
                                     onOpenRowMenu(
                                         EpisodeMenuRequest(
@@ -370,6 +380,7 @@ fun ModernDetailsEpisodesPage(
                                             },
                                             onRate = { viewModel.rateEpisode(season.seasonNumber, episode, it) },
                                             onSetWatched = { viewModel.setWatched(season, episode, it) },
+                                            episodeKey = key,
                                         )
                                     )
                                 },
@@ -775,6 +786,7 @@ private fun EpisodeRow(
     onAction: () -> Unit,
     /** Удержание на серии; null — копия в оверлее меню, там жестов нет. */
     onLongPress: ((Rect) -> Unit)?,
+    selection: Boolean? = null,
 ) {
     val bounds = remember { BoundsHolder() }
     val hasProgress = (progress?.positionMs ?: 0L) > 0L
@@ -810,18 +822,21 @@ private fun EpisodeRow(
             .background(rowColor)
             // Обводка только у просмотренной — раньше у остальных рисовалась нулевая прозрачная.
             .then(
-                if (watched) {
+                if (selection == true) {
+                    Modifier.border(2.dp, StatusSuccess, rowShape)
+                } else if (watched) {
                     Modifier.border(1.dp, watchedColor.copy(alpha = 0.48f), rowShape)
                 } else {
                     Modifier
                 },
             )
+            .then(if (selection != null) Modifier.semantics { selected = selection } else Modifier)
             .onGloballyPositioned { bounds.coordinates = it }
             // Тап запускает серию, удержание поднимает её над списком с кнопками оценки и отметок.
             .combinedClickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
-                enabled = !streaming,
+                enabled = selection != null || !streaming,
                 onLongClick = onLongPress?.let { open ->
                     { bounds.boundsOrNull()?.let(open) }
                 },
@@ -895,6 +910,7 @@ private fun EpisodeRow(
                     EpisodeMetaChip(
                         text = "★ ${RatingScale.format(rating)}",
                         accent = getRatingColor(rating),
+                        rolling = true,
                     )
                 }
                 if ((progress?.durationMs ?: 0L) > 0L) {
@@ -922,7 +938,20 @@ private fun EpisodeRow(
             )
         }
         Spacer(Modifier.width(8.dp))
-        DownloadAction(
+        if (selection != null) {
+            Box(Modifier.size(40.dp), contentAlignment = Alignment.Center) {
+                Box(
+                    Modifier.size(24.dp)
+                        .background(if (selection) StatusSuccess else Color.Transparent, CircleShape)
+                        .border(2.dp, if (selection) StatusSuccess else MaterialTheme.colorScheme.outline, CircleShape),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    if (selection) {
+                        Icon(Icons.Rounded.Check, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
+                    }
+                }
+            }
+        } else DownloadAction(
             state = action,
             contentDescription = when (action) {
                 is EpisodeActionState.Downloaded, is EpisodeActionState.Completed ->
@@ -939,6 +968,7 @@ private fun EpisodeRow(
 private fun EpisodeMetaChip(
     text: String,
     accent: Color,
+    rolling: Boolean = false,
 ) {
     Box(
         modifier = Modifier
@@ -947,16 +977,13 @@ private fun EpisodeMetaChip(
             .border(0.5.dp, accent.copy(alpha = 0.24f), CircleShape)
             .padding(horizontal = 7.dp, vertical = 3.dp),
     ) {
-        Text(
-            text = text,
-            style = MaterialTheme.typography.labelSmall.copy(
-                fontFamily = SnProFamily,
-                fontWeight = FontWeight.SemiBold,
-                fontSize = 9.sp,
-            ),
-            color = accent,
-            maxLines = 1,
+        val style = MaterialTheme.typography.labelSmall.copy(
+            fontFamily = SnProFamily,
+            fontWeight = FontWeight.SemiBold,
+            fontSize = 9.sp,
         )
+        if (rolling) RollingNumberText(text, style = style, color = accent, maxLines = 1)
+        else Text(text, style = style, color = accent, maxLines = 1)
     }
 }
 

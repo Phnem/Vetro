@@ -1,5 +1,7 @@
 package com.example.myapplication.ui.home.stats
 
+import com.example.myapplication.ui.shared.components.RollingNumberText
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -319,7 +321,7 @@ private fun StatsLegendRow(
             modifier = Modifier.weight(1f),
         )
         Spacer(Modifier.size(8.dp))
-        Text(
+        RollingNumberText(
             text = detail,
             style = MaterialTheme.typography.bodyMedium.copy(fontFamily = SnProFamily),
             color = detailColor,

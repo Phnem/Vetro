@@ -1,0 +1,6 @@
+New
+• Hold a card or episode and slide to an action. Release to run it.
+• Select multiple episodes to mark them watched or unwatched, or rate them together.
+• Confirm deletion to fold a collection card into the trash button.
+• Ratings, statistics, and progress counters animate when their numbers change.
+• A dot on the anime cover marks a new episode notification.

@@ -1,5 +1,7 @@
 package com.example.myapplication.ui.home
 
+import com.example.myapplication.ui.shared.components.RollingNumberText
+
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -260,7 +262,7 @@ internal fun FullBleedAnimeCardBody(
                             .background(palette.ratingFill)
                             .ratingChipTap(onRatingClick, onLongClick)
                     ) {
-                        Text(
+                        RollingNumberText(
                             text = "★ ${RatingScale.format(state.rating)}",
                             color = getRatingColor(state.rating),
                             fontSize = 12.sp,
@@ -346,7 +348,7 @@ internal fun FullBleedAnimeCardBody(
                             trackColor = palette.track,
                         )
                     } else {
-                        Text(
+                        RollingNumberText(
                             text = state.episodesLabel,
                             style = TextStyle(
                                 fontFamily = SnProFamily,
@@ -401,6 +403,12 @@ internal fun FullBleedAnimeCardBody(
         )
         if (state.isFavorite) {
             FavoriteCornerChip(modifier = Modifier.align(Alignment.TopStart))
+        }
+        if (state.hasNewEpisode) {
+            NewEpisodeDot(
+                state.language,
+                Modifier.align(Alignment.TopStart).padding(start = 10.dp, top = if (state.isFavorite) 35.dp else 10.dp),
+            )
         }
     }
 }

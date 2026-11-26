@@ -8,6 +8,9 @@ import com.example.myapplication.ui.shared.glassControl
 import com.example.myapplication.ui.shared.StatusBarIconsOverArt
 import androidx.compose.ui.platform.LocalDensity
 import com.example.myapplication.ui.shared.LocalModernUi
+import com.example.myapplication.ui.home.cardmenu.ActionMenuGesture
+import com.example.myapplication.ui.home.cardmenu.collectionGestures
+import androidx.compose.material.icons.rounded.CheckCircleOutline
 import android.graphics.BitmapFactory
 
 import androidx.compose.animation.AnimatedVisibility
@@ -168,6 +171,15 @@ fun DetailsScreen(
     }
     val scope = rememberCoroutineScope()
     val view = LocalView.current
+    val menuGesture = if (current.mediaType != MediaType.MANGA) remember(view) {
+        ActionMenuGesture { performHaptic(view, Haptic.Tick) }
+    } else null
+    var selectedEpisodes by remember(current.id) { mutableStateOf(emptySet<EpisodeKey>()) }
+    val selectingEpisodes = selectedEpisodes.isNotEmpty()
+    fun toggleEpisodeSelection(key: EpisodeKey) {
+        performHaptic(view, Haptic.Tick)
+        selectedEpisodes = if (key in selectedEpisodes) selectedEpisodes - key else selectedEpisodes + key
+    }
     // Удержание на серии или сезоне: поднятая строка с круглыми кнопками (оценка / не смотрел /
     // смотрел). Отдельный признак видимости — оверлей обязан доиграть уход, см. ActionMenuOverlay.
     var episodeMenu by remember { mutableStateOf<EpisodeMenuRequest?>(null) }
@@ -190,6 +202,7 @@ fun DetailsScreen(
     val episodeRatingSlider = remember { RatingSliderState(0f) }
     var episodeRatingShown by remember { mutableStateOf(false) }
     var episodeRatingCommit by remember { mutableStateOf<((Float) -> Unit)?>(null) }
+    BackHandler(enabled = selectingEpisodes && !episodeRatingShown) { selectedEpisodes = emptySet() }
     BackHandler(enabled = episodeMenuVisible) { episodeMenuVisible = false }
     val pagerState = rememberPagerState(
         initialPage = if (openEpisodes) 1 else 0,
@@ -248,7 +261,7 @@ fun DetailsScreen(
         // Цвета полей берём с реальной страницы: здесь фон зависит от обложки и прокрутки.
         edgeContentLayer = backdrop.graphicsLayer,
         content = {
-            Box(modifier = Modifier.fillMaxSize().background(screenBg)) {
+            Box(modifier = Modifier.fillMaxSize().background(screenBg).collectionGestures(menuGesture)) {
                 // Обе страницы лежат под layerBackdrop — стеклянные кнопка «назад» и мини-док
                 // преломляют живой контент. Узел с layerBackdrop никогда не размонтируется.
                 Box(modifier = Modifier.fillMaxSize().layerBackdrop(backdrop)) {
@@ -257,8 +270,13 @@ fun DetailsScreen(
                         // Резинка на краях у страниц читается как дёрганье (см. IosScroll.pagerFlingBehavior).
                         overscrollEffect = null,
                         state = pagerState,
+                        userScrollEnabled = !selectingEpisodes,
                         // Свайп вправо со страницы «Детали» — назад на главную (как в iOS, от любой точки).
-                        modifier = Modifier.fillMaxSize().detailsSwipeBack(pagerState, enabled = !com.example.myapplication.ui.shared.SheetGate.anyOpen),
+                        modifier = Modifier.fillMaxSize().detailsSwipeBack(
+                            pagerState,
+                            enabled = !com.example.myapplication.ui.shared.SheetGate.anyOpen &&
+                                !selectingEpisodes && !episodeMenuVisible,
+                        ),
                         beyondViewportPageCount = 1,
                     ) { page ->
                         when (page) {
@@ -340,7 +358,10 @@ fun DetailsScreen(
                                 fallbackEpisodes = current.episodes,
                                 posterPath = viewModel.getImgPath(current.imageFileName),
                                 viewModel = checkNotNull(episodeMenuViewModel),
+                                selectedEpisodes = selectedEpisodes,
+                                onToggleEpisode = ::toggleEpisodeSelection,
                                 onOpenRowMenu = { request ->
+                                    menuGesture?.arm()
                                     episodeMenu = request
                                     episodeMenuVisible = true
                                 },
@@ -359,7 +380,10 @@ fun DetailsScreen(
                         DetailsGlassBackButton(
                             backdrop = backdrop,
                             isDark = isDark,
-                            onClick = { navController.popBackStack() },
+                            onClick = {
+                                if (selectingEpisodes) selectedEpisodes = emptySet()
+                                else navController.popBackStack()
+                            },
                             modifier = Modifier
                                 .align(Alignment.TopStart)
                                 .statusBarsPadding()
@@ -370,7 +394,7 @@ fun DetailsScreen(
                         // Каталоги аниме (обложки, id, «просмотрено» по сериям) манге не нужны: у неё в меню
                         // остаётся только секретная папка.
                         val isSecret by viewModel.isSecret.collectAsStateWithLifecycle()
-                        DetailsOverflowMenu(
+                        if (!selectingEpisodes) DetailsOverflowMenu(
                             backdrop = backdrop,
                             isDark = isDark,
                             ru = language == AppLanguage.RU,
@@ -477,7 +501,7 @@ fun DetailsScreen(
                 DisposableEffect(miniClearanceOwner) { onDispose { MiniPlayerClearance.clear(miniClearanceOwner) } }
 
                 AnimatedVisibility(
-                    visible = !pageSheetOpen,
+                    visible = !pageSheetOpen && !selectingEpisodes,
                     enter = fadeIn(),
                     exit = fadeOut(),
                     modifier = Modifier.fillMaxSize().zIndex(4f),
@@ -585,7 +609,19 @@ fun DetailsScreen(
                                     request.onSetWatched(true)
                                 },
                             ),
-                        )
+                        ) + if (request.episodeKey != null) {
+                            listOf(
+                                ActionMenuItem(
+                                    icon = Icons.Rounded.CheckCircleOutline,
+                                    tint = neutralTint,
+                                    contentDescription = if (ru) "Выбрать серию" else "Select episode",
+                                    onClick = {
+                                        episodeMenuVisible = false
+                                        toggleEpisodeSelection(request.episodeKey)
+                                    },
+                                )
+                            )
+                        } else emptyList()
                         ActionMenuOverlay(
                             boundsInRoot = request.bounds,
                             visible = episodeMenuVisible,
@@ -596,10 +632,43 @@ fun DetailsScreen(
                             actions = actions,
                             onDismiss = { episodeMenuVisible = false },
                             onClosed = { episodeMenu = null },
+                            gesture = menuGesture,
                             modifier = Modifier.zIndex(9f),
                         ) {
                             request.content()
                         }
+                    }
+
+                    if (episodeMenuViewModel != null) {
+                        EpisodeSelectionDock(
+                            count = selectedEpisodes.size,
+                            ru = language == AppLanguage.RU,
+                            backdrop = backdrop,
+                            modifier = Modifier.align(Alignment.TopEnd).statusBarsPadding()
+                                .padding(top = 12.dp, end = 16.dp).zIndex(5f),
+                            onClear = {
+                                performHaptic(view, Haptic.Light)
+                                selectedEpisodes = emptySet()
+                            },
+                            onWatched = { watched ->
+                                performHaptic(view, if (watched) Haptic.Success else Haptic.Light)
+                                episodeMenuViewModel.setEpisodesWatched(selectedEpisodes, watched)
+                                selectedEpisodes = emptySet()
+                            },
+                            onRate = { bounds ->
+                                performHaptic(view, Haptic.Light)
+                                val episodes = selectedEpisodes
+                                scope.launch {
+                                    episodeRatingSlider.anchorBoundsInRoot = bounds
+                                    episodeRatingSlider.syncFromExternal(episodeMenuViewModel.ratingForSelection(episodes))
+                                    episodeRatingCommit = { rating ->
+                                        episodeMenuViewModel.rateEpisodes(episodes, rating)
+                                        selectedEpisodes = emptySet()
+                                    }
+                                    episodeRatingShown = true
+                                }
+                            },
+                        )
                     }
 
                     // Бабл оценки — последним и с самым высоким zIndex: закрывает мини-док и кнопки.

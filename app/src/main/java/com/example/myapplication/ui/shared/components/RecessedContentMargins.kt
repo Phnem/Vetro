@@ -54,7 +54,7 @@ internal fun DrawScope.drawRecessedContentMargins(
     }
 }
 
-private fun DrawScope.drawLayerSlice(content: GraphicsLayer, source: Rect, destination: Rect) {
+internal fun DrawScope.drawLayerSlice(content: GraphicsLayer, source: Rect, destination: Rect) {
     if (destination.width <= 0f || destination.height <= 0f) return
     clipRect(destination.left, destination.top, destination.right, destination.bottom) {
         withTransform({

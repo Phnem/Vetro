@@ -22,6 +22,8 @@ import androidx.compose.animation.core.tween
 import com.example.myapplication.ui.shared.frostedGlass
 import com.example.myapplication.ui.shared.FrostedMaterials
 import com.example.myapplication.ui.shared.LocalModernUi
+import com.example.myapplication.ui.home.cardmenu.ActionMenuGesture
+import com.example.myapplication.ui.home.cardmenu.collectionGestures
 import com.example.myapplication.ui.shared.LocalAdaptiveGlassEnabled
 import android.app.Activity
 import android.content.pm.PackageManager
@@ -204,6 +206,9 @@ fun HomeScreen(
     val list by viewModel.animeListFlow.collectAsStateWithLifecycle()
     val collectionEmpty by viewModel.collectionEmpty.collectAsStateWithLifecycle()
     val experimentalGrid by viewModel.experimentalGrid.collectAsStateWithLifecycle()
+    val newEpisodeIds = remember(uiState.updates) {
+        uiState.updates.mapTo(HashSet()) { it.animeId }
+    }
     val favorites = remember(list, experimentalGrid) {
         if (experimentalGrid) list.filter { it.isFavorite } else emptyList()
     }
@@ -230,7 +235,8 @@ fun HomeScreen(
             airing = airingEntry,
             reading = mangaReadingMap[anime.id],
         )
-        return remember(anime, currentLanguage, webLinksEntry, cardProgress, seasonLayout, airingEntry) {
+        val hasNewEpisode = anime.mediaType == MediaType.ANIME && anime.id in newEpisodeIds
+        return remember(anime, currentLanguage, webLinksEntry, cardProgress, seasonLayout, airingEntry, hasNewEpisode) {
             // Название по выбранному языку: EN → английское, RU → русское.
             // Замена, а не вторая строка; при отсутствии перевода — исходный title.
             val displayTitle = when (currentLanguage) {
@@ -263,6 +269,7 @@ fun HomeScreen(
                 webLinks = links,
                 language = currentLanguage,
                 imagePath = viewModel.getImgPath(anime.imageFileName),
+                hasNewEpisode = hasNewEpisode,
                 mediaTypeLabel = when (anime.mediaType) {
                     com.example.myapplication.data.models.MediaType.ANIME -> strings.typeAnime
                     com.example.myapplication.data.models.MediaType.MANGA -> strings.typeManga
@@ -320,6 +327,9 @@ fun HomeScreen(
     val kbd = LocalSoftwareKeyboardController.current
     val focusManager = LocalFocusManager.current
     val view = LocalView.current
+    val menuGesture = remember(view) {
+        ActionMenuGesture { performHaptic(view, Haptic.Tick) }
+    }
     val ctx = LocalContext.current
     var showCSheet by remember { mutableStateOf(false) }
     var showRecsSheet by remember { mutableStateOf(false) }
@@ -359,11 +369,22 @@ fun HomeScreen(
     val searchFocusRequester = remember { FocusRequester() }
     var animeToDelete by remember { mutableStateOf<Anime?>(null) }
     var animeToFavorite by remember { mutableStateOf<Anime?>(null) }
-    var pendingSwipeReset by remember { mutableStateOf<(suspend () -> Unit)?>(null) }
     /** Карточка, поднятая долгим удержанием (контекстное меню). */
     var cardMenuTarget by remember { mutableStateOf<CardMenuTarget?>(null) }
     // Отдельно от цели: меню обязано дожить до конца своего закрытия, см. CardActionMenuOverlay.
     var cardMenuVisible by remember { mutableStateOf(false) }
+    var confirmedMenuDeleteId by remember { mutableStateOf<String?>(null) }
+    var collapsingCardId by remember { mutableStateOf<String?>(null) }
+    var awaitingDeletedCards by remember { mutableStateOf(emptySet<String>()) }
+    fun commitMenuDeletion() {
+        val id = confirmedMenuDeleteId ?: return
+        confirmedMenuDeleteId = null
+        awaitingDeletedCards = awaitingDeletedCards + id
+        viewModel.deleteAnime(id) { awaitingDeletedCards = awaitingDeletedCards - id }
+    }
+    DisposableEffect(viewModel) {
+        onDispose { commitMenuDeletion() }
+    }
     /**
      * Окно оценки по тапу на рейтинг карточки — то же, что открывается в AddEdit при движении
      * рейтинг-слайдера, только выезжает из чипа на карточке. Состояние (смайлик, значение)
@@ -386,8 +407,11 @@ fun HomeScreen(
     // Запись пропала из списка (удалена, отфильтрована, сменился поиск) — выделение снимаем:
     // держать поднятой карточку, которой больше нет, нельзя.
     LaunchedEffect(list) {
+        if (awaitingDeletedCards.isNotEmpty()) {
+            awaitingDeletedCards = awaitingDeletedCards.filterTo(HashSet()) { id -> list.any { it.id == id } }
+        }
         val id = cardMenuTarget?.state?.id ?: return@LaunchedEffect
-        if (list.none { it.id == id }) cardMenuTarget = null
+        if (id != collapsingCardId && list.none { it.id == id }) cardMenuTarget = null
     }
     val scope = rememberCoroutineScope()
     val openRatingPicker: (Anime, Rect) -> Unit = { anime, chipBounds ->
@@ -676,7 +700,9 @@ fun HomeScreen(
         // Отдельной заливки под контентом нет: под главной уже фон того же цвета (корень
         // MainActivity, бэкдроп рабочей области), а колонка ниже непрозрачна — это была
         // лишняя полноэкранная заливка на каждый кадр.
-        Box(modifier = Modifier.fillMaxSize().padding(paddingValues)) {
+        Box(
+            modifier = Modifier.fillMaxSize().padding(paddingValues).collectionGestures(menuGesture),
+        ) {
             if (notifVisibleState.currentState || notifVisibleState.targetState) {
                 Box(modifier = Modifier.zIndex(5f).fillMaxSize()) {
                     NotificationSyncOverlay(
@@ -948,7 +974,14 @@ fun HomeScreen(
                                 } else if (list.isNotEmpty()) {
                                     if (favorites.isNotEmpty()) {
                                         item(key = "favorite_collection", contentType = "favorite_collection") {
-                                            FavoriteCollectionStrip(favorites, currentLanguage) { anime, position, cardModifier ->
+                                            FavoriteCollectionStrip(
+                                                favorites,
+                                                currentLanguage,
+                                                modifier = Modifier.animateItem(
+                                                    fadeInSpec = null,
+                                                    fadeOutSpec = null,
+                                                ),
+                                            ) { anime, position, cardModifier ->
                                                 val state = rememberCollectionCardState(anime)
                                                 with(sharedTransitionScope) {
                                                     FavoriteCollectionCard(
@@ -966,9 +999,16 @@ fun HomeScreen(
                                                                 state = state, isFavorite = true, boundsInRoot = bounds,
                                                                 favoritePosition = position, releaseYear = anime.releaseYear,
                                                             )
+                                                            menuGesture.arm()
                                                             cardMenuVisible = true
                                                         },
-                                                        modifier = cardModifier.sharedBounds(
+                                                        modifier = cardModifier
+                                                            .then(
+                                                                if (collapsingCardId == anime.id || anime.id in awaitingDeletedCards) {
+                                                                    Modifier.graphicsLayer { alpha = 0f }
+                                                                } else Modifier
+                                                            )
+                                                            .sharedBounds(
                                                             sharedContentState = rememberSharedContentState("anime_${anime.id}_bounds"),
                                                             animatedVisibilityScope = animatedVisibilityScope,
                                                             resizeMode = SharedTransitionScope.ResizeMode.RemeasureToBounds,
@@ -996,67 +1036,34 @@ fun HomeScreen(
                                             performHaptic(view, Haptic.Light)
                                             navController.navigateToAddEdit(anime.id)
                                         }
-                                        // .animateItem() не добавляем: конфликт с SharedTransition при возврате.
-
-                                        if (hostedInWorkspace) {
-                                            // Горизонтальная ось отдана навигации: действия — по удержанию.
-                                            val placement = remember { PlacedCoordinates() }
-                                            Box(
-                                                modifier = rowModifier.trackPlacement(placement),
-                                            ) {
-                                                with(sharedTransitionScope) {
-                                                    OneUiAnimeCard(
-                                                        state = cardState,
-                                                        animatedVisibilityScope = animatedVisibilityScope,
-                                                        onClick = openDetails,
-                                                        onEditClick = openEdit,
-                                                        onLongClick = {
-                                                            val bounds = placement.boundsInRoot() ?: return@OneUiAnimeCard
-                                                            performHaptic(view, Haptic.Light)
-                                                            cardMenuTarget = CardMenuTarget(
-                                                                state = cardState,
-                                                                isFavorite = anime.isFavorite,
-                                                                boundsInRoot = bounds,
-                                                            )
-                                                            cardMenuVisible = true
-                                                        },
-                                                        onRatingClick = { bounds -> openRatingPicker(anime, bounds) },
-                                                    )
-                                                }
-                                            }
-                                        } else {
-                                            val dismissState = rememberSwipeToDismissBoxState(
-                                                positionalThreshold = { totalDistance -> totalDistance * 0.4f }
-                                            )
-                                            LaunchedEffect(dismissState.currentValue) {
-                                                when (dismissState.currentValue) {
-                                                    SwipeToDismissBoxValue.StartToEnd -> {
-                                                        performHaptic(view, Haptic.Success)
-                                                        animeToFavorite = anime
-                                                        pendingSwipeReset = { dismissState.reset() }
-                                                    }
-                                                    SwipeToDismissBoxValue.EndToStart -> {
-                                                        performHaptic(view, Haptic.Warning)
-                                                        animeToDelete = anime
-                                                        pendingSwipeReset = { dismissState.reset() }
-                                                    }
-                                                    SwipeToDismissBoxValue.Settled -> Unit
-                                                }
-                                            }
-                                            SwipeToDismissBox(
-                                                state = dismissState,
-                                                backgroundContent = { SwipeBackground(dismissState) },
-                                                modifier = rowModifier
-                                            ) {
-                                                with(sharedTransitionScope) {
-                                                    OneUiAnimeCard(
-                                                        state = cardState,
-                                                        animatedVisibilityScope = animatedVisibilityScope,
-                                                        onClick = openDetails,
-                                                        onEditClick = openEdit,
-                                                        onRatingClick = { bounds -> openRatingPicker(anime, bounds) },
-                                                    )
-                                                }
+                                        // Горизонтальная ось отдана навигации: действия — по удержанию.
+                                        val placement = remember { PlacedCoordinates() }
+                                        Box(
+                                            modifier = rowModifier.trackPlacement(placement).then(
+                                                if (collapsingCardId == anime.id || anime.id in awaitingDeletedCards) {
+                                                    Modifier.graphicsLayer { alpha = 0f }
+                                                } else Modifier
+                                            ),
+                                        ) {
+                                            with(sharedTransitionScope) {
+                                                OneUiAnimeCard(
+                                                    state = cardState,
+                                                    animatedVisibilityScope = animatedVisibilityScope,
+                                                    onClick = openDetails,
+                                                    onEditClick = openEdit,
+                                                    onLongClick = {
+                                                        val bounds = placement.boundsInRoot() ?: return@OneUiAnimeCard
+                                                        performHaptic(view, Haptic.Light)
+                                                        cardMenuTarget = CardMenuTarget(
+                                                            state = cardState,
+                                                            isFavorite = anime.isFavorite,
+                                                            boundsInRoot = bounds,
+                                                        )
+                                                        menuGesture.arm()
+                                                        cardMenuVisible = true
+                                                    },
+                                                    onRatingClick = { bounds -> openRatingPicker(anime, bounds) },
+                                                )
                                             }
                                         }
                                     }
@@ -1066,7 +1073,8 @@ fun HomeScreen(
                                             key = { it.id },
                                             contentType = { "anime_card" }
                                         ) { anime ->
-                                            cardCell(anime, Modifier.padding(horizontal = 16.dp))
+                                            val placement = Modifier.animateItem(fadeInSpec = null, fadeOutSpec = null)
+                                            cardCell(anime, placement.padding(horizontal = 16.dp))
                                         }
                                     } else {
                                         items(
@@ -1075,7 +1083,9 @@ fun HomeScreen(
                                             contentType = { "anime_card_row" }
                                         ) { row ->
                                             Row(
-                                                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                                                modifier = Modifier
+                                                    .animateItem(fadeInSpec = null, fadeOutSpec = null)
+                                                    .fillMaxWidth().padding(horizontal = 16.dp),
                                                 horizontalArrangement = Arrangement.spacedBy(16.dp),
                                             ) {
                                                 row.forEach { anime ->
@@ -1316,29 +1326,31 @@ fun HomeScreen(
                 AnimeListMenuSheet(
                     anime = animeToDelete!!,
                     confirmMode = AnimeMenuConfirmMode.DELETE,
+                    modifier = Modifier.zIndex(50f),
                     strings = strings,
                     language = currentLanguage,
                     getImgPath = { viewModel.getImgPath(it) },
                     onEvent = { event ->
                         when (event) {
-                            is AnimeMenuEvent.OnConfirm -> viewModel.deleteAnime(animeToDelete!!.id)
+                            is AnimeMenuEvent.OnConfirm -> confirmedMenuDeleteId = animeToDelete?.id
                             is AnimeMenuEvent.OnCancel -> { }
                         }
                     },
                     onDismiss = {
-                        val reset = pendingSwipeReset
-                        pendingSwipeReset = null
                         animeToDelete = null
-                        if (reset != null) scope.launch { reset() }
+                        val confirmed = confirmedMenuDeleteId
+                        if (confirmed != null && cardMenuTarget?.state?.id == confirmed) {
+                            collapsingCardId = confirmed
+                        } else {
+                            commitMenuDeletion()
+                            cardMenuVisible = false
+                        }
                     }
                 )
             }
             if (animeToFavorite != null) {
                 AnimeListMenuSheet(
                     anime = animeToFavorite!!,
-                    // Свайп вправо — переключатель: у уже избранного он предлагает снять звезду,
-                    // а не добавить её второй раз (toggleFavorite снизу и так был двусторонним,
-                    // но шит утверждал обратное).
                     confirmMode = if (animeToFavorite!!.isFavorite) {
                         AnimeMenuConfirmMode.REMOVE_FROM_FAVORITE
                     } else {
@@ -1353,12 +1365,7 @@ fun HomeScreen(
                             is AnimeMenuEvent.OnCancel -> { }
                         }
                     },
-                    onDismiss = {
-                        val reset = pendingSwipeReset
-                        pendingSwipeReset = null
-                        animeToFavorite = null
-                        if (reset != null) scope.launch { reset() }
-                    }
+                    onDismiss = { animeToFavorite = null }
                 )
             }
 
@@ -1592,7 +1599,9 @@ fun HomeScreen(
             cardMenuTarget?.let { target ->
                 // «Назад» закрывает меню, а не приложение. Стоит здесь, а не наверху экрана: зарегистрированный
                 // при открытии меню обработчик получает «назад» раньше остальных (поиска, например).
-                BackHandler(enabled = cardMenuVisible) { cardMenuVisible = false }
+                BackHandler(enabled = cardMenuVisible && animeToDelete == null) {
+                    if (collapsingCardId == null) cardMenuVisible = false
+                }
                 val systemBars = WindowInsets.systemBars.asPaddingValues()
                 CardActionMenuOverlay(
                     target = target,
@@ -1601,8 +1610,14 @@ fun HomeScreen(
                     // Ряд кнопок не должен уезжать под док рабочей области и нав-бар.
                     bottomInset = systemBars.calculateBottomPadding() + 100.dp,
                     topInset = systemBars.calculateTopPadding() + 8.dp,
-                    onDismiss = { cardMenuVisible = false },
-                    onClosed = { cardMenuTarget = null },
+                    onDismiss = {
+                        if (collapsingCardId == null && animeToDelete == null) cardMenuVisible = false
+                    },
+                    onClosed = {
+                        if (collapsingCardId != null) commitMenuDeletion()
+                        cardMenuTarget = null
+                        collapsingCardId = null
+                    },
                     onToggleFavorite = {
                         performHaptic(view, Haptic.Light)
                         animeToFavorite = list.firstOrNull { it.id == target.state.id }
@@ -1611,7 +1626,7 @@ fun HomeScreen(
                     onDelete = {
                         performHaptic(view, Haptic.Warning)
                         animeToDelete = list.firstOrNull { it.id == target.state.id }
-                        cardMenuVisible = false
+                        if (animeToDelete == null) cardMenuVisible = false
                     },
                     onEdit = {
                         performHaptic(view, Haptic.Light)
@@ -1623,6 +1638,9 @@ fun HomeScreen(
                         cardMenuVisible = false
                         navController.navigateToDetails(target.state.id)
                     },
+                    gesture = menuGesture,
+                    deleting = collapsingCardId == target.state.id,
+                    onDeleteAnimationFinished = { cardMenuVisible = false },
                     modifier = Modifier.zIndex(50f),
                 )
             }

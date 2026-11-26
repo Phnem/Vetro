@@ -52,6 +52,7 @@ object DevPreferencesKeys {
 
     /** Ключи удалённых настроек — стираются из файла настроек при старте. */
     val RETIRED_UI_FLAGS = listOf(
+        booleanPreferencesKey("dev_collection_labs"),
         booleanPreferencesKey("dev_select_dock_navigation"),
         booleanPreferencesKey("dev_glass_capsule_dock"),
         booleanPreferencesKey("dev_staged_sheet_motion"),

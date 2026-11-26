@@ -1,5 +1,7 @@
 package com.example.myapplication.ui.home
 
+import com.example.myapplication.ui.shared.components.RollingNumberText
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
@@ -45,10 +47,11 @@ import java.util.Locale
 internal fun FavoriteCollectionStrip(
     favorites: List<Anime>,
     language: AppLanguage,
+    modifier: Modifier = Modifier,
     cardContent: @Composable (Anime, Int, Modifier) -> Unit,
 ) {
     if (favorites.isEmpty()) return
-    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(14.dp)) {
         Row(
             Modifier.fillMaxWidth().padding(horizontal = 20.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -61,7 +64,7 @@ internal fun FavoriteCollectionStrip(
                 color = MaterialTheme.colorScheme.onBackground,
                 modifier = Modifier.testTag("favorite_collection_heading"),
             )
-            Text(
+            RollingNumberText(
                 text = favorites.size.toString(),
                 style = MaterialTheme.typography.labelLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -77,7 +80,8 @@ internal fun FavoriteCollectionStrip(
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 itemsIndexed(favorites, key = { _, anime -> anime.id }, contentType = { _, _ -> "favorite" }) { index, anime ->
-                    cardContent(anime, index + 1, Modifier.width(cardWidth))
+                    val placement = Modifier.animateItem(fadeInSpec = null, fadeOutSpec = null)
+                    cardContent(anime, index + 1, placement.width(cardWidth))
                 }
             }
         }
@@ -125,6 +129,9 @@ internal fun FavoriteCollectionCard(
                 )
             )
         )
+        if (state.hasNewEpisode) {
+            NewEpisodeDot(state.language, Modifier.align(Alignment.TopStart).padding(7.dp))
+        }
         Text(
             text = "${position.toString().padStart(2, '0')} / ${state.mediaTypeLabel}",
             color = Color.White.copy(alpha = 0.85f),

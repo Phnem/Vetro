@@ -1,5 +1,7 @@
 package com.example.myapplication.ui.home
 
+import com.example.myapplication.ui.shared.components.RollingNumberText
+
 import com.example.myapplication.ui.shared.theme.BrandLightGray
 import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.ExperimentalSharedTransitionApi
@@ -122,6 +124,7 @@ data class AnimeCardState(
     val language: com.example.myapplication.network.AppLanguage = com.example.myapplication.network.AppLanguage.EN,
     /** Не-null = тайтл «в процессе»: прямо сейчас выходит сезон. */
     val airing: AiringCardInfo? = null,
+    val hasNewEpisode: Boolean = false,
 )
 
 /** Цвет заполнения бара прогресса сезона (фиолетовый, как на референсе). */
@@ -186,7 +189,7 @@ internal fun AiringProgressSection(
                             .background(BrandOrangeBright)
                             .padding(horizontal = 5.dp, vertical = 1.dp),
                     ) {
-                        Text(
+                        RollingNumberText(
                             text = "+${airing.newItems}",
                             fontSize = 10.sp,
                             lineHeight = 12.sp,
@@ -197,7 +200,7 @@ internal fun AiringProgressSection(
                     }
                 }
             }
-            Text(
+            RollingNumberText(
                 text = counter,
                 fontSize = 11.sp,
                 lineHeight = 13.sp,
@@ -424,6 +427,9 @@ fun AnimeCardBody(
                         // постера) — пилюля встаёт справа от него, на той же высоте.
                         .padding(start = if (state.isFavorite) 22.dp else 6.dp, top = 6.dp, end = 6.dp),
                 )
+                if (state.hasNewEpisode) {
+                    NewEpisodeDot(state.language, Modifier.align(Alignment.TopStart).padding(7.dp))
+                }
             }
 
             Spacer(Modifier.width(16.dp))
@@ -482,7 +488,7 @@ fun AnimeCardBody(
                                 )
                                 .ratingChipTap(onRatingClick, onLongClick)
                         ) {
-                            Text(
+                            RollingNumberText(
                                 text = "★ ${RatingScale.format(state.rating)}",
                                 style = MaterialTheme.typography.labelMedium.copy(
                                     color = getRatingColor(state.rating),
@@ -538,7 +544,7 @@ fun AnimeCardBody(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(
+                    RollingNumberText(
                         text = state.episodesLabel,
                         style = MaterialTheme.typography.labelLarge.copy(
                             fontSize = 13.sp,

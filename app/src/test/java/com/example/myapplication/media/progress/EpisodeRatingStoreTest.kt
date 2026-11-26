@@ -74,6 +74,22 @@ class EpisodeRatingStoreTest {
     }
 
     @Test
+    fun `selected episodes across seasons get one rating without changing adjacent episodes`() = runBlocking {
+        val store = EpisodeRatingStore(MemoryDataStore())
+        val first = PlaybackEpisodeKey(season = 1, episode = 5)
+        val adjacent = PlaybackEpisodeKey(season = 2, episode = 6)
+        store.setRating("anime-1", adjacent.season, adjacent.episode, 4f)
+
+        store.setRatings("anime-1", listOf(first, key), 8.2f)
+
+        val ratings = store.ratingsFlow("anime-1").first()
+        assertEquals(82, ratings.getValue(first).stored)
+        assertEquals(82, ratings.getValue(key).stored)
+        assertEquals(ratings.getValue(first).updatedAt, ratings.getValue(key).updatedAt)
+        assertEquals(40, ratings.getValue(adjacent).stored)
+    }
+
+    @Test
     fun `remote rating wins only when it is newer than the local one`() = runBlocking {
         val store = EpisodeRatingStore(MemoryDataStore())
         store.setRating("anime-1", 2, 5, 4f)

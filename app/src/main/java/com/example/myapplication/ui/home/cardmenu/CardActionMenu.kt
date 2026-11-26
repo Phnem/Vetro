@@ -41,7 +41,7 @@ data class CardMenuTarget(
 )
 
 @Composable
-fun CardActionMenuOverlay(
+internal fun CardActionMenuOverlay(
     target: CardMenuTarget,
     /**
      * Показано ли меню.
@@ -63,6 +63,9 @@ fun CardActionMenuOverlay(
     onEdit: () -> Unit,
     onDetails: () -> Unit,
     modifier: Modifier = Modifier,
+    gesture: ActionMenuGesture? = null,
+    deleting: Boolean = false,
+    onDeleteAnimationFinished: () -> Unit = {},
 ) {
     val isDark = isAppInDarkTheme()
     val neutralTint = if (isDark) Color.White else Color(0xFF1C1C1E)
@@ -103,6 +106,9 @@ fun CardActionMenuOverlay(
         onDismiss = onDismiss,
         onClosed = onClosed,
         modifier = modifier,
+        gesture = gesture,
+        genieAction = if (deleting) 1 else null,
+        onGenieFinished = onDeleteAnimationFinished,
     ) {
         val favoritePosition = target.favoritePosition
         if (favoritePosition != null) {

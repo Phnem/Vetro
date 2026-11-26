@@ -84,7 +84,10 @@ class EpisodeRatingStore(
      * Та же оценка сразу нескольким сериям сезона — одним снимком, а не записью на серию.
      * Серии, у которых уже стоит эта оценка, не трогаются (см. [setRating]).
      */
-    suspend fun setRatings(animeId: String, season: Int, episodes: Collection<Int>, rating: Float) {
+    suspend fun setRatings(animeId: String, season: Int, episodes: Collection<Int>, rating: Float) =
+        setRatings(animeId, episodes.map { PlaybackEpisodeKey(season, it) }, rating)
+
+    suspend fun setRatings(animeId: String, episodes: Collection<PlaybackEpisodeKey>, rating: Float) {
         if (episodes.isEmpty()) return
         val stored = RatingScale.displayToStored(rating)
         val preferenceKey = ratingKey(animeId)
@@ -93,8 +96,7 @@ class EpisodeRatingStore(
             store.edit { preferences ->
                 val current = decode(preferences[preferenceKey]).toMutableMap()
                 var changed = false
-                for (episode in episodes) {
-                    val target = PlaybackEpisodeKey(season, episode)
+                for (target in episodes) {
                     if (current[target]?.stored == stored) continue
                     if (stored == 0 && current[target] == null) continue
                     current[target] = EpisodeRating(stored = stored, updatedAt = now)

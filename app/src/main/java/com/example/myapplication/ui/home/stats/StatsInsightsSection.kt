@@ -1,5 +1,7 @@
 package com.example.myapplication.ui.home.stats
 
+import com.example.myapplication.ui.shared.components.RollingNumberText
+
 import com.example.myapplication.utils.runSuspendCatching
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -512,7 +514,7 @@ private fun ReturnMetric(modifier: Modifier, value: Int, label: String, detail: 
             .padding(horizontal = 10.dp, vertical = 12.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Text(
+        RollingNumberText(
             text = value.toString(),
             style = MaterialTheme.typography.titleLarge.copy(fontFamily = SnProFamily, fontWeight = FontWeight.Bold),
             color = if (value > 0) BrandOrange else mutedColor(isDark),

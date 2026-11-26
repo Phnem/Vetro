@@ -698,7 +698,7 @@ class HomeViewModel(
         updateSearchQuery(_uiState.value.searchQuery)
     }
 
-    fun deleteAnime(id: String) {
+    fun deleteAnime(id: String, onFailure: (() -> Unit)? = null) {
         viewModelScope.launch(Dispatchers.IO) {
             runSuspendCatching {
                 val anime = localDataSource.getAnimeById(id) ?: return@launch
@@ -708,7 +708,10 @@ class HomeViewModel(
                 localDataSource.removeUpdate(id)
                 notifier.cancelAllUpdateNotifications(listOf(id))
                 seasonEpisodesStore.remove(id)
-            }.onFailure { it.printStackTrace() }
+            }.onFailure { failure ->
+                failure.printStackTrace()
+                if (onFailure != null) withContext(Dispatchers.Main) { onFailure() }
+            }
         }
     }
 

@@ -1,5 +1,7 @@
 package com.example.myapplication.ui.home
 
+import com.example.myapplication.ui.shared.components.RollingNumberText
+
 import com.example.myapplication.ui.shared.components.extendUnderGrabber
 import com.example.myapplication.ui.shared.theme.IosScroll
 import androidx.activity.compose.BackHandler
@@ -446,7 +448,7 @@ internal fun StatsMetricTile(
         ) {
             iconBox()
             labelText(Modifier.weight(1f))
-            Text(
+            RollingNumberText(
                 text = value,
                 style = OverlayThemeTokens.MetricValue,
                 color = accent,
@@ -467,7 +469,7 @@ internal fun StatsMetricTile(
                 labelText(Modifier.weight(1f))
             }
             Spacer(Modifier.weight(1f))
-            Text(
+            RollingNumberText(
                 text = value,
                 style = OverlayThemeTokens.MetricValue,
                 color = accent,

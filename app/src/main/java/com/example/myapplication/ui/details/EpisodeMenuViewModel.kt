@@ -234,20 +234,44 @@ class EpisodeMenuViewModel(
         }
     }
 
+    fun rateEpisodes(episodes: Set<EpisodeKey>, rating: Float) {
+        viewModelScope.launch {
+            runSuspendCatching {
+                ratingStore.setRatings(anime.id, episodes.map { PlaybackEpisodeKey(it.season, it.episode) }, rating)
+            }.onFailure { Log.w(TAG, "Saving selected episode ratings failed", it) }
+        }
+    }
+
+    fun ratingForSelection(episodes: Set<EpisodeKey>): Float =
+        episodes.mapNotNull { state.value.ratings[it] }.takeIf { it.isNotEmpty() }?.average()?.toFloat() ?: 0f
+
     /**
      * Ручная отметка «смотрел / не смотрел» для серии ([episode] задана) или для всех серий сезона.
      * Пишет в то же хранилище прогресса, из которого экран и карточка главной считают «просмотрено».
      */
     fun setWatched(season: SeasonInfo, episode: Int?, watched: Boolean) {
         val numbers = episode?.let(::listOf) ?: (1..season.episodes.coerceAtLeast(0)).toList()
-        val keys = numbers.map { PlaybackEpisodeKey(season.seasonNumber, it) }
+        val completedSeasons = if (season.episodes > 0 && (episode == null || episode >= season.episodes)) {
+            listOf(season.seasonNumber)
+        } else emptyList()
+        setWatched(numbers.map { PlaybackEpisodeKey(season.seasonNumber, it) }, watched, completedSeasons)
+    }
+
+    fun setEpisodesWatched(episodes: Set<EpisodeKey>, watched: Boolean) {
+        val completedSeasons = seasons.filter { season ->
+            season.episodes > 0 && EpisodeKey(season.seasonNumber, season.episodes) in episodes
+        }.map { it.seasonNumber }
+        setWatched(episodes.map { PlaybackEpisodeKey(it.season, it.episode) }, watched, completedSeasons)
+    }
+
+    private fun setWatched(keys: List<PlaybackEpisodeKey>, watched: Boolean, completedSeasons: List<Int>) {
         viewModelScope.launch {
             runSuspendCatching {
                 if (watched) playbackStore.markWatched(anime.id, keys) else playbackStore.markUnwatched(anime.id, keys)
             }.onSuccess {
                 // Сезон закрыт — очки активности для напоминания о поддержке (повтор не засчитывается).
-                if (watched && season.episodes > 0 && (episode == null || episode >= season.episodes)) {
-                    com.example.myapplication.support.SupportActivity.report(com.example.myapplication.support.SupportActivityEvent.SeasonCompleted(anime.id, season.seasonNumber))
+                if (watched) completedSeasons.forEach { season ->
+                    com.example.myapplication.support.SupportActivity.report(com.example.myapplication.support.SupportActivityEvent.SeasonCompleted(anime.id, season))
                 }
             }.onFailure { Log.w(TAG, "Marking watched=$watched failed", it) }
         }

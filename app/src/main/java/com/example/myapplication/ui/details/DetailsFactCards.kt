@@ -1,5 +1,7 @@
 package com.example.myapplication.ui.details
 
+import com.example.myapplication.ui.shared.components.RollingNumberText
+
 import androidx.compose.material.icons.rounded.Leaderboard
 import androidx.compose.material.icons.rounded.ThumbUp
 import com.example.myapplication.network.enrichment.OmdbRatings
@@ -229,7 +231,7 @@ private fun DetailFactCard(
                 overflow = TextOverflow.Ellipsis,
             )
             Spacer(Modifier.size(2.dp))
-            Text(
+            RollingNumberText(
                 text = fact.value,
                 style = MaterialTheme.typography.titleSmall.copy(
                     fontFamily = SnProFamily,

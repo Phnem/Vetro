@@ -1,6 +1,15 @@
 package com.example.myapplication.ui.home.cardmenu
 
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.ui.layout.onPlaced
+import androidx.compose.ui.platform.LocalView
+import com.example.myapplication.utils.Haptic
+import com.example.myapplication.utils.performHaptic
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -73,7 +82,7 @@ class ActionMenuItem(
 )
 
 @Composable
-fun ActionMenuOverlay(
+internal fun ActionMenuOverlay(
     /** Границы выделенной строки в координатах корня окна. */
     boundsInRoot: Rect,
     /**
@@ -96,9 +105,30 @@ fun ActionMenuOverlay(
     /** Во сколько раз поднятая копия крупнее оригинала. */
     liftScale: Float = DEFAULT_LIFT_SCALE,
     /** Копия строки: рисуется в размер [boundsInRoot], поверх скрима. */
+    gesture: ActionMenuGesture? = null,
+    genieAction: Int? = null,
+    onGenieFinished: () -> Unit = {},
     content: @Composable () -> Unit,
 ) {
     val density = LocalDensity.current
+    val view = LocalView.current
+    val genie = remember { Animatable(0f) }
+    val latestOnGenieFinished by rememberUpdatedState(onGenieFinished)
+    LaunchedEffect(genieAction) {
+        if (genieAction != null) {
+            performHaptic(view, Haptic.Heavy)
+            genie.animateTo(1f, tween(480, easing = FastOutSlowInEasing))
+            performHaptic(view, Haptic.Tick)
+            latestOnGenieFinished()
+        }
+    }
+    SideEffect { gesture?.actions = if (visible && genieAction == null) actions else emptyList() }
+    DisposableEffect(gesture) {
+        onDispose {
+            gesture?.actions = emptyList()
+            gesture?.buttonCoordinates?.clear()
+        }
+    }
 
     // Собственное начало координат оверлея: строку мы поймали в координатах КОРНЯ, а
     // раскладываем внутри этого Box — без вычета его смещения копия уедет.
@@ -197,11 +227,16 @@ fun ActionMenuOverlay(
                         scaleX = s
                         scaleY = s
                     }
+                    .then(
+                        if (genieAction != null) {
+                            Modifier.genieCollapse(genie) { gesture?.buttonCoordinates?.get(genieAction) }
+                        } else Modifier
+                    )
                     // Тап по самой копии — тоже выход из режима: отдельного действия у неё нет.
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null,
-                    ) { onDismiss() },
+                    ) { if (genieAction == null) onDismiss() },
             ) {
                 content()
             }
@@ -209,8 +244,12 @@ fun ActionMenuOverlay(
             // —— Ряд действий —— //
             val actionsRestTop = cardLocalTop - grow + scaledHeight + gapPx
             // Все кнопки обязаны уместиться, даже если выделенная строка уже ряда.
-            val actionsWidth = maxOf(cardWidth, ACTION_SIZE * actions.size + ACTION_SPACING * (actions.size - 1))
-                .coerceAtMost(maxWidth - 32.dp)
+            val availableWidth = (maxWidth - 32.dp).coerceAtLeast(1.dp)
+            val actionSize = if (gesture == null) ACTION_SIZE else
+                ((availableWidth - ACTION_SPACING * (actions.size - 1)) / actions.size)
+                    .coerceIn(1.dp, ACTION_SIZE)
+            val actionsWidth = maxOf(cardWidth, actionSize * actions.size + ACTION_SPACING * (actions.size - 1))
+                .coerceAtMost(availableWidth)
             val actionsWidthPx = with(density) { actionsWidth.toPx() }
             val marginPx = with(density) { 16.dp.toPx() }
             val actionsLeft = (cardLocalLeft + boundsInRoot.width / 2f - actionsWidthPx / 2f)
@@ -236,6 +275,10 @@ fun ActionMenuOverlay(
                         backdrop = backdrop,
                         entry = actionProgress[index],
                         slideFromPx = gapPx,
+                        size = actionSize,
+                        index = index,
+                        gesture = gesture,
+                        enabled = gesture == null || (visible && genieAction == null),
                         onClick = action.onClick,
                     )
                 }
@@ -261,10 +304,15 @@ private fun CardActionButton(
     entry: Animatable<Float, *>,
     /** Откуда кнопка выезжает: на столько пикселей выше места, «из-под» строки. */
     slideFromPx: Float,
+    size: Dp,
+    index: Int,
+    gesture: ActionMenuGesture?,
+    enabled: Boolean,
     onClick: () -> Unit,
 ) {
     Box(
         modifier = Modifier
+            .then(if (gesture != null) Modifier.onPlaced { gesture.buttonCoordinates[index] = it } else Modifier)
             // Читается в графическом слое: прогресс кнопки не пересобирает композицию на кадрах.
             .graphicsLayer {
                 val p = entry.value
@@ -274,7 +322,7 @@ private fun CardActionButton(
                 scaleX = s
                 scaleY = s
             }
-            .size(ACTION_SIZE)
+            .size(size)
             .clip(CircleShape)
             .frostedGlass(
                 backdrop = backdrop,
@@ -284,6 +332,7 @@ private fun CardActionButton(
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
+                enabled = enabled,
                 onClick = onClick,
             ),
         contentAlignment = Alignment.Center,
@@ -292,7 +341,21 @@ private fun CardActionButton(
             imageVector = icon,
             contentDescription = contentDescription,
             tint = tint,
-            modifier = Modifier.size(24.dp),
+            modifier = Modifier.size(24.dp).then(
+                if (gesture != null) Modifier.graphicsLayer {
+                    if (gesture.hoveredAction == index) {
+                        val button = gesture.buttonCoordinates[index]?.takeIf { it.isAttached }
+                        val finger = gesture.pointerInRoot
+                        if (button != null && finger != null) {
+                            val pull = finger - button.boundsInRoot().center
+                            translationX = pull.x * 0.34f
+                            translationY = pull.y * 0.34f
+                            scaleX = 1.18f
+                            scaleY = 1.18f
+                        }
+                    }
+                } else Modifier,
+            ),
         )
     }
 }

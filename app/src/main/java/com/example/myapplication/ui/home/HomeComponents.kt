@@ -61,7 +61,6 @@ import com.example.myapplication.ui.shared.gradientHighlightBorder
 import com.example.myapplication.ui.shared.inertialCollision
 import com.example.myapplication.ui.shared.rememberInertialCollisionState
 import com.example.myapplication.ui.shared.theme.*
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 
 // ==========================================
@@ -368,7 +367,8 @@ fun AnimeListMenuSheet(
     language: AppLanguage,
     getImgPath: (String?) -> String?,
     onEvent: (AnimeMenuEvent) -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     var visible by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { visible = true }
@@ -402,7 +402,7 @@ fun AnimeListMenuSheet(
     }
 
     Box(
-        modifier = Modifier.fillMaxSize().zIndex(10f),
+        modifier = modifier.fillMaxSize().zIndex(10f),
         contentAlignment = Alignment.BottomCenter
     ) {
         AnimatedVisibility(
@@ -604,75 +604,6 @@ fun CloudSyncPill(
                     color = MaterialTheme.colorScheme.onSurface,
                 )
             }
-        }
-    }
-}
-
-// ==========================================
-// SwipeBackground
-// ==========================================
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun SwipeBackground(dismissState: SwipeToDismissBoxState) {
-    // Используем dismissDirection вместо targetValue — показывает реальное направление свайпа.
-    val direction = dismissState.dismissDirection
-
-    val color by animateColorAsState(
-        targetValue = when (direction) {
-            // Тот же токен, что у рамки и чипса избранного: раньше здесь был литерал, и цвет
-            // заливки разъехался с рамкой карточки.
-            SwipeToDismissBoxValue.StartToEnd -> OverlayThemeTokens.FavoriteGold.copy(alpha = 0.85f)
-            SwipeToDismissBoxValue.EndToStart -> Color(0xFFFF1744).copy(alpha = 0.85f)
-            SwipeToDismissBoxValue.Settled -> Color.Transparent
-        },
-        label = "swipeBg"
-    )
-
-    val icon = when (direction) {
-        SwipeToDismissBoxValue.StartToEnd -> Icons.Rounded.Star
-        SwipeToDismissBoxValue.EndToStart -> Icons.Default.Delete
-        SwipeToDismissBoxValue.Settled -> Icons.Rounded.Star
-    }
-
-    val alignment = when (direction) {
-        SwipeToDismissBoxValue.StartToEnd -> Alignment.CenterStart
-        SwipeToDismissBoxValue.EndToStart -> Alignment.CenterEnd
-        SwipeToDismissBoxValue.Settled -> Alignment.Center
-    }
-
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .clip(RoundedCornerShape(24.dp))
-            .background(color)
-            .padding(horizontal = 24.dp),
-        contentAlignment = alignment
-    ) {
-        if (direction != SwipeToDismissBoxValue.Settled) {
-            val scale by animateFloatAsState(
-                targetValue = if (dismissState.progress > 0.05f) 1f else 0.5f,
-                animationSpec = spring(
-                    dampingRatio = Spring.DampingRatioMediumBouncy,
-                    stiffness = Spring.StiffnessLow
-                ),
-                label = "iconScale"
-            )
-
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                tint = if (direction == SwipeToDismissBoxValue.Settled) {
-                    MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
-                } else {
-                    Color.White
-                },
-                modifier = Modifier
-                    .size(26.dp)
-                    .graphicsLayer {
-                        scaleX = scale
-                        scaleY = scale
-                    }
-            )
         }
     }
 }
